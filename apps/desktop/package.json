@@ -1,0 +1,41 @@
+{
+  "name": "@phantom-os/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PhantomOS Electron Desktop App",
+  "author": "Subash Karki",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@mantine/core": "^8.1.1",
+    "@mantine/hooks": "^8.1.1",
+    "@mantine/notifications": "^8.1.1",
+    "@phantom-os/db": "workspace:*",
+    "@phantom-os/gamification": "workspace:*",
+    "@phantom-os/server": "workspace:*",
+    "@phantom-os/shared": "workspace:*",
+    "@phantom-os/theme": "workspace:*",
+    "better-sqlite3": "^11.10.0",
+    "jotai": "^2.12.6",
+    "lucide-react": "^0.509.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "electron": "^41.1.1",
+    "electron-vite": "^5.0.0",
+    "typescript": "~5.9.3"
+  }
+}

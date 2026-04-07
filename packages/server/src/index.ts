@@ -1,0 +1,198 @@
+/**
+ * PhantomOS — The System
+ * Main Hono server: routes, SSE, watchers, migrations, seeding.
+ * @author Subash Karki
+ */
+import { serve } from '@hono/node-server';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { streamSSE } from 'hono/streaming';
+import { db, sqlite, runMigrations, seedDatabase } from '@phantom-os/db';
+import { startSessionWatcher } from './collectors/session-watcher.js';
+import { startTaskWatcher } from './collectors/task-watcher.js';
+import {
+  checkAchievements,
+  onSessionEnd,
+  onSessionStart,
+  onTaskComplete,
+  seedAchievements,
+} from '@phantom-os/gamification';
+import { achievementRoutes } from './routes/achievements.js';
+import { hunterRoutes } from './routes/hunter.js';
+import { questRoutes } from './routes/quests.js';
+import { sessionRoutes } from './routes/sessions.js';
+import { statsRoutes } from './routes/stats.js';
+import { taskRoutes } from './routes/tasks.js';
+import { API_PORT } from '@phantom-os/shared';
+
+// ---------------------------------------------------------------------------
+// SSE Broadcast
+// ---------------------------------------------------------------------------
+
+type SSEClient = {
+  sendRaw: (data: string) => void;
+  close: () => void;
+  lastActive: number;
+};
+
+const sseClients = new Set<SSEClient>();
+
+const broadcast = (event: string, data: unknown): void => {
+  // Send as data-only (no event: field) so browser's onmessage catches it
+  const payload = JSON.stringify({ type: event, data });
+  for (const client of sseClients) {
+    try {
+      client.sendRaw(payload);
+    } catch {
+      sseClients.delete(client);
+    }
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Database Bootstrap
+// ---------------------------------------------------------------------------
+
+runMigrations(sqlite);
+seedDatabase(db, sqlite);
+seedAchievements();
+
+// ---------------------------------------------------------------------------
+// Hono App
+// ---------------------------------------------------------------------------
+
+const app = new Hono();
+
+app.use('*', cors());
+
+// Mount route groups
+app.route('/api', hunterRoutes);
+app.route('/api', sessionRoutes);
+app.route('/api', taskRoutes);
+app.route('/api', achievementRoutes);
+app.route('/api', questRoutes);
+app.route('/api', statsRoutes);
+
+// SSE endpoint
+app.get('/events', (c) => {
+  return streamSSE(c, async (stream) => {
+    const client: SSEClient = {
+      sendRaw: (data) => {
+        // Write data-only SSE (no event: field) so onmessage receives it
+        stream.writeSSE({ data });
+      },
+      close: () => {
+        sseClients.delete(client);
+      },
+      lastActive: Date.now(),
+    };
+    sseClients.add(client);
+
+    // Immediate heartbeat so client knows it's connected
+    stream.writeSSE({ event: 'heartbeat', data: '' });
+
+    // Periodic heartbeat every 30 seconds
+    const heartbeat = setInterval(() => {
+      try {
+        stream.writeSSE({ event: 'heartbeat', data: '' });
+        client.lastActive = Date.now();
+      } catch {
+        clearInterval(heartbeat);
+      }
+    }, 30_000);
+
+    // Keep alive until client disconnects
+    stream.onAbort(() => {
+      clearInterval(heartbeat);
+      sseClients.delete(client);
+    });
+
+    // Block to keep stream open
+    await new Promise(() => {});
+  });
+});
+
+// Health check
+app.get('/health', (c) => c.json({ status: 'alive', timestamp: Date.now() }));
+
+// Sweep stale SSE clients that silently disconnected (laptop sleep, WiFi switch)
+setInterval(() => {
+  const staleThreshold = Date.now() - 60_000; // 60 seconds
+  for (const client of sseClients) {
+    if (client.lastActive < staleThreshold) {
+      try { client.close(); } catch {}
+      sseClients.delete(client);
+    }
+  }
+}, 30_000);
+
+// ---------------------------------------------------------------------------
+// Start Watchers
+// ---------------------------------------------------------------------------
+
+const handleTaskComplete = (sessionId: string, taskId: string): void => {
+  onTaskComplete(sessionId, taskId);
+  const newAchievements = checkAchievements();
+  if (newAchievements.length > 0) {
+    broadcast('achievement:unlock', newAchievements);
+  }
+};
+
+const handleSessionStart = (sessionId: string): void => {
+  onSessionStart(sessionId);
+  const newAchievements = checkAchievements();
+  if (newAchievements.length > 0) {
+    broadcast('achievement:unlock', newAchievements);
+  }
+};
+
+const handleSessionEnd = (sessionId: string): void => {
+  onSessionEnd(sessionId);
+  const newAchievements = checkAchievements();
+  if (newAchievements.length > 0) {
+    broadcast('achievement:unlock', newAchievements);
+  }
+};
+
+startSessionWatcher(broadcast, handleSessionStart, handleSessionEnd);
+startTaskWatcher(broadcast, handleTaskComplete);
+
+// Scan JSONL sessions async (don't block boot)
+import { scanJsonlSessions, startActiveContextPoller } from './collectors/jsonl-scanner.js';
+scanJsonlSessions(broadcast).catch((err) => console.error('[JsonlScanner] Error:', err));
+
+// Poll active sessions for live context every 10s
+startActiveContextPoller(broadcast);
+
+// Poll active sessions for live activity feed every 5s
+import { startActivityPoller } from './collectors/activity-poller.js';
+startActivityPoller(broadcast);
+
+// ---------------------------------------------------------------------------
+// Graceful Shutdown
+// ---------------------------------------------------------------------------
+
+const shutdown = () => {
+  console.log('[PhantomOS] Shutting down gracefully...');
+  // Checkpoint WAL so no data is lost
+  try { sqlite.pragma('wal_checkpoint(TRUNCATE)'); } catch {}
+  // Close database
+  try { sqlite.close(); } catch {}
+  process.exit(0);
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
+// ---------------------------------------------------------------------------
+// Start Server
+// ---------------------------------------------------------------------------
+
+serve({ fetch: app.fetch, port: API_PORT }, (info) => {
+  console.log('');
+  console.log('================================================');
+  console.log(' PhantomOS — The System');
+  console.log(`   running on http://localhost:${info.port}`);
+  console.log('================================================');
+  console.log('');
+});

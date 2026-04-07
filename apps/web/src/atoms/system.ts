@@ -1,0 +1,64 @@
+/**
+ * System Jotai Atoms
+ * Font scale, theme, and notification queue
+ *
+ * @author Subash Karki
+ */
+import { atom } from 'jotai';
+import { atomWithStorage } from 'jotai/utils';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export type FontScale = 0.9 | 1.0 | 1.1 | 1.25 | 1.5;
+export type ThemeMode = 'dark' | 'light';
+
+export interface SystemNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+}
+
+// ---------------------------------------------------------------------------
+// Font scale — persisted to localStorage
+// ---------------------------------------------------------------------------
+
+export const fontScaleAtom = atomWithStorage<FontScale>(
+  'phantom-font-scale',
+  1.0,
+);
+
+// ---------------------------------------------------------------------------
+// Theme — persisted to localStorage
+// ---------------------------------------------------------------------------
+
+export const themeAtom = atomWithStorage<ThemeMode>(
+  'phantom-theme',
+  'dark',
+);
+
+// ---------------------------------------------------------------------------
+// Notification queue — writable atom
+// ---------------------------------------------------------------------------
+
+const notificationsBaseAtom = atom<SystemNotification[]>([]);
+
+export const systemNotificationsAtom = atom(
+  (get) => get(notificationsBaseAtom),
+  (get, set, action: { type: 'add'; notification: SystemNotification } | { type: 'remove'; id: string } | { type: 'clear' }) => {
+    const current = get(notificationsBaseAtom);
+    switch (action.type) {
+      case 'add':
+        set(notificationsBaseAtom, [...current, action.notification]);
+        break;
+      case 'remove':
+        set(notificationsBaseAtom, current.filter((n) => n.id !== action.id));
+        break;
+      case 'clear':
+        set(notificationsBaseAtom, []);
+        break;
+    }
+  },
+);

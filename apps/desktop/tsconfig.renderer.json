@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "outDir": "dist/renderer",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "paths": {
+      "@phantom/atoms/*": ["../web/src/atoms/*"],
+      "@phantom/hooks/*": ["../web/src/hooks/*"],
+      "@phantom/lib/*": ["../web/src/lib/*"]
+    }
+  },
+  "include": ["src/renderer", "src/preload/index.d.ts"]
+}

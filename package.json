@@ -1,0 +1,27 @@
+{
+  "name": "phantom-os",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "PhantomOS — Solo Leveling System gamified Claude session dashboard",
+  "author": "Subash Karki",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "dev:web": "turbo dev --filter=@phantom-os/web",
+    "dev:api": "turbo dev:api --filter=@phantom-os/server",
+    "dev:all": "turbo dev dev:api",
+    "dev:desktop": "turbo dev --filter=@phantom-os/desktop"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "~5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild",
+      "electron"
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@phantom-os/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  }
+}

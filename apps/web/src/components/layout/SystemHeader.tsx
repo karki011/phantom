@@ -1,0 +1,139 @@
+/**
+ * SystemHeader Component
+ * App header with branding, connection status, font scale, and theme toggle
+ *
+ * @author Subash Karki
+ */
+import {
+  ActionIcon,
+  Group,
+  Menu,
+  Text,
+  useMantineColorScheme,
+} from '@mantine/core';
+import { useAtom } from 'jotai';
+import { ArrowLeft, Circle, Moon, Sun, Type } from 'lucide-react';
+
+import { type FontScale, fontScaleAtom } from '../../atoms/system';
+import { useRouter } from '../../hooks/useRouter';
+
+interface SystemHeaderProps {
+  activeSessions: number;
+  isConnected?: boolean;
+}
+
+const FONT_SCALE_OPTIONS: { label: string; value: FontScale }[] = [
+  { label: '90%', value: 0.9 },
+  { label: '100%', value: 1.0 },
+  { label: '110%', value: 1.1 },
+  { label: '125%', value: 1.25 },
+  { label: '150%', value: 1.5 },
+];
+
+export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }: SystemHeaderProps) => {
+  const { colorScheme, toggleColorScheme } = useMantineColorScheme();
+  const [fontScale, setFontScale] = useAtom(fontScaleAtom);
+  const { isHome, navigate } = useRouter();
+
+  const isDark = colorScheme === 'dark';
+  const isConnected = isBackendConnected ?? activeSessions >= 0;
+
+  return (
+    <Group
+      h="100%"
+      px="md"
+      justify="space-between"
+      style={{
+        // Make header draggable as a window titlebar in Electron
+        WebkitAppRegion: navigator.userAgent.includes('Electron') ? 'drag' : undefined,
+      } as React.CSSProperties}
+    >
+      {/* Left: Back button + Branding */}
+      <Group gap="sm" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        {!isHome && (
+          <ActionIcon
+            variant="subtle"
+            size="lg"
+            onClick={() => navigate('cockpit')}
+            aria-label="Back to cockpit"
+          >
+            <ArrowLeft size={18} aria-hidden="true" />
+          </ActionIcon>
+        )}
+        <Text
+          ff="Orbitron, sans-serif"
+          fz="1.125rem"
+          fw={900}
+          c="var(--phantom-text-primary)"
+          tt="uppercase"
+          visibleFrom="sm"
+          style={{
+            letterSpacing: '0.1em',
+            textShadow: isDark
+              ? '0 0 0.5rem var(--phantom-accent-glow)'
+              : 'none',
+          }}
+        >
+          Phantom OS
+        </Text>
+      </Group>
+
+      {/* Center: Connection status */}
+      <Group gap="0.375rem">
+        <Circle
+          size={10}
+          fill={isConnected ? 'var(--phantom-status-active)' : 'var(--phantom-status-danger)'}
+          stroke="none"
+          aria-hidden="true"
+        />
+        <Text fz="0.8125rem" c="var(--phantom-text-secondary)">
+          {!isConnected ? 'Disconnected' : activeSessions > 0 ? `${activeSessions} Active` : 'Idle'}
+        </Text>
+      </Group>
+
+      {/* Right: Font scale + Theme toggle */}
+      <Group gap="xs" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        {/* Font Scale Menu */}
+        <Menu shadow="md" width={120} position="bottom-end">
+          <Menu.Target>
+            <ActionIcon
+              variant="subtle"
+              size="lg"
+              aria-label="Font scale settings"
+            >
+              <Type size={18} aria-hidden="true" />
+            </ActionIcon>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Label>Font Scale</Menu.Label>
+            {FONT_SCALE_OPTIONS.map((option) => (
+              <Menu.Item
+                key={option.value}
+                onClick={() => setFontScale(option.value)}
+                fw={fontScale === option.value ? 700 : 400}
+                c={fontScale === option.value ? 'var(--phantom-accent-glow)' : undefined}
+                aria-current={fontScale === option.value ? 'true' : undefined}
+              >
+                {option.label}
+              </Menu.Item>
+            ))}
+          </Menu.Dropdown>
+        </Menu>
+
+        {/* Theme Toggle */}
+        <ActionIcon
+          variant="subtle"
+          size="lg"
+          onClick={toggleColorScheme}
+          aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+        >
+          {isDark ? (
+            <Sun size={18} aria-hidden="true" />
+          ) : (
+            <Moon size={18} aria-hidden="true" />
+          )}
+        </ActionIcon>
+      </Group>
+    </Group>
+  );
+};

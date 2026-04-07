@@ -1,0 +1,13 @@
+{
+  "name": "@phantom-os/gamification",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@phantom-os/db": "workspace:*",
+    "@phantom-os/shared": "workspace:*",
+    "drizzle-orm": "^0.44.2"
+  }
+}
