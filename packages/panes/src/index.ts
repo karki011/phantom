@@ -24,4 +24,4 @@ export {
 } from './react/PaneRegistry.js';
 export { PaneLayout, type PaneLayoutProps } from './react/PaneLayout.js';
 export { PaneContainer, type PaneContainerProps } from './react/PaneContainer.js';
-export { TabBar } from './react/TabBar.js';
+export { TabBar, type PaneMenuItem } from './react/TabBar.js';

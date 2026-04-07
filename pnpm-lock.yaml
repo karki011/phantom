@@ -96,12 +96,18 @@ importers:
       '@mantine/notifications':
         specifier: ^9.0.1
         version: 9.0.1(@mantine/core@9.0.1(@mantine/hooks@9.0.1(react@19.2.4))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@mantine/hooks@9.0.1(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@phantom-os/editor':
+        specifier: workspace:*
+        version: link:../../packages/editor
       '@phantom-os/panes':
         specifier: workspace:*
         version: link:../../packages/panes
       '@phantom-os/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@phantom-os/terminal':
+        specifier: workspace:*
+        version: link:../../packages/terminal
       '@phantom-os/theme':
         specifier: workspace:*
         version: link:../../packages/theme

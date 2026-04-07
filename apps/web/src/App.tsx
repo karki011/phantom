@@ -10,7 +10,7 @@ import { Flame, Trophy } from 'lucide-react';
 import { useEffect } from 'react';
 
 import { PaneRegistryProvider, TabBar, PaneLayout, usePanes } from '@phantom-os/panes';
-import { paneDefinitions } from './pane-definitions';
+import { paneDefinitions, paneMenu } from './pane-definitions';
 import { unlockedCountAtom, refreshAchievementsAtom } from './atoms/achievements';
 import { fontScaleAtom } from './atoms/system';
 import { SystemHeader } from './components/layout/SystemHeader';
@@ -47,7 +47,7 @@ const CockpitPaneView = () => {
         '--tab-bar-bg': 'var(--phantom-surface-card)',
       } as React.CSSProperties}
     >
-      <TabBar />
+      <TabBar paneMenu={paneMenu} />
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <PaneLayout
           layout={tab.layout}
