@@ -1,6 +1,6 @@
 /**
- * Hook for terminal lifecycle — create, resize, dispose.
- * PTY backend (node-pty) will be connected later via Electron IPC.
+ * Hook for terminal lifecycle — create, resize, WebSocket PTY.
+ * Connects xterm.js to a real shell via the PhantomOS server.
  * @author Subash Karki
  */
 import { useEffect, useRef } from 'react';
@@ -9,8 +9,11 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { getTerminalTheme } from './theme.js';
 
+const WS_PORT = 3849;
+
 export const useTerminal = (
   containerRef: React.RefObject<HTMLDivElement | null>,
+  paneId: string,
 ) => {
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -29,26 +32,58 @@ export const useTerminal = (
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.loadAddon(new WebLinksAddon());
-
     term.open(containerRef.current);
     fit.fit();
 
     termRef.current = term;
     fitRef.current = fit;
 
-    // Re-fit on container resize
-    const observer = new ResizeObserver(() => fit.fit());
-    observer.observe(containerRef.current);
+    // --- WebSocket to PTY server ---
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const host = location.hostname || 'localhost';
+    const wsUrl = `${proto}://${host}:${WS_PORT}/ws/terminal/${paneId}`;
+    const ws = new WebSocket(wsUrl);
 
-    // Welcome message (no shell connected yet)
-    term.writeln('\x1b[1;36mPhantomOS Terminal\x1b[0m');
-    term.writeln('');
+    ws.onopen = () => {
+      const dims = fit.proposeDimensions();
+      if (dims) {
+        ws.send(JSON.stringify({
+          type: 'resize', cols: dims.cols, rows: dims.rows,
+        }));
+      }
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'output') term.write(msg.data);
+      } catch { /* ignore */ }
+    };
+
+    term.onData((data) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'input', data }));
+      }
+    });
+
+    // Resize handler
+    const observer = new ResizeObserver(() => {
+      fit.fit();
+      const dims = fit.proposeDimensions();
+      if (dims && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'resize', cols: dims.cols, rows: dims.rows,
+        }));
+      }
+    });
+    observer.observe(containerRef.current);
 
     return () => {
       observer.disconnect();
+      ws.close();
       term.dispose();
     };
-  }, [containerRef]);
+  }, [containerRef, paneId]);
 
   return { terminal: termRef, fit: fitRef };
 };

@@ -130,7 +130,7 @@ export const App = () => {
       {/* Main Content — hash-routed views */}
       <AppShell.Main>
         {route === 'cockpit' ? (
-          <div style={{ height: '100%' }}>
+          <div style={{ height: 'calc(100vh - 3.5rem - 2.5rem)' }}>
             <ViewContent route={route} />
           </div>
         ) : (

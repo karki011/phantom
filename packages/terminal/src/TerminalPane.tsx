@@ -12,7 +12,7 @@ interface TerminalPaneProps {
 
 export const TerminalPane = ({ paneId }: TerminalPaneProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  useTerminal(containerRef);
+  useTerminal(containerRef, paneId);
 
   return (
     <div

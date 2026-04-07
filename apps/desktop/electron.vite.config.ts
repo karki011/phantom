@@ -35,6 +35,10 @@ export default defineConfig({
         '/api': 'http://localhost:3849',
         '/events': 'http://localhost:3849',
         '/health': 'http://localhost:3849',
+        '/ws': {
+          target: 'ws://localhost:3849',
+          ws: true,
+        },
       },
     },
     resolve: {

@@ -24,6 +24,9 @@ import { sessionRoutes } from './routes/sessions.js';
 import { statsRoutes } from './routes/stats.js';
 import { taskRoutes } from './routes/tasks.js';
 import { API_PORT } from '@phantom-os/shared';
+import type { Server } from 'node:http';
+import { setupTerminalWs } from './routes/terminal-ws.js';
+import { destroyAllPtys } from './terminal-manager.js';
 
 // ---------------------------------------------------------------------------
 // SSE Broadcast
@@ -174,6 +177,7 @@ startActivityPoller(broadcast);
 
 const shutdown = () => {
   console.log('[PhantomOS] Shutting down gracefully...');
+  destroyAllPtys();
   // Checkpoint WAL so no data is lost
   try { sqlite.pragma('wal_checkpoint(TRUNCATE)'); } catch {}
   // Close database
@@ -188,7 +192,7 @@ process.on('SIGINT', shutdown);
 // Start Server
 // ---------------------------------------------------------------------------
 
-serve({ fetch: app.fetch, port: API_PORT }, (info) => {
+const server = serve({ fetch: app.fetch, port: API_PORT }, (info) => {
   console.log('');
   console.log('================================================');
   console.log(' PhantomOS — The System');
@@ -196,3 +200,5 @@ serve({ fetch: app.fetch, port: API_PORT }, (info) => {
   console.log('================================================');
   console.log('');
 });
+
+setupTerminalWs(server as unknown as Server);

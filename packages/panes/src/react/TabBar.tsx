@@ -9,7 +9,7 @@ const barStyle: CSSProperties = {
   display: 'flex', alignItems: 'center', height: 32,
   background: 'var(--tab-bar-bg, rgba(0,0,0,0.3))',
   borderBottom: '1px solid var(--pane-border, rgba(255,255,255,0.08))',
-  overflow: 'hidden', userSelect: 'none', gap: 2, padding: '0 4px',
+  overflow: 'visible', userSelect: 'none', gap: 2, padding: '0 4px',
 };
 
 const tabStyle = (active: boolean): CSSProperties => ({
@@ -31,7 +31,7 @@ const addStyle: CSSProperties = {
 };
 
 const menuStyle: CSSProperties = {
-  position: 'absolute', top: '100%', right: 0, zIndex: 100,
+  position: 'absolute', top: '100%', left: 0, zIndex: 9999,
   background: 'var(--pane-header-bg, #1a1a2e)', border: '1px solid var(--pane-border, rgba(255,255,255,0.12))',
   borderRadius: 6, padding: '4px 0', minWidth: 160, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
 };
