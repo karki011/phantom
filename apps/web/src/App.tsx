@@ -7,11 +7,12 @@
 import { AppShell, Group, Stack, Text } from '@mantine/core';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { Flame, Trophy } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 
+import { PaneRegistryProvider, TabBar, PaneLayout, usePanes } from '@phantom-os/panes';
+import { paneDefinitions } from './pane-definitions';
 import { unlockedCountAtom, refreshAchievementsAtom } from './atoms/achievements';
 import { fontScaleAtom } from './atoms/system';
-import { Cockpit } from './components/cockpit/Cockpit';
 import { SystemHeader } from './components/layout/SystemHeader';
 import { ActiveSessions } from './components/views/ActiveSessions';
 import { QuestHistory } from './components/views/QuestHistory';
@@ -27,10 +28,41 @@ import { useSessions } from './hooks/useSessions';
 import { useHealthCheck } from './hooks/useHealthCheck';
 import { useSystemEvents } from './hooks/useSystemEvents';
 
+/** Cockpit route renders the pane workspace (TabBar + PaneLayout) */
+const CockpitPaneView = () => {
+  const { getActiveTab, setSplitRatio } = usePanes();
+  const tab = getActiveTab();
+
+  if (!tab) return null;
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        // Map pane CSS custom properties to PhantomOS theme tokens
+        '--pane-border': 'var(--phantom-border-subtle)',
+        '--pane-header-bg': 'var(--phantom-surface-card)',
+        '--tab-bar-bg': 'var(--phantom-surface-card)',
+      } as React.CSSProperties}
+    >
+      <TabBar />
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        <PaneLayout
+          layout={tab.layout}
+          panes={tab.panes}
+          onRatioChange={(node, ratio) => setSplitRatio(node, ratio)}
+        />
+      </div>
+    </div>
+  );
+};
+
 const ViewContent = ({ route }: { route: Route }) => {
   switch (route) {
     case 'cockpit':
-      return <Cockpit />;
+      return <CockpitPaneView />;
     case 'sessions':
       return <ActiveSessions />;
     case 'history':
@@ -77,6 +109,7 @@ export const App = () => {
   const isElectron = navigator.userAgent.includes('Electron');
 
   return (
+    <PaneRegistryProvider definitions={paneDefinitions}>
     <AppShell
       header={{ height: '3.5rem' }}
       footer={{ height: '2.5rem' }}
@@ -96,9 +129,15 @@ export const App = () => {
 
       {/* Main Content — hash-routed views */}
       <AppShell.Main>
-        <Stack p="md" gap="lg">
-          <ViewContent route={route} />
-        </Stack>
+        {route === 'cockpit' ? (
+          <div style={{ height: '100%' }}>
+            <ViewContent route={route} />
+          </div>
+        ) : (
+          <Stack p="md" gap="lg">
+            <ViewContent route={route} />
+          </Stack>
+        )}
       </AppShell.Main>
 
       {/* Footer */}
@@ -127,5 +166,6 @@ export const App = () => {
         </Group>
       </AppShell.Footer>
     </AppShell>
+    </PaneRegistryProvider>
   );
 };
