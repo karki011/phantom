@@ -1,6 +1,6 @@
 /**
  * PhantomOS Desktop — Renderer Entry
- * Mirrors apps/web/src/main.tsx, sharing the same App component via symlinks.
+ * Electron renderer entry point — the sole frontend for PhantomOS.
  * @author Subash Karki
  */
 import '@mantine/core/styles.css';

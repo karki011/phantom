@@ -26,7 +26,7 @@ import { taskRoutes } from './routes/tasks.js';
 import { API_PORT } from '@phantom-os/shared';
 import type { Server } from 'node:http';
 import { setupTerminalWs } from './routes/terminal-ws.js';
-import { destroyAllPtys } from './terminal-manager.js';
+import { destroyAllPtys, initDaemonClient, disconnectDaemon } from './terminal-manager.js';
 
 // ---------------------------------------------------------------------------
 // SSE Broadcast
@@ -177,6 +177,7 @@ startActivityPoller(broadcast);
 
 const shutdown = () => {
   console.log('[PhantomOS] Shutting down gracefully...');
+  disconnectDaemon();
   destroyAllPtys();
   // Checkpoint WAL so no data is lost
   try { sqlite.pragma('wal_checkpoint(TRUNCATE)'); } catch {}
@@ -202,3 +203,8 @@ const server = serve({ fetch: app.fetch, port: API_PORT }, (info) => {
 });
 
 setupTerminalWs(server as unknown as Server);
+
+// Connect to the terminal daemon (non-blocking — falls back to direct PTY if unavailable)
+initDaemonClient().catch((err) =>
+  console.warn('[PhantomOS] Daemon client init error:', err),
+);

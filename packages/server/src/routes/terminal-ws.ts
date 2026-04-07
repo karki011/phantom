@@ -1,6 +1,8 @@
 /**
  * PhantomOS Terminal WebSocket Handler
- * Bridges xterm.js in the renderer to node-pty in the server.
+ * Bridges xterm.js in the renderer to the terminal daemon (or direct PTY fallback).
+ * The frontend WebSocket interface is unchanged — this layer relays between
+ * WebSocket and the daemon's Unix socket.
  * @author Subash Karki
  */
 import { WebSocketServer, WebSocket } from 'ws';
@@ -29,10 +31,22 @@ export const setupTerminalWs = (
   });
 };
 
-const handleConnection = (ws: WebSocket, termId: string): void => {
+const handleConnection = async (ws: WebSocket, termId: string): Promise<void> => {
   let session = getPtySession(termId);
+
   if (!session) {
-    session = createPty(termId);
+    try {
+      // createPty is now async — it tries the daemon first, falls back to direct PTY
+      session = await createPty(termId);
+    } catch (err) {
+      console.error(`[TerminalWS] Failed to spawn PTY for ${termId}:`, err);
+      ws.send(JSON.stringify({
+        type: 'output',
+        data: `\r\n\x1b[31mFailed to spawn terminal: ${(err as Error).message}\x1b[0m\r\n`,
+      }));
+      ws.close(1011, 'PTY spawn failed');
+      return;
+    }
   }
 
   const onData = (data: string) => {

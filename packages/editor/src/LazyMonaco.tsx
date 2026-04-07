@@ -3,6 +3,11 @@
  * Loads Monaco from local node_modules instead of CDN (works with strict CSP).
  * @author Subash Karki
  */
+
+// Configure web workers BEFORE Monaco initializes — enables off-main-thread
+// syntax highlighting, validation, and IntelliSense via Vite ?worker imports.
+import './monaco-workers.js';
+
 import { Suspense, lazy } from 'react';
 import type { EditorProps, DiffEditorProps } from '@monaco-editor/react';
 import { loader } from '@monaco-editor/react';

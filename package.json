@@ -3,26 +3,32 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "packageManager": "bun@1.3.11",
   "description": "PhantomOS — Solo Leveling System gamified Claude session dashboard",
   "author": "Subash Karki",
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
-    "dev:web": "turbo dev --filter=@phantom-os/web",
     "dev:api": "turbo dev:api --filter=@phantom-os/server",
     "dev:all": "turbo dev dev:api",
-    "dev:desktop": "turbo dev --filter=@phantom-os/desktop"
+    "dev:desktop": "turbo dev --filter=@phantom-os/desktop",
+    "postinstall": "chmod +x node_modules/.bun/node-pty@*/node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true"
   },
   "devDependencies": {
     "turbo": "^2.9.4",
+    "tsx": "^4.21.0",
     "typescript": "~6.0.2"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3",
-      "esbuild",
-      "electron",
-      "node-pty"
-    ]
-  }
+  "trustedDependencies": [
+    "better-sqlite3",
+    "bufferutil",
+    "electron",
+    "esbuild",
+    "node-pty",
+    "utf-8-validate"
+  ],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
 }

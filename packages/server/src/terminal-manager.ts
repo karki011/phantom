@@ -1,33 +1,157 @@
 /**
  * PhantomOS Terminal Manager
- * Spawns and manages PTY processes via node-pty.
+ * Connects to the terminal daemon for PTY management.
+ * Falls back to direct node-pty spawn if the daemon isn't running.
  * @author Subash Karki
  */
 import * as pty from 'node-pty';
 import { homedir } from 'node:os';
+import { existsSync } from 'node:fs';
+import { DaemonClient } from '@phantom-os/terminal/daemon';
 
-interface PtySession {
+// ─── Types ─────────────────────────────────────────────────────────────
+
+export interface PtySession {
   id: string;
-  pty: pty.IPty;
+  /** Direct PTY — only set when running in fallback mode */
+  pty: pty.IPty | null;
   listeners: Set<(data: string) => void>;
+  /** Whether this session is managed by the daemon */
+  daemonManaged: boolean;
 }
 
-const sessions = new Map<string, PtySession>();
+// ─── State ─────────────────────────────────────────────────────────────
 
-export const createPty = (id: string, cwd?: string): PtySession => {
-  const shell = process.env.SHELL || '/bin/zsh';
+const sessions = new Map<string, PtySession>();
+let daemonClient: DaemonClient | null = null;
+let daemonAvailable = false;
+
+// ─── Daemon Client ─────────────────────────────────────────────────────
+
+/**
+ * Initialize the daemon client connection.
+ * Call this once at server startup.
+ */
+export const initDaemonClient = async (): Promise<boolean> => {
+  if (daemonClient?.connected) return true;
+
+  // Check if daemon is reachable
+  const reachable = await DaemonClient.isDaemonReachable();
+  if (!reachable) {
+    console.log('[TerminalManager] Daemon not reachable, using direct PTY fallback');
+    daemonAvailable = false;
+    return false;
+  }
+
+  try {
+    daemonClient = new DaemonClient();
+
+    // Wire up output events — route to session listeners
+    daemonClient.on('output', (sessionId: string, data: string) => {
+      const session = sessions.get(sessionId);
+      if (session) {
+        for (const listener of session.listeners) {
+          listener(data);
+        }
+      }
+    });
+
+    daemonClient.on('exit', (sessionId: string, _code: number) => {
+      const session = sessions.get(sessionId);
+      if (session) {
+        session.listeners.clear();
+        sessions.delete(sessionId);
+      }
+    });
+
+    daemonClient.on('disconnected', () => {
+      console.warn('[TerminalManager] Daemon disconnected');
+      daemonAvailable = false;
+    });
+
+    daemonClient.on('connected', () => {
+      console.log('[TerminalManager] Daemon reconnected');
+      daemonAvailable = true;
+    });
+
+    daemonClient.on('error', (err: Error) => {
+      console.error('[TerminalManager] Daemon client error:', err.message);
+    });
+
+    await daemonClient.connect();
+    daemonAvailable = true;
+    console.log('[TerminalManager] Connected to terminal daemon');
+    return true;
+  } catch (err) {
+    console.warn(
+      '[TerminalManager] Failed to connect to daemon:',
+      (err as Error).message,
+    );
+    daemonClient = null;
+    daemonAvailable = false;
+    return false;
+  }
+};
+
+/** Get the daemon client instance (may be null if not connected) */
+export const getDaemonClient = (): DaemonClient | null =>
+  daemonAvailable ? daemonClient : null;
+
+/** Check if we're using the daemon */
+export const isDaemonMode = (): boolean => daemonAvailable;
+
+// ─── Fallback: Direct PTY ──────────────────────────────────────────────
+
+/** Resolve a working shell binary — Electron can strip PATH */
+const resolveShell = (): string => {
+  const candidates = [
+    process.env.SHELL,
+    '/bin/zsh',
+    '/bin/bash',
+    '/bin/sh',
+  ].filter(Boolean) as string[];
+
+  for (const shell of candidates) {
+    if (existsSync(shell)) return shell;
+  }
+  return '/bin/sh';
+};
+
+/** Env vars that break tools inside the PTY (e.g. nvm vs homebrew) */
+const STRIP_ENV_KEYS = new Set([
+  'npm_config_prefix',
+  'npm_config_globalconfig',
+  'ELECTRON_RUN_AS_NODE',
+]);
+
+/** Build a clean env for the PTY — inherit process.env but ensure PATH */
+const buildPtyEnv = (): Record<string, string> => {
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v !== undefined && !STRIP_ENV_KEYS.has(k)) env[k] = v;
+  }
+  env.TERM = 'xterm-256color';
+  if (!env.PATH || !env.PATH.includes('/usr/local/bin')) {
+    env.PATH = `/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin${env.PATH ? `:${env.PATH}` : ''}`;
+  }
+  return env;
+};
+
+const createDirectPty = (id: string, cwd?: string): PtySession => {
+  const shell = resolveShell();
   const ptyProcess = pty.spawn(shell, [], {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
     cwd: cwd || homedir(),
-    env: { ...process.env, TERM: 'xterm-256color' },
+    env: buildPtyEnv(),
   });
 
   const session: PtySession = {
     id,
     pty: ptyProcess,
     listeners: new Set(),
+    daemonManaged: false,
   };
 
   ptyProcess.onData((data) => {
@@ -40,8 +164,75 @@ export const createPty = (id: string, cwd?: string): PtySession => {
   return session;
 };
 
+// ─── Public API ────────────────────────────────────────────────────────
+
+/**
+ * Create or attach to a PTY session (async — prefers daemon).
+ */
+export const createPty = async (
+  id: string,
+  cwd?: string,
+  cols?: number,
+  rows?: number,
+): Promise<PtySession> => {
+  // Try daemon first
+  if (daemonAvailable && daemonClient?.connected) {
+    try {
+      await daemonClient.createOrAttach(id, { cols, rows, cwd });
+
+      const session: PtySession = {
+        id,
+        pty: null,
+        listeners: new Set(),
+        daemonManaged: true,
+      };
+      sessions.set(id, session);
+      return session;
+    } catch (err) {
+      console.warn(
+        `[TerminalManager] Daemon createOrAttach failed for ${id}, falling back:`,
+        (err as Error).message,
+      );
+    }
+  }
+
+  // Fallback to direct PTY
+  return createDirectPty(id, cwd);
+};
+
+/**
+ * Synchronous create — for backward compatibility.
+ * Prefers daemon if connected, otherwise direct PTY.
+ */
+export const createPtySync = (id: string, cwd?: string): PtySession => {
+  if (daemonAvailable && daemonClient?.connected) {
+    // Fire-and-forget the daemon createOrAttach
+    daemonClient.createOrAttach(id, { cwd }).catch((err) => {
+      console.warn(`[TerminalManager] Async daemon create failed for ${id}:`, err);
+    });
+
+    const session: PtySession = {
+      id,
+      pty: null,
+      listeners: new Set(),
+      daemonManaged: true,
+    };
+    sessions.set(id, session);
+    return session;
+  }
+
+  return createDirectPty(id, cwd);
+};
+
 export const writePty = (id: string, data: string): void => {
-  sessions.get(id)?.pty.write(data);
+  const session = sessions.get(id);
+  if (!session) return;
+
+  if (session.daemonManaged && daemonClient?.connected) {
+    daemonClient.input(id, data);
+  } else if (session.pty) {
+    session.pty.write(data);
+  }
 };
 
 export const resizePty = (
@@ -49,16 +240,30 @@ export const resizePty = (
   cols: number,
   rows: number,
 ): void => {
-  sessions.get(id)?.pty.resize(cols, rows);
+  const session = sessions.get(id);
+  if (!session) return;
+
+  if (session.daemonManaged && daemonClient?.connected) {
+    daemonClient.resize(id, cols, rows);
+  } else if (session.pty) {
+    session.pty.resize(cols, rows);
+  }
 };
 
 export const destroyPty = (id: string): void => {
   const session = sessions.get(id);
-  if (session) {
+  if (!session) return;
+
+  if (session.daemonManaged && daemonClient?.connected) {
+    daemonClient.kill(id).catch((err) => {
+      console.warn(`[TerminalManager] Daemon kill failed for ${id}:`, err);
+    });
+  } else if (session.pty) {
     session.pty.kill();
-    session.listeners.clear();
-    sessions.delete(id);
   }
+
+  session.listeners.clear();
+  sessions.delete(id);
 };
 
 export const getPtySession = (
@@ -67,4 +272,13 @@ export const getPtySession = (
 
 export const destroyAllPtys = (): void => {
   for (const [id] of sessions) destroyPty(id);
+};
+
+/** Disconnect the daemon client (call on server shutdown) */
+export const disconnectDaemon = (): void => {
+  if (daemonClient) {
+    daemonClient.disconnect();
+    daemonClient = null;
+    daemonAvailable = false;
+  }
 };

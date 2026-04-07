@@ -1,98 +1,59 @@
 /**
- * @phantom-os/panes — Recursive binary-tree renderer
+ * @phantom-os/panes — PaneLayout backward-compatible wrapper
  * @author Subash Karki
  *
- * Renders LayoutNode trees. Split nodes use a CSS flex + drag handle.
+ * Wraps the new LayoutRenderer to maintain the old PaneLayout API.
+ * New code should use LayoutRenderer or Workspace directly.
  */
 
-import { useCallback, useRef, type CSSProperties, type MouseEvent } from 'react';
+import { useCallback } from 'react';
 import type { LayoutNode, Pane } from '../core/types.js';
-import { PaneContainer } from './PaneContainer.js';
-import { usePaneRegistry } from './PaneRegistry.js';
-
-const handleStyle: CSSProperties = {
-  flex: '0 0 4px',
-  cursor: 'col-resize',
-  background: 'var(--pane-border, rgba(255,255,255,0.08))',
-  zIndex: 1,
-};
-
-interface SplitProps {
-  direction: 'horizontal' | 'vertical';
-  first: React.ReactNode;
-  second: React.ReactNode;
-  ratio: number;
-  onRatioChange: (r: number) => void;
-}
-
-function SplitView({ direction, first, second, ratio, onRatioChange }: SplitProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const startDrag = useCallback(
-    (e: MouseEvent) => {
-      e.preventDefault();
-      const el = containerRef.current;
-      if (!el) return;
-
-      const onMove = (ev: globalThis.MouseEvent) => {
-        const rect = el.getBoundingClientRect();
-        const pos = direction === 'horizontal' ? ev.clientX - rect.left : ev.clientY - rect.top;
-        const size = direction === 'horizontal' ? rect.width : rect.height;
-        onRatioChange(Math.min(0.9, Math.max(0.1, pos / size)));
-      };
-      const onUp = () => {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-      };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    },
-    [direction, onRatioChange],
-  );
-
-  const isH = direction === 'horizontal';
-  return (
-    <div
-      ref={containerRef}
-      style={{ display: 'flex', flexDirection: isH ? 'row' : 'column', height: '100%', width: '100%' }}
-    >
-      <div style={{ flex: `0 0 ${ratio * 100}%`, overflow: 'hidden' }}>{first}</div>
-      <div
-        style={{ ...handleStyle, cursor: isH ? 'col-resize' : 'row-resize' }}
-        onMouseDown={startDrag}
-      />
-      <div style={{ flex: 1, overflow: 'hidden' }}>{second}</div>
-    </div>
-  );
-}
+import { LayoutRenderer } from './LayoutRenderer.js';
+import { usePaneStore } from './WorkspaceProvider.js';
 
 export interface PaneLayoutProps {
   layout: LayoutNode;
   panes: Record<string, Pane>;
+  /** @deprecated Use resizeSplit from the store instead */
   onRatioChange?: (node: LayoutNode, ratio: number) => void;
 }
 
+/**
+ * @deprecated Use Workspace or LayoutRenderer directly.
+ * This wrapper maintains the old API surface.
+ */
 export function PaneLayout({ layout, panes, onRatioChange }: PaneLayoutProps) {
-  const registry = usePaneRegistry();
+  const store = usePaneStore();
+  const tab = store.getActiveTab();
+  const tabId = tab?.id ?? '';
 
-  if (layout.type === 'pane') {
-    const pane = panes[layout.paneId];
-    if (!pane) return null;
-    const def = registry.get(pane.kind);
-    return (
-      <PaneContainer pane={pane}>
-        {def ? def.render(pane) : <div>Unknown pane kind: {pane.kind}</div>}
-      </PaneContainer>
-    );
-  }
+  const handleResize = useCallback(
+    (path: number[], percentage: number) => {
+      if (tabId) {
+        store.resizeSplit(tabId, path, percentage);
+      }
+      // Also call legacy handler if provided
+      // (the old API passed the node + ratio, new API uses path + percentage)
+      if (onRatioChange) {
+        // Walk the tree to find the node at this path
+        let node: LayoutNode = layout;
+        for (const idx of path) {
+          if (node.type === 'split') {
+            node = idx === 0 ? node.first : node.second;
+          }
+        }
+        onRatioChange(node, percentage / 100);
+      }
+    },
+    [store, tabId, layout, onRatioChange],
+  );
 
   return (
-    <SplitView
-      direction={layout.direction}
-      ratio={layout.ratio}
-      onRatioChange={(r) => onRatioChange?.(layout, r)}
-      first={<PaneLayout layout={layout.first} panes={panes} onRatioChange={onRatioChange} />}
-      second={<PaneLayout layout={layout.second} panes={panes} onRatioChange={onRatioChange} />}
+    <LayoutRenderer
+      layout={layout}
+      panes={panes}
+      tabId={tabId}
+      onResize={handleResize}
     />
   );
 }

@@ -6,6 +6,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
+    "dev": "tsx watch src/index.ts",
     "dev:api": "tsx watch src/index.ts"
   },
   "dependencies": {
@@ -13,6 +14,7 @@
     "@phantom-os/db": "workspace:*",
     "@phantom-os/gamification": "workspace:*",
     "@phantom-os/shared": "workspace:*",
+    "@phantom-os/terminal": "workspace:*",
     "chokidar": "^5.0.0",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.12",
