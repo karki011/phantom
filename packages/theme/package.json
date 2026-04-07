@@ -7,6 +7,6 @@
   "types": "src/index.ts",
   "author": "Subash Karki",
   "dependencies": {
-    "@mantine/core": "8.1.1"
+    "@mantine/core": "9.0.1"
   }
 }

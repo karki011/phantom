@@ -6,15 +6,17 @@
  */
 import {
   ActionIcon,
+  Box,
   Group,
   Menu,
   Text,
   useMantineColorScheme,
 } from '@mantine/core';
 import { useAtom } from 'jotai';
-import { ArrowLeft, Circle, Moon, Sun, Type } from 'lucide-react';
+import { ArrowLeft, Circle, Moon, Palette, Sun, Type } from 'lucide-react';
+import { themeRegistry } from '@phantom-os/theme';
 
-import { type FontScale, fontScaleAtom } from '../../atoms/system';
+import { type FontScale, fontScaleAtom, themeNameAtom } from '../../atoms/system';
 import { useRouter } from '../../hooks/useRouter';
 
 interface SystemHeaderProps {
@@ -33,6 +35,7 @@ const FONT_SCALE_OPTIONS: { label: string; value: FontScale }[] = [
 export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }: SystemHeaderProps) => {
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const [fontScale, setFontScale] = useAtom(fontScaleAtom);
+  const [themeName, setThemeName] = useAtom(themeNameAtom);
   const { isHome, navigate } = useRouter();
 
   const isDark = colorScheme === 'dark';
@@ -115,6 +118,44 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
                 aria-current={fontScale === option.value ? 'true' : undefined}
               >
                 {option.label}
+              </Menu.Item>
+            ))}
+          </Menu.Dropdown>
+        </Menu>
+
+        {/* Theme Picker Menu */}
+        <Menu shadow="md" width={180} position="bottom-end">
+          <Menu.Target>
+            <ActionIcon
+              variant="subtle"
+              size="lg"
+              aria-label="Theme picker"
+            >
+              <Palette size={18} aria-hidden="true" />
+            </ActionIcon>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Label>Theme</Menu.Label>
+            {themeRegistry.map((t) => (
+              <Menu.Item
+                key={t.name}
+                onClick={() => setThemeName(t.name)}
+                fw={themeName === t.name ? 700 : 400}
+                c={themeName === t.name ? 'var(--phantom-accent-glow)' : undefined}
+                aria-current={themeName === t.name ? 'true' : undefined}
+                leftSection={
+                  <Box
+                    w={12}
+                    h={12}
+                    style={{
+                      borderRadius: '50%',
+                      background: t.colors[t.primaryColor]?.[5] ?? '#888',
+                      border: '1px solid var(--phantom-border-subtle)',
+                    }}
+                  />
+                }
+              >
+                {t.label}
               </Menu.Item>
             ))}
           </Menu.Dropdown>

@@ -17,7 +17,7 @@ hunterRoutes.get('/hunter', (c) => {
     return c.json({ error: 'Hunter profile not found' }, 404);
   }
 
-  return c.json({ ...profile, stats: stats ?? null });
+  return c.json({ profile, stats: stats ?? null });
 });
 
 /** POST /hunter/name — Update hunter name */

@@ -14,8 +14,8 @@
     "dev:desktop": "turbo dev --filter=@phantom-os/desktop"
   },
   "devDependencies": {
-    "turbo": "^2.5.0",
-    "typescript": "~5.9.3"
+    "turbo": "^2.9.4",
+    "typescript": "~6.0.2"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

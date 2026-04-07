@@ -8,6 +8,6 @@
   "dependencies": {
     "@phantom-os/db": "workspace:*",
     "@phantom-os/shared": "workspace:*",
-    "drizzle-orm": "^0.44.2"
+    "drizzle-orm": "^0.45.2"
   }
 }

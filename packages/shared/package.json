@@ -6,6 +6,6 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "devDependencies": {
-    "@types/node": "^22.0.0"
+    "@types/node": "^25.5.2"
   }
 }

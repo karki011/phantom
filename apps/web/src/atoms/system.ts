@@ -40,6 +40,15 @@ export const themeAtom = atomWithStorage<ThemeMode>(
 );
 
 // ---------------------------------------------------------------------------
+// Theme name — which token set is active (persisted to localStorage)
+// ---------------------------------------------------------------------------
+
+export const themeNameAtom = atomWithStorage<string>(
+  'phantom-theme-name',
+  'cz-dark',
+);
+
+// ---------------------------------------------------------------------------
 // Notification queue — writable atom
 // ---------------------------------------------------------------------------
 

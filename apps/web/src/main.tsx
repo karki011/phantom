@@ -4,7 +4,6 @@
  *
  * @author Subash Karki
  */
-import { MantineProvider } from '@mantine/core';
 import '@mantine/core/styles.css';
 import { Notifications } from '@mantine/notifications';
 import '@mantine/notifications/styles.css';
@@ -12,10 +11,9 @@ import { Provider as JotaiProvider } from 'jotai';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { buildCssVarsResolver, buildPhantomTheme, defaultTheme } from '@phantom-os/theme';
-
 import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ThemeProvider } from './components/ThemeProvider';
 
 // ---------------------------------------------------------------------------
 // Font scale initialization from localStorage (before React mounts)
@@ -44,22 +42,15 @@ applyFontScale();
 const container = document.getElementById('root');
 if (!container) throw new Error('Root element not found');
 
-const defaultColorScheme =
-  (localStorage.getItem('phantom-theme')?.replace(/"/g, '') as 'dark' | 'light') ?? 'dark';
-
 createRoot(container).render(
   <StrictMode>
-    <MantineProvider
-      theme={buildPhantomTheme(defaultTheme)}
-      defaultColorScheme={defaultColorScheme}
-      cssVariablesResolver={buildCssVarsResolver(defaultTheme)}
-    >
-      <Notifications position="top-right" />
-      <JotaiProvider>
+    <JotaiProvider>
+      <ThemeProvider>
+        <Notifications position="top-right" />
         <ErrorBoundary>
           <App />
         </ErrorBoundary>
-      </JotaiProvider>
-    </MantineProvider>
+      </ThemeProvider>
+    </JotaiProvider>
   </StrictMode>,
 );

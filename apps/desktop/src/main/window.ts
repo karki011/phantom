@@ -24,7 +24,7 @@ export const createWindow = (): void => {
     backgroundColor: '#000000',
     show: false,
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false,
