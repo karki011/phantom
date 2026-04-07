@@ -23,6 +23,9 @@ import { questRoutes } from './routes/quests.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { statsRoutes } from './routes/stats.js';
 import { taskRoutes } from './routes/tasks.js';
+import { projectRoutes } from './routes/projects.js';
+import { workspaceRoutes } from './routes/workspaces.js';
+import { workspaceFileRoutes } from './routes/workspace-files.js';
 import { API_PORT } from '@phantom-os/shared';
 import type { Server } from 'node:http';
 import { setupTerminalWs } from './routes/terminal-ws.js';
@@ -75,6 +78,9 @@ app.route('/api', taskRoutes);
 app.route('/api', achievementRoutes);
 app.route('/api', questRoutes);
 app.route('/api', statsRoutes);
+app.route('/api', projectRoutes);
+app.route('/api', workspaceRoutes);
+app.route('/api', workspaceFileRoutes);
 
 // SSE endpoint
 app.get('/events', (c) => {

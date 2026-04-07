@@ -199,3 +199,98 @@ export const getSessionMessages = async (
   );
   return data.messages;
 };
+
+// ---------------------------------------------------------------------------
+// Projects & Workspaces
+// ---------------------------------------------------------------------------
+
+export interface ProjectData {
+  id: string;
+  repoPath: string;
+  name: string;
+  color: string;
+  createdAt: number;
+}
+
+export interface WorkspaceData {
+  id: string;
+  projectId: string;
+  name: string;
+  branch: string;
+  baseBranch: string;
+  color: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface FileEntry {
+  name: string;
+  relativePath: string;
+  isDirectory: boolean;
+  size: number;
+  mtime: number;
+}
+
+export interface DirectoryListing {
+  entries: FileEntry[];
+}
+
+export interface FileContent {
+  content: string;
+  mtime: number;
+}
+
+export const getProjects = (): Promise<ProjectData[]> =>
+  fetchApi<ProjectData[]>('/api/projects');
+
+export const createProject = (data: {
+  repoPath: string;
+  name?: string;
+}): Promise<ProjectData> =>
+  fetchApi<ProjectData>('/api/projects', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const getWorkspaces = (projectId?: string): Promise<WorkspaceData[]> =>
+  fetchApi<WorkspaceData[]>(
+    `/api/workspaces${projectId ? `?projectId=${projectId}` : ''}`,
+  );
+
+export const createWorkspace = (data: {
+  projectId: string;
+  name?: string;
+  branch?: string;
+}): Promise<WorkspaceData> =>
+  fetchApi<WorkspaceData>('/api/workspaces', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const updateWorkspace = (
+  id: string,
+  data: Partial<{ name: string; branch: string }>,
+): Promise<WorkspaceData> =>
+  fetchApi<WorkspaceData>(`/api/workspaces/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+
+export const deleteWorkspace = (id: string): Promise<void> =>
+  fetchApi<void>(`/api/workspaces/${id}`, { method: 'DELETE' });
+
+export const getDirectoryListing = (
+  workspaceId: string,
+  path: string,
+): Promise<DirectoryListing> =>
+  fetchApi<DirectoryListing>(
+    `/api/workspaces/${workspaceId}/files?path=${encodeURIComponent(path)}`,
+  );
+
+export const getFileContent = (
+  workspaceId: string,
+  path: string,
+): Promise<FileContent> =>
+  fetchApi<FileContent>(
+    `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`,
+  );

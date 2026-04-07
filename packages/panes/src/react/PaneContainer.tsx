@@ -170,7 +170,7 @@ export function PaneContainer({ pane, tabId, children }: PaneContainerProps) {
             )}
           </div>
         </div>
-        <div style={{ flex: 1, overflow: 'auto' }}>{children}</div>
+        <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>{children}</div>
       </div>
     </DropZone>
   );

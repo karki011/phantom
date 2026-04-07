@@ -141,6 +141,51 @@ export const runMigrations = (sqlite: Database.Database): void => {
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_activity_log_timestamp ON activity_log(timestamp)`);
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_daily_quests_date ON daily_quests(date)`);
 
+  // ---------------------------------------------------------------------------
+  // Workspace System Tables
+  // ---------------------------------------------------------------------------
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      repo_path TEXT NOT NULL UNIQUE,
+      default_branch TEXT DEFAULT 'main',
+      worktree_base_dir TEXT,
+      color TEXT,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS workspace_sections (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      name TEXT NOT NULL,
+      tab_order INTEGER DEFAULT 0,
+      is_collapsed INTEGER DEFAULT 0,
+      color TEXT,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS workspaces (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      type TEXT NOT NULL CHECK(type IN ('worktree','branch')),
+      name TEXT NOT NULL,
+      branch TEXT NOT NULL,
+      worktree_path TEXT,
+      port_base INTEGER,
+      section_id TEXT REFERENCES workspace_sections(id),
+      tab_order INTEGER DEFAULT 0,
+      is_active INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
+  `);
+
+  // Workspace indexes
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_workspaces_project_id ON workspaces(project_id)`);
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_workspaces_section_id ON workspaces(section_id)`);
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_workspaces_is_active ON workspaces(is_active)`);
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_workspace_sections_project_id ON workspace_sections(project_id)`);
+
   // Cleanup stale data on boot
   cleanupStaleData(sqlite);
 };

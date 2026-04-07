@@ -1,6 +1,11 @@
 /**
  * PhantomOS App Shell
- * Main application layout with cockpit + hash-routed detail views
+ * Main application layout with sidebars + cockpit + hash-routed detail views
+ *
+ * Layout:
+ *   [Header]
+ *   [LeftSidebar | Main Content (flex: 1) | RightSidebar]
+ *   [Footer]
  *
  * @author Subash Karki
  */
@@ -22,6 +27,8 @@ import { StreakView } from './components/views/StreakView';
 import { TaskHistory } from './components/views/TaskHistory';
 import { AchievementsView } from './components/views/AchievementsView';
 import { DailyQuestsView } from './components/views/DailyQuestsView';
+import { WorkspaceSidebar } from './components/sidebar/WorkspaceSidebar';
+import { RightSidebar } from './components/sidebar/RightSidebar';
 import { useHunter } from './hooks/useHunter';
 import { type Route, useRouter } from './hooks/useRouter';
 import { useSessions } from './hooks/useSessions';
@@ -88,6 +95,7 @@ export const App = () => {
   }, [refreshAchievements]);
 
   const isElectron = navigator.userAgent.includes('Electron');
+  const isCockpit = route === 'cockpit';
 
   return (
     <WorkspaceProvider definitions={paneDefinitions}>
@@ -108,17 +116,34 @@ export const App = () => {
         <SystemHeader activeSessions={active.length} isConnected={isConnected} />
       </AppShell.Header>
 
-      {/* Main Content — hash-routed views */}
+      {/* Main area — sidebars + content in flexbox row */}
       <AppShell.Main>
-        {route === 'cockpit' ? (
-          <div style={{ height: 'calc(100vh - 3.5rem - 2.5rem)' }}>
-            <ViewContent route={route} />
+        <div
+          style={{
+            display: 'flex',
+            height: 'calc(100vh - 3.5rem - 2.5rem)',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Left Sidebar — workspace list */}
+          <WorkspaceSidebar />
+
+          {/* Center content — flex: 1 */}
+          <div style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
+            {isCockpit ? (
+              <div style={{ height: '100%' }}>
+                <ViewContent route={route} />
+              </div>
+            ) : (
+              <Stack p="md" gap="lg">
+                <ViewContent route={route} />
+              </Stack>
+            )}
           </div>
-        ) : (
-          <Stack p="md" gap="lg">
-            <ViewContent route={route} />
-          </Stack>
-        )}
+
+          {/* Right Sidebar — file explorer (only on cockpit route) */}
+          {isCockpit && <RightSidebar />}
+        </div>
       </AppShell.Main>
 
       {/* Footer */}
