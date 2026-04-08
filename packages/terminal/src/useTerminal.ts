@@ -12,6 +12,12 @@ import { getTerminalTheme } from './theme.js';
 /** Port the Hono API server listens on — must match @phantom-os/shared API_PORT */
 const API_PORT = 3849;
 
+/**
+ * Track active terminal sessions to prevent React StrictMode double-mount
+ * from creating duplicate PTYs. Maps paneId → cleanup function.
+ */
+const activeTerminals = new Map<string, () => void>();
+
 export const useTerminal = (
   containerRef: React.RefObject<HTMLDivElement | null>,
   paneId: string,
@@ -19,14 +25,19 @@ export const useTerminal = (
 ) => {
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
-  // Stabilize cwd in a ref so the effect doesn't re-run when cwd changes
-  // from undefined to actual value (which would create duplicate PTYs).
   const cwdRef = useRef(cwd);
   cwdRef.current = cwd;
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+
+    // Prevent duplicate terminals for the same paneId.
+    // If one already exists, clean it up first.
+    if (activeTerminals.has(paneId)) {
+      activeTerminals.get(paneId)!();
+      activeTerminals.delete(paneId);
+    }
 
     const term = new Terminal({
       theme: getTerminalTheme(),
@@ -46,13 +57,6 @@ export const useTerminal = (
     let ws: WebSocket | null = null;
     let opened = false;
 
-    /**
-     * Open the terminal and connect the WebSocket only once the
-     * container has non-zero dimensions. This avoids the
-     * "Cannot read properties of undefined (reading 'dimensions')"
-     * crash that occurs when xterm.js tries to measure a zero-size
-     * element.
-     */
     const openTerminal = () => {
       if (opened) return;
       opened = true;
@@ -60,18 +64,11 @@ export const useTerminal = (
       term.open(container);
       fit.fit();
 
-      // --- WebSocket to PTY server ---
-      // Connect directly to the Hono server, bypassing the Vite dev proxy.
-      // The proxy on port 3850 conflicts with WebSocket upgrade handling in
-      // @hono/node-server, causing ERR_CONNECTION_RESET.
       const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
       const wsUrl = `${proto}://localhost:${API_PORT}/ws/terminal/${paneId}`;
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        // Send init with cwd AND dimensions so PTY starts at correct size.
-        // Sending cols/rows here avoids the garbled-output race where the
-        // shell outputs at 80x24 before a separate resize arrives.
         const dims = fit.proposeDimensions();
         if (ws) {
           ws.send(JSON.stringify({
@@ -105,8 +102,6 @@ export const useTerminal = (
       });
     };
 
-    // Use a ResizeObserver to wait for the container to have
-    // dimensions before opening xterm.
     const observer = new ResizeObserver(() => {
       if (!opened) {
         if (container.offsetWidth > 0 && container.offsetHeight > 0) {
@@ -114,8 +109,6 @@ export const useTerminal = (
         }
         return;
       }
-
-      // Normal resize handling after the terminal is open.
       fit.fit();
       const dims = fit.proposeDimensions();
       if (dims && ws && ws.readyState === WebSocket.OPEN) {
@@ -126,17 +119,19 @@ export const useTerminal = (
     });
     observer.observe(container);
 
-    // If the container already has dimensions (common when
-    // re-mounting), open immediately on the next frame.
-    if (container.offsetWidth > 0 && container.offsetHeight > 0) {
-      requestAnimationFrame(() => openTerminal());
-    }
+    // Only use ResizeObserver — remove the requestAnimationFrame fallback
+    // that was causing a duplicate openTerminal() race.
 
-    return () => {
+    const cleanup = () => {
       observer.disconnect();
       ws?.close();
       term.dispose();
+      activeTerminals.delete(paneId);
     };
+
+    activeTerminals.set(paneId, cleanup);
+
+    return cleanup;
   }, [containerRef, paneId]);
 
   return { terminal: termRef, fit: fitRef };
