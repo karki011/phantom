@@ -8,11 +8,12 @@ import { useTerminal } from './useTerminal.js';
 
 interface TerminalPaneProps {
   paneId: string;
+  cwd?: string;
 }
 
-export const TerminalPane = ({ paneId }: TerminalPaneProps) => {
+export const TerminalPane = ({ paneId, cwd }: TerminalPaneProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  useTerminal(containerRef, paneId);
+  useTerminal(containerRef, paneId, cwd);
 
   return (
     <div

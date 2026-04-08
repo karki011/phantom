@@ -34,33 +34,51 @@ export const setupTerminalWs = (
 const handleConnection = async (ws: WebSocket, termId: string): Promise<void> => {
   let session = getPtySession(termId);
 
-  if (!session) {
-    try {
-      // createPty is now async — it tries the daemon first, falls back to direct PTY
-      session = await createPty(termId);
-    } catch (err) {
-      console.error(`[TerminalWS] Failed to spawn PTY for ${termId}:`, err);
-      ws.send(JSON.stringify({
-        type: 'output',
-        data: `\r\n\x1b[31mFailed to spawn terminal: ${(err as Error).message}\x1b[0m\r\n`,
-      }));
-      ws.close(1011, 'PTY spawn failed');
-      return;
-    }
+  const setupSession = (s: typeof session) => {
+    if (!s) return;
+    const onData = (data: string) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'output', data }));
+      }
+    };
+    s.listeners.add(onData);
+    ws.on('close', () => { s.listeners.delete(onData); });
+  };
+
+  // If session already exists (reconnect), wire it up immediately
+  if (session) {
+    setupSession(session);
   }
 
-  const onData = (data: string) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'output', data }));
-    }
-  };
-  session.listeners.add(onData);
-
-  ws.on('message', (raw) => {
+  ws.on('message', async (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
       switch (msg.type) {
+        case 'init': {
+          // Spawn PTY with cwd from the frontend
+          if (!session) {
+            try {
+              session = await createPty(termId, msg.cwd || undefined);
+              setupSession(session);
+            } catch (err) {
+              console.error(`[TerminalWS] Failed to spawn PTY for ${termId}:`, err);
+              ws.send(JSON.stringify({
+                type: 'output',
+                data: `\r\n\x1b[31mFailed to spawn terminal: ${(err as Error).message}\x1b[0m\r\n`,
+              }));
+              ws.close(1011, 'PTY spawn failed');
+            }
+          }
+          break;
+        }
         case 'input':
+          // If no init was sent, create PTY on first input (fallback)
+          if (!session) {
+            try {
+              session = await createPty(termId);
+              setupSession(session);
+            } catch { /* already handled */ }
+          }
           writePty(termId, msg.data);
           break;
         case 'resize':
@@ -70,9 +88,5 @@ const handleConnection = async (ws: WebSocket, termId: string): Promise<void> =>
     } catch {
       /* ignore malformed messages */
     }
-  });
-
-  ws.on('close', () => {
-    session?.listeners.delete(onData);
   });
 };

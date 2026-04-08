@@ -9,9 +9,13 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { getTerminalTheme } from './theme.js';
 
+/** Port the Hono API server listens on — must match @phantom-os/shared API_PORT */
+const API_PORT = 3849;
+
 export const useTerminal = (
   containerRef: React.RefObject<HTMLDivElement | null>,
   paneId: string,
+  cwd?: string,
 ) => {
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -53,13 +57,18 @@ export const useTerminal = (
       fit.fit();
 
       // --- WebSocket to PTY server ---
-      // Connect through the same host:port as the page so the Vite dev proxy
-      // (or any reverse proxy in production) handles the upgrade correctly.
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const wsUrl = `${proto}://${location.host}/ws/terminal/${paneId}`;
+      // Connect directly to the Hono server, bypassing the Vite dev proxy.
+      // The proxy on port 3850 conflicts with WebSocket upgrade handling in
+      // @hono/node-server, causing ERR_CONNECTION_RESET.
+      const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsUrl = `${proto}://localhost:${API_PORT}/ws/terminal/${paneId}`;
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
+        // Send init with cwd before resize so the server spawns PTY in the right directory
+        if (ws) {
+          ws.send(JSON.stringify({ type: 'init', cwd: cwd || null }));
+        }
         const dims = fit.proposeDimensions();
         if (dims && ws) {
           ws.send(JSON.stringify({
@@ -73,6 +82,14 @@ export const useTerminal = (
           const msg = JSON.parse(event.data);
           if (msg.type === 'output') term.write(msg.data);
         } catch { /* ignore */ }
+      };
+
+      ws.onerror = (event) => {
+        console.error('[Terminal] WebSocket error:', event);
+      };
+
+      ws.onclose = () => {
+        term.write('\r\n[Disconnected]\r\n');
       };
 
       term.onData((data) => {
@@ -114,7 +131,7 @@ export const useTerminal = (
       ws?.close();
       term.dispose();
     };
-  }, [containerRef, paneId]);
+  }, [containerRef, paneId, cwd]);
 
   return { terminal: termRef, fit: fitRef };
 };

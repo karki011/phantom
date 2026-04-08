@@ -236,7 +236,7 @@ export function WorkspaceHome() {
     return { total, completed, availableXp };
   }, [quests]);
 
-  const openTerminal = useCallback(() => store.addPane('terminal'), [store]);
+  const openTerminal = useCallback(() => store.addPane('terminal', { cwd: workspace?.worktreePath } as Record<string, unknown>), [store, workspace]);
   const openEditor = useCallback(() => store.addPane('editor'), [store]);
 
   return (
