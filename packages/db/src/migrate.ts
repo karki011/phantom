@@ -180,6 +180,9 @@ export const runMigrations = (sqlite: Database.Database): void => {
     );
   `);
 
+  // Workspace column migrations
+  addColumn('workspaces', 'base_branch', 'TEXT', 'NULL');
+
   // Workspace indexes
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_workspaces_project_id ON workspaces(project_id)`);
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_workspaces_section_id ON workspaces(section_id)`);

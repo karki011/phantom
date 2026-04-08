@@ -77,6 +77,7 @@ workspaceRoutes.post('/workspaces', async (c) => {
     type: 'worktree' as const,
     name,
     branch,
+    baseBranch: body.baseBranch ?? project.defaultBranch ?? null,
     worktreePath,
     portBase: null,
     sectionId: null,

@@ -137,6 +137,7 @@ export const workspaces = sqliteTable('workspaces', {
   worktreePath: text('worktree_path'),
   portBase: integer('port_base'),
   sectionId: text('section_id').references(() => workspaceSections.id),
+  baseBranch: text('base_branch'),
   tabOrder: integer('tab_order').default(0),
   isActive: integer('is_active').default(0),
   createdAt: integer('created_at').notNull(),

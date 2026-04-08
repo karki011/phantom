@@ -240,6 +240,11 @@ export function WorkspaceItem({
               {workspace.branch}
             </Badge>
           )}
+          {workspace.baseBranch && workspace.baseBranch !== workspace.branch && (
+            <Text fz="0.65rem" c="var(--phantom-text-muted)" style={{ flexShrink: 0 }}>
+              from {workspace.baseBranch}
+            </Text>
+          )}
         </Group>
       </UnstyledButton>
     </WorkspaceContextMenu>

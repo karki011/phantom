@@ -220,6 +220,7 @@ export interface WorkspaceData {
   type: string;
   name: string;
   branch: string;
+  baseBranch?: string | null;
   worktreePath: string | null;
   portBase: number | null;
   sectionId: string | null;
