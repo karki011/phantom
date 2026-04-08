@@ -11,7 +11,6 @@ import { themeNameAtom } from '../atoms/system';
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const themeName = useAtomValue(themeNameAtom);
   const tokens = themeRegistry.find(t => t.name === themeName) ?? defaultTheme;
-  console.log('[ThemeProvider] Active theme:', themeName, '→', tokens.label, '| primary:', tokens.primaryColor);
   const theme = buildPhantomTheme(tokens);
   const cssVarsResolver = buildCssVarsResolver(tokens);
 

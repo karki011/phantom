@@ -23,6 +23,9 @@ export default defineConfig({
   renderer: {
     plugins: [react()],
     root: 'src/renderer',
+    worker: {
+      format: 'es',
+    },
     build: {
       outDir: resolve(__dirname, 'dist/renderer'),
       rollupOptions: {
