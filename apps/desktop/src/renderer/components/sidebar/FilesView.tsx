@@ -3,10 +3,11 @@
  *
  * @author Subash Karki
  */
-import { ScrollArea, Skeleton, Text } from '@mantine/core';
+import { ScrollArea, Skeleton, Text, TextInput } from '@mantine/core';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
+import { Search, X } from 'lucide-react';
 
 import {
   clearFileTreeAtom,
@@ -21,12 +22,37 @@ import { activeWorkspaceAtom } from '../../atoms/workspaces';
 import type { FileEntry } from '../../lib/api';
 import { FileTreeItem } from './FileTreeItem';
 
+/** Recursively collect all file entries from loaded tree that match the query */
+function collectMatchingFiles(
+  entries: FileEntry[],
+  query: string,
+  workspaceId: string,
+  fileTree: Map<string, FileEntry[]>,
+): FileEntry[] {
+  const results: FileEntry[] = [];
+  const lowerQuery = query.toLowerCase();
+  for (const entry of entries) {
+    if (!entry.isDirectory && entry.name.toLowerCase().includes(lowerQuery)) {
+      results.push(entry);
+    }
+    if (entry.isDirectory) {
+      const cacheKey = `${workspaceId}:${entry.relativePath}`;
+      const children = fileTree.get(cacheKey);
+      if (children) {
+        results.push(...collectMatchingFiles(children, query, workspaceId, fileTree));
+      }
+    }
+  }
+  return results;
+}
+
 export function FilesView() {
   const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   const fileTree = useAtomValue(fileTreeAtom);
   const expandedFolders = useAtomValue(expandedFoldersAtom);
   const isDirLoading = useAtomValue(isDirLoadingAtom);
   const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchDirectory = useSetAtom(fetchDirectoryAtom);
   const toggleFolder = useSetAtom(toggleFolderAtom);
@@ -84,6 +110,12 @@ export function FilesView() {
   const rootKey = `${activeWorkspace.id}:/`;
   const rootEntries = fileTree.get(rootKey);
 
+  // Collect search results from all loaded directories
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim() || !rootEntries) return null;
+    return collectMatchingFiles(rootEntries, searchQuery.trim(), activeWorkspace.id, fileTree);
+  }, [searchQuery, rootEntries, activeWorkspace.id, fileTree]);
+
   if (!rootEntries) {
     return (
       <div style={{ padding: '8px 12px' }}>
@@ -97,21 +129,75 @@ export function FilesView() {
   }
 
   return (
-    <ScrollArea style={{ flex: 1 }} scrollbarSize={6}>
-      <div style={{ padding: '4px 0' }}>
-        <FileTreeRecursive
-          entries={rootEntries}
-          depth={0}
-          workspaceId={activeWorkspace.id}
-          fileTree={fileTree}
-          expandedFolders={expandedFolders}
-          selectedFile={selectedFile}
-          isDirLoading={isDirLoading}
-          onToggleFolder={handleToggleFolder}
-          onFileClick={handleFileClick}
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+      {/* Search input */}
+      <div style={{ padding: '6px 8px', flexShrink: 0 }}>
+        <TextInput
+          size="xs"
+          placeholder="Search files..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.currentTarget.value)}
+          leftSection={<Search size={12} style={{ color: 'var(--phantom-text-muted)' }} />}
+          rightSection={
+            searchQuery ? (
+              <X
+                size={12}
+                style={{ color: 'var(--phantom-text-muted)', cursor: 'pointer' }}
+                onClick={() => setSearchQuery('')}
+              />
+            ) : null
+          }
+          styles={{
+            input: {
+              backgroundColor: 'var(--phantom-surface-elevated)',
+              borderColor: 'var(--phantom-border-subtle)',
+              color: 'var(--phantom-text-primary)',
+              fontSize: '0.75rem',
+              '&:focus': { borderColor: 'var(--phantom-accent-glow)' },
+            },
+          }}
         />
       </div>
-    </ScrollArea>
+
+      <ScrollArea style={{ flex: 1 }} scrollbarSize={6}>
+        <div style={{ padding: '4px 0' }}>
+          {searchResults ? (
+            // Flat search results
+            searchResults.length > 0 ? (
+              searchResults.map((entry) => (
+                <FileTreeItem
+                  key={entry.relativePath}
+                  entry={entry}
+                  depth={0}
+                  isExpanded={false}
+                  isSelected={selectedFile === entry.relativePath}
+                  isLoading={false}
+                  onToggle={() => {}}
+                  onClick={() => handleFileClick(entry)}
+                />
+              ))
+            ) : (
+              <Text fz="0.72rem" c="var(--phantom-text-muted)" ta="center" py="md">
+                No files match &ldquo;{searchQuery}&rdquo;
+              </Text>
+            )
+          ) : (
+            // Normal tree view
+            <FileTreeRecursive
+              entries={rootEntries}
+              depth={0}
+              workspaceId={activeWorkspace.id}
+              fileTree={fileTree}
+              expandedFolders={expandedFolders}
+              selectedFile={selectedFile}
+              isDirLoading={isDirLoading}
+              onToggleFolder={handleToggleFolder}
+              onFileClick={handleFileClick}
+            />
+          )}
+        </div>
+      </ScrollArea>
+    </div>
   );
 }
 
