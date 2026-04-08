@@ -16,6 +16,9 @@ const TerminalPane = lazy(() =>
 const EditorPane = lazy(() =>
   import('@phantom-os/editor').then((m) => ({ default: m.EditorPane })),
 );
+const WorkspaceHome = lazy(() =>
+  import('../components/WorkspaceHome').then((m) => ({ default: m.WorkspaceHome })),
+);
 
 const Loading = () =>
   createElement(
@@ -63,6 +66,20 @@ export const paneDefinitions: Record<string, PaneDefinition> = {
     component: ({ pane }: { pane: Pane }) =>
       createElement(Suspense, { fallback: createElement(Loading) },
         createElement(EditorPane, { paneId: pane.id, ...pane.data }),
+      ),
+  },
+  'workspace-home': {
+    kind: 'workspace-home',
+    title: 'Home',
+    icon: '⬡',
+    render: (_pane: Pane) =>
+      createElement(Suspense, { fallback: createElement(Loading) },
+        createElement(WorkspaceHome),
+      ),
+    defaultTitle: 'Home',
+    component: () =>
+      createElement(Suspense, { fallback: createElement(Loading) },
+        createElement(WorkspaceHome),
       ),
   },
 };
