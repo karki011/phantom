@@ -16,8 +16,7 @@ import * as monaco from 'monaco-editor';
 // Use local Monaco instead of CDN — avoids CSP script-src issues in Electron
 loader.config({ monaco });
 
-// Disable semantic validation — Monaco can't resolve project imports without
-// access to node_modules and tsconfig.json. Keep syntax validation for errors.
+// Default: disable semantic validation until workspace types are loaded
 monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
   noSemanticValidation: true,
   noSyntaxValidation: false,
@@ -26,6 +25,86 @@ monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
   noSemanticValidation: true,
   noSyntaxValidation: false,
 });
+
+/**
+ * Configure Monaco's TypeScript from a workspace's tsconfig.json and
+ * load type definitions from node_modules/@types. Call once per workspace.
+ * Re-enables semantic validation after types are loaded.
+ */
+export async function configureMonacoForWorkspace(repoPath: string): Promise<void> {
+  if (!window.phantomOS?.isDesktop) return;
+
+  const ts = monaco.languages.typescript;
+
+  // Phase 1: Read tsconfig and set compiler options
+  const compilerOptions = await window.phantomOS.invoke('phantom:read-tsconfig', repoPath) as Record<string, unknown> | null;
+
+  const moduleResolutionMap: Record<string, number> = {
+    node: ts.ModuleResolutionKind.NodeJs,
+    node16: ts.ModuleResolutionKind.NodeJs,
+    nodenext: ts.ModuleResolutionKind.NodeJs,
+    bundler: ts.ModuleResolutionKind.NodeJs,
+    classic: ts.ModuleResolutionKind.Classic,
+  };
+
+  const jsxMap: Record<string, number> = {
+    react: ts.JsxEmit.React,
+    'react-jsx': ts.JsxEmit.ReactJSX,
+    'react-jsxdev': ts.JsxEmit.ReactJSXDev,
+    'react-native': ts.JsxEmit.ReactNative,
+    preserve: ts.JsxEmit.Preserve,
+  };
+
+  const monacoOptions: monaco.languages.typescript.CompilerOptions = {
+    target: ts.ScriptTarget.ESNext,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeJs,
+    jsx: ts.JsxEmit.ReactJSX,
+    allowJs: true,
+    strict: compilerOptions?.strict === true,
+    esModuleInterop: true,
+    skipLibCheck: true,
+    noEmit: true,
+    allowNonTsExtensions: true,
+  };
+
+  if (compilerOptions) {
+    const mr = String(compilerOptions.moduleResolution ?? '').toLowerCase();
+    if (mr in moduleResolutionMap) monacoOptions.moduleResolution = moduleResolutionMap[mr];
+
+    const jsx = String(compilerOptions.jsx ?? '').toLowerCase();
+    if (jsx in jsxMap) monacoOptions.jsx = jsxMap[jsx];
+
+    if (typeof compilerOptions.baseUrl === 'string') {
+      monacoOptions.baseUrl = compilerOptions.baseUrl;
+    }
+    if (compilerOptions.paths && typeof compilerOptions.paths === 'object') {
+      monacoOptions.paths = compilerOptions.paths as Record<string, string[]>;
+    }
+  }
+
+  ts.typescriptDefaults.setCompilerOptions(monacoOptions);
+  ts.javascriptDefaults.setCompilerOptions(monacoOptions);
+
+  // Phase 2: Load type definitions from node_modules
+  const types = await window.phantomOS.invoke('phantom:read-types', repoPath) as { filePath: string; content: string }[] | null;
+
+  if (types && types.length > 0) {
+    for (const { filePath, content } of types) {
+      ts.typescriptDefaults.addExtraLib(content, filePath);
+    }
+
+    // Re-enable semantic validation now that types are available
+    ts.typescriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: false,
+      noSyntaxValidation: false,
+    });
+    ts.javascriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: false,
+      noSyntaxValidation: false,
+    });
+  }
+}
 
 const MonacoEditor = lazy(() =>
   import('@monaco-editor/react').then((m) => ({ default: m.Editor }))

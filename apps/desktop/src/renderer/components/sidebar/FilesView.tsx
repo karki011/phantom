@@ -83,6 +83,7 @@ export function FilesView() {
       store.addPane('editor', {
         filePath: entry.relativePath,
         workspaceId: activeWorkspace.id,
+        repoPath: activeWorkspace.worktreePath,
       } as Record<string, unknown>, entry.name);
     },
     [activeWorkspace, setSelectedFile, store],

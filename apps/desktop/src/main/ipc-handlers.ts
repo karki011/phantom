@@ -6,6 +6,8 @@
  */
 import { ipcMain, dialog, shell, BrowserWindow } from 'electron';
 import { execFile } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -76,5 +78,81 @@ export const registerIpcHandlers = (): void => {
     } catch {
       return null;
     }
+  });
+
+  /** Read and parse tsconfig.json from a workspace root */
+  ipcMain.handle('phantom:read-tsconfig', (_e, repoPath: string) => {
+    try {
+      const tsconfigPath = join(repoPath, 'tsconfig.json');
+      if (!existsSync(tsconfigPath)) return null;
+      const raw = readFileSync(tsconfigPath, 'utf-8');
+      // Strip comments (tsconfig allows them) before parsing
+      const stripped = raw.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+      const parsed = JSON.parse(stripped);
+      return parsed.compilerOptions ?? null;
+    } catch {
+      return null;
+    }
+  });
+
+  /** Scan node_modules/@types and direct dependency types, return type definitions */
+  ipcMain.handle('phantom:read-types', (_e, repoPath: string) => {
+    const results: { filePath: string; content: string }[] = [];
+    const MAX_FILES = 100;
+    const MAX_FILE_SIZE = 512 * 1024; // 512KB per file
+
+    // 1. Scan node_modules/@types/*/index.d.ts
+    const typesDir = join(repoPath, 'node_modules', '@types');
+    if (existsSync(typesDir)) {
+      try {
+        for (const pkg of readdirSync(typesDir)) {
+          if (results.length >= MAX_FILES) break;
+          // Handle scoped packages like @types/react
+          const pkgDir = join(typesDir, pkg);
+          const indexPath = join(pkgDir, 'index.d.ts');
+          if (existsSync(indexPath)) {
+            try {
+              const content = readFileSync(indexPath, 'utf-8');
+              if (content.length <= MAX_FILE_SIZE) {
+                results.push({
+                  filePath: `file:///node_modules/@types/${pkg}/index.d.ts`,
+                  content,
+                });
+              }
+            } catch { /* skip unreadable */ }
+          }
+        }
+      } catch { /* skip if @types dir can't be read */ }
+    }
+
+    // 2. Read package.json dependencies and look for their type roots
+    try {
+      const pkgPath = join(repoPath, 'package.json');
+      if (existsSync(pkgPath)) {
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+        const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+        for (const depName of Object.keys(deps)) {
+          if (results.length >= MAX_FILES) break;
+          // Skip @types — already scanned above
+          if (depName.startsWith('@types/')) continue;
+          const depTypesPath = join(repoPath, 'node_modules', depName, 'dist', 'index.d.ts');
+          const depTypesAlt = join(repoPath, 'node_modules', depName, 'index.d.ts');
+          const typesPath = existsSync(depTypesPath) ? depTypesPath : existsSync(depTypesAlt) ? depTypesAlt : null;
+          if (typesPath) {
+            try {
+              const content = readFileSync(typesPath, 'utf-8');
+              if (content.length <= MAX_FILE_SIZE) {
+                results.push({
+                  filePath: `file:///node_modules/${depName}/index.d.ts`,
+                  content,
+                });
+              }
+            } catch { /* skip */ }
+          }
+        }
+      }
+    } catch { /* skip */ }
+
+    return results;
   });
 };

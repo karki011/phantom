@@ -4,16 +4,20 @@
  * @author Subash Karki
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { LazyEditor } from './LazyMonaco.js';
+import { LazyEditor, configureMonacoForWorkspace } from './LazyMonaco.js';
 
 interface EditorPaneProps {
   paneId: string;
   filePath?: string;
   workspaceId?: string;
+  repoPath?: string;
   language?: string;
   value?: string;
   onChange?: (value: string | undefined) => void;
 }
+
+/** Track which workspace roots have been configured to avoid re-running */
+const configuredRoots = new Set<string>();
 
 /** Detect language from file extension */
 const detectLanguage = (path?: string): string => {
@@ -38,12 +42,20 @@ export const EditorPane = ({
   paneId,
   filePath,
   workspaceId,
+  repoPath,
   language,
   value: initialValue,
   onChange,
 }: EditorPaneProps) => {
   const [content, setContent] = useState<string>(initialValue ?? '');
   const [loading, setLoading] = useState(!!workspaceId && !!filePath);
+
+  // Configure Monaco with workspace tsconfig + types (once per workspace root)
+  useEffect(() => {
+    if (!repoPath || configuredRoots.has(repoPath)) return;
+    configuredRoots.add(repoPath);
+    configureMonacoForWorkspace(repoPath);
+  }, [repoPath]);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const contentRef = useRef(content);
