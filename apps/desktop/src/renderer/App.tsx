@@ -1,10 +1,13 @@
 /**
  * PhantomOS App Shell
- * Main application layout with sidebars + cockpit + hash-routed detail views
+ * Two top-level tabs: Cockpit (gamification dashboard) and Workspace (editor/terminal/files).
+ * Welcome page shown when Workspace tab is active but no workspace is selected.
  *
  * Layout:
  *   [Header]
- *   [LeftSidebar | Main Content (flex: 1) | RightSidebar]
+ *   [TopTabBar: Cockpit | Workspace]
+ *   Cockpit tab  -> full-width dashboard + sub-views (no sidebars)
+ *   Workspace tab -> [LeftSidebar | Pane workspace or WelcomePage | RightSidebar]
  *   [Footer]
  *
  * @author Subash Karki
@@ -17,8 +20,12 @@ import { useEffect } from 'react';
 import { WorkspaceProvider, Workspace } from '@phantom-os/panes';
 import { paneDefinitions, paneMenu } from './panes/registry';
 import { unlockedCountAtom, refreshAchievementsAtom } from './atoms/achievements';
-import { fontScaleAtom } from './atoms/system';
+import { activeTopTabAtom, fontScaleAtom } from './atoms/system';
+import { activeWorkspaceAtom } from './atoms/workspaces';
+import { Cockpit } from './components/cockpit/Cockpit';
+import { TopTabBar } from './components/layout/TopTabBar';
 import { SystemHeader } from './components/layout/SystemHeader';
+import { WelcomePage } from './components/WelcomePage';
 import { ActiveSessions } from './components/views/ActiveSessions';
 import { QuestHistory } from './components/views/QuestHistory';
 import { TokenAnalytics } from './components/views/TokenAnalytics';
@@ -35,22 +42,9 @@ import { useSessions } from './hooks/useSessions';
 import { useHealthCheck } from './hooks/useHealthCheck';
 import { useSystemEvents } from './hooks/useSystemEvents';
 
-/** Cockpit route renders the pane workspace (TabBar + PaneLayout) */
-const CockpitPaneView = () => (
-  <Workspace
-    paneMenu={paneMenu}
-    style={{
-      '--pane-border': 'var(--phantom-border-subtle)',
-      '--pane-header-bg': 'var(--phantom-surface-card)',
-      '--tab-bar-bg': 'var(--phantom-surface-card)',
-    }}
-  />
-);
-
+/** Render cockpit sub-route content (sessions, tokens, profile, etc.) */
 const ViewContent = ({ route }: { route: Route }) => {
   switch (route) {
-    case 'cockpit':
-      return <CockpitPaneView />;
     case 'sessions':
       return <ActiveSessions />;
     case 'history':
@@ -67,6 +61,8 @@ const ViewContent = ({ route }: { route: Route }) => {
       return <AchievementsView />;
     case 'quests':
       return <DailyQuestsView />;
+    default:
+      return null;
   }
 };
 
@@ -77,10 +73,12 @@ export const App = () => {
   // Periodic backend health polling
   const { isConnected } = useHealthCheck();
 
-  const { route } = useRouter();
+  const { route, isCockpitSubRoute } = useRouter();
   const { profile } = useHunter();
   const { active } = useSessions();
   const fontScale = useAtomValue(fontScaleAtom);
+  const activeTab = useAtomValue(activeTopTabAtom);
+  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   const achievementCount = useAtomValue(unlockedCountAtom);
   const refreshAchievements = useSetAtom(refreshAchievementsAtom);
 
@@ -95,7 +93,6 @@ export const App = () => {
   }, [refreshAchievements]);
 
   const isElectron = navigator.userAgent.includes('Electron');
-  const isCockpit = route === 'cockpit';
 
   return (
     <WorkspaceProvider definitions={paneDefinitions}>
@@ -116,33 +113,48 @@ export const App = () => {
         <SystemHeader activeSessions={active.length} isConnected={isConnected} />
       </AppShell.Header>
 
-      {/* Main area — sidebars + content in flexbox row */}
+      {/* Main area — top tab bar + content */}
       <AppShell.Main>
-        <div
-          style={{
-            display: 'flex',
-            height: 'calc(100vh - 3.5rem - 2.5rem)',
-            overflow: 'hidden',
-          }}
-        >
-          {/* Left Sidebar — workspace list */}
-          <WorkspaceSidebar />
+        {/* Top-level tab bar */}
+        <TopTabBar />
 
-          {/* Center content — flex: 1 */}
-          <div style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
-            {isCockpit ? (
-              <div style={{ height: '100%' }}>
-                <ViewContent route={route} />
+        <div style={{ height: 'calc(100vh - 3.5rem - 2.5rem - 32px)', overflow: 'hidden' }}>
+          {activeTab === 'cockpit' ? (
+            /* ── Cockpit tab: full-width, no sidebars ── */
+            <div style={{ height: '100%', overflow: 'auto' }}>
+              {isCockpitSubRoute ? (
+                <Stack p="md" gap="lg">
+                  <ViewContent route={route} />
+                </Stack>
+              ) : (
+                <Stack p="md" gap="lg">
+                  <Cockpit />
+                </Stack>
+              )}
+            </div>
+          ) : (
+            /* ── Workspace tab: sidebars + pane workspace or welcome page ── */
+            <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+              <WorkspaceSidebar />
+
+              <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                {activeWorkspace ? (
+                  <Workspace
+                    paneMenu={paneMenu}
+                    style={{
+                      '--pane-border': 'var(--phantom-border-subtle)',
+                      '--pane-header-bg': 'var(--phantom-surface-card)',
+                      '--tab-bar-bg': 'var(--phantom-surface-card)',
+                    } as React.CSSProperties}
+                  />
+                ) : (
+                  <WelcomePage />
+                )}
               </div>
-            ) : (
-              <Stack p="md" gap="lg">
-                <ViewContent route={route} />
-              </Stack>
-            )}
-          </div>
 
-          {/* Right Sidebar — file explorer (only on cockpit route) */}
-          {isCockpit && <RightSidebar />}
+              {activeWorkspace && <RightSidebar />}
+            </div>
+          )}
         </div>
       </AppShell.Main>
 

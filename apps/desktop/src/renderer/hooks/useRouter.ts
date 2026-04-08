@@ -1,10 +1,15 @@
 /**
  * useRouter Hook
- * Simple hash-based router for PhantomOS cockpit navigation
+ * Simple hash-based router for PhantomOS cockpit navigation.
+ * All hash routes are cockpit sub-routes. When navigated to,
+ * the top-level tab auto-switches to cockpit.
  *
  * @author Subash Karki
  */
 import { useCallback, useEffect, useState } from 'react';
+import { useSetAtom } from 'jotai';
+
+import { activeTopTabAtom } from '../atoms/system';
 
 export type Route =
   | 'cockpit'
@@ -36,14 +41,29 @@ const parseHash = (): Route => {
   return VALID_ROUTES.has(hash as Route) ? (hash as Route) : DEFAULT_ROUTE;
 };
 
+/** Routes that are cockpit sub-views (not the dashboard itself) */
+export const COCKPIT_SUB_ROUTES = new Set<Route>([
+  'sessions',
+  'history',
+  'tokens',
+  'profile',
+  'streak',
+  'tasks',
+  'achievements',
+  'quests',
+]);
+
 interface UseRouterReturn {
   route: Route;
   navigate: (target: Route) => void;
   isHome: boolean;
+  /** True when on a cockpit sub-route (sessions, tokens, etc.) */
+  isCockpitSubRoute: boolean;
 }
 
 export const useRouter = (): UseRouterReturn => {
   const [route, setRoute] = useState<Route>(parseHash);
+  const setActiveTab = useSetAtom(activeTopTabAtom);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -56,11 +76,19 @@ export const useRouter = (): UseRouterReturn => {
     };
   }, []);
 
+  // Auto-switch to cockpit tab when a cockpit route is active
+  useEffect(() => {
+    if (COCKPIT_SUB_ROUTES.has(route) || route === 'cockpit') {
+      setActiveTab('cockpit');
+    }
+  }, [route, setActiveTab]);
+
   const navigate = useCallback((target: Route) => {
     window.location.hash = target;
   }, []);
 
   const isHome = route === 'cockpit';
+  const isCockpitSubRoute = COCKPIT_SUB_ROUTES.has(route);
 
-  return { route, navigate, isHome };
+  return { route, navigate, isHome, isCockpitSubRoute };
 };

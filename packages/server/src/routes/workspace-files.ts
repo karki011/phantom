@@ -86,7 +86,7 @@ workspaceFileRoutes.get('/workspaces/:id/files', (c) => {
         return a.name.localeCompare(b.name);
       });
 
-    return c.json(items);
+    return c.json({ entries: items });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ error: `Failed to list directory: ${msg}` }, 500);
