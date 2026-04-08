@@ -18,7 +18,7 @@ import {
 } from '@mantine/core';
 import { usePaneStore } from '@phantom-os/panes';
 import { useAtomValue } from 'jotai';
-import { FileCode, Flame, GitBranch, Sword, Target, Terminal as TerminalIcon } from 'lucide-react';
+import { FileCode, GitBranch, Sword, Target, Terminal as TerminalIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { activeWorkspaceAtom } from '../atoms/workspaces';
