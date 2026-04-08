@@ -86,9 +86,28 @@ function saveState<TData>(state: WorkspaceState<TData>): void {
 // Initial state
 // ---------------------------------------------------------------------------
 
+/**
+ * Migrate persisted tabs: replace any lone "terminal" default pane with
+ * "workspace-home" so users see the Hunter's Terminal on upgrade.
+ */
+function migrateState<TData>(state: WorkspaceState<TData>): WorkspaceState<TData> {
+  const tabs = state.tabs.map((tab) => {
+    const paneList = Object.values(tab.panes);
+    // Only migrate tabs that have exactly one pane of kind "terminal"
+    // (the old default). Tabs with multiple panes or non-terminal panes are user-created.
+    if (paneList.length === 1 && paneList[0].kind === 'terminal') {
+      const oldPane = paneList[0];
+      const newPane: Pane<TData> = { ...oldPane, kind: 'workspace-home', title: 'Home' };
+      return { ...tab, panes: { [newPane.id]: newPane } };
+    }
+    return tab;
+  });
+  return { ...state, tabs };
+}
+
 function createInitialState<TData>(): WorkspaceState<TData> {
   const saved = loadState<TData>();
-  if (saved && saved.tabs.length > 0) return saved;
+  if (saved && saved.tabs.length > 0) return migrateState(saved);
   const tab = makeTab<TData>('Main');
   return { tabs: [tab], activeTabId: tab.id };
 }
