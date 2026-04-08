@@ -163,7 +163,7 @@ export function ProjectSection({
             <Text fz="0.7rem" c="var(--phantom-text-muted)">
               {workspaces.length}
             </Text>
-            {isHovered && !isRenaming && (
+            {!isRenaming && (
               <Tooltip label="New workspace" position="right">
                 <ActionIcon
                   variant="subtle"
@@ -188,12 +188,13 @@ export function ProjectSection({
 
       <Collapse expanded={isExpanded}>
         <div style={{ paddingLeft: 18, position: 'relative' }}>
-          {workspaces.map((ws) => (
+          {workspaces.map((ws, index) => (
             <WorkspaceItem
               key={ws.id}
               workspace={ws}
               isActive={ws.id === activeWorkspaceId}
               onSelect={onSelectWorkspace}
+              isLast={index === workspaces.length - 1}
             />
           ))}
           {workspaces.length === 0 && !showNewInput && (

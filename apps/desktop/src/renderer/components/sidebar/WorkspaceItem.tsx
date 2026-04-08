@@ -17,12 +17,14 @@ interface WorkspaceItemProps {
   workspace: WorkspaceData;
   isActive: boolean;
   onSelect: (id: string) => void;
+  isLast?: boolean;
 }
 
 export function WorkspaceItem({
   workspace,
   isActive,
   onSelect,
+  isLast,
 }: WorkspaceItemProps) {
   const deleteWorkspace = useSetAtom(deleteWorkspaceAtom);
   const updateWorkspace = useSetAtom(updateWorkspaceAtom);
@@ -204,6 +206,20 @@ export function WorkspaceItem({
         }}
       >
         <Group gap={8} wrap="nowrap">
+          <span
+            style={{
+              fontFamily: 'monospace',
+              fontSize: '0.7rem',
+              color: 'var(--phantom-text-muted)',
+              opacity: 0.4,
+              flexShrink: 0,
+              width: 14,
+              textAlign: 'center',
+              userSelect: 'none',
+            }}
+          >
+            {isLast ? '└' : '├'}
+          </span>
           <div
             style={{
               width: 8,
