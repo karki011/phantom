@@ -210,7 +210,10 @@ const server = serve({ fetch: app.fetch, port: API_PORT }, (info) => {
 
 setupTerminalWs(server as unknown as Server);
 
-// Connect to the terminal daemon (non-blocking — falls back to direct PTY if unavailable)
-initDaemonClient().catch((err) =>
-  console.warn('[PhantomOS] Daemon client init error:', err),
-);
+// Skip daemon — use direct PTY (node-pty) for terminal sessions.
+// The daemon has output routing bugs that cause black-screen terminals.
+// Direct PTY is simpler and works reliably.
+// To re-enable daemon: uncomment initDaemonClient() call below.
+// initDaemonClient().catch((err) =>
+//   console.warn('[PhantomOS] Daemon client init error:', err),
+// );

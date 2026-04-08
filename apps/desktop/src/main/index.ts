@@ -13,14 +13,11 @@ import { registerIpcHandlers } from './ipc-handlers';
 // Register IPC handlers for renderer communication
 registerIpcHandlers();
 
-// Boot the terminal daemon first (persistent, survives restarts),
-// then the API server, then create the window once everything is ready.
-ensureTerminalDaemon()
-  .catch((err) => console.warn('[PhantomOS Desktop] Daemon start warning:', err))
-  .then(() => startServer())
-  .then(() => {
-    registerLifecycle(createWindow);
-  });
+// Boot the API server, then create the window once ready.
+// Terminal daemon is disabled — direct PTY (node-pty) is used instead.
+startServer().then(() => {
+  registerLifecycle(createWindow);
+});
 
 // Graceful shutdown — stop the server child process
 app.on('before-quit', () => {
