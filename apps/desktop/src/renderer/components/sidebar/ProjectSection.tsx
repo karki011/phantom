@@ -107,7 +107,7 @@ export function ProjectSection({
               : 'transparent',
           }}
         >
-          <Group gap={8} wrap="nowrap">
+          <Group gap={4} wrap="nowrap">
             <ChevronRight
               size={14}
               style={{
@@ -119,8 +119,8 @@ export function ProjectSection({
             />
             <div
               style={{
-                width: 10,
-                height: 10,
+                width: 8,
+                height: 8,
                 borderRadius: '50%',
                 backgroundColor:
                   project.color || 'var(--phantom-accent-purple)',
@@ -187,7 +187,7 @@ export function ProjectSection({
       </ProjectContextMenu>
 
       <Collapse expanded={isExpanded}>
-        <div style={{ paddingLeft: 18, position: 'relative' }}>
+        <div style={{ paddingLeft: 24, position: 'relative' }}>
           {workspaces.map((ws, index) => (
             <WorkspaceItem
               key={ws.id}

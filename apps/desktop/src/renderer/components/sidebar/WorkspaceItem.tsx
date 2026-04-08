@@ -4,7 +4,7 @@
  *
  * @author Subash Karki
  */
-import { Badge, Button, Group, Text, TextInput, UnstyledButton } from '@mantine/core';
+import { Badge, Button, Text, TextInput, UnstyledButton } from '@mantine/core';
 import { GitBranch } from 'lucide-react';
 import { useSetAtom } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -205,21 +205,40 @@ export function WorkspaceItem({
               'transparent';
         }}
       >
-        <Group gap={8} wrap="nowrap">
-          <span
+        <div style={{ display: 'flex', alignItems: 'stretch', gap: 8, flexWrap: 'nowrap' }}>
+          {/* Tree connector — CSS lines instead of Unicode */}
+          <div
             style={{
-              fontFamily: 'monospace',
-              fontSize: '0.7rem',
-              color: 'var(--phantom-text-muted)',
-              opacity: 0.4,
+              position: 'relative',
+              width: 12,
+              height: '100%',
               flexShrink: 0,
-              width: 14,
-              textAlign: 'center',
-              userSelect: 'none',
+              alignSelf: 'stretch',
             }}
           >
-            {isLast ? '└' : '├'}
-          </span>
+            {/* Vertical line — full height for non-last, half for last */}
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: isLast ? '50%' : 0,
+                width: 0,
+                borderLeft: '1px solid var(--phantom-border-subtle)',
+              }}
+            />
+            {/* Horizontal stub */}
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: '50%',
+                width: 10,
+                height: 0,
+                borderBottom: '1px solid var(--phantom-border-subtle)',
+              }}
+            />
+          </div>
           <div
             style={{
               width: 8,
@@ -261,7 +280,7 @@ export function WorkspaceItem({
               from {workspace.baseBranch}
             </Text>
           )}
-        </Group>
+        </div>
       </UnstyledButton>
     </WorkspaceContextMenu>
   );
