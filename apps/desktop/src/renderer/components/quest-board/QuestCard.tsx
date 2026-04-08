@@ -7,7 +7,6 @@
 import {
   Badge,
   Box,
-  Collapse,
   Group,
   Progress,
   Stack,
@@ -15,19 +14,17 @@ import {
   UnstyledButton,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { Brain, Maximize2, Minus, Terminal, X as XIcon } from 'lucide-react';
+import { Brain, Terminal } from 'lucide-react';
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-import { type MessageData, type SessionData, getSessionMessages } from '../../lib/api';
+import { type MessageData, type SessionData, type TaskData, getSessionMessages, getSessionTasks } from '../../lib/api';
 import { TaskRow } from './TaskRow';
 
 interface QuestCardProps {
   session: SessionData;
   defaultExpanded?: boolean;
 }
-
-const MAX_CONTEXT = 1_000_000; // Claude Opus 4.6 = 1M context
 
 const formatTokens = (count: number): string => {
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
@@ -58,11 +55,18 @@ const formatRelativeTime = (timestamp: number): string => {
 export const QuestCard = ({ session, defaultExpanded = false }: QuestCardProps) => {
   const [expanded, { toggle }] = useDisclosure(defaultExpanded);
 
+  // Fetch tasks on-demand when card is expanded
+  const [tasks, setTasks] = useState<TaskData[]>(session.tasks ?? []);
+  useEffect(() => {
+    if (expanded && tasks.length === 0) {
+      getSessionTasks(session.id).then(setTasks).catch(() => {});
+    }
+  }, [expanded, session.id]);
+
   const isActive = session.status === 'active';
   const totalTokens = session.inputTokens + session.outputTokens;
-  const contextUsed = session.lastInputTokens > 0 ? session.lastInputTokens : session.inputTokens;
-  // Use live context % from Claude's statusline bridge when available
-  const contextPercent = session.contextUsedPct ?? Math.min((contextUsed / MAX_CONTEXT) * 100, 100);
+  // Use live context % from server (model-aware); fall back to 0 if not yet computed
+  const contextPercent = session.contextUsedPct ?? 0;
   const progressPercent =
     session.taskCount > 0
       ? (session.completedTasks / session.taskCount) * 100
@@ -106,61 +110,15 @@ export const QuestCard = ({ session, defaultExpanded = false }: QuestCardProps) 
         style={{ borderBottom: '0.0625rem solid var(--phantom-border-subtle)' }}
       >
         <Group gap="0.5rem">
-          {/* macOS window controls — gray by default, colored on hover */}
-          <Group
-            gap="0.375rem"
-            className="terminal-dots"
-            style={{ cursor: 'default' }}
-          >
-            <style>{`
-              .terminal-dots .dot { background: var(--phantom-text-muted); border-color: var(--phantom-border-subtle); }
-              .terminal-dots .dot .dot-icon { opacity: 0; }
-              .terminal-dots:hover .dot-red { background: #FF5F57; border-color: #E0443E; }
-              .terminal-dots:hover .dot-yellow { background: #FEBC2E; border-color: #DEA123; }
-              .terminal-dots:hover .dot-green { background: #28C840; border-color: #1AAB29; }
-              .terminal-dots:hover .dot .dot-icon { opacity: 0.7; }
-            `}</style>
-            <Box
-              className="dot dot-red"
-              style={{
-                width: 14, height: 14, borderRadius: '50%',
-                border: '0.5px solid', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', transition: 'background 150ms ease',
-              }}
-              aria-hidden="true"
-            >
-              <XIcon className="dot-icon" size={8} color="#4D0000" strokeWidth={3} />
-            </Box>
-            <Box
-              className="dot dot-yellow"
-              style={{
-                width: 14, height: 14, borderRadius: '50%',
-                border: '0.5px solid', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', transition: 'background 150ms ease',
-              }}
-              aria-hidden="true"
-            >
-              <Minus className="dot-icon" size={8} color="#5A3D00" strokeWidth={3} />
-            </Box>
-            <Box
-              component="button"
-              className="dot dot-green"
-              aria-label={expanded ? 'Collapse' : 'Expand'}
-              onClick={(e: React.MouseEvent) => { e.stopPropagation(); toggle(); }}
-              style={{
-                width: 14, height: 14, borderRadius: '50%',
-                border: '0.5px solid', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', cursor: 'pointer', padding: 0,
-                transition: 'background 150ms ease',
-              }}
-            >
-              <Maximize2 className="dot-icon" size={7} color="#006500" strokeWidth={3} />
-            </Box>
-          </Group>
           <Terminal size={12} style={{ color: 'var(--phantom-text-muted)' }} aria-hidden="true" />
           <Text fz="0.875rem" fw={600} c="var(--phantom-text-secondary)" truncate="end" style={{ maxWidth: '16rem' }}>
             {displayName}
           </Text>
+          {session.model && (
+            <Badge size="xs" variant="light" color="gray" style={{ textTransform: 'none' }}>
+              {session.model.includes('opus') ? 'opus' : session.model.includes('sonnet') ? 'sonnet' : session.model.includes('haiku') ? 'haiku' : session.model}
+            </Badge>
+          )}
         </Group>
         <Group gap="xs" wrap="nowrap">
           {isActive && (
@@ -252,7 +210,7 @@ export const QuestCard = ({ session, defaultExpanded = false }: QuestCardProps) 
                   radius="xl"
                   role="progressbar"
                   aria-valuenow={session.inputTokens}
-                  aria-valuemax={MAX_CONTEXT}
+                  aria-valuemax={100}
                   aria-label={`Context window: ${Math.round(contextPercent)}% used`}
                 />
               </Stack>
@@ -261,15 +219,15 @@ export const QuestCard = ({ session, defaultExpanded = false }: QuestCardProps) 
         </UnstyledButton>
 
         {/* Expanded: tasks as terminal output */}
-        <Collapse in={expanded}>
+        {expanded && (
           <Box
             mt="xs"
             pt="xs"
             style={{ borderTop: '0.0625rem dashed var(--phantom-border-subtle)' }}
           >
-            {session.tasks != null && session.tasks.length > 0 ? (
+            {tasks.length > 0 ? (
               <Stack gap={0}>
-                {session.tasks.map((task) => (
+                {tasks.map((task) => (
                   <TaskRow key={task.id} task={task} />
                 ))}
               </Stack>
@@ -402,7 +360,7 @@ export const QuestCard = ({ session, defaultExpanded = false }: QuestCardProps) 
               </Stack>
             )}
           </Box>
-        </Collapse>
+        )}
       </Box>
     </Box>
   );

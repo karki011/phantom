@@ -256,17 +256,31 @@ function FileTreeRecursive({
               onClick={() => onFileClick(entry)}
             />
             {entry.isDirectory && isExpanded && childEntries && (
-              <FileTreeRecursive
-                entries={childEntries}
-                depth={depth + 1}
-                workspaceId={workspaceId}
-                fileTree={fileTree}
-                expandedFolders={expandedFolders}
-                selectedFile={selectedFile}
-                isDirLoading={isDirLoading}
-                onToggleFolder={onToggleFolder}
-                onFileClick={onFileClick}
-              />
+              <div style={{ position: 'relative' }}>
+                {/* Continuous indent guide line spanning all children */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: depth * 20 + 14,
+                    top: 0,
+                    bottom: 0,
+                    width: 1,
+                    backgroundColor: 'var(--phantom-border-subtle)',
+                    opacity: 0.4,
+                  }}
+                />
+                <FileTreeRecursive
+                  entries={childEntries}
+                  depth={depth + 1}
+                  workspaceId={workspaceId}
+                  fileTree={fileTree}
+                  expandedFolders={expandedFolders}
+                  selectedFile={selectedFile}
+                  isDirLoading={isDirLoading}
+                  onToggleFolder={onToggleFolder}
+                  onFileClick={onFileClick}
+                />
+              </div>
             )}
             {entry.isDirectory && isExpanded && !childEntries && loading && (
               <div style={{ paddingLeft: (depth + 1) * 20 + 4, padding: '2px 0' }}>

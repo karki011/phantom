@@ -46,6 +46,7 @@ export interface SessionData {
   repo: string | null;
   name: string | null;
   kind: string | null;
+  model: string | null;
   startedAt: number;
   endedAt: number | null;
   status: string;

@@ -11,6 +11,7 @@ export const sessions = sqliteTable('sessions', {
   repo: text('repo'),
   name: text('name'),
   kind: text('kind'),
+  model: text('model'),
   entrypoint: text('entrypoint'),
   startedAt: integer('started_at'),
   endedAt: integer('ended_at'),

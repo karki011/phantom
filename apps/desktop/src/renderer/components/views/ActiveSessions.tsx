@@ -51,7 +51,7 @@ export const ActiveSessions = () => {
       ) : (
         <Stack gap="md">
           {active.map((session) => (
-            <QuestCard key={session.id} session={session} defaultExpanded />
+            <QuestCard key={session.id} session={session} />
           ))}
         </Stack>
       )}

@@ -27,6 +27,7 @@ interface TokenAccumulator {
   endedAt: number | null;
   cwd: string | null;
   repo: string | null;
+  model: string | null;
 }
 
 const safeDirs = (dir: string): string[] => {
@@ -76,6 +77,10 @@ const processEntry = (entry: Record<string, unknown>, acc: TokenAccumulator, fou
 
     const message = entry.message as Record<string, unknown> | undefined;
     if (!message) return;
+
+    if (!acc.model && message.model) {
+      acc.model = message.model as string;
+    }
 
     // Sum token usage
     const usage = message.usage as Record<string, number> | undefined;
@@ -139,6 +144,7 @@ const parseJsonlFile = async (filePath: string): Promise<TokenAccumulator> => {
     endedAt: null,
     cwd: null,
     repo: null,
+    model: null,
   };
 
   const foundFirstUser = { value: false };
@@ -166,6 +172,11 @@ const parseJsonlFile = async (filePath: string): Promise<TokenAccumulator> => {
   }
 
   return acc;
+};
+
+const getMaxContext = (model: string | null): number => {
+  if (model?.includes('opus')) return 1_000_000;
+  return 200_000;
 };
 
 const calculateCostMicros = (acc: TokenAccumulator): number =>
@@ -248,11 +259,9 @@ const findActiveJsonlByCwd = (cwd: string | null): string | null => {
 };
 
 export const startActiveContextPoller = (broadcast: Broadcast): void => {
-  const MAX_CONTEXT = 1_000_000;
-
   const poll = () => {
     const activeSessions = db
-      .select({ id: sessions.id, cwd: sessions.cwd, lastInputTokens: sessions.lastInputTokens })
+      .select({ id: sessions.id, cwd: sessions.cwd, lastInputTokens: sessions.lastInputTokens, model: sessions.model })
       .from(sessions)
       .where(eq(sessions.status, 'active'))
       .all();
@@ -264,7 +273,7 @@ export const startActiveContextPoller = (broadcast: Broadcast): void => {
 
       const ctx = tailReadContext(jsonlPath);
       if (ctx !== null && ctx !== session.lastInputTokens) {
-        const ctxPct = Math.round((ctx / MAX_CONTEXT) * 100);
+        const ctxPct = Math.round((ctx / getMaxContext(session.model)) * 100);
         db.update(sessions)
           .set({ lastInputTokens: ctx, contextUsedPct: ctxPct })
           .where(eq(sessions.id, session.id))
@@ -332,6 +341,7 @@ export const scanJsonlSessions = async (broadcast: Broadcast): Promise<void> => 
             toolUseCount: acc.toolUseCount,
             toolBreakdown: JSON.stringify(acc.toolBreakdown),
             firstPrompt: acc.firstPrompt,
+            model: acc.model,
             ...(acc.startedAt && !existing ? { startedAt: acc.startedAt } : {}),
             ...(acc.endedAt ? { endedAt: acc.endedAt } : {}),
           })
@@ -357,6 +367,7 @@ export const scanJsonlSessions = async (broadcast: Broadcast): Promise<void> => 
             toolUseCount: acc.toolUseCount,
             toolBreakdown: JSON.stringify(acc.toolBreakdown),
             firstPrompt: acc.firstPrompt,
+            model: acc.model,
           })
           .run();
       }
