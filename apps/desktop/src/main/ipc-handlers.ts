@@ -4,7 +4,7 @@
  * Future: theme switching, settings, direct Hono calls bypassing HTTP.
  * @author Subash Karki
  */
-import { ipcMain, dialog, BrowserWindow } from 'electron';
+import { ipcMain, dialog, shell, BrowserWindow } from 'electron';
 
 /** Register all IPC handlers. Call once during app init. */
 export const registerIpcHandlers = (): void => {
@@ -21,5 +21,15 @@ export const registerIpcHandlers = (): void => {
     });
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths[0];
+  });
+
+  /** Open a path in macOS Finder */
+  ipcMain.handle('phantom:open-in-finder', (_e, filePath: string) => {
+    shell.showItemInFolder(filePath);
+  });
+
+  /** Open a path in the default editor */
+  ipcMain.handle('phantom:open-in-editor', (_e, filePath: string) => {
+    shell.openPath(filePath);
   });
 };

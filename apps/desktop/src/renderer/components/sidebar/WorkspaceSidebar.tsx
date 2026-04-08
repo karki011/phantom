@@ -272,19 +272,20 @@ export function WorkspaceSidebar() {
       </Group>
 
       {/* Body */}
+      {loading && projects.length === 0 ? (
+        <div style={{ flex: 1, padding: '8px 12px' }}>
+          <Skeleton height={20} mb={8} />
+          <Skeleton height={16} mb={6} />
+          <Skeleton height={16} mb={6} />
+          <Skeleton height={20} mb={8} mt={12} />
+          <Skeleton height={16} mb={6} />
+        </div>
+      ) : projects.length === 0 ? (
+        <EmptyState onOpenRepository={handleOpenRepository} />
+      ) : (
       <ScrollArea style={{ flex: 1 }} scrollbarSize={6}>
         <div style={{ padding: '4px 0' }}>
-          {loading && projects.length === 0 ? (
-            <div style={{ padding: '8px 12px' }}>
-              <Skeleton height={20} mb={8} />
-              <Skeleton height={16} mb={6} />
-              <Skeleton height={16} mb={6} />
-              <Skeleton height={20} mb={8} mt={12} />
-              <Skeleton height={16} mb={6} />
-            </div>
-          ) : projects.length === 0 ? (
-            <EmptyState onOpenRepository={handleOpenRepository} />
-          ) : (
+          {(
             projects.map((project) => (
               <ProjectSection
                 key={project.id}
@@ -299,6 +300,7 @@ export function WorkspaceSidebar() {
           )}
         </div>
       </ScrollArea>
+      )}
 
       {/* Footer */}
       <div

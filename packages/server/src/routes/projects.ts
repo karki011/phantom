@@ -3,6 +3,7 @@
  * @author Subash Karki
  */
 import { randomUUID } from 'node:crypto';
+import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -137,6 +138,56 @@ projectRoutes.post('/projects/open', async (c) => {
   db.insert(workspaces).values(workspace).run();
 
   return c.json({ project, workspace }, 201);
+});
+
+/** GET /projects/:id/branches — List local + remote branches for a project's repo */
+projectRoutes.get('/projects/:id/branches', (c) => {
+  const id = c.req.param('id');
+
+  const project = db.select().from(projects).where(eq(projects.id, id)).get();
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  if (!existsSync(project.repoPath)) {
+    return c.json({ error: 'Repository path does not exist' }, 400);
+  }
+
+  try {
+    const output = execSync('git branch -a --no-color', {
+      cwd: project.repoPath,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    const local: string[] = [];
+    const remote: string[] = [];
+    let current = '';
+
+    for (const raw of output.split('\n')) {
+      const line = raw.trim();
+      if (!line) continue;
+
+      const isCurrent = line.startsWith('* ');
+      const name = line.replace(/^\*\s+/, '');
+
+      if (name.startsWith('remotes/')) {
+        // Skip HEAD pointer
+        if (name.includes('/HEAD')) continue;
+        // Strip remotes/origin/ prefix
+        const short = name.replace(/^remotes\/origin\//, '');
+        remote.push(short);
+      } else {
+        local.push(name);
+        if (isCurrent) current = name;
+      }
+    }
+
+    return c.json({ local, remote, current });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ error: `Failed to list branches: ${msg}` }, 500);
+  }
 });
 
 /** DELETE /projects/:id — Delete project and cascade workspaces */

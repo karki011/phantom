@@ -16,7 +16,9 @@ export const workspaceFileRoutes = new Hono();
 
 /** Resolve and validate a path is within the workspace root. Returns null if invalid. */
 const safePath = (workspaceRoot: string, relativePath: string): string | null => {
-  const resolved = resolve(workspaceRoot, relativePath);
+  // Strip leading slash — resolve('/path', '/') returns '/' not '/path/'
+  const cleaned = relativePath.replace(/^\/+/, '') || '.';
+  const resolved = resolve(workspaceRoot, cleaned);
   // CRITICAL: Prevent path traversal — resolved path must start with workspace root
   if (!resolved.startsWith(workspaceRoot)) {
     return null;

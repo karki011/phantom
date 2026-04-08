@@ -5,6 +5,7 @@
  * @author Subash Karki
  */
 import { Badge, Button, Group, Text, TextInput, UnstyledButton } from '@mantine/core';
+import { GitBranch } from 'lucide-react';
 import { useSetAtom } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { WorkspaceData } from '../../lib/api';
@@ -171,6 +172,7 @@ export function WorkspaceItem({
 
   return (
     <WorkspaceContextMenu
+      workspacePath={workspace.worktreePath ?? undefined}
       onRename={handleStartRename}
       onOpenTerminal={handleOpenTerminal}
       onDelete={() => setIsConfirmingDelete(true)}
@@ -223,14 +225,21 @@ export function WorkspaceItem({
           >
             {workspace.name}
           </Text>
-          <Badge
-            size="xs"
-            variant="light"
-            color="gray"
-            style={{ flexShrink: 0 }}
-          >
-            {workspace.branch}
-          </Badge>
+          {workspace.branch && workspace.branch !== workspace.name && (
+            <Badge
+              size="xs"
+              variant="light"
+              color="gray"
+              leftSection={
+                workspace.type === 'worktree' ? (
+                  <GitBranch size={9} style={{ marginRight: 2 }} />
+                ) : undefined
+              }
+              style={{ flexShrink: 0 }}
+            >
+              {workspace.branch}
+            </Badge>
+          )}
         </Group>
       </UnstyledButton>
     </WorkspaceContextMenu>

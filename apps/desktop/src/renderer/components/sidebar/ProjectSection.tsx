@@ -45,18 +45,18 @@ export function ProjectSection({
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
-  // We don't have a rename project atom yet, so inline rename is a placeholder
-  // that can be wired up when the API endpoint exists
   useEffect(() => {
     if (isRenaming) {
-      renameInputRef.current?.focus();
-      renameInputRef.current?.select();
+      const timer = setTimeout(() => {
+        renameInputRef.current?.focus();
+        renameInputRef.current?.select();
+      }, 120);
+      return () => clearTimeout(timer);
     }
   }, [isRenaming]);
 
   const handleAddWorkspace = useCallback(() => {
     setShowNewInput(true);
-    // Ensure project is expanded so the input is visible
     if (!isExpanded) onToggle();
   }, [isExpanded, onToggle]);
 
@@ -88,16 +88,19 @@ export function ProjectSection({
         }}
         onRemoveProject={() => setShowRemoveDialog(true)}
       >
-        <UnstyledButton
+        <div
+          role="button"
+          tabIndex={0}
           onClick={onToggle}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onToggle(); }}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
-          py={6}
-          px="sm"
           style={{
             display: 'block',
             width: '100%',
             borderRadius: 4,
+            padding: '6px 12px',
+            cursor: 'pointer',
             transition: 'background-color 120ms ease',
             backgroundColor: isHovered
               ? 'var(--phantom-surface-card)'
@@ -130,7 +133,6 @@ export function ProjectSection({
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.currentTarget.value)}
                 onKeyDown={handleRenameKeyDown}
-                onBlur={handleRenameSubmit}
                 onClick={(e) => e.stopPropagation()}
                 size="xs"
                 styles={{
@@ -181,11 +183,11 @@ export function ProjectSection({
               </Tooltip>
             )}
           </Group>
-        </UnstyledButton>
+        </div>
       </ProjectContextMenu>
 
       <Collapse expanded={isExpanded}>
-        <div style={{ paddingLeft: 18 }}>
+        <div style={{ paddingLeft: 18, position: 'relative' }}>
           {workspaces.map((ws) => (
             <WorkspaceItem
               key={ws.id}
@@ -194,16 +196,30 @@ export function ProjectSection({
               onSelect={onSelectWorkspace}
             />
           ))}
+          {workspaces.length === 0 && !showNewInput && (
+            <UnstyledButton
+              onClick={handleAddWorkspace}
+              py={6}
+              px="sm"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                width: '100%',
+                borderRadius: 4,
+                color: 'var(--phantom-text-muted)',
+                fontSize: '0.75rem',
+              }}
+            >
+              <Plus size={12} />
+              Create new workspace
+            </UnstyledButton>
+          )}
           {showNewInput && (
             <InlineWorkspaceInput
               projectId={project.id}
               onDone={() => setShowNewInput(false)}
             />
-          )}
-          {workspaces.length === 0 && !showNewInput && (
-            <Text fz="0.75rem" c="var(--phantom-text-muted)" py={4} px="sm">
-              No workspaces
-            </Text>
           )}
         </div>
       </Collapse>

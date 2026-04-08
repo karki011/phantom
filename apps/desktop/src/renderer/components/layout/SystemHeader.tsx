@@ -9,11 +9,13 @@ import {
   Box,
   Group,
   Menu,
+  Popover,
+  Stack,
   Text,
   useMantineColorScheme,
 } from '@mantine/core';
 import { useAtom } from 'jotai';
-import { ArrowLeft, Circle, Moon, Palette, Sun, Type } from 'lucide-react';
+import { ArrowLeft, Circle, HelpCircle, Moon, Palette, Sun, Type } from 'lucide-react';
 import { themeRegistry } from '@phantom-os/theme';
 
 import { type FontScale, fontScaleAtom, themeNameAtom } from '../../atoms/system';
@@ -174,6 +176,51 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
             <Moon size={18} aria-hidden="true" />
           )}
         </ActionIcon>
+
+        {/* Help */}
+        <Popover width={320} position="bottom-end" shadow="md" withArrow>
+          <Popover.Target>
+            <ActionIcon variant="subtle" size="lg" aria-label="Help">
+              <HelpCircle size={18} aria-hidden="true" />
+            </ActionIcon>
+          </Popover.Target>
+          <Popover.Dropdown
+            style={{
+              backgroundColor: 'var(--phantom-surface-card)',
+              borderColor: 'var(--phantom-border-subtle)',
+            }}
+          >
+            <Stack gap="sm">
+              <Text fw={700} fz="sm" c="var(--phantom-text-primary)">
+                PhantomOS Concepts
+              </Text>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Project</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  A git repository you've opened. Each project tracks its repo path, default branch, and workspaces.
+                </Text>
+              </div>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Workspace</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  An isolated working copy of a project. Your first workspace uses the main branch directly. Each additional workspace creates a <strong>git worktree</strong> — a separate directory with its own branch and files, so you can work on multiple features without stashing or switching branches.
+                </Text>
+              </div>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Panes</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Split your workspace into terminals, editors, session dashboards, and more. Drag panes to rearrange, split horizontally or vertically.
+                </Text>
+              </div>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Hunter Rank</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Your gamification level. Earn XP by completing tasks, starting sessions, and maintaining streaks. Ranks go from E through SSS to National Level.
+                </Text>
+              </div>
+            </Stack>
+          </Popover.Dropdown>
+        </Popover>
       </Group>
     </Group>
   );

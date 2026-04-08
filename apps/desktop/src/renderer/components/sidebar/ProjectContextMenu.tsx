@@ -1,11 +1,12 @@
 /**
  * ProjectContextMenu — right-click context menu for project headers
+ * Uses a pending action ref so callbacks fire cleanly after menu closes.
  *
  * @author Subash Karki
  */
 import { Menu } from '@mantine/core';
 import { Edit3, FolderPlus, Trash2 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useCallback, useRef, useState } from 'react';
 
 interface ProjectContextMenuProps {
   children: ReactNode;
@@ -20,52 +21,88 @@ export function ProjectContextMenu({
   onRename,
   onRemoveProject,
 }: ProjectContextMenuProps) {
+  const [opened, setOpened] = useState(false);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const pendingAction = useRef<(() => void) | null>(null);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setPosition({ x: e.clientX, y: e.clientY });
+    setOpened(true);
+  }, []);
+
+  // When menu closes, execute any pending action
+  const handleOpenChange = useCallback((isOpen: boolean) => {
+    setOpened(isOpen);
+    if (!isOpen && pendingAction.current) {
+      const action = pendingAction.current;
+      pendingAction.current = null;
+      // Execute after the menu unmount completes
+      requestAnimationFrame(action);
+    }
+  }, []);
+
+  // Queue an action and close the menu — action fires after close
+  const queueAction = useCallback((action: () => void) => {
+    pendingAction.current = action;
+    setOpened(false);
+  }, []);
+
   return (
-    <Menu
-      trigger="contextMenu"
-      shadow="md"
-      width={180}
-      position="bottom-start"
-      styles={{
-        dropdown: {
-          backgroundColor: 'var(--phantom-surface-card)',
-          borderColor: 'var(--phantom-border-subtle)',
-        },
-        item: {
-          fontSize: '0.75rem',
-          color: 'var(--phantom-text-secondary)',
-          '&[data-hovered]': {
-            backgroundColor: 'var(--phantom-surface-hover)',
+    <>
+      <div onContextMenu={handleContextMenu}>{children}</div>
+      <Menu
+        opened={opened}
+        onChange={handleOpenChange}
+        shadow="md"
+        width={200}
+        position="bottom-start"
+        offset={{ mainAxis: 0, crossAxis: 0 }}
+        styles={{
+          dropdown: {
+            backgroundColor: 'var(--phantom-surface-card)',
+            borderColor: 'var(--phantom-border-subtle)',
+            position: 'fixed',
+            left: position.x,
+            top: position.y,
           },
-        },
-        separator: {
-          borderColor: 'var(--phantom-border-subtle)',
-        },
-      }}
-    >
-      <Menu.Target>{children}</Menu.Target>
-      <Menu.Dropdown>
-        <Menu.Item
-          leftSection={<FolderPlus size={14} />}
-          onClick={onAddWorkspace}
-        >
-          Add Workspace
-        </Menu.Item>
-        <Menu.Item
-          leftSection={<Edit3 size={14} />}
-          onClick={onRename}
-        >
-          Rename Project
-        </Menu.Item>
-        <Menu.Divider />
-        <Menu.Item
-          leftSection={<Trash2 size={14} />}
-          color="red"
-          onClick={onRemoveProject}
-        >
-          Remove Project
-        </Menu.Item>
-      </Menu.Dropdown>
-    </Menu>
+          item: {
+            fontSize: '0.8rem',
+            color: 'var(--phantom-text-secondary)',
+            padding: '8px 12px',
+          },
+          separator: {
+            borderColor: 'var(--phantom-border-subtle)',
+          },
+        }}
+      >
+        <Menu.Target>
+          <div style={{ position: 'fixed', left: position.x, top: position.y, width: 0, height: 0 }} />
+        </Menu.Target>
+        <Menu.Dropdown>
+          <Menu.Item
+            leftSection={<FolderPlus size={14} />}
+            onClick={() => queueAction(onAddWorkspace)}
+          >
+            Add Workspace
+          </Menu.Item>
+          <Menu.Item
+            leftSection={<Edit3 size={14} />}
+            onClick={() => queueAction(onRename)}
+          >
+            Rename Project
+          </Menu.Item>
+          <Menu.Divider />
+          <Menu.Item
+            leftSection={<Trash2 size={14} />}
+            color="red"
+            onClick={() => queueAction(onRemoveProject)}
+          >
+            Remove Project
+          </Menu.Item>
+        </Menu.Dropdown>
+      </Menu>
+    </>
   );
 }

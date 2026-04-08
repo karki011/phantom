@@ -257,13 +257,6 @@ export const createProject = (data: {
     body: JSON.stringify(data),
   });
 
-export const openRepository = (repoPath: string) =>
-  fetchApi<{ project: ProjectData; workspace: WorkspaceData }>('/api/projects/open', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repoPath }),
-  });
-
 export const getWorkspaces = (projectId?: string): Promise<WorkspaceData[]> =>
   fetchApi<WorkspaceData[]>(
     `/api/workspaces${projectId ? `?projectId=${projectId}` : ''}`,
@@ -307,6 +300,15 @@ export const openRepository = (repoPath: string): Promise<OpenRepositoryResult> 
     method: 'POST',
     body: JSON.stringify({ repoPath }),
   });
+
+export interface BranchesData {
+  local: string[];
+  remote: string[];
+  current: string;
+}
+
+export const getProjectBranches = (projectId: string): Promise<BranchesData> =>
+  fetchApi<BranchesData>(`/api/projects/${projectId}/branches`);
 
 export const getDirectoryListing = (
   workspaceId: string,
