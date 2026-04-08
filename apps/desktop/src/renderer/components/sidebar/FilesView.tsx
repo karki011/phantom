@@ -5,7 +5,7 @@
  */
 import { ScrollArea, Skeleton, Text, TextInput } from '@mantine/core';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
 import { Search, X } from 'lucide-react';
 
@@ -22,30 +22,6 @@ import { activeWorkspaceAtom } from '../../atoms/workspaces';
 import type { FileEntry } from '../../lib/api';
 import { FileTreeItem } from './FileTreeItem';
 
-/** Recursively collect all file entries from loaded tree that match the query */
-function collectMatchingFiles(
-  entries: FileEntry[],
-  query: string,
-  workspaceId: string,
-  fileTree: Map<string, FileEntry[]>,
-): FileEntry[] {
-  const results: FileEntry[] = [];
-  const lowerQuery = query.toLowerCase();
-  for (const entry of entries) {
-    if (!entry.isDirectory && entry.name.toLowerCase().includes(lowerQuery)) {
-      results.push(entry);
-    }
-    if (entry.isDirectory) {
-      const cacheKey = `${workspaceId}:${entry.relativePath}`;
-      const children = fileTree.get(cacheKey);
-      if (children) {
-        results.push(...collectMatchingFiles(children, query, workspaceId, fileTree));
-      }
-    }
-  }
-  return results;
-}
-
 export function FilesView() {
   const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   const fileTree = useAtomValue(fileTreeAtom);
@@ -53,12 +29,31 @@ export function FilesView() {
   const isDirLoading = useAtomValue(isDirLoadingAtom);
   const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<FileEntry[] | null>(null);
+  const [searching, setSearching] = useState(false);
 
   const fetchDirectory = useSetAtom(fetchDirectoryAtom);
   const toggleFolder = useSetAtom(toggleFolderAtom);
   const clearFileTree = useSetAtom(clearFileTreeAtom);
 
   const store = usePaneStore();
+
+  // Debounced server-side file search
+  useEffect(() => {
+    if (!activeWorkspace || !searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    setSearching(true);
+    const timer = setTimeout(() => {
+      fetch(`/api/workspaces/${activeWorkspace.id}/files/search?q=${encodeURIComponent(searchQuery.trim())}`)
+        .then((r) => r.json())
+        .then((data: { entries: FileEntry[] }) => setSearchResults(data.entries))
+        .catch(() => setSearchResults([]))
+        .finally(() => setSearching(false));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery, activeWorkspace?.id]);
 
   // Fetch root when workspace changes
   useEffect(() => {
@@ -110,12 +105,6 @@ export function FilesView() {
   const rootKey = `${activeWorkspace.id}:/`;
   const rootEntries = fileTree.get(rootKey);
 
-  // Collect search results from all loaded directories
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim() || !rootEntries) return null;
-    return collectMatchingFiles(rootEntries, searchQuery.trim(), activeWorkspace.id, fileTree);
-  }, [searchQuery, rootEntries, activeWorkspace.id, fileTree]);
-
   if (!rootEntries) {
     return (
       <div style={{ padding: '8px 12px' }}>
@@ -161,7 +150,11 @@ export function FilesView() {
 
       <ScrollArea style={{ flex: 1 }} scrollbarSize={6}>
         <div style={{ padding: '4px 0' }}>
-          {searchResults ? (
+          {searching ? (
+            <Text fz="0.72rem" c="var(--phantom-text-muted)" ta="center" py="md">
+              Searching...
+            </Text>
+          ) : searchResults ? (
             // Flat search results
             searchResults.length > 0 ? (
               searchResults.map((entry) => (

@@ -93,6 +93,51 @@ workspaceFileRoutes.get('/workspaces/:id/files', (c) => {
   }
 });
 
+/** GET /workspaces/:id/files/search — Recursive file name search */
+workspaceFileRoutes.get('/workspaces/:id/files/search', (c) => {
+  const id = c.req.param('id');
+  const query = c.req.query('q')?.toLowerCase();
+  const limit = Math.min(Number(c.req.query('limit') || 50), 200);
+
+  if (!query) return c.json({ error: 'q query parameter is required' }, 400);
+
+  const root = getWorkspaceRoot(id);
+  if (!root) return c.json({ error: 'Workspace not found' }, 404);
+
+  const results: { name: string; relativePath: string; isDirectory: boolean; size: number; mtime: number }[] = [];
+
+  const SKIP_DIRS = new Set(['.git', 'node_modules', '.next', 'dist', '.turbo', '.cache', '__pycache__', '.venv']);
+
+  const walk = (dir: string, relDir: string) => {
+    if (results.length >= limit) return;
+    let entries;
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+
+    for (const entry of entries) {
+      if (results.length >= limit) return;
+      if (entry.name.startsWith('.') && entry.name !== '.gitignore') continue;
+      if (entry.isDirectory() && SKIP_DIRS.has(entry.name)) continue;
+
+      const relPath = join(relDir, entry.name);
+      const fullPath = join(dir, entry.name);
+
+      if (!entry.isDirectory() && entry.name.toLowerCase().includes(query)) {
+        let size = 0;
+        let mtime = 0;
+        try { const s = statSync(fullPath); size = s.size; mtime = s.mtimeMs; } catch {}
+        results.push({ name: entry.name, relativePath: relPath, isDirectory: false, size, mtime });
+      }
+
+      if (entry.isDirectory()) {
+        walk(fullPath, relPath);
+      }
+    }
+  };
+
+  walk(root, '/');
+  return c.json({ entries: results });
+});
+
 /** GET /workspaces/:id/file — Read file content */
 workspaceFileRoutes.get('/workspaces/:id/file', (c) => {
   const id = c.req.param('id');
