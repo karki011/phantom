@@ -1,5 +1,6 @@
 /**
  * WorkspaceSidebar — left sidebar with project/workspace list
+ * 2-click workspace flow: no modals for the happy path
  *
  * @author Subash Karki
  */
@@ -15,26 +16,43 @@ import {
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   ChevronsLeft,
-  FolderPlus,
+  FolderOpen,
   Plus,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   activeWorkspaceIdAtom,
   expandedProjectsAtom,
   leftSidebarCollapsedAtom,
   leftSidebarWidthAtom,
+  openRepositoryAtom,
   projectsAtom,
   projectsLoadingStateAtom,
   refreshProjectsAtom,
   refreshWorkspacesAtom,
   workspacesByProjectAtom,
 } from '../../atoms/workspaces';
+import { showSystemNotification } from '../notifications/SystemToast';
 import { ResizeHandle } from './ResizeHandle';
 import { ProjectSection } from './ProjectSection';
-import { NewWorkspaceModal } from './NewWorkspaceModal';
-import { AddProjectModal } from './AddProjectModal';
+import { EmptyState } from './EmptyState';
+
+/** Call Electron's native folder picker via IPC */
+const pickFolder = async (): Promise<string | null> => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const api = (window as any).phantomOS;
+    if (api?.invoke) {
+      const result = await api.invoke('phantom:pick-folder');
+      return result as string | null;
+    }
+    return window.prompt('Enter repository path:');
+  } catch (err) {
+    console.error('[WorkspaceSidebar] Folder picker failed:', err);
+    return window.prompt('Enter repository path:');
+  }
+};
 
 export function WorkspaceSidebar() {
   const projects = useAtomValue(projectsAtom);
@@ -51,9 +69,12 @@ export function WorkspaceSidebar() {
 
   const refreshProjects = useSetAtom(refreshProjectsAtom);
   const refreshWorkspaces = useSetAtom(refreshWorkspacesAtom);
+  const openRepo = useSetAtom(openRepositoryAtom);
 
-  const [wsModalOpen, setWsModalOpen] = useState(false);
-  const [projModalOpen, setProjModalOpen] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  // Track which project should show inline workspace input from header "+"
+  const [inlineInputProjectId, setInlineInputProjectId] = useState<string | null>(null);
 
   // Fetch on mount
   useEffect(() => {
@@ -70,6 +91,86 @@ export function WorkspaceSidebar() {
       );
     },
     [setExpandedProjects],
+  );
+
+  const handleOpenRepository = useCallback(async () => {
+    const folder = await pickFolder();
+    if (!folder) return;
+    try {
+      await openRepo(folder);
+      showSystemNotification(
+        'Repository Opened',
+        `Opened ${folder.split('/').pop() ?? folder}`,
+        'success',
+      );
+    } catch (err) {
+      showSystemNotification(
+        'Error',
+        'Failed to open repository.',
+        'warning',
+      );
+      console.error('[WorkspaceSidebar] openRepository failed:', err);
+    }
+  }, [openRepo]);
+
+  const handleHeaderPlusClick = useCallback(() => {
+    if (projects.length === 0) {
+      handleOpenRepository();
+      return;
+    }
+    // Expand first project and show inline input there
+    const firstProject = projects[0];
+    if (!expandedProjects.includes(firstProject.id)) {
+      setExpandedProjects((prev) => [...prev, firstProject.id]);
+    }
+    setInlineInputProjectId(firstProject.id);
+  }, [projects, expandedProjects, setExpandedProjects, handleOpenRepository]);
+
+  // Drag-and-drop handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+
+      // Try to extract folder path from dropped items
+      const items = e.dataTransfer.files;
+      if (items.length > 0) {
+        const item = items[0];
+        // Electron exposes .path on File objects
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const filePath = (item as any).path as string | undefined;
+        if (filePath) {
+          try {
+            await openRepo(filePath);
+            showSystemNotification(
+              'Repository Opened',
+              `Opened ${filePath.split('/').pop() ?? filePath}`,
+              'success',
+            );
+          } catch {
+            showSystemNotification(
+              'Error',
+              'Failed to open dropped folder.',
+              'warning',
+            );
+          }
+        }
+      }
+    },
+    [openRepo],
   );
 
   if (collapsed) {
@@ -109,6 +210,9 @@ export function WorkspaceSidebar() {
 
   return (
     <div
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       style={{
         width,
         minWidth: 160,
@@ -119,6 +223,12 @@ export function WorkspaceSidebar() {
         backgroundColor: 'var(--phantom-surface-card)',
         borderRight: '1px solid var(--phantom-border-subtle)',
         position: 'relative',
+        // Drop indicator
+        outline: isDragOver
+          ? '2px solid var(--phantom-accent-purple)'
+          : 'none',
+        outlineOffset: -2,
+        transition: 'outline 150ms ease',
       }}
     >
       {/* Header */}
@@ -139,7 +249,7 @@ export function WorkspaceSidebar() {
             <ActionIcon
               variant="subtle"
               size="xs"
-              onClick={() => setWsModalOpen(true)}
+              onClick={handleHeaderPlusClick}
               aria-label="New workspace"
             >
               <Plus size={14} style={{ color: 'var(--phantom-text-muted)' }} />
@@ -173,15 +283,7 @@ export function WorkspaceSidebar() {
               <Skeleton height={16} mb={6} />
             </div>
           ) : projects.length === 0 ? (
-            <Text
-              fz="0.75rem"
-              c="var(--phantom-text-muted)"
-              ta="center"
-              py="lg"
-              px="sm"
-            >
-              No projects yet. Add a project to get started.
-            </Text>
+            <EmptyState onOpenRepository={handleOpenRepository} />
           ) : (
             projects.map((project) => (
               <ProjectSection
@@ -211,12 +313,12 @@ export function WorkspaceSidebar() {
           size="xs"
           fullWidth
           leftSection={
-            <FolderPlus
+            <FolderOpen
               size={14}
               style={{ color: 'var(--phantom-text-muted)' }}
             />
           }
-          onClick={() => setProjModalOpen(true)}
+          onClick={handleOpenRepository}
           styles={{
             label: {
               color: 'var(--phantom-text-secondary)',
@@ -224,7 +326,7 @@ export function WorkspaceSidebar() {
             },
           }}
         >
-          Add Project
+          Open Repository
         </Button>
       </div>
 
@@ -234,16 +336,6 @@ export function WorkspaceSidebar() {
         onResize={(delta) =>
           setWidth((prev) => Math.max(160, Math.min(400, prev + delta)))
         }
-      />
-
-      {/* Modals */}
-      <NewWorkspaceModal
-        opened={wsModalOpen}
-        onClose={() => setWsModalOpen(false)}
-      />
-      <AddProjectModal
-        opened={projModalOpen}
-        onClose={() => setProjModalOpen(false)}
       />
     </div>
   );

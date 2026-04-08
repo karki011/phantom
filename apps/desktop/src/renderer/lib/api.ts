@@ -208,19 +208,24 @@ export interface ProjectData {
   id: string;
   repoPath: string;
   name: string;
-  color: string;
+  defaultBranch: string;
+  worktreeBaseDir: string;
+  color: string | null;
   createdAt: number;
 }
 
 export interface WorkspaceData {
   id: string;
   projectId: string;
+  type: string;
   name: string;
   branch: string;
-  baseBranch: string;
-  color: string;
+  worktreePath: string | null;
+  portBase: number | null;
+  sectionId: string | null;
+  tabOrder: number;
+  isActive: number;
   createdAt: number;
-  updatedAt: number;
 }
 
 export interface FileEntry {
@@ -252,6 +257,13 @@ export const createProject = (data: {
     body: JSON.stringify(data),
   });
 
+export const openRepository = (repoPath: string) =>
+  fetchApi<{ project: ProjectData; workspace: WorkspaceData }>('/api/projects/open', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repoPath }),
+  });
+
 export const getWorkspaces = (projectId?: string): Promise<WorkspaceData[]> =>
   fetchApi<WorkspaceData[]>(
     `/api/workspaces${projectId ? `?projectId=${projectId}` : ''}`,
@@ -278,6 +290,23 @@ export const updateWorkspace = (
 
 export const deleteWorkspace = (id: string): Promise<void> =>
   fetchApi<void>(`/api/workspaces/${id}`, { method: 'DELETE' });
+
+export const deleteProject = (id: string, deleteWorktrees = false): Promise<void> =>
+  fetchApi<void>(`/api/projects/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ deleteWorktrees }),
+  });
+
+export interface OpenRepositoryResult {
+  project: ProjectData;
+  workspace: WorkspaceData;
+}
+
+export const openRepository = (repoPath: string): Promise<OpenRepositoryResult> =>
+  fetchApi<OpenRepositoryResult>('/api/projects/open', {
+    method: 'POST',
+    body: JSON.stringify({ repoPath }),
+  });
 
 export const getDirectoryListing = (
   workspaceId: string,

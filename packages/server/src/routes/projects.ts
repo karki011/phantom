@@ -69,6 +69,76 @@ projectRoutes.post('/projects', async (c) => {
   return c.json(project, 201);
 });
 
+/** POST /projects/open — Open (or create) a project + default workspace in one call */
+projectRoutes.post('/projects/open', async (c) => {
+  const body = await c.req.json<{ repoPath: string }>();
+  const { repoPath } = body;
+
+  if (!repoPath) {
+    return c.json({ error: 'repoPath is required' }, 400);
+  }
+
+  if (!existsSync(repoPath)) {
+    return c.json({ error: 'Path does not exist' }, 400);
+  }
+
+  if (!isGitRepo(repoPath)) {
+    return c.json({ error: 'Path is not a git repository' }, 400);
+  }
+
+  // If project already exists, return it with its first workspace
+  const existing = db
+    .select()
+    .from(projects)
+    .where(eq(projects.repoPath, repoPath))
+    .get();
+
+  if (existing) {
+    const firstWorkspace = db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.projectId, existing.id))
+      .get();
+
+    return c.json({ project: existing, workspace: firstWorkspace ?? null });
+  }
+
+  // Auto-detect project name from directory basename
+  const name = getRepoName(repoPath);
+  const defaultBranch = await getDefaultBranch(repoPath);
+
+  const project = {
+    id: randomUUID(),
+    name,
+    repoPath,
+    defaultBranch,
+    worktreeBaseDir: getWorktreeDir(name, ''),
+    color: null,
+    createdAt: Date.now(),
+  };
+
+  db.insert(projects).values(project).run();
+
+  // Create default workspace (uses main repo directory directly — no git worktree)
+  const workspace = {
+    id: randomUUID(),
+    projectId: project.id,
+    type: 'branch' as const,
+    name: defaultBranch,
+    branch: defaultBranch,
+    worktreePath: repoPath,
+    portBase: null,
+    sectionId: null,
+    tabOrder: 0,
+    isActive: 1,
+    createdAt: Date.now(),
+  };
+
+  db.insert(workspaces).values(workspace).run();
+
+  return c.json({ project, workspace }, 201);
+});
+
 /** DELETE /projects/:id — Delete project and cascade workspaces */
 projectRoutes.delete('/projects/:id', async (c) => {
   const id = c.req.param('id');

@@ -16,6 +16,8 @@ import {
   createWorkspace as apiCreateWorkspace,
   deleteWorkspace as apiDeleteWorkspace,
   updateWorkspace as apiUpdateWorkspace,
+  deleteProject as apiDeleteProject,
+  openRepository,
 } from '../lib/api';
 
 // ---------------------------------------------------------------------------
@@ -167,4 +169,56 @@ export const rightSidebarWidthAtom = atomWithStorage(
 export const expandedProjectsAtom = atomWithStorage<string[]>(
   'phantom-expanded-projects',
   [],
+);
+
+// ---------------------------------------------------------------------------
+// Open repository (2-click flow)
+// ---------------------------------------------------------------------------
+
+export const openRepositoryAtom = atom(
+  null,
+  async (_get, set, repoPath: string) => {
+    const { project, workspace } = await openRepository(repoPath);
+    set(projectsDataAtom, (prev) => {
+      if (prev.some((p) => p.id === project.id)) return prev;
+      return [...prev, project];
+    });
+    set(workspacesDataAtom, (prev) => {
+      if (prev.some((w) => w.id === workspace.id)) return prev;
+      return [...prev, workspace];
+    });
+    set(activeWorkspaceIdAtom, workspace.id);
+    set(expandedProjectsAtom, (prev) =>
+      prev.includes(project.id) ? prev : [...prev, project.id],
+    );
+    return { project, workspace };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Delete project
+// ---------------------------------------------------------------------------
+
+export const deleteProjectAtom = atom(
+  null,
+  async (get, set, params: { id: string; deleteWorktrees?: boolean }) => {
+    await apiDeleteProject(params.id, params.deleteWorktrees);
+    set(projectsDataAtom, (prev) => prev.filter((p) => p.id !== params.id));
+    // Remove workspaces belonging to the deleted project
+    const removed = get(workspacesDataAtom).filter(
+      (w) => w.projectId === params.id,
+    );
+    set(workspacesDataAtom, (prev) =>
+      prev.filter((w) => w.projectId !== params.id),
+    );
+    // Clear active workspace if it belonged to the deleted project
+    const activeId = get(activeWorkspaceIdAtom);
+    if (activeId && removed.some((w) => w.id === activeId)) {
+      set(activeWorkspaceIdAtom, null);
+    }
+    // Remove from expanded
+    set(expandedProjectsAtom, (prev) =>
+      prev.filter((id) => id !== params.id),
+    );
+  },
 );

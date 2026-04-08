@@ -4,7 +4,7 @@
  * Future: theme switching, settings, direct Hono calls bypassing HTTP.
  * @author Subash Karki
  */
-import { ipcMain } from 'electron';
+import { ipcMain, dialog, BrowserWindow } from 'electron';
 
 /** Register all IPC handlers. Call once during app init. */
 export const registerIpcHandlers = (): void => {
@@ -12,7 +12,14 @@ export const registerIpcHandlers = (): void => {
     return { status: 'ok', timestamp: Date.now() };
   });
 
-  // Future handlers:
-  // ipcMain.handle('phantom:get-settings', () => { ... });
-  // ipcMain.handle('phantom:set-theme', (_e, theme) => { ... });
+  /** Open native folder picker, returns selected path or null */
+  ipcMain.handle('phantom:pick-folder', async () => {
+    const win = BrowserWindow.getFocusedWindow();
+    const result = await dialog.showOpenDialog(win!, {
+      properties: ['openDirectory'],
+      title: 'Select Repository Folder',
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
+  });
 };
