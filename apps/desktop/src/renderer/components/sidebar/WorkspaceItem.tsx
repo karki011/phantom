@@ -5,7 +5,7 @@
  * @author Subash Karki
  */
 import { Badge, Button, Text, TextInput, UnstyledButton } from '@mantine/core';
-import { GitBranch } from 'lucide-react';
+import { AlertTriangle, GitBranch } from 'lucide-react';
 import { useSetAtom } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { WorkspaceData } from '../../lib/api';
@@ -231,6 +231,13 @@ export function WorkspaceItem({
           >
             {workspace.name}
           </Text>
+          {workspace.worktreeValid === false && (
+            <AlertTriangle
+              size={12}
+              style={{ color: 'var(--phantom-status-warning)', flexShrink: 0 }}
+              title="Worktree missing — click to re-create or delete"
+            />
+          )}
           {workspace.branch && workspace.branch !== workspace.name && (
             <Badge
               size="xs"

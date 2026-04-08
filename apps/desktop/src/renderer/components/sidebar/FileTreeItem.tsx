@@ -54,6 +54,28 @@ function getFileIcon(name: string) {
   }
 }
 
+function IndentGuides({ depth }: { depth: number }) {
+  if (depth === 0) return null;
+  return (
+    <>
+      {Array.from({ length: depth }, (_, i) => (
+        <div
+          key={i}
+          style={{
+            position: 'absolute',
+            left: i * 20 + 14,
+            top: 0,
+            bottom: 0,
+            width: 1,
+            backgroundColor: 'var(--phantom-border-subtle)',
+            opacity: 0.4,
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
 export function FileTreeItem({
   entry,
   depth,
@@ -103,7 +125,8 @@ export function FileTreeItem({
         style={{
           display: 'block',
           width: '100%',
-          paddingLeft: depth * 16 + 4,
+          paddingLeft: depth * 20 + 4,
+          position: 'relative',
           borderRadius: 4,
           backgroundColor: isSelected
             ? 'var(--phantom-surface-hover)'
@@ -121,6 +144,7 @@ export function FileTreeItem({
               'transparent';
         }}
       >
+        <IndentGuides depth={depth} />
         <Group gap={4} wrap="nowrap">
           {entry.isDirectory && (
             <ChevronRight

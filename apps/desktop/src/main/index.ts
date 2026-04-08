@@ -5,7 +5,7 @@
  */
 import { app } from 'electron';
 
-import { startServer, stopServer, ensureTerminalDaemon } from './server';
+import { startServer, stopServer } from './server';
 import { createWindow } from './window';
 import { registerLifecycle } from './lifecycle';
 import { registerIpcHandlers } from './ipc-handlers';

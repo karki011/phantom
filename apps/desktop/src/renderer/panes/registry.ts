@@ -8,11 +8,9 @@
 
 import { lazy, Suspense, createElement } from 'react';
 import type { PaneDefinition, Pane } from '@phantom-os/panes';
+import { TerminalPane } from '@phantom-os/terminal';
 
-// Lazy-load heavy pane types
-const TerminalPane = lazy(() =>
-  import('@phantom-os/terminal').then((m) => ({ default: m.TerminalPane })),
-);
+// Lazy-load heavy pane types (terminal has its own loading overlay)
 const EditorPane = lazy(() =>
   import('@phantom-os/editor').then((m) => ({ default: m.EditorPane })),
 );

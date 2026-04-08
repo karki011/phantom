@@ -101,25 +101,84 @@ export const registerIpcHandlers = (): void => {
     const MAX_FILES = 100;
     const MAX_FILE_SIZE = 512 * 1024; // 512KB per file
 
-    // 1. Scan node_modules/@types/*/index.d.ts
+    /** Read a single .d.ts file and push to results. Returns the content or null. */
+    const pushTypeFile = (absPath: string, virtualPath: string): string | null => {
+      if (results.length >= MAX_FILES) return null;
+      try {
+        const content = readFileSync(absPath, 'utf-8');
+        if (content.length <= MAX_FILE_SIZE) {
+          results.push({ filePath: virtualPath, content });
+          return content;
+        }
+      } catch { /* skip unreadable */ }
+      return null;
+    };
+
+    /**
+     * Parse `/// <reference types="pkg" />` directives from a .d.ts file and
+     * load each referenced package's root types (1 level deep only).
+     */
+    const followReferenceDirectives = (content: string): void => {
+      const refRe = /\/\/\/\s*<reference\s+types="([^"]+)"\s*\/>/g;
+      let match: RegExpExecArray | null;
+      while ((match = refRe.exec(content)) !== null) {
+        if (results.length >= MAX_FILES) break;
+        const refPkg = match[1];
+        // Resolve: first check @types/<refPkg>, then node_modules/<refPkg>
+        const candidates: [string, string][] = [
+          [
+            join(repoPath, 'node_modules', '@types', refPkg, 'index.d.ts'),
+            `file:///node_modules/@types/${refPkg}/index.d.ts`,
+          ],
+          [
+            join(repoPath, 'node_modules', refPkg, 'index.d.ts'),
+            `file:///node_modules/${refPkg}/index.d.ts`,
+          ],
+        ];
+        for (const [absPath, virtualPath] of candidates) {
+          // Skip if already loaded
+          if (results.some(r => r.filePath === virtualPath)) break;
+          if (existsSync(absPath)) {
+            pushTypeFile(absPath, virtualPath);
+            break;
+          }
+        }
+      }
+    };
+
+    // 1. Scan node_modules/@types — including scoped dirs like @types/@scope/pkg
     const typesDir = join(repoPath, 'node_modules', '@types');
     if (existsSync(typesDir)) {
       try {
-        for (const pkg of readdirSync(typesDir)) {
+        for (const entry of readdirSync(typesDir)) {
           if (results.length >= MAX_FILES) break;
-          // Handle scoped packages like @types/react
-          const pkgDir = join(typesDir, pkg);
-          const indexPath = join(pkgDir, 'index.d.ts');
-          if (existsSync(indexPath)) {
+          const entryPath = join(typesDir, entry);
+
+          if (entry.startsWith('@')) {
+            // Scoped dir under @types (e.g. @types/@testing-library/react)
             try {
-              const content = readFileSync(indexPath, 'utf-8');
-              if (content.length <= MAX_FILE_SIZE) {
-                results.push({
-                  filePath: `file:///node_modules/@types/${pkg}/index.d.ts`,
-                  content,
-                });
+              for (const scopedPkg of readdirSync(entryPath)) {
+                if (results.length >= MAX_FILES) break;
+                const indexPath = join(entryPath, scopedPkg, 'index.d.ts');
+                if (existsSync(indexPath)) {
+                  const content = pushTypeFile(
+                    indexPath,
+                    `file:///node_modules/@types/${entry}/${scopedPkg}/index.d.ts`,
+                  );
+                  if (content) followReferenceDirectives(content);
+                }
               }
-            } catch { /* skip unreadable */ }
+            } catch { /* skip unreadable scoped dir */ }
+          } else {
+            // Normal @types/<pkg>
+            const indexPath = join(entryPath, 'index.d.ts');
+            if (existsSync(indexPath)) {
+              const content = pushTypeFile(
+                indexPath,
+                `file:///node_modules/@types/${entry}/index.d.ts`,
+              );
+              if (content) followReferenceDirectives(content);
+            }
           }
         }
       } catch { /* skip if @types dir can't be read */ }
@@ -130,24 +189,42 @@ export const registerIpcHandlers = (): void => {
       const pkgPath = join(repoPath, 'package.json');
       if (existsSync(pkgPath)) {
         const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-        const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+        const deps: Record<string, string> = { ...pkg.dependencies, ...pkg.devDependencies };
         for (const depName of Object.keys(deps)) {
           if (results.length >= MAX_FILES) break;
           // Skip @types — already scanned above
           if (depName.startsWith('@types/')) continue;
-          const depTypesPath = join(repoPath, 'node_modules', depName, 'dist', 'index.d.ts');
-          const depTypesAlt = join(repoPath, 'node_modules', depName, 'index.d.ts');
-          const typesPath = existsSync(depTypesPath) ? depTypesPath : existsSync(depTypesAlt) ? depTypesAlt : null;
-          if (typesPath) {
-            try {
-              const content = readFileSync(typesPath, 'utf-8');
-              if (content.length <= MAX_FILE_SIZE) {
-                results.push({
-                  filePath: `file:///node_modules/${depName}/index.d.ts`,
-                  content,
-                });
-              }
-            } catch { /* skip */ }
+
+          const depModuleDir = join(repoPath, 'node_modules', depName);
+
+          // Resolve the types entry point:
+          // a) Check dep's package.json for "types" / "typings" field first
+          // b) Fall back to dist/index.d.ts, then index.d.ts
+          let typesRelPath: string | null = null;
+          try {
+            const depPkgPath = join(depModuleDir, 'package.json');
+            if (existsSync(depPkgPath)) {
+              const depPkg = JSON.parse(readFileSync(depPkgPath, 'utf-8'));
+              typesRelPath = depPkg.types ?? depPkg.typings ?? null;
+            }
+          } catch { /* ignore malformed package.json */ }
+
+          const candidates: string[] = [];
+          if (typesRelPath) {
+            candidates.push(join(depModuleDir, typesRelPath));
+          }
+          candidates.push(
+            join(depModuleDir, 'dist', 'index.d.ts'),
+            join(depModuleDir, 'index.d.ts'),
+          );
+
+          const virtualBase = `file:///node_modules/${depName}/index.d.ts`;
+          for (const candidate of candidates) {
+            if (existsSync(candidate)) {
+              const content = pushTypeFile(candidate, virtualBase);
+              if (content) followReferenceDirectives(content);
+              break;
+            }
           }
         }
       }

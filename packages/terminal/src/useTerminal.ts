@@ -3,7 +3,7 @@
  * Connects xterm.js to a real shell via the PhantomOS server.
  * @author Subash Karki
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -27,6 +27,7 @@ export const useTerminal = (
   const fitRef = useRef<FitAddon | null>(null);
   const cwdRef = useRef(cwd);
   cwdRef.current = cwd;
+  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -80,10 +81,17 @@ export const useTerminal = (
         }
       };
 
+      let gotFirstOutput = false;
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          if (msg.type === 'output') term.write(msg.data);
+          if (msg.type === 'output') {
+            term.write(msg.data);
+            if (!gotFirstOutput) {
+              gotFirstOutput = true;
+              setConnected(true);
+            }
+          }
         } catch { /* ignore */ }
       };
 
@@ -134,5 +142,5 @@ export const useTerminal = (
     return cleanup;
   }, [containerRef, paneId]);
 
-  return { terminal: termRef, fit: fitRef };
+  return { terminal: termRef, fit: fitRef, connected };
 };

@@ -6,6 +6,7 @@
  * @author Subash Karki
  */
 import {
+  Button,
   Center,
   Group,
   Kbd,
@@ -17,11 +18,11 @@ import {
   Title,
 } from '@mantine/core';
 import { usePaneStore } from '@phantom-os/panes';
-import { useAtomValue } from 'jotai';
-import { FileCode, GitBranch, Sword, Target, Terminal as TerminalIcon } from 'lucide-react';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { AlertTriangle, FileCode, GitBranch, Sword, Target, Terminal as TerminalIcon, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { activeWorkspaceAtom } from '../atoms/workspaces';
+import { activeWorkspaceAtom, deleteWorkspaceAtom, projectsAtom } from '../atoms/workspaces';
 import { useHunter } from '../hooks/useHunter';
 import { useQuests } from '../hooks/useQuests';
 
@@ -130,18 +131,27 @@ function QuickActionCard({
   );
 }
 
-function GitStatusCard({ status }: { status: GitStatus | null }) {
-  if (!status) {
+type GitStatusState = 'loading' | 'unavailable' | 'error' | GitStatus;
+
+function GitStatusCard({ state }: { state: GitStatusState }) {
+  if (state === 'loading' || state === 'unavailable' || state === 'error') {
+    const message =
+      state === 'loading'
+        ? 'Loading...'
+        : state === 'unavailable'
+          ? 'No git repository'
+          : 'Git status unavailable';
     return (
       <Paper p="md" bg="var(--phantom-surface-card)" radius="md" style={{ border: '1px solid var(--phantom-border-subtle)' }}>
         <Group gap="xs" mb="xs">
           <GitBranch size={14} style={{ color: 'var(--phantom-text-muted)' }} />
           <Text fz="xs" fw={600} c="var(--phantom-text-secondary)">Git Status</Text>
         </Group>
-        <Text fz="xs" c="var(--phantom-text-muted)">Loading...</Text>
+        <Text fz="xs" c="var(--phantom-text-muted)">{message}</Text>
       </Paper>
     );
   }
+  const status = state;
 
   const isDirty = status.staged > 0 || status.modified > 0 || status.untracked > 0;
   const dotColor = isDirty ? 'var(--phantom-status-warning)' : 'var(--phantom-status-active)';
@@ -209,19 +219,38 @@ export function WorkspaceHome() {
   const { quests } = useQuests();
   const store = usePaneStore();
   const workspace = useAtomValue(activeWorkspaceAtom);
+  const projects = useAtomValue(projectsAtom);
+  const deleteWorkspace = useSetAtom(deleteWorkspaceAtom);
 
-  const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
+  const project = workspace
+    ? projects.find((p) => p.id === workspace.projectId) ?? null
+    : null;
+
+  // Prefer worktreePath (the checked-out path for this workspace), fall back to
+  // the project's bare repoPath. Either is a valid git directory for IPC.
+  const gitPath = workspace?.worktreePath ?? project?.repoPath ?? null;
+
+  const [gitStatusState, setGitStatusState] = useState<GitStatusState>('loading');
 
   // Fetch git status via IPC
   useEffect(() => {
-    if (!workspace?.repoPath) return;
+    if (!gitPath) {
+      setGitStatusState('unavailable');
+      return;
+    }
     const isDesktop = window.phantomOS?.isDesktop;
-    if (!isDesktop) return;
+    if (!isDesktop) {
+      setGitStatusState('unavailable');
+      return;
+    }
 
-    window.phantomOS.invoke('phantom:git-status', workspace.repoPath)
-      .then((result) => setGitStatus(result as GitStatus | null))
-      .catch(() => setGitStatus(null));
-  }, [workspace?.repoPath]);
+    setGitStatusState('loading');
+    window.phantomOS.invoke('phantom:git-status', gitPath)
+      .then((result) => {
+        setGitStatusState(result ? (result as GitStatus) : 'unavailable');
+      })
+      .catch(() => setGitStatusState('error'));
+  }, [gitPath]);
 
   // Random quote (stable per mount)
   const quote = useMemo(() => QUOTES[Math.floor(Math.random() * QUOTES.length)], []);
@@ -238,6 +267,36 @@ export function WorkspaceHome() {
 
   const openTerminal = useCallback(() => store.addPane('terminal', { cwd: workspace?.worktreePath } as Record<string, unknown>), [store, workspace]);
   const openEditor = useCallback(() => store.addPane('editor'), [store]);
+
+  // Guard: worktree was deleted externally
+  if (workspace && workspace.worktreeValid === false) {
+    return (
+      <Center h="100%">
+        <Stack align="center" gap="md" maw={420} px="md">
+          <AlertTriangle size={40} style={{ color: 'var(--phantom-status-warning)' }} />
+          <Title order={3} c="var(--phantom-text-primary)" ta="center">
+            Worktree Not Found
+          </Title>
+          <Text fz="sm" c="var(--phantom-text-secondary)" ta="center">
+            The git worktree for this workspace was deleted externally.
+          </Text>
+          <Text fz="xs" c="var(--phantom-text-muted)" ta="center" ff="monospace">
+            Path: {workspace.worktreePath}
+          </Text>
+          <Button
+            variant="light"
+            color="red"
+            size="sm"
+            leftSection={<Trash2 size={14} />}
+            mt="sm"
+            onClick={() => deleteWorkspace(workspace.id)}
+          >
+            Delete Workspace
+          </Button>
+        </Stack>
+      </Center>
+    );
+  }
 
   return (
     <Center h="100%" style={{ overflow: 'auto' }}>
@@ -269,7 +328,7 @@ export function WorkspaceHome() {
 
         {/* Info Cards */}
         <SimpleGrid cols={{ base: 1, sm: 2 }} w="100%" spacing="md">
-          <GitStatusCard status={gitStatus} />
+          <GitStatusCard state={gitStatusState} />
           <DailyQuestsCard quests={questSummary} />
         </SimpleGrid>
 

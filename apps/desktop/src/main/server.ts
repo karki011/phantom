@@ -2,18 +2,13 @@
  * PhantomOS Desktop — Server Bootstrap
  * Runs the Hono API server as a child process using system Node.js
  * so native modules (better-sqlite3) work without Electron V8 conflicts.
- * Also manages the terminal daemon lifecycle — the daemon is a persistent
- * process that survives app restarts.
  * @author Subash Karki
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
-import { existsSync, readFileSync } from 'node:fs';
 import { app } from 'electron';
-import { homedir } from 'node:os';
 
 let serverProcess: ChildProcess | null = null;
-let daemonProcess: ChildProcess | null = null;
 
 /** Monorepo root (two levels up from apps/desktop/) */
 const monoRoot = join(__dirname, '..', '..', '..', '..');
@@ -98,74 +93,8 @@ export const stopServer = (): void => {
     serverProcess.kill('SIGTERM');
     serverProcess = null;
   }
-  // Intentionally do NOT kill the daemon — it persists across app restarts.
-  // The daemon cleans itself up via SIGTERM if explicitly stopped.
-  daemonProcess = null;
 };
 
-// ─── Terminal Daemon Lifecycle ──────────────────────────────────────────
-
-const PHANTOM_DIR = join(homedir(), '.phantom-os');
-const DAEMON_PID_FILE = join(PHANTOM_DIR, 'terminal-host.pid');
-
-/** Check if the terminal daemon is already running */
-const isDaemonRunning = (): boolean => {
-  try {
-    if (!existsSync(DAEMON_PID_FILE)) return false;
-    const pid = parseInt(readFileSync(DAEMON_PID_FILE, 'utf-8').trim(), 10);
-    process.kill(pid, 0); // Signal 0 = check existence
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-/**
- * Ensure the terminal daemon is running.
- * If it's already running (from a previous app session), adopt it.
- * Otherwise, spawn a new daemon process.
- */
-export const ensureTerminalDaemon = async (): Promise<void> => {
-  if (isDaemonRunning()) {
-    console.log('[PhantomOS Desktop] Terminal daemon already running, adopting');
-    return;
-  }
-
-  const daemonEntry = app.isPackaged
-    ? join(process.resourcesPath, 'server', 'terminal-daemon.js')
-    : join(monoRoot, 'packages', 'terminal', 'src', 'daemon', 'terminal-daemon.ts');
-
-  const cmd = app.isPackaged ? 'node' : 'bun';
-  const args = app.isPackaged ? [daemonEntry] : ['run', daemonEntry];
-
-  console.log(`[PhantomOS Desktop] Starting terminal daemon: ${cmd} ${args.join(' ')}`);
-
-  daemonProcess = spawn(cmd, args, {
-    cwd: monoRoot,
-    env: { ...process.env },
-    stdio: ['ignore', 'inherit', 'inherit'],
-    detached: true, // Run independently of the parent process
-  });
-
-  // Unref so the daemon doesn't prevent the Electron app from exiting
-  daemonProcess.unref();
-
-  daemonProcess.on('error', (err) => {
-    console.error('[PhantomOS Desktop] Terminal daemon error:', err.message);
-    daemonProcess = null;
-  });
-
-  daemonProcess.on('exit', (code) => {
-    console.log(`[PhantomOS Desktop] Terminal daemon exited with code ${code}`);
-    daemonProcess = null;
-  });
-
-  // Give the daemon a moment to start and create its socket
-  await new Promise<void>((resolve) => setTimeout(resolve, 500));
-
-  if (isDaemonRunning()) {
-    console.log('[PhantomOS Desktop] Terminal daemon is ready');
-  } else {
-    console.warn('[PhantomOS Desktop] Terminal daemon may not have started — server will use direct PTY fallback');
-  }
-};
+// === DISABLED (M4): Terminal daemon — needs output routing rewrite ===
+// ensureTerminalDaemon, isDaemonRunning, DAEMON_PID_FILE removed.
+// Recover from git history when M4 terminal daemon work resumes.

@@ -227,6 +227,7 @@ export interface WorkspaceData {
   tabOrder: number;
   isActive: number;
   createdAt: number;
+  worktreeValid: boolean;
 }
 
 export interface FileEntry {

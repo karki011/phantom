@@ -3,6 +3,7 @@
  * @author Subash Karki
  */
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db, projects, workspaces } from '@phantom-os/db';
@@ -31,7 +32,11 @@ workspaceRoutes.get('/workspaces', (c) => {
     query = query.where(eq(workspaces.projectId, projectId)) as typeof query;
   }
 
-  return c.json(query.all());
+  const results = query.all().map((ws) => ({
+    ...ws,
+    worktreeValid: ws.worktreePath ? existsSync(ws.worktreePath) : false,
+  }));
+  return c.json(results);
 });
 
 /** POST /workspaces — Create a new workspace with git worktree */

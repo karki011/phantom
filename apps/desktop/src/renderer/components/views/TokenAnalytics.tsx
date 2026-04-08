@@ -109,11 +109,12 @@ interface ProjectAggregate {
 export const TokenAnalytics = () => {
   const [allSessions, setAllSessions] = useState<SessionData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     getSessions({ limit: 9999 })
       .then((data) => { setAllSessions(data); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch(() => { setError('Failed to load analytics'); setLoading(false); });
   }, []);
 
   const recent = allSessions;
@@ -163,6 +164,21 @@ export const TokenAnalytics = () => {
       .sort((a, b) => b.estimatedCostMicros - a.estimatedCostMicros)
       .slice(0, 10);
   }, [recent]);
+
+  if (error) {
+    return (
+      <Stack gap="lg">
+        <ViewHeader
+          title="Token Analytics"
+          icon={<Coins size={20} />}
+          subtitle="Usage and cost breakdown"
+        />
+        <Text fz="0.875rem" c="var(--phantom-status-error)">
+          {error}
+        </Text>
+      </Stack>
+    );
+  }
 
   if (loading) {
     return (

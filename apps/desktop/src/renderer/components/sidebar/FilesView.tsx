@@ -103,6 +103,14 @@ export function FilesView() {
     );
   }
 
+  if (activeWorkspace.worktreeValid === false) {
+    return (
+      <Text fz="0.75rem" c="var(--phantom-status-warning)" ta="center" py="xl" px="sm">
+        Worktree missing. Cannot browse files.
+      </Text>
+    );
+  }
+
   const rootKey = `${activeWorkspace.id}:/`;
   const rootEntries = fileTree.get(rootKey);
 
@@ -261,7 +269,7 @@ function FileTreeRecursive({
               />
             )}
             {entry.isDirectory && isExpanded && !childEntries && loading && (
-              <div style={{ paddingLeft: (depth + 1) * 16 + 4, padding: '2px 0' }}>
+              <div style={{ paddingLeft: (depth + 1) * 20 + 4, padding: '2px 0' }}>
                 <Skeleton height={14} width="60%" />
               </div>
             )}
