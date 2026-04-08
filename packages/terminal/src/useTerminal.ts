@@ -19,6 +19,10 @@ export const useTerminal = (
 ) => {
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  // Stabilize cwd in a ref so the effect doesn't re-run when cwd changes
+  // from undefined to actual value (which would create duplicate PTYs).
+  const cwdRef = useRef(cwd);
+  cwdRef.current = cwd;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -65,14 +69,16 @@ export const useTerminal = (
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        // Send init with cwd before resize so the server spawns PTY in the right directory
-        if (ws) {
-          ws.send(JSON.stringify({ type: 'init', cwd: cwd || null }));
-        }
+        // Send init with cwd AND dimensions so PTY starts at correct size.
+        // Sending cols/rows here avoids the garbled-output race where the
+        // shell outputs at 80x24 before a separate resize arrives.
         const dims = fit.proposeDimensions();
-        if (dims && ws) {
+        if (ws) {
           ws.send(JSON.stringify({
-            type: 'resize', cols: dims.cols, rows: dims.rows,
+            type: 'init',
+            cwd: cwdRef.current || null,
+            cols: dims?.cols ?? 80,
+            rows: dims?.rows ?? 24,
           }));
         }
       };
@@ -131,7 +137,7 @@ export const useTerminal = (
       ws?.close();
       term.dispose();
     };
-  }, [containerRef, paneId, cwd]);
+  }, [containerRef, paneId]);
 
   return { terminal: termRef, fit: fitRef };
 };

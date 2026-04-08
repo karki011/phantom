@@ -137,12 +137,12 @@ const buildPtyEnv = (): Record<string, string> => {
   return env;
 };
 
-const createDirectPty = (id: string, cwd?: string): PtySession => {
+const createDirectPty = (id: string, cwd?: string, cols?: number, rows?: number): PtySession => {
   const shell = resolveShell();
   const ptyProcess = pty.spawn(shell, [], {
     name: 'xterm-256color',
-    cols: 80,
-    rows: 24,
+    cols: cols || 80,
+    rows: rows || 24,
     cwd: cwd || homedir(),
     env: buildPtyEnv(),
   });
@@ -204,7 +204,7 @@ export const createPty = async (
   }
 
   // Fallback to direct PTY
-  const session = createDirectPty(id, cwd);
+  const session = createDirectPty(id, cwd, cols, rows);
   if (initialListener) session.listeners.add(initialListener);
   return session;
 };

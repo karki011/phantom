@@ -12,6 +12,7 @@ import {
   createPty,
   writePty,
   resizePty,
+  destroyPty,
   getPtySession,
 } from '../terminal-manager.js';
 
@@ -44,6 +45,9 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
 
   ws.on('close', () => {
     session?.listeners.delete(onData);
+    // Destroy the PTY process when the WebSocket closes to prevent ghost sessions
+    if (session) destroyPty(termId);
+    session = undefined;
   });
 
   // If session already exists (reconnect), wire listener immediately
@@ -64,7 +68,7 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
               try {
                 // Pass onData as initialListener — it's attached to the session
                 // BEFORE the daemon subscription, preventing lost output.
-                session = await createPty(termId, msg.cwd || undefined, undefined, undefined, onData);
+                session = await createPty(termId, msg.cwd || undefined, msg.cols, msg.rows, onData);
               } catch (err) {
                 console.error(`[TerminalWS] Failed to spawn PTY for ${termId}:`, err);
                 ws.send(JSON.stringify({
