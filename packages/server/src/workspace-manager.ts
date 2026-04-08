@@ -29,10 +29,11 @@ export const createWorktree = async (
   repoPath: string,
   branch: string,
   targetDir: string,
+  baseBranch?: string,
 ): Promise<void> => {
   mkdirSync(targetDir, { recursive: true });
 
-  // Check if branch exists remotely or locally
+  // Check if branch already exists
   try {
     execSync(`git rev-parse --verify "${branch}"`, { cwd: repoPath, stdio: 'pipe' });
     // Branch exists — create worktree from it
@@ -41,8 +42,9 @@ export const createWorktree = async (
       stdio: 'pipe',
     });
   } catch {
-    // Branch doesn't exist — create new branch from HEAD
-    execSync(`git worktree add -b "${branch}" "${targetDir}"`, {
+    // Branch doesn't exist — create new branch from baseBranch (or HEAD)
+    const startPoint = baseBranch ? ` "${baseBranch}"` : '';
+    execSync(`git worktree add -b "${branch}" "${targetDir}"${startPoint}`, {
       cwd: repoPath,
       stdio: 'pipe',
     });

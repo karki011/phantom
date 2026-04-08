@@ -65,7 +65,7 @@ workspaceRoutes.post('/workspaces', async (c) => {
 
   // Create git worktree
   try {
-    await createWorktree(project.repoPath, branch, worktreePath);
+    await createWorktree(project.repoPath, branch, worktreePath, body.baseBranch);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ error: `Failed to create worktree: ${msg}` }, 500);

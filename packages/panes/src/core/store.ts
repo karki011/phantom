@@ -44,7 +44,7 @@ function makePane<TData = Record<string, unknown>>(
 }
 
 function makeTab<TData = Record<string, unknown>>(label: string): Tab<TData> {
-  const pane = makePane<TData>('dashboard', undefined as TData, 'Dashboard');
+  const pane = makePane<TData>('terminal', undefined as TData, 'Terminal');
   return {
     id: uid(),
     label,

@@ -120,24 +120,7 @@ projectRoutes.post('/projects/open', async (c) => {
 
   db.insert(projects).values(project).run();
 
-  // Create default workspace (uses main repo directory directly — no git worktree)
-  const workspace = {
-    id: randomUUID(),
-    projectId: project.id,
-    type: 'branch' as const,
-    name: defaultBranch,
-    branch: defaultBranch,
-    worktreePath: repoPath,
-    portBase: null,
-    sectionId: null,
-    tabOrder: 0,
-    isActive: 1,
-    createdAt: Date.now(),
-  };
-
-  db.insert(workspaces).values(workspace).run();
-
-  return c.json({ project, workspace }, 201);
+  return c.json({ project, workspace: null }, 201);
 });
 
 /** GET /projects/:id/branches — List local + remote branches for a project's repo */
@@ -183,7 +166,7 @@ projectRoutes.get('/projects/:id/branches', (c) => {
       }
     }
 
-    return c.json({ local, remote, current });
+    return c.json({ local, remote, current, defaultBranch: project.defaultBranch ?? 'main' });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ error: `Failed to list branches: ${msg}` }, 500);

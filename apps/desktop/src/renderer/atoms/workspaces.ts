@@ -105,7 +105,7 @@ export const createWorkspaceAtom = atom(
   async (
     _get,
     set,
-    params: { projectId: string; name?: string; branch?: string },
+    params: { projectId: string; name?: string; branch?: string; baseBranch?: string },
   ) => {
     const workspace = await apiCreateWorkspace(params);
     set(workspacesDataAtom, (prev) => [...prev, workspace]);
@@ -183,11 +183,13 @@ export const openRepositoryAtom = atom(
       if (prev.some((p) => p.id === project.id)) return prev;
       return [...prev, project];
     });
-    set(workspacesDataAtom, (prev) => {
-      if (prev.some((w) => w.id === workspace.id)) return prev;
-      return [...prev, workspace];
-    });
-    set(activeWorkspaceIdAtom, workspace.id);
+    if (workspace) {
+      set(workspacesDataAtom, (prev) => {
+        if (prev.some((w) => w.id === workspace.id)) return prev;
+        return [...prev, workspace];
+      });
+      set(activeWorkspaceIdAtom, workspace.id);
+    }
     set(expandedProjectsAtom, (prev) =>
       prev.includes(project.id) ? prev : [...prev, project.id],
     );

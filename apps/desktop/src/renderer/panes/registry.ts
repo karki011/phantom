@@ -8,12 +8,6 @@
 
 import { lazy, Suspense, createElement } from 'react';
 import type { PaneDefinition, Pane } from '@phantom-os/panes';
-import { Cockpit } from '../components/cockpit/Cockpit';
-import { ActiveSessions } from '../components/views/ActiveSessions';
-import { TokenAnalytics } from '../components/views/TokenAnalytics';
-import { HunterProfile } from '../components/views/HunterProfile';
-import { AchievementsView } from '../components/views/AchievementsView';
-import { TaskHistory } from '../components/views/TaskHistory';
 
 // Lazy-load heavy pane types
 const TerminalPane = lazy(() =>
@@ -43,54 +37,6 @@ const Loading = () =>
 // ---------------------------------------------------------------------------
 
 export const paneDefinitions: Record<string, PaneDefinition> = {
-  dashboard: {
-    kind: 'dashboard',
-    title: 'Dashboard',
-    icon: '📊',
-    render: () => createElement(Cockpit),
-    defaultTitle: 'Dashboard',
-    component: () => createElement(Cockpit),
-  },
-  sessions: {
-    kind: 'sessions',
-    title: 'Sessions',
-    icon: '⚡',
-    render: () => createElement(ActiveSessions),
-    defaultTitle: 'Sessions',
-    component: () => createElement(ActiveSessions),
-  },
-  tokens: {
-    kind: 'tokens',
-    title: 'Tokens',
-    icon: '🪙',
-    render: () => createElement(TokenAnalytics),
-    defaultTitle: 'Tokens',
-    component: () => createElement(TokenAnalytics),
-  },
-  profile: {
-    kind: 'profile',
-    title: 'Profile',
-    icon: '🏆',
-    render: () => createElement(HunterProfile),
-    defaultTitle: 'Profile',
-    component: () => createElement(HunterProfile),
-  },
-  achievements: {
-    kind: 'achievements',
-    title: 'Achievements',
-    icon: '🎖',
-    render: () => createElement(AchievementsView),
-    defaultTitle: 'Achievements',
-    component: () => createElement(AchievementsView),
-  },
-  tasks: {
-    kind: 'tasks',
-    title: 'Tasks',
-    icon: '✅',
-    render: () => createElement(TaskHistory),
-    defaultTitle: 'Tasks',
-    component: () => createElement(TaskHistory),
-  },
   terminal: {
     kind: 'terminal',
     title: 'Terminal',
@@ -126,12 +72,6 @@ export const paneDefinitions: Record<string, PaneDefinition> = {
 // ---------------------------------------------------------------------------
 
 export const paneMenu = [
-  { kind: 'dashboard', label: 'Dashboard', icon: '📊' },
-  { kind: 'sessions', label: 'Sessions', icon: '⚡' },
-  { kind: 'tokens', label: 'Tokens', icon: '🪙' },
-  { kind: 'tasks', label: 'Tasks', icon: '✅' },
-  { kind: 'profile', label: 'Profile', icon: '🏆' },
-  { kind: 'achievements', label: 'Achievements', icon: '🎖' },
   { kind: 'terminal', label: 'Terminal', icon: '▶' },
   { kind: 'editor', label: 'Editor', icon: '📝' },
 ];

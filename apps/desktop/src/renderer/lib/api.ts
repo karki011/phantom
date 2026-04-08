@@ -266,6 +266,7 @@ export const createWorkspace = (data: {
   projectId: string;
   name?: string;
   branch?: string;
+  baseBranch?: string;
 }): Promise<WorkspaceData> =>
   fetchApi<WorkspaceData>('/api/workspaces', {
     method: 'POST',
@@ -305,6 +306,7 @@ export interface BranchesData {
   local: string[];
   remote: string[];
   current: string;
+  defaultBranch: string;
 }
 
 export const getProjectBranches = (projectId: string): Promise<BranchesData> =>
