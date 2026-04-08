@@ -205,40 +205,11 @@ export function WorkspaceItem({
               'transparent';
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'stretch', gap: 8, flexWrap: 'nowrap' }}>
-          {/* Tree connector — CSS lines instead of Unicode */}
-          <div
-            style={{
-              position: 'relative',
-              width: 12,
-              height: '100%',
-              flexShrink: 0,
-              alignSelf: 'stretch',
-            }}
-          >
-            {/* Vertical line — full height for non-last, half for last */}
-            <div
-              style={{
-                position: 'absolute',
-                left: 0,
-                top: 0,
-                bottom: isLast ? '50%' : 0,
-                width: 0,
-                borderLeft: '1px solid var(--phantom-border-subtle)',
-              }}
-            />
-            {/* Horizontal stub */}
-            <div
-              style={{
-                position: 'absolute',
-                left: 0,
-                top: '50%',
-                width: 10,
-                height: 0,
-                borderBottom: '1px solid var(--phantom-border-subtle)',
-              }}
-            />
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}>
+          <svg width="12" height="28" viewBox="0 0 12 28" style={{ flexShrink: 0, overflow: 'visible' }}>
+            <line x1="0.5" y1="0" x2="0.5" y2={isLast ? 14 : 28} stroke="var(--phantom-border-subtle)" strokeWidth="1" />
+            <line x1="0.5" y1="14" x2="12" y2="14" stroke="var(--phantom-border-subtle)" strokeWidth="1" />
+          </svg>
           <div
             style={{
               width: 8,
