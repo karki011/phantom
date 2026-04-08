@@ -16,6 +16,17 @@ import * as monaco from 'monaco-editor';
 // Use local Monaco instead of CDN — avoids CSP script-src issues in Electron
 loader.config({ monaco });
 
+// Disable semantic validation — Monaco can't resolve project imports without
+// access to node_modules and tsconfig.json. Keep syntax validation for errors.
+monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+  noSemanticValidation: true,
+  noSyntaxValidation: false,
+});
+monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+  noSemanticValidation: true,
+  noSyntaxValidation: false,
+});
+
 const MonacoEditor = lazy(() =>
   import('@monaco-editor/react').then((m) => ({ default: m.Editor }))
 );
