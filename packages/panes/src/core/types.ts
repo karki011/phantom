@@ -104,6 +104,9 @@ export interface PaneActions<TData = Record<string, unknown>> {
   ) => void;
   movePaneToTab: (paneId: string, targetTabId: string) => void;
 
+  // Workspace switching
+  switchWorkspace: (workspaceId: string) => void;
+
   // Utility
   getActiveTab: () => Tab<TData> | undefined;
   getActivePane: () => Pane<TData> | undefined;

@@ -56,35 +56,15 @@ function makeTab<TData = Record<string, unknown>>(label: string): Tab<TData> {
 }
 
 // ---------------------------------------------------------------------------
-// Persistence
+// Per-workspace persistence
 // ---------------------------------------------------------------------------
 
-const STORAGE_KEY = 'phantom-os:workspace';
+/** Current workspace ID — drives which localStorage key is used */
+let activeWorkspaceId: string | null = null;
 
-function loadState<TData>(): WorkspaceState<TData> | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as WorkspaceState<TData>;
-  } catch {
-    // Ignore parse errors
-  }
-  return null;
+function storageKey(wsId: string): string {
+  return `phantom-os:panes:${wsId}`;
 }
-
-function saveState<TData>(state: WorkspaceState<TData>): void {
-  try {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ tabs: state.tabs, activeTabId: state.activeTabId }),
-    );
-  } catch {
-    // Ignore quota errors
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Initial state
-// ---------------------------------------------------------------------------
 
 /**
  * Migrate persisted tabs: replace any lone "terminal" default pane with
@@ -93,8 +73,6 @@ function saveState<TData>(state: WorkspaceState<TData>): void {
 function migrateState<TData>(state: WorkspaceState<TData>): WorkspaceState<TData> {
   const tabs = state.tabs.map((tab) => {
     const paneList = Object.values(tab.panes);
-    // Only migrate tabs that have exactly one pane of kind "terminal"
-    // (the old default). Tabs with multiple panes or non-terminal panes are user-created.
     if (paneList.length === 1 && paneList[0].kind === 'terminal') {
       const oldPane = paneList[0];
       const newPane: Pane<TData> = { ...oldPane, kind: 'workspace-home', title: 'Home' };
@@ -105,9 +83,44 @@ function migrateState<TData>(state: WorkspaceState<TData>): WorkspaceState<TData
   return { ...state, tabs };
 }
 
+function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
+  try {
+    const raw = localStorage.getItem(storageKey(wsId));
+    if (raw) {
+      const saved = JSON.parse(raw) as WorkspaceState<TData>;
+      if (saved.tabs.length > 0) return migrateState(saved);
+    }
+  } catch { /* ignore */ }
+
+  // Also try migrating from the legacy global key (one-time)
+  try {
+    const legacyKey = 'phantom-os:workspace';
+    const legacy = localStorage.getItem(legacyKey);
+    if (legacy) {
+      localStorage.removeItem(legacyKey); // Clean up legacy key
+      const saved = JSON.parse(legacy) as WorkspaceState<TData>;
+      if (saved.tabs.length > 0) return migrateState(saved);
+    }
+  } catch { /* ignore */ }
+
+  const tab = makeTab<TData>('Main');
+  return { tabs: [tab], activeTabId: tab.id };
+}
+
+function saveWorkspaceState<TData>(wsId: string, state: WorkspaceState<TData>): void {
+  try {
+    localStorage.setItem(
+      storageKey(wsId),
+      JSON.stringify({ tabs: state.tabs, activeTabId: state.activeTabId }),
+    );
+  } catch { /* ignore quota errors */ }
+}
+
+// ---------------------------------------------------------------------------
+// Initial state — empty until switchWorkspace is called
+// ---------------------------------------------------------------------------
+
 function createInitialState<TData>(): WorkspaceState<TData> {
-  const saved = loadState<TData>();
-  if (saved && saved.tabs.length > 0) return migrateState(saved);
   const tab = makeTab<TData>('Main');
   return { tabs: [tab], activeTabId: tab.id };
 }
@@ -379,6 +392,22 @@ export function createPaneStore<TData = Record<string, unknown>>() {
       },
 
       // ---------------------------------------------------------------
+      // Workspace switching
+      // ---------------------------------------------------------------
+
+      switchWorkspace: (workspaceId: string) => {
+        // Save current workspace state
+        if (activeWorkspaceId) {
+          const current = get();
+          saveWorkspaceState(activeWorkspaceId, { tabs: current.tabs, activeTabId: current.activeTabId });
+        }
+        // Load target workspace state
+        activeWorkspaceId = workspaceId;
+        const loaded = loadWorkspaceState<TData>(workspaceId);
+        set((s) => ({ ...s, tabs: loaded.tabs, activeTabId: loaded.activeTabId }));
+      },
+
+      // ---------------------------------------------------------------
       // Utility
       // ---------------------------------------------------------------
 
@@ -399,13 +428,15 @@ export function createPaneStore<TData = Record<string, unknown>>() {
     })),
   );
 
-  // Auto-persist on state changes (debounced)
+  // Auto-persist on state changes (debounced, per-workspace)
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   store.subscribe(
     (s) => ({ tabs: s.tabs, activeTabId: s.activeTabId }),
     (slice) => {
+      if (!activeWorkspaceId) return; // No workspace active yet
+      const wsId = activeWorkspaceId;
       if (saveTimer) clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => saveState(slice), 300);
+      saveTimer = setTimeout(() => saveWorkspaceState(wsId, slice), 300);
     },
   );
 

@@ -17,11 +17,11 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { Flame, Trophy } from 'lucide-react';
 import { useEffect } from 'react';
 
-import { WorkspaceProvider, Workspace } from '@phantom-os/panes';
+import { WorkspaceProvider, Workspace, paneStore } from '@phantom-os/panes';
 import { paneDefinitions, paneMenu } from './panes/registry';
 import { unlockedCountAtom, refreshAchievementsAtom } from './atoms/achievements';
 import { activeTopTabAtom, fontScaleAtom } from './atoms/system';
-import { activeWorkspaceAtom } from './atoms/workspaces';
+import { activeWorkspaceAtom, activeWorkspaceIdAtom } from './atoms/workspaces';
 import { Cockpit } from './components/cockpit/Cockpit';
 import { TopTabBar } from './components/layout/TopTabBar';
 import { SystemHeader } from './components/layout/SystemHeader';
@@ -79,8 +79,16 @@ export const App = () => {
   const fontScale = useAtomValue(fontScaleAtom);
   const activeTab = useAtomValue(activeTopTabAtom);
   const activeWorkspace = useAtomValue(activeWorkspaceAtom);
+  const activeWsId = useAtomValue(activeWorkspaceIdAtom);
   const achievementCount = useAtomValue(unlockedCountAtom);
   const refreshAchievements = useSetAtom(refreshAchievementsAtom);
+
+  // Switch pane store when active workspace changes
+  useEffect(() => {
+    if (activeWsId) {
+      paneStore.getState().switchWorkspace(activeWsId);
+    }
+  }, [activeWsId]);
 
   // Apply font scale to document root
   useEffect(() => {
