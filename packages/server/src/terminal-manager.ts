@@ -174,21 +174,28 @@ export const createPty = async (
   cwd?: string,
   cols?: number,
   rows?: number,
+  /** Pre-attach a listener BEFORE daemon subscription to avoid losing initial output */
+  initialListener?: (data: string) => void,
 ): Promise<PtySession> => {
   // Try daemon first
   if (daemonAvailable && daemonClient?.connected) {
     try {
-      await daemonClient.createOrAttach(id, { cols, rows, cwd });
-
+      // CRITICAL: Register session with listener BEFORE calling createOrAttach.
+      // The daemon sends output immediately after attach — if listeners is empty,
+      // the shell prompt is silently dropped and the terminal appears black.
       const session: PtySession = {
         id,
         pty: null,
         listeners: new Set(),
         daemonManaged: true,
       };
+      if (initialListener) session.listeners.add(initialListener);
       sessions.set(id, session);
+
+      await daemonClient.createOrAttach(id, { cols, rows, cwd });
       return session;
     } catch (err) {
+      sessions.delete(id); // Clean up on failure
       console.warn(
         `[TerminalManager] Daemon createOrAttach failed for ${id}, falling back:`,
         (err as Error).message,
@@ -197,7 +204,9 @@ export const createPty = async (
   }
 
   // Fallback to direct PTY
-  return createDirectPty(id, cwd);
+  const session = createDirectPty(id, cwd);
+  if (initialListener) session.listeners.add(initialListener);
+  return session;
 };
 
 /**
