@@ -199,7 +199,7 @@ function CreateFirstWorkspace({ projectId, defaultBranch }: { projectId: string;
             size="md"
             onClick={handleSubmit}
             loading={submitting}
-            disabled={!name.trim()}
+            disabled={!name.trim() || !baseBranch}
             rightSection={<span style={{ fontSize: 11, opacity: 0.6 }}>⌘↵</span>}
           >
             Continue

@@ -190,7 +190,7 @@ export function InlineWorkspaceInput({
               size="md"
               onClick={handleSubmit}
               loading={submitting}
-              disabled={!name.trim()}
+              disabled={!name.trim() || !baseBranch}
             >
               Create Workspace
             </Button>
