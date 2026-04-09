@@ -178,7 +178,7 @@ export function ProjectSection({
             <Text fz="0.7rem" c="var(--phantom-text-muted)">
               {workspaces.length}
             </Text>
-            {!isRenaming && (
+            {!isRenaming && workspaces.length > 0 && (
               <Tooltip label="New workspace" position="right">
                 <ActionIcon
                   variant="subtle"
@@ -234,6 +234,7 @@ export function ProjectSection({
           {showNewInput && (
             <InlineWorkspaceInput
               projectId={project.id}
+              projectName={project.name}
               onDone={() => setShowNewInput(false)}
             />
           )}

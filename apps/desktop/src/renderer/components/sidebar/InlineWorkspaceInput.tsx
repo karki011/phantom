@@ -16,11 +16,13 @@ import {
 } from '@mantine/core';
 import { useSetAtom } from 'jotai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePaneStore } from '@phantom-os/panes';
 import { createWorkspaceAtom } from '../../atoms/workspaces';
 import { type BranchesData, getProjectBranches } from '../../lib/api';
 
 interface InlineWorkspaceInputProps {
   projectId: string;
+  projectName?: string;
   defaultBranch?: string;
   onDone: () => void;
 }
@@ -34,10 +36,12 @@ const slugify = (name: string): string =>
 
 export function InlineWorkspaceInput({
   projectId,
+  projectName,
   defaultBranch,
   onDone,
 }: InlineWorkspaceInputProps) {
   const createWorkspace = useSetAtom(createWorkspaceAtom);
+  const store = usePaneStore();
   const [name, setName] = useState('');
   const [baseBranch, setBaseBranch] = useState(defaultBranch ?? 'main');
   const [newBranch, setNewBranch] = useState('');
@@ -99,13 +103,19 @@ export function InlineWorkspaceInput({
     if (!wsName || !branch || submitting) return;
     setSubmitting(true);
     try {
-      await createWorkspace({
+      const ws = await createWorkspace({
         projectId,
         name: wsName,
         branch,
         baseBranch,
       });
       onDone();
+      // Auto-open Claude session in the new workspace
+      if (ws?.worktreePath) {
+        setTimeout(() => {
+          store.addPaneAsTab('terminal', { cwd: ws.worktreePath, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>, 'Claude');
+        }, 500);
+      }
     } catch {
       // Error handled at atom level
     } finally {
@@ -117,7 +127,7 @@ export function InlineWorkspaceInput({
     <Modal
       opened
       onClose={onDone}
-      title="New Workspace"
+      title={projectName ? `New Workspace — ${projectName}` : 'New Workspace'}
       size="md"
       centered
       padding="xl"

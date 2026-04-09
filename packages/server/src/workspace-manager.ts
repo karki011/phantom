@@ -33,6 +33,12 @@ export const createWorktree = async (
 ): Promise<void> => {
   mkdirSync(targetDir, { recursive: true });
 
+  // Pull latest base branch before creating worktree
+  const pullTarget = baseBranch ?? 'main';
+  try {
+    execSync(`git fetch origin "${pullTarget}"`, { cwd: repoPath, stdio: 'pipe', timeout: 15_000 });
+  } catch { /* offline is fine — use local state */ }
+
   // Check if branch already exists
   try {
     execSync(`git rev-parse --verify "${branch}"`, { cwd: repoPath, stdio: 'pipe' });

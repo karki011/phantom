@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { usePaneStore } from '@phantom-os/panes';
+
 import {
   createWorkspaceAtom,
   openRepositoryAtom,
@@ -76,8 +78,9 @@ const shortenPath = (fullPath: string): string => {
 // Create First Workspace Form
 // ---------------------------------------------------------------------------
 
-function CreateFirstWorkspace({ projectId, defaultBranch }: { projectId: string; defaultBranch: string }) {
+function CreateFirstWorkspace({ projectId, projectName, defaultBranch }: { projectId: string; projectName: string; defaultBranch: string }) {
   const createWorkspace = useSetAtom(createWorkspaceAtom);
+  const store = usePaneStore();
   const [name, setName] = useState('');
   const [baseBranch, setBaseBranch] = useState(defaultBranch);
   const [newBranch, setNewBranch] = useState('');
@@ -129,8 +132,14 @@ function CreateFirstWorkspace({ projectId, defaultBranch }: { projectId: string;
     if (!wsName || !branch || submitting) return;
     setSubmitting(true);
     try {
-      await createWorkspace({ projectId, name: wsName, branch, baseBranch });
+      const ws = await createWorkspace({ projectId, name: wsName, branch, baseBranch });
       showSystemNotification('Workspace Created', `Created workspace "${wsName}"`, 'success');
+      // Auto-open Claude session in the new workspace
+      if (ws?.worktreePath) {
+        setTimeout(() => {
+          store.addPaneAsTab('terminal', { cwd: ws.worktreePath, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>, 'Claude');
+        }, 500);
+      }
     } catch {
       showSystemNotification('Error', 'Failed to create workspace', 'warning');
     } finally {
@@ -151,10 +160,10 @@ function CreateFirstWorkspace({ projectId, defaultBranch }: { projectId: string;
   return (
     <div style={{ maxWidth: 560, width: '100%' }}>
       <Text fz="xs" fw={600} c="var(--phantom-accent-glow)" tt="uppercase" mb={8} style={{ letterSpacing: '0.08em' }}>
-        Step 1 of 1
+        {projectName}
       </Text>
       <Text fz="1.5rem" fw={800} c="var(--phantom-text-primary)" mb={4}>
-        Create your first workspace
+        Create a workspace
       </Text>
       <Text fz="sm" c="var(--phantom-text-muted)" mb={28}>
         Workspaces are isolated task environments backed by git worktrees.
@@ -242,7 +251,7 @@ export function WelcomePage() {
     return (
       <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', backgroundColor: 'var(--phantom-surface-bg)' }}>
         <div style={{ padding: '48px 32px' }}>
-          <CreateFirstWorkspace projectId={firstProject.id} defaultBranch={firstProject.defaultBranch ?? 'main'} />
+          <CreateFirstWorkspace projectId={firstProject.id} projectName={firstProject.name} defaultBranch={firstProject.defaultBranch ?? 'main'} />
         </div>
       </div>
     );
