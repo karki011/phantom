@@ -335,7 +335,7 @@ export function WorkspaceHome() {
 
   return (
     <Center h="100%" style={{ overflow: 'auto' }}>
-      <Stack align="center" gap="xl" maw={560} w="100%" px="md" py="xl">
+      <Stack align="center" gap="xl" maw={900} w="100%" px="xl" py="xl">
         {/* Rank Header */}
         <RankHeader profile={profile} />
 

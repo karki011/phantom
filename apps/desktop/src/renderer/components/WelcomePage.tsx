@@ -160,51 +160,53 @@ function CreateFirstWorkspace({ projectId, defaultBranch }: { projectId: string;
         Workspaces are isolated task environments backed by git worktrees.
       </Text>
 
-      <Stack gap="lg">
-        <TextInput
-          ref={nameRef}
-          label="Task"
-          placeholder="e.g. Add dark mode, Fix checkout bug"
-          value={name}
-          onChange={(e) => setName(e.currentTarget.value)}
-          size="md"
-          disabled={submitting}
-        />
-
-        <TextInput
-          label="Branch"
-          description="Auto-generated from task name, editable"
-          placeholder="auto-generated from task name"
-          value={newBranch}
-          onChange={(e) => { setNewBranch(e.currentTarget.value); setBranchEdited(true); }}
-          size="md"
-          disabled={submitting}
-          style={{ fontFamily: 'JetBrains Mono, monospace' }}
-        />
-
-        <Select
-          label="From branch"
-          description="The existing branch to create the worktree from"
-          data={branchOptions}
-          value={baseBranch}
-          onChange={(val) => setBaseBranch(val ?? defaultBranch)}
-          searchable
-          size="md"
-          disabled={submitting}
-        />
-
-        <Group justify="flex-end">
-          <Button
+      <form onSubmit={(e) => { e.preventDefault(); if (name.trim() && baseBranch) handleSubmit(); }}>
+        <Stack gap="lg">
+          <TextInput
+            ref={nameRef}
+            label="Task"
+            placeholder="e.g. Add dark mode, Fix checkout bug"
+            value={name}
+            onChange={(e) => setName(e.currentTarget.value)}
             size="md"
-            onClick={handleSubmit}
-            loading={submitting}
-            disabled={!name.trim() || !baseBranch}
-            rightSection={<span style={{ fontSize: 11, opacity: 0.6 }}>⌘↵</span>}
-          >
-            Continue
-          </Button>
-        </Group>
-      </Stack>
+            disabled={submitting}
+          />
+
+          <TextInput
+            label="Branch"
+            description="Auto-generated from task name, editable"
+            placeholder="auto-generated from task name"
+            value={newBranch}
+            onChange={(e) => { setNewBranch(e.currentTarget.value); setBranchEdited(true); }}
+            size="md"
+            disabled={submitting}
+            style={{ fontFamily: 'JetBrains Mono, monospace' }}
+          />
+
+          <Select
+            label="From branch"
+            description="The existing branch to create the worktree from"
+            data={branchOptions}
+            value={baseBranch}
+            onChange={(val) => setBaseBranch(val ?? defaultBranch)}
+            searchable
+            size="md"
+            disabled={submitting}
+          />
+
+          <Group justify="flex-end">
+            <Button
+              type="submit"
+              size="md"
+              loading={submitting}
+              disabled={!name.trim() || !baseBranch}
+              rightSection={<span style={{ fontSize: 11, opacity: 0.6 }}>⌘↵</span>}
+            >
+              Continue
+            </Button>
+          </Group>
+        </Stack>
+      </form>
     </div>
   );
 }

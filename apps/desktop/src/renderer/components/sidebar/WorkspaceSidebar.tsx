@@ -284,10 +284,12 @@ export function WorkspaceSidebar() {
       ) : (
       <ScrollArea style={{ flex: 1 }} scrollbarSize={6}>
         <div style={{ padding: '4px 0' }}>
-          {(
-            projects.map((project) => (
+          {projects.map((project, idx) => (
+            <div key={project.id}>
+              {idx > 0 && (
+                <div style={{ height: 1, backgroundColor: 'var(--phantom-border-subtle)', margin: '6px 12px', opacity: 0.5 }} />
+              )}
               <ProjectSection
-                key={project.id}
                 project={project}
                 workspaces={workspacesByProject.get(project.id) ?? []}
                 isExpanded={expandedProjects.includes(project.id)}
@@ -295,8 +297,8 @@ export function WorkspaceSidebar() {
                 onToggle={() => toggleProject(project.id)}
                 onSelectWorkspace={setActiveWorkspaceId}
               />
-            ))
-          )}
+            </div>
+          ))}
         </div>
       </ScrollArea>
       )}

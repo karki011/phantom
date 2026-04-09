@@ -139,63 +139,65 @@ export function InlineWorkspaceInput({
           <Skeleton height={36} radius="sm" />
         </Stack>
       ) : (
-        <Stack gap="lg">
-          <TextInput
-            ref={nameRef}
-            label="Workspace Name"
-            placeholder="e.g. auth-fix"
-            description="A display name for this workspace"
-            value={name}
-            onChange={(e) => setName(e.currentTarget.value)}
-            size="md"
-            disabled={submitting}
-          />
-
-          <Select
-            label="From Branch"
-            placeholder="Select base branch"
-            description="The existing branch to create the worktree from"
-            data={branchOptions}
-            value={baseBranch}
-            onChange={(val) => setBaseBranch(val ?? 'main')}
-            searchable
-            size="md"
-            disabled={submitting}
-          />
-
-          <TextInput
-            label="New Branch"
-            placeholder="auto-generated from name"
-            description="A new git branch will be created for this workspace"
-            value={newBranch}
-            onChange={(e) => {
-              setNewBranch(e.currentTarget.value);
-              setBranchEdited(true);
-            }}
-            size="md"
-            disabled={submitting}
-          />
-
-          {newBranch && baseBranch && (
-            <Text fz="xs" c="var(--phantom-text-muted)">
-              Will run: git worktree add -b <strong>{newBranch}</strong> ... <strong>{baseBranch}</strong>
-            </Text>
-          )}
-
-          <Group justify="flex-end" gap="md" mt="xs">
-            <Button variant="subtle" size="md" onClick={onDone} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button
+        <form onSubmit={(e) => { e.preventDefault(); if (name.trim() && baseBranch) handleSubmit(); }}>
+          <Stack gap="lg">
+            <TextInput
+              ref={nameRef}
+              label="Workspace Name"
+              placeholder="e.g. auth-fix"
+              description="A display name for this workspace"
+              value={name}
+              onChange={(e) => setName(e.currentTarget.value)}
               size="md"
-              onClick={handleSubmit}
-              loading={submitting}
-              disabled={!name.trim() || !baseBranch}
-            >
-              Create Workspace
-            </Button>
-          </Group>
-        </Stack>
+              disabled={submitting}
+            />
+
+            <Select
+              label="From Branch"
+              placeholder="Select base branch"
+              description="The existing branch to create the worktree from"
+              data={branchOptions}
+              value={baseBranch}
+              onChange={(val) => setBaseBranch(val ?? 'main')}
+              searchable
+              size="md"
+              disabled={submitting}
+            />
+
+            <TextInput
+              label="New Branch"
+              placeholder="auto-generated from name"
+              description="A new git branch will be created for this workspace"
+              value={newBranch}
+              onChange={(e) => {
+                setNewBranch(e.currentTarget.value);
+                setBranchEdited(true);
+              }}
+              size="md"
+              disabled={submitting}
+            />
+
+            {newBranch && baseBranch && (
+              <Text fz="xs" c="var(--phantom-text-muted)">
+                Will run: git worktree add -b <strong>{newBranch}</strong> ... <strong>{baseBranch}</strong>
+              </Text>
+            )}
+
+            <Group justify="flex-end" gap="md" mt="xs">
+              <Button variant="subtle" size="md" onClick={onDone} disabled={submitting}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="md"
+                loading={submitting}
+                disabled={!name.trim() || !baseBranch}
+              >
+                Create Workspace
+              </Button>
+            </Group>
+          </Stack>
+        </form>
       )}
     </Modal>
   );
