@@ -116,6 +116,7 @@ export const projects = sqliteTable('projects', {
   defaultBranch: text('default_branch').default('main'),
   worktreeBaseDir: text('worktree_base_dir'),
   color: text('color'),
+  profile: text('profile'),  // JSON: ProjectProfile
   createdAt: integer('created_at').notNull(),
 });
 

@@ -10,6 +10,7 @@ import { Hono } from 'hono';
 import { db, projects, workspaces, workspaceSections } from '@phantom-os/db';
 import { isGitRepo, getDefaultBranch, getRepoName, getWorktreeDir } from '../workspace-manager.js';
 import { removeWorktree } from '../workspace-manager.js';
+import { detectProject } from '../project-detector.js';
 import { logger } from '../logger.js';
 
 export const projectRoutes = new Hono();
@@ -135,7 +136,39 @@ projectRoutes.post('/projects/open', async (c) => {
 
   db.insert(projects).values(project).run();
 
+  // Auto-detect project profile
+  const profile = detectProject(repoPath);
+  db.update(projects).set({ profile: JSON.stringify(profile) }).where(eq(projects.id, project.id)).run();
+
   return c.json({ project, workspace: null }, 201);
+});
+
+/** POST /projects/:id/detect — Re-detect project profile */
+projectRoutes.post('/projects/:id/detect', (c) => {
+  const id = c.req.param('id');
+  const project = db.select().from(projects).where(eq(projects.id, id)).get();
+  if (!project) return c.json({ error: 'Project not found' }, 404);
+
+  const profile = detectProject(project.repoPath);
+  db.update(projects).set({ profile: JSON.stringify(profile) }).where(eq(projects.id, id)).run();
+
+  return c.json(profile);
+});
+
+/** GET /projects/:id/profile — Get cached or auto-detect project profile */
+projectRoutes.get('/projects/:id/profile', (c) => {
+  const id = c.req.param('id');
+  const project = db.select().from(projects).where(eq(projects.id, id)).get();
+  if (!project) return c.json({ error: 'Project not found' }, 404);
+
+  if (project.profile) {
+    return c.json(JSON.parse(project.profile));
+  }
+
+  // Auto-detect if no profile cached
+  const profile = detectProject(project.repoPath);
+  db.update(projects).set({ profile: JSON.stringify(profile) }).where(eq(projects.id, id)).run();
+  return c.json(profile);
 });
 
 /** PATCH /projects/:id — Rename a project */

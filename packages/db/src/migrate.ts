@@ -180,6 +180,9 @@ export const runMigrations = (sqlite: Database.Database): void => {
     );
   `);
 
+  // Project Intelligence column
+  try { sqlite.exec('ALTER TABLE projects ADD COLUMN profile TEXT'); } catch {}
+
   // Workspace column migrations
   addColumn('workspaces', 'base_branch', 'TEXT', 'NULL');
 

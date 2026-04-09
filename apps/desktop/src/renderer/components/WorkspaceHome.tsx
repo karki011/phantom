@@ -19,11 +19,16 @@ import {
 } from '@mantine/core';
 import { usePaneStore } from '@phantom-os/panes';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { AlertTriangle, BarChart3, FileCode, GitBranch, MessageSquare, Sparkles, Target, Terminal as TerminalIcon, Trash2 } from 'lucide-react';
+import {
+  AlertTriangle, BarChart3, Beaker, Braces, FileCode, GitBranch,
+  Hammer, MessageSquare, Package, Play, Rocket, Settings2, Sparkles,
+  Target, Terminal as TerminalIcon, Trash2,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { activeWorkspaceAtom, deleteWorkspaceAtom, projectsAtom } from '../atoms/workspaces';
 import { useHunter } from '../hooks/useHunter';
+import { useProjectProfile } from '../hooks/useProjectProfile';
 import { useQuests } from '../hooks/useQuests';
 import { useRouter } from '../hooks/useRouter';
 
@@ -39,6 +44,16 @@ const formatRelativeTime = (ts: number): string => {
   const hr = Math.floor(min / 60);
   if (hr < 24) return `${hr}h`;
   return `${Math.floor(hr / 24)}d`;
+};
+
+const RECIPE_ICONS: Record<string, React.ReactNode> = {
+  test: <Beaker size={20} />,
+  lint: <Braces size={20} />,
+  build: <Hammer size={20} />,
+  serve: <Play size={20} />,
+  deploy: <Rocket size={20} />,
+  setup: <Package size={20} />,
+  custom: <Settings2 size={20} />,
 };
 
 const QUOTES = [
@@ -241,6 +256,7 @@ export function WorkspaceHome() {
   const project = workspace
     ? projects.find((p) => p.id === workspace.projectId) ?? null
     : null;
+  const { profile: projectProfile } = useProjectProfile(project?.id ?? null);
 
   // Prefer worktreePath (the checked-out path for this workspace), fall back to
   // the project's bare repoPath. Either is a valid git directory for IPC.
@@ -364,7 +380,62 @@ export function WorkspaceHome() {
         {/* Rank Header */}
         <RankHeader profile={profile} />
 
-        {/* Quick Actions */}
+        {/* Project Recipes — auto-detected commands */}
+        {projectProfile && projectProfile.recipes.length > 0 && (
+          <>
+            <Group gap="xs" w="100%">
+              <Text fz="xs" fw={600} c="var(--phantom-accent-glow)" tt="uppercase" style={{ letterSpacing: '0.08em' }}>
+                {projectProfile.type} · {projectProfile.buildSystem}
+              </Text>
+            </Group>
+            <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} w="100%" spacing="sm">
+              {projectProfile.recipes.slice(0, 8).map((recipe) => (
+                <Paper
+                  key={recipe.id}
+                  p="md"
+                  bg="var(--phantom-surface-card)"
+                  radius="md"
+                  onClick={() => store.addPaneAsTab('terminal', {
+                    cwd: workspace?.worktreePath ?? project?.repoPath,
+                    initialCommand: recipe.command,
+                  } as Record<string, unknown>, recipe.label)}
+                  style={{
+                    cursor: 'pointer',
+                    border: '1px solid var(--phantom-border-subtle)',
+                    transition: 'border-color 0.2s, box-shadow 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--phantom-accent-glow)';
+                    e.currentTarget.style.boxShadow = '0 0 12px color-mix(in srgb, var(--phantom-accent-glow) 30%, transparent)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--phantom-border-subtle)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  <Stack align="center" gap="xs">
+                    <div style={{ color: 'var(--phantom-accent-glow)' }}>
+                      {RECIPE_ICONS[recipe.category] ?? <Settings2 size={20} />}
+                    </div>
+                    <Text fw={600} fz="0.78rem" c="var(--phantom-text-primary)" ta="center" lineClamp={1}>
+                      {recipe.label}
+                    </Text>
+                    <Text fz="0.65rem" c="var(--phantom-text-muted)" ta="center" lineClamp={1} ff="'JetBrains Mono', monospace">
+                      {recipe.command}
+                    </Text>
+                  </Stack>
+                </Paper>
+              ))}
+            </SimpleGrid>
+          </>
+        )}
+
+        {/* Tools */}
+        <Group gap="xs" w="100%">
+          <Text fz="xs" fw={600} c="var(--phantom-text-muted)" tt="uppercase" style={{ letterSpacing: '0.08em' }}>
+            Tools
+          </Text>
+        </Group>
         <SimpleGrid cols={{ base: 2, sm: 5 }} w="100%" spacing="md">
           <QuickActionCard
             icon={<TerminalIcon size={24} style={{ color: 'var(--phantom-accent-glow)' }} />}

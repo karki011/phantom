@@ -395,3 +395,32 @@ export const getModelBreakdown = (): Promise<ModelBreakdownEntry[]> =>
 
 export const getSessionTimeline = (limit = 50): Promise<TimelineSession[]> =>
   fetchApi<TimelineSession[]>(`/api/hunter-stats/timeline?limit=${limit}`);
+
+// ---------------------------------------------------------------------------
+// Project Intelligence
+// ---------------------------------------------------------------------------
+
+export interface Recipe {
+  id: string;
+  label: string;
+  command: string;
+  icon: string;
+  category: 'setup' | 'test' | 'lint' | 'build' | 'serve' | 'deploy' | 'custom';
+  description?: string;
+  auto: boolean;
+}
+
+export interface ProjectProfile {
+  type: 'python' | 'node' | 'monorepo' | 'infra' | 'go' | 'rust' | 'unknown';
+  buildSystem: string;
+  recipes: Recipe[];
+  envNeeds: string[];
+  detected: boolean;
+  detectedAt: number;
+}
+
+export const getProjectProfile = (projectId: string): Promise<ProjectProfile> =>
+  fetchApi<ProjectProfile>(`/api/projects/${projectId}/profile`);
+
+export const detectProjectProfile = (projectId: string): Promise<ProjectProfile> =>
+  fetchApi<ProjectProfile>(`/api/projects/${projectId}/detect`, { method: 'POST' });
