@@ -3,7 +3,7 @@
  * Creates and configures the main BrowserWindow.
  * @author Subash Karki
  */
-import { BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, nativeImage, shell } from 'electron';
 import { join } from 'node:path';
 import { is } from '@electron-toolkit/utils';
 
@@ -14,14 +14,24 @@ export const getMainWindow = (): BrowserWindow | null => mainWindow;
 
 /** Creates and shows the main application window. */
 export const createWindow = (): void => {
+  // Load app icon from resources
+  const iconPath = join(__dirname, '../../resources/icon.png');
+  const appIcon = nativeImage.createFromPath(iconPath);
+
+  // Set dock icon on macOS
+  if (process.platform === 'darwin' && !appIcon.isEmpty()) {
+    app.dock.setIcon(appIcon);
+  }
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 800,
     minHeight: 600,
+    icon: appIcon,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 15, y: 16 },
-    backgroundColor: '#000000',
+    backgroundColor: '#0d0d10',
     show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),

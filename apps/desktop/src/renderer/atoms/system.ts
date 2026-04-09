@@ -23,6 +23,13 @@ export interface SystemNotification {
 }
 
 // ---------------------------------------------------------------------------
+// SSE connection state
+// ---------------------------------------------------------------------------
+
+export type SseConnectionState = 'connecting' | 'connected' | 'disconnected';
+export const sseConnectionAtom = atom<SseConnectionState>('connecting');
+
+// ---------------------------------------------------------------------------
 // Font scale — persisted to localStorage
 // ---------------------------------------------------------------------------
 

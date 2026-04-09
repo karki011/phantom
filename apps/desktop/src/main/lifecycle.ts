@@ -10,6 +10,9 @@ import { app, BrowserWindow } from 'electron';
  * @param createWindowFn - Factory function to create the main window
  */
 export const registerLifecycle = (createWindowFn: () => void): void => {
+  // Set app name (shown in dock tooltip and menu bar)
+  app.setName('PhantomOS');
+
   app.whenReady().then(createWindowFn);
 
   // macOS: re-create window when dock icon clicked

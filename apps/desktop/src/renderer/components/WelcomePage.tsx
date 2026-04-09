@@ -39,8 +39,7 @@ import { showSystemNotification } from './notifications/SystemToast';
 /** Call Electron's native folder picker via IPC */
 const pickFolder = async (): Promise<string | null> => {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const api = (window as any).phantomOS;
+    const api = window.phantomOS;
     if (api?.invoke) return (await api.invoke('phantom:pick-folder')) as string | null;
     return window.prompt('Enter repository path:');
   } catch {

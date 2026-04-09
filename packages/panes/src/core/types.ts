@@ -81,6 +81,8 @@ export interface PaneActions<TData = Record<string, unknown>> {
 
   // Pane operations
   addPane: (kind: string, data?: TData, title?: string) => string;
+  /** Open a pane kind in a new tab (instead of splitting the current tab) */
+  addPaneAsTab: (kind: string, data?: TData, title?: string) => string;
   closePane: (paneId: string) => void;
   setActivePaneInTab: (tabId: string, paneId: string) => void;
 

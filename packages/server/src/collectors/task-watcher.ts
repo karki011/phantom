@@ -3,6 +3,7 @@
  * Watches ~/.claude/tasks/ for task JSON files, syncs to DB, triggers XP on completion.
  * @author Subash Karki
  */
+import { logger } from '../logger.js';
 import { basename, dirname, join } from 'node:path';
 import { watch } from 'chokidar';
 import { eq, sql } from 'drizzle-orm';
@@ -162,5 +163,5 @@ export const startTaskWatcher = (
   watcher.on('add', handle);
   watcher.on('change', handle);
 
-  console.log(`[TaskWatcher] Watching ${TASKS_DIR}`);
+  logger.info('TaskWatcher', `Watching ${TASKS_DIR}`);
 };

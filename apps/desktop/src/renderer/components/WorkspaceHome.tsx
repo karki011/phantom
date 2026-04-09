@@ -19,12 +19,13 @@ import {
 } from '@mantine/core';
 import { usePaneStore } from '@phantom-os/panes';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { AlertTriangle, FileCode, GitBranch, Sword, Target, Terminal as TerminalIcon, Trash2 } from 'lucide-react';
+import { AlertTriangle, BarChart3, FileCode, GitBranch, Sword, Target, Terminal as TerminalIcon, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { activeWorkspaceAtom, deleteWorkspaceAtom, projectsAtom } from '../atoms/workspaces';
 import { useHunter } from '../hooks/useHunter';
 import { useQuests } from '../hooks/useQuests';
+import { useRouter } from '../hooks/useRouter';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -217,6 +218,7 @@ function DailyQuestsCard({ quests }: { quests: { total: number; completed: numbe
 export function WorkspaceHome() {
   const { profile } = useHunter();
   const { quests } = useQuests();
+  const { navigate } = useRouter();
   const store = usePaneStore();
   const workspace = useAtomValue(activeWorkspaceAtom);
   const projects = useAtomValue(projectsAtom);
@@ -265,8 +267,8 @@ export function WorkspaceHome() {
     return { total, completed, availableXp };
   }, [quests]);
 
-  const openTerminal = useCallback(() => store.addPane('terminal', { cwd: workspace?.worktreePath } as Record<string, unknown>), [store, workspace]);
-  const openEditor = useCallback(() => store.addPane('editor'), [store]);
+  const openTerminal = useCallback(() => store.addPaneAsTab('terminal', { cwd: workspace?.worktreePath } as Record<string, unknown>, 'Terminal'), [store, workspace]);
+  const openEditor = useCallback(() => store.addPaneAsTab('editor', {} as Record<string, unknown>, 'Editor'), [store]);
 
   // Guard: worktree was deleted externally
   if (workspace && workspace.worktreeValid === false) {
@@ -305,7 +307,7 @@ export function WorkspaceHome() {
         <RankHeader profile={profile} />
 
         {/* Quick Actions */}
-        <SimpleGrid cols={{ base: 2, sm: 3 }} w="100%" spacing="md">
+        <SimpleGrid cols={{ base: 2, sm: 4 }} w="100%" spacing="md">
           <QuickActionCard
             icon={<TerminalIcon size={24} style={{ color: 'var(--phantom-accent-glow)' }} />}
             label="Terminal"
@@ -323,6 +325,12 @@ export function WorkspaceHome() {
             label="New Quest"
             shortcut="Ctrl+Q"
             onClick={openTerminal}
+          />
+          <QuickActionCard
+            icon={<BarChart3 size={24} style={{ color: 'var(--phantom-accent-glow)' }} />}
+            label="Hunter Stats"
+            shortcut="Ctrl+H"
+            onClick={() => navigate('hunter-stats')}
           />
         </SimpleGrid>
 

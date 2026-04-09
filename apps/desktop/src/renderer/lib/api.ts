@@ -294,6 +294,12 @@ export const deleteProject = (id: string, deleteWorktrees = false): Promise<void
     body: JSON.stringify({ deleteWorktrees }),
   });
 
+export const renameProject = (id: string, name: string): Promise<ProjectData> =>
+  fetchApi<ProjectData>(`/api/projects/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  });
+
 export interface OpenRepositoryResult {
   project: ProjectData;
   workspace: WorkspaceData;
@@ -330,3 +336,59 @@ export const getFileContent = (
   fetchApi<FileContent>(
     `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`,
   );
+
+// ---------------------------------------------------------------------------
+// Hunter Stats Dashboard (Phase 1)
+// ---------------------------------------------------------------------------
+
+export interface HeatmapDay {
+  date: string;
+  messageCount: number;
+  sessionCount: number;
+  toolCallCount: number;
+}
+
+export interface LifetimeStats {
+  totalSessions: number;
+  totalTokens: number;
+  totalCost: number;
+  favoriteModel: string;
+  longestSession: number;
+  currentStreak: number;
+  bestStreak: number;
+  activeDays: number;
+  peakHour: number;
+  totalMessages: number;
+  totalToolCalls: number;
+}
+
+export interface ModelBreakdownEntry {
+  model: string;
+  sessions: number;
+  tokens: number;
+  cost: number;
+}
+
+export interface TimelineSession {
+  id: string;
+  model: string | null;
+  startedAt: number;
+  endedAt: number | null;
+  duration: number;
+  tokens: number;
+  cost: number;
+  taskCount: number;
+  firstPrompt: string | null;
+}
+
+export const getHeatmap = (): Promise<HeatmapDay[]> =>
+  fetchApi<HeatmapDay[]>('/api/hunter-stats/heatmap');
+
+export const getLifetimeStats = (): Promise<LifetimeStats> =>
+  fetchApi<LifetimeStats>('/api/hunter-stats/lifetime');
+
+export const getModelBreakdown = (): Promise<ModelBreakdownEntry[]> =>
+  fetchApi<ModelBreakdownEntry[]>('/api/hunter-stats/model-breakdown');
+
+export const getSessionTimeline = (limit = 50): Promise<TimelineSession[]> =>
+  fetchApi<TimelineSession[]>(`/api/hunter-stats/timeline?limit=${limit}`);

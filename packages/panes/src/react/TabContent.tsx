@@ -31,6 +31,7 @@ export function TabContent({ tab }: TabContentProps) {
         panes={tab.panes}
         tabId={tab.id}
         onResize={handleResize}
+        singlePane={tab.layout.type === 'pane'}
       />
     </div>
   );

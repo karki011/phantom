@@ -73,9 +73,11 @@ export interface PaneContainerProps {
   pane: Pane;
   tabId: string;
   children: ReactNode;
+  /** Hide the pane header (used when tab has a single pane — tab bar already shows the title) */
+  hideHeader?: boolean;
 }
 
-export function PaneContainer({ pane, tabId, children }: PaneContainerProps) {
+export function PaneContainer({ pane, tabId, children, hideHeader }: PaneContainerProps) {
   const store = usePaneStore();
 
   const handleFocus = useCallback(() => {
@@ -123,53 +125,55 @@ export function PaneContainer({ pane, tabId, children }: PaneContainerProps) {
   return (
     <DropZone paneId={pane.id} onDrop={onDropPane}>
       <div style={containerStyle} onMouseDown={handleFocus}>
-        <div
-          style={headerStyle}
-          draggable
-          onDragStart={onDragStart}
-        >
-          <div style={headerLeftStyle}>
-            <span
-              style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {pane.title}
-            </span>
-          </div>
-          <div style={headerActionsStyle}>
-            <button
-              type="button"
-              style={iconBtnStyle}
-              onClick={handleSplitH}
-              title="Split horizontally"
-              aria-label="Split horizontally"
-            >
-              ⊞
-            </button>
-            <button
-              type="button"
-              style={iconBtnStyle}
-              onClick={handleSplitV}
-              title="Split vertically"
-              aria-label="Split vertically"
-            >
-              ⊟
-            </button>
-            {!pane.pinned && (
+        {!hideHeader && (
+          <div
+            style={headerStyle}
+            draggable
+            onDragStart={onDragStart}
+          >
+            <div style={headerLeftStyle}>
+              <span
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {pane.title}
+              </span>
+            </div>
+            <div style={headerActionsStyle}>
               <button
                 type="button"
-                style={{ ...iconBtnStyle, fontSize: 14 }}
-                onClick={handleClose}
-                aria-label="Close pane"
+                style={iconBtnStyle}
+                onClick={handleSplitH}
+                title="Split horizontally"
+                aria-label="Split horizontally"
               >
-                ×
+                ⊞
               </button>
-            )}
+              <button
+                type="button"
+                style={iconBtnStyle}
+                onClick={handleSplitV}
+                title="Split vertically"
+                aria-label="Split vertically"
+              >
+                ⊟
+              </button>
+              {!pane.pinned && (
+                <button
+                  type="button"
+                  style={{ ...iconBtnStyle, fontSize: 14 }}
+                  onClick={handleClose}
+                  aria-label="Close pane"
+                >
+                  ×
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
         <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>{children}</div>
       </div>
     </DropZone>

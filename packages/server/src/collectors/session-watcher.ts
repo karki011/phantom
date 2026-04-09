@@ -3,13 +3,14 @@
  * Watches ~/.claude/sessions/ for session JSON files, syncs to DB, detects stale PIDs.
  * @author Subash Karki
  */
+import { logger } from '../logger.js';
 import { basename, join } from 'node:path';
 import { homedir } from 'node:os';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { watch } from 'chokidar';
 import { eq } from 'drizzle-orm';
 import { db, sessions } from '@phantom-os/db';
-import { SESSIONS_DIR, extractRepoName, isProcessAlive, safeReadJson } from '@phantom-os/shared';
+import { SESSIONS_DIR, PROJECTS_DIR, extractRepoName, isProcessAlive, safeReadJson } from '@phantom-os/shared';
 
 interface SessionFile {
   sessionId?: string;
@@ -117,6 +118,47 @@ const markCompleted = (filePath: string, broadcast: Broadcast, onEnd?: (id: stri
   }
 };
 
+/** Read directory entries, returning [] on error */
+const safeDirs = (dir: string): string[] => {
+  try {
+    return readdirSync(dir);
+  } catch {
+    return [];
+  }
+};
+
+/** Check if a session's JSONL file has been idle (no writes) for a duration */
+const isJsonlIdle = (sessionId: string, cwd: string | null, idleMs: number): boolean => {
+  // Try finding JSONL by cwd-encoded project dir (handles /clear rotation)
+  if (cwd) {
+    const encoded = cwd.replace(/\//g, '-');
+    const projectDir = join(PROJECTS_DIR, encoded);
+    try {
+      const files = readdirSync(projectDir)
+        .filter((f) => f.endsWith('.jsonl'))
+        .map((f) => {
+          try { return statSync(join(projectDir, f)).mtimeMs; } catch { return 0; }
+        });
+      if (files.length > 0) {
+        const latestMtime = Math.max(...files);
+        return Date.now() - latestMtime > idleMs;
+      }
+    } catch { /* project dir doesn't exist */ }
+  }
+
+  // Fallback: try by session ID directly
+  for (const dir of safeDirs(PROJECTS_DIR)) {
+    const candidate = join(PROJECTS_DIR, dir, `${sessionId}.jsonl`);
+    try {
+      const stat = statSync(candidate);
+      return Date.now() - stat.mtimeMs > idleMs;
+    } catch { /* not in this dir */ }
+  }
+
+  // No JSONL found — can't determine
+  return false;
+};
+
 const detectStaleSessions = (broadcast: Broadcast, onEnd?: (id: string) => void): void => {
   const activeSessions = db
     .select()
@@ -124,15 +166,24 @@ const detectStaleSessions = (broadcast: Broadcast, onEnd?: (id: string) => void)
     .where(eq(sessions.status, 'active'))
     .all();
 
-  const STALE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes with no PID = stale
+  const STALE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes with no PID = stale (reduced from 30)
+  const JSONL_IDLE_MS = 5 * 60 * 1000; // 5 minutes of JSONL inactivity
 
   for (const session of activeSessions) {
     const pid = session.pid;
     const alive = pid && pid > 0 ? isProcessAlive(pid) : false;
     const age = Date.now() - (session.startedAt ?? 0);
 
-    // Mark as completed if: PID is dead, OR no valid PID and session is old
-    if (!alive && ((pid ?? 0) > 0 || age > STALE_THRESHOLD_MS)) {
+    // Reason to mark as completed:
+    // 1. PID is dead (most reliable)
+    // 2. No valid PID and session is old (>10 min)
+    // 3. JSONL has been idle for >5 min AND PID is dead or missing
+    const pidDead = !alive && (pid ?? 0) > 0;
+    const noPidAndOld = !alive && (pid ?? 0) === 0 && age > STALE_THRESHOLD_MS;
+    const jsonlIdle = isJsonlIdle(session.id, session.cwd, JSONL_IDLE_MS);
+    const jsonlIdleAndNoPid = jsonlIdle && !alive;
+
+    if (pidDead || noPidAndOld || jsonlIdleAndNoPid) {
       db.update(sessions)
         .set({ status: 'completed', endedAt: Date.now() })
         .where(eq(sessions.id, session.id))
@@ -187,5 +238,5 @@ export const startSessionWatcher = (
   // Poll for stale sessions every 5 seconds
   setInterval(() => detectStaleSessions(broadcast, onEnd), 5_000);
 
-  console.log(`[SessionWatcher] Watching ${SESSIONS_DIR}`);
+  logger.info('SessionWatcher', `Watching ${SESSIONS_DIR}`);
 };

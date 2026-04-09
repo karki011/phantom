@@ -201,7 +201,7 @@ export function TabBar({ paneMenu }: TabBarProps) {
           onDragEnd={onTabDragEnd}
         >
           <span>{t.label}</span>
-          {tabs.length > 1 && (
+          {tabs.length > 1 && !Object.values(t.panes).some((p) => p.kind === 'workspace-home') && (
             <button
               type="button"
               style={closeStyle}

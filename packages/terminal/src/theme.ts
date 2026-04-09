@@ -10,10 +10,10 @@ const css = (prop: string, fallback: string): string =>
     .trim() || fallback;
 
 export const getTerminalTheme = (): ITheme => ({
-  background: css('--phantom-surface-bg', '#000000'),
-  foreground: css('--phantom-text-primary', '#f8f8f2'),
+  background: css('--phantom-surface-bg', '#0d0d10'),
+  foreground: css('--phantom-text-primary', '#f0f0f2'),
   cursor: css('--phantom-accent-glow', '#4599ac'),
-  cursorAccent: '#000000',
+  cursorAccent: '#0d0d10',
   selectionBackground: 'rgba(69, 153, 172, 0.3)',
   // ANSI colors
   black: '#21222c',

@@ -12,7 +12,7 @@
     "dev:api": "turbo dev:api --filter=@phantom-os/server",
     "dev:all": "turbo dev dev:api",
     "dev:desktop": "turbo dev --filter=@phantom-os/desktop",
-    "postinstall": "chmod +x node_modules/.bun/node-pty@*/node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true"
+    "postinstall": "chmod +x node_modules/.bun/node-pty@*/node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true; bash scripts/patch-electron-name.sh"
   },
   "dependencies": {
     "node-pty": "^1.1.0",

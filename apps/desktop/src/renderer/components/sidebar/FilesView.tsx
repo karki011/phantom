@@ -31,6 +31,7 @@ export function FilesView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FileEntry[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
 
   const fetchDirectory = useSetAtom(fetchDirectoryAtom);
   const toggleFolder = useSetAtom(toggleFolderAtom);
@@ -42,14 +43,16 @@ export function FilesView() {
   useEffect(() => {
     if (!activeWorkspace || !searchQuery.trim()) {
       setSearchResults(null);
+      setSearchError(false);
       return;
     }
     setSearching(true);
+    setSearchError(false);
     const timer = setTimeout(() => {
       fetch(`/api/workspaces/${activeWorkspace.id}/files/search?q=${encodeURIComponent(searchQuery.trim())}`)
         .then((r) => r.json())
         .then((data: { entries: FileEntry[] }) => setSearchResults(data.entries))
-        .catch(() => setSearchResults([]))
+        .catch(() => { setSearchResults([]); setSearchError(true); })
         .finally(() => setSearching(false));
     }, 250);
     return () => clearTimeout(timer);
@@ -178,6 +181,10 @@ export function FilesView() {
                   onClick={() => handleFileClick(entry)}
                 />
               ))
+            ) : searchError ? (
+              <Text fz="0.72rem" c="var(--phantom-status-danger)" ta="center" py="md">
+                Search failed. Try again.
+              </Text>
             ) : (
               <Text fz="0.72rem" c="var(--phantom-text-muted)" ta="center" py="md">
                 No files match &ldquo;{searchQuery}&rdquo;

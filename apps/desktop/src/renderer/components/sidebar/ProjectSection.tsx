@@ -15,7 +15,10 @@ import {
 } from '@mantine/core';
 import { ChevronRight, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSetAtom } from 'jotai';
 import type { ProjectData, WorkspaceData } from '../../lib/api';
+import { renameProject } from '../../lib/api';
+import { refreshProjectsAtom } from '../../atoms/workspaces';
 import { WorkspaceItem } from './WorkspaceItem';
 import { InlineWorkspaceInput } from './InlineWorkspaceInput';
 import { ProjectContextMenu } from './ProjectContextMenu';
@@ -44,6 +47,7 @@ export function ProjectSection({
   const [isHovered, setIsHovered] = useState(false);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const refreshProjects = useSetAtom(refreshProjectsAtom);
 
   useEffect(() => {
     if (isRenaming) {
@@ -60,10 +64,21 @@ export function ProjectSection({
     if (!isExpanded) onToggle();
   }, [isExpanded, onToggle]);
 
-  const handleRenameSubmit = useCallback(() => {
-    // TODO: wire up renameProject API when available
+  const handleRenameSubmit = useCallback(async () => {
+    const trimmed = renameValue.trim();
+    if (!trimmed || trimmed === project.name) {
+      setIsRenaming(false);
+      return;
+    }
+    try {
+      await renameProject(project.id, trimmed);
+      refreshProjects();
+    } catch {
+      // Revert on failure
+      setRenameValue(project.name);
+    }
     setIsRenaming(false);
-  }, []);
+  }, [renameValue, project.id, project.name, refreshProjects]);
 
   const handleRenameKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

@@ -20,7 +20,8 @@ export type Route =
   | 'streak'
   | 'tasks'
   | 'achievements'
-  | 'quests';
+  | 'quests'
+  | 'hunter-stats';
 
 const VALID_ROUTES = new Set<Route>([
   'cockpit',
@@ -32,6 +33,7 @@ const VALID_ROUTES = new Set<Route>([
   'tasks',
   'achievements',
   'quests',
+  'hunter-stats',
 ]);
 
 const DEFAULT_ROUTE: Route = 'cockpit';
@@ -51,6 +53,7 @@ export const COCKPIT_SUB_ROUTES = new Set<Route>([
   'tasks',
   'achievements',
   'quests',
+  'hunter-stats',
 ]);
 
 interface UseRouterReturn {

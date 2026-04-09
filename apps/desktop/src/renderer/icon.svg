@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background gradient -->
+    <radialGradient id="bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#0a0a14"/>
+    </radialGradient>
+    <!-- Eye glow -->
+    <radialGradient id="eyeGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="1"/>
+      <stop offset="50%" stop-color="#06b6d4" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#0891b2" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Crown glow -->
+    <linearGradient id="crownGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <!-- Face gradient -->
+    <linearGradient id="faceGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#312e81"/>
+      <stop offset="40%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#0f0d2e"/>
+    </linearGradient>
+    <!-- Outer glow filter -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <!-- Strong glow -->
+    <filter id="strongGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur"/>
+      <feColorMatrix in="blur" type="saturate" values="3" result="saturated"/>
+      <feMerge>
+        <feMergeNode in="saturated"/>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <!-- Subtle inner shadow -->
+    <filter id="innerShadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur"/>
+      <feOffset dx="0" dy="2"/>
+      <feComposite in2="SourceAlpha" operator="arithmetic" k2="-1" k3="1"/>
+      <feFlood flood-color="#000" flood-opacity="0.5"/>
+      <feComposite in2="SourceGraphic" operator="in"/>
+      <feMerge>
+        <feMergeNode in="SourceGraphic"/>
+        <feMergeNode/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="248" fill="url(#bg)" stroke="#312e81" stroke-width="3"/>
+
+  <!-- Outer ring accent -->
+  <circle cx="256" cy="256" r="240" fill="none" stroke="#4c1d95" stroke-width="1" opacity="0.5"/>
+
+  <!-- Shadow Monarch Mask/Helmet -->
+  <g transform="translate(256, 260)">
+    <!-- Helmet outer shape - angular, warrior-like -->
+    <path d="
+      M0,-160
+      L80,-120 L100,-60 L90,0 L80,40 L60,80 L40,110 L20,130 L0,140
+      L-20,130 L-40,110 L-60,80 L-80,40 L-90,0 L-100,-60 L-80,-120
+      Z
+    " fill="url(#faceGrad)" filter="url(#innerShadow)" stroke="#4c1d95" stroke-width="2"/>
+
+    <!-- Crown spikes -->
+    <g filter="url(#glow)">
+      <path d="M0,-160 L-15,-195 L0,-180 L15,-195 Z" fill="url(#crownGrad)"/>
+      <path d="M-50,-140 L-70,-175 L-45,-155 Z" fill="url(#crownGrad)" opacity="0.9"/>
+      <path d="M50,-140 L70,-175 L45,-155 Z" fill="url(#crownGrad)" opacity="0.9"/>
+      <path d="M-80,-120 L-100,-150 L-75,-125 Z" fill="url(#crownGrad)" opacity="0.7"/>
+      <path d="M80,-120 L100,-150 L75,-125 Z" fill="url(#crownGrad)" opacity="0.7"/>
+    </g>
+
+    <!-- Visor / Eye slit -->
+    <path d="
+      M-75,-30 L-50,-55 L0,-65 L50,-55 L75,-30
+      L50,-10 L0,-5 L-50,-10 Z
+    " fill="#0a0a14" stroke="#312e81" stroke-width="1.5"/>
+
+    <!-- Left eye -->
+    <g filter="url(#strongGlow)">
+      <ellipse cx="-35" cy="-35" rx="20" ry="14" fill="url(#eyeGlow)"/>
+      <ellipse cx="-35" cy="-35" rx="8" ry="10" fill="#22d3ee"/>
+      <ellipse cx="-35" cy="-35" rx="4" ry="6" fill="#ffffff" opacity="0.9"/>
+    </g>
+
+    <!-- Right eye -->
+    <g filter="url(#strongGlow)">
+      <ellipse cx="35" cy="-35" rx="20" ry="14" fill="url(#eyeGlow)"/>
+      <ellipse cx="35" cy="-35" rx="8" ry="10" fill="#22d3ee"/>
+      <ellipse cx="35" cy="-35" rx="4" ry="6" fill="#ffffff" opacity="0.9"/>
+    </g>
+
+    <!-- Nose bridge line -->
+    <line x1="0" y1="-50" x2="0" y2="-15" stroke="#4c1d95" stroke-width="1.5" opacity="0.6"/>
+
+    <!-- Mouth guard / jaw plate -->
+    <path d="
+      M-45,25 L-35,15 L0,10 L35,15 L45,25
+      L35,55 L20,75 L0,82 L-20,75 L-35,55 Z
+    " fill="#1e1b4b" stroke="#312e81" stroke-width="1.5"/>
+
+    <!-- Jaw vent lines -->
+    <line x1="-25" y1="30" x2="-20" y2="60" stroke="#4c1d95" stroke-width="1" opacity="0.5"/>
+    <line x1="0" y1="25" x2="0" y2="65" stroke="#4c1d95" stroke-width="1" opacity="0.5"/>
+    <line x1="25" y1="30" x2="20" y2="60" stroke="#4c1d95" stroke-width="1" opacity="0.5"/>
+
+    <!-- Cheek plates -->
+    <path d="M-75,-30 L-90,0 L-80,40 L-60,30 L-50,-10 Z" fill="#1e1b4b" stroke="#312e81" stroke-width="1" opacity="0.8"/>
+    <path d="M75,-30 L90,0 L80,40 L60,30 L50,-10 Z" fill="#1e1b4b" stroke="#312e81" stroke-width="1" opacity="0.8"/>
+
+    <!-- Helmet side accent lines -->
+    <line x1="-85" y1="-10" x2="-70" y2="35" stroke="#a855f7" stroke-width="1" opacity="0.4"/>
+    <line x1="85" y1="-10" x2="70" y2="35" stroke="#a855f7" stroke-width="1" opacity="0.4"/>
+  </g>
+
+  <!-- "SYSTEM" text arc at bottom -->
+  <text x="256" y="480" text-anchor="middle" font-family="'Orbitron', monospace" font-size="22" font-weight="700" fill="#4c1d95" letter-spacing="8">
+    THE SYSTEM
+  </text>
+</svg>

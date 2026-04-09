@@ -96,8 +96,7 @@ export function WorkspaceItem({
   }, [workspace.id, workspace.name, deleteWorkspace]);
 
   const handleOpenTerminal = useCallback(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const api = (window as any).phantomOS;
+    const api = window.phantomOS;
     if (api?.invoke) {
       api.invoke('phantom:open-terminal', { workspaceId: workspace.id });
     }

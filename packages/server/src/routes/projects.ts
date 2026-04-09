@@ -123,6 +123,29 @@ projectRoutes.post('/projects/open', async (c) => {
   return c.json({ project, workspace: null }, 201);
 });
 
+/** PATCH /projects/:id — Rename a project */
+projectRoutes.patch('/projects/:id', async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json<{ name?: string }>();
+
+  if (!body.name?.trim()) {
+    return c.json({ error: 'name is required' }, 400);
+  }
+
+  const project = db.select().from(projects).where(eq(projects.id, id)).get();
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  db.update(projects)
+    .set({ name: body.name.trim() })
+    .where(eq(projects.id, id))
+    .run();
+
+  const updated = db.select().from(projects).where(eq(projects.id, id)).get();
+  return c.json(updated);
+});
+
 /** GET /projects/:id/branches — List local + remote branches for a project's repo */
 projectRoutes.get('/projects/:id/branches', (c) => {
   const id = c.req.param('id');

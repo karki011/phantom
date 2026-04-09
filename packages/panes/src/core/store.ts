@@ -103,7 +103,7 @@ function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
     }
   } catch { /* ignore */ }
 
-  const tab = makeTab<TData>('Main');
+  const tab = makeTab<TData>('Home');
   return { tabs: [tab], activeTabId: tab.id };
 }
 
@@ -121,7 +121,7 @@ function saveWorkspaceState<TData>(wsId: string, state: WorkspaceState<TData>): 
 // ---------------------------------------------------------------------------
 
 function createInitialState<TData>(): WorkspaceState<TData> {
-  const tab = makeTab<TData>('Main');
+  const tab = makeTab<TData>('Home');
   return { tabs: [tab], activeTabId: tab.id };
 }
 
@@ -176,6 +176,20 @@ export function createPaneStore<TData = Record<string, unknown>>() {
       // ---------------------------------------------------------------
       // Pane operations
       // ---------------------------------------------------------------
+
+      addPaneAsTab: (kind, data = {} as TData, title) => {
+        const pane = makePane<TData>(kind, data, title ?? kind);
+        const tab: Tab<TData> = {
+          id: uid(),
+          label: title ?? kind.charAt(0).toUpperCase() + kind.slice(1),
+          createdAt: Date.now(),
+          activePaneId: pane.id,
+          layout: { type: 'pane', paneId: pane.id },
+          panes: { [pane.id]: pane },
+        };
+        set((s) => ({ ...s, tabs: [...s.tabs, tab], activeTabId: tab.id }));
+        return tab.id;
+      },
 
       addPane: (kind, data = {} as TData, title) => {
         const state = get();

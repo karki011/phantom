@@ -20,7 +20,7 @@ import { useEffect } from 'react';
 import { WorkspaceProvider, Workspace, paneStore } from '@phantom-os/panes';
 import { paneDefinitions, paneMenu } from './panes/registry';
 import { unlockedCountAtom, refreshAchievementsAtom } from './atoms/achievements';
-import { activeTopTabAtom, fontScaleAtom } from './atoms/system';
+import { activeTopTabAtom, fontScaleAtom, sseConnectionAtom } from './atoms/system';
 import { activeWorkspaceAtom, activeWorkspaceIdAtom } from './atoms/workspaces';
 import { Cockpit } from './components/cockpit/Cockpit';
 import { TopTabBar } from './components/layout/TopTabBar';
@@ -34,6 +34,7 @@ import { StreakView } from './components/views/StreakView';
 import { TaskHistory } from './components/views/TaskHistory';
 import { AchievementsView } from './components/views/AchievementsView';
 import { DailyQuestsView } from './components/views/DailyQuestsView';
+import { HunterStatsView } from './components/hunter-stats/HunterStatsView';
 import { WorkspaceSidebar } from './components/sidebar/WorkspaceSidebar';
 import { RightSidebar } from './components/sidebar/RightSidebar';
 import { useHunter } from './hooks/useHunter';
@@ -61,6 +62,8 @@ const ViewContent = ({ route }: { route: Route }) => {
       return <AchievementsView />;
     case 'quests':
       return <DailyQuestsView />;
+    case 'hunter-stats':
+      return <HunterStatsView />;
     default:
       return null;
   }
@@ -77,6 +80,7 @@ export const App = () => {
   const { profile } = useHunter();
   const { active } = useSessions();
   const fontScale = useAtomValue(fontScaleAtom);
+  const sseState = useAtomValue(sseConnectionAtom);
   const activeTab = useAtomValue(activeTopTabAtom);
   const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   const activeWsId = useAtomValue(activeWorkspaceIdAtom);
@@ -126,7 +130,30 @@ export const App = () => {
         {/* Top-level tab bar */}
         <TopTabBar />
 
-        <div style={{ height: 'calc(100vh - 3.5rem - 2.5rem - 32px)', overflow: 'hidden' }}>
+        {/* SSE reconnecting banner */}
+        {sseState === 'disconnected' && (
+          <div style={{
+            padding: '6px 16px',
+            backgroundColor: 'var(--phantom-status-warning)',
+            color: '#000',
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            textAlign: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+          }}>
+            <div style={{
+              width: 6, height: 6, borderRadius: '50%',
+              backgroundColor: '#000',
+              animation: 'pulse 1.5s infinite',
+            }} />
+            Reconnecting to The System...
+          </div>
+        )}
+
+        <div style={{ height: `calc(100vh - 3.5rem - 2.5rem - 32px - ${sseState === 'disconnected' ? 28 : 0}px)`, overflow: 'hidden' }}>
           {activeTab === 'cockpit' ? (
             /* ── Cockpit tab: full-width, no sidebars ── */
             <div style={{ height: '100%', overflow: 'auto' }}>

@@ -4,6 +4,7 @@
  * extracts token usage, costs, and metadata.
  * @author Subash Karki
  */
+import { logger } from '../logger.js';
 import { createReadStream, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { basename, join } from 'node:path';
@@ -286,7 +287,7 @@ export const startActiveContextPoller = (broadcast: Broadcast): void => {
   // First poll after 3 seconds (let boot finish), then every 10 seconds
   setTimeout(poll, 3000);
   setInterval(poll, 10_000);
-  console.log('[ContextPoller] Polling active sessions every 10s');
+  logger.info('ContextPoller', 'Polling active sessions every 10s');
 };
 
 export const scanJsonlSessions = async (broadcast: Broadcast): Promise<void> => {
@@ -376,6 +377,74 @@ export const scanJsonlSessions = async (broadcast: Broadcast): Promise<void> => 
     }
   }
 
-  console.log(`[JsonlScanner] Scanned ${scannedCount} sessions from ${projectDirs.length} projects, enriched ${enrichedCount}`);
+  logger.info('JsonlScanner', `Scanned ${scannedCount} sessions from ${projectDirs.length} projects, enriched ${enrichedCount}`);
   broadcast('jsonl:scan-complete', { scanned: scannedCount, enriched: enrichedCount });
+};
+
+/**
+ * Periodically re-enrich sessions that have 0 tokens.
+ * Handles the case where a session was discovered before its JSONL had data
+ * (e.g., session-watcher creates the record before any assistant messages arrive,
+ * or /clear rotates to a new JSONL file that wasn't yet populated at boot scan).
+ * Runs every 60 seconds.
+ * @author Subash Karki
+ */
+export const startPeriodicRescan = (broadcast: Broadcast): void => {
+  const rescan = async () => {
+    // Find sessions with 0 input tokens that might have JSONL data now
+    const emptySessions = db
+      .select({ id: sessions.id, cwd: sessions.cwd })
+      .from(sessions)
+      .where(eq(sessions.inputTokens, 0))
+      .all();
+
+    let enrichedCount = 0;
+
+    for (const session of emptySessions) {
+      const jsonlPath = findActiveJsonlByCwd(session.cwd) ?? findJsonlPath(session.id);
+      if (!jsonlPath) continue;
+
+      // Check file has content (>100 bytes to skip nearly-empty files)
+      try {
+        const stat = statSync(jsonlPath);
+        if (stat.size < 100) continue;
+      } catch { continue; }
+
+      const acc = await parseJsonlFile(jsonlPath);
+      if (acc.messageCount === 0) continue;
+
+      const costMicros = calculateCostMicros(acc);
+
+      db.update(sessions)
+        .set({
+          inputTokens: acc.inputTokens,
+          outputTokens: acc.outputTokens,
+          cacheReadTokens: acc.cacheReadTokens,
+          cacheWriteTokens: acc.cacheWriteTokens,
+          lastInputTokens: acc.lastInputTokens,
+          estimatedCostMicros: costMicros,
+          messageCount: acc.messageCount,
+          toolUseCount: acc.toolUseCount,
+          toolBreakdown: JSON.stringify(acc.toolBreakdown),
+          firstPrompt: acc.firstPrompt ?? undefined,
+          model: acc.model ?? undefined,
+          ...(acc.startedAt ? { startedAt: acc.startedAt } : {}),
+          ...(acc.endedAt ? { endedAt: acc.endedAt } : {}),
+        })
+        .where(eq(sessions.id, session.id))
+        .run();
+
+      enrichedCount++;
+    }
+
+    if (enrichedCount > 0) {
+      logger.debug('JsonlScanner', `Re-enriched ${enrichedCount} sessions`);
+      broadcast('jsonl:rescan', { enriched: enrichedCount });
+    }
+  };
+
+  // First rescan after 30 seconds (let boot finish), then every 60 seconds
+  setTimeout(rescan, 30_000);
+  setInterval(rescan, 60_000);
+  logger.info('JsonlScanner', 'Periodic rescan enabled (every 60s for 0-token sessions)');
 };

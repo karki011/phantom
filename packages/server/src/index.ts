@@ -3,6 +3,7 @@
  * Main Hono server: routes, SSE, watchers, migrations, seeding.
  * @author Subash Karki
  */
+import { logger } from './logger.js';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -26,6 +27,7 @@ import { taskRoutes } from './routes/tasks.js';
 import { projectRoutes } from './routes/projects.js';
 import { workspaceRoutes } from './routes/workspaces.js';
 import { workspaceFileRoutes } from './routes/workspace-files.js';
+import { hunterStatsRoutes } from './routes/hunter-stats.js';
 import { API_PORT } from '@phantom-os/shared';
 import type { Server } from 'node:http';
 import { setupTerminalWs } from './routes/terminal-ws.js';
@@ -81,6 +83,7 @@ app.route('/api', statsRoutes);
 app.route('/api', projectRoutes);
 app.route('/api', workspaceRoutes);
 app.route('/api', workspaceFileRoutes);
+app.route('/api', hunterStatsRoutes);
 
 // SSE endpoint
 app.get('/events', (c) => {
@@ -167,11 +170,14 @@ startSessionWatcher(broadcast, handleSessionStart, handleSessionEnd);
 startTaskWatcher(broadcast, handleTaskComplete);
 
 // Scan JSONL sessions async (don't block boot)
-import { scanJsonlSessions, startActiveContextPoller } from './collectors/jsonl-scanner.js';
+import { scanJsonlSessions, startActiveContextPoller, startPeriodicRescan } from './collectors/jsonl-scanner.js';
 scanJsonlSessions(broadcast).catch((err) => console.error('[JsonlScanner] Error:', err));
 
 // Poll active sessions for live context every 10s
 startActiveContextPoller(broadcast);
+
+// Re-enrich sessions that had 0 tokens at boot (handles late JSONL writes and /clear rotation)
+startPeriodicRescan(broadcast);
 
 // Poll active sessions for live activity feed every 5s
 import { startActivityPoller } from './collectors/activity-poller.js';
@@ -182,7 +188,7 @@ startActivityPoller(broadcast);
 // ---------------------------------------------------------------------------
 
 const shutdown = () => {
-  console.log('[PhantomOS] Shutting down gracefully...');
+  logger.info('PhantomOS', 'Shutting down gracefully...');
   disconnectDaemon();
   destroyAllPtys();
   // Checkpoint WAL so no data is lost
@@ -200,12 +206,14 @@ process.on('SIGINT', shutdown);
 // ---------------------------------------------------------------------------
 
 const server = serve({ fetch: app.fetch, port: API_PORT }, (info) => {
-  console.log('');
-  console.log('================================================');
-  console.log(' PhantomOS — The System');
-  console.log(`   running on http://localhost:${info.port}`);
-  console.log('================================================');
-  console.log('');
+  logger.banner(
+    '',
+    '================================================',
+    ' PhantomOS — The System',
+    `   running on http://localhost:${info.port}`,
+    '================================================',
+    '',
+  );
 });
 
 setupTerminalWs(server as unknown as Server);

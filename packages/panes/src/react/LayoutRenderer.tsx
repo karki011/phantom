@@ -23,6 +23,8 @@ export interface LayoutRendererProps {
   /** Path from root to this node (array of 0=first, 1=second) */
   path?: number[];
   onResize: (path: number[], percentage: number) => void;
+  /** True when the tab contains a single pane (no splits) — hides the pane header */
+  singlePane?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -96,6 +98,7 @@ export function LayoutRenderer({
   tabId,
   path = [],
   onResize,
+  singlePane,
 }: LayoutRendererProps) {
   const registry = usePaneRegistry();
 
@@ -128,7 +131,7 @@ export function LayoutRenderer({
     }
 
     return (
-      <PaneContainer pane={pane} tabId={tabId}>
+      <PaneContainer pane={pane} tabId={tabId} hideHeader={singlePane}>
         {content}
       </PaneContainer>
     );

@@ -3,6 +3,7 @@
  * Tail-reads active sessions' JSONL files for real-time activity events.
  * @author Subash Karki
  */
+import { logger } from '../logger.js';
 import { openSync, readSync, closeSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { eq } from 'drizzle-orm';
@@ -290,5 +291,5 @@ export const startActivityPoller = (broadcast: Broadcast): void => {
 
   setInterval(poll, 5_000);
   setTimeout(poll, 2_000);
-  console.log('[ActivityPoller] Polling active sessions every 5s');
+  logger.info('ActivityPoller', 'Polling active sessions every 5s');
 };

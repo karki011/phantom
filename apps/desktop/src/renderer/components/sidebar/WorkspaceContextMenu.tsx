@@ -18,8 +18,7 @@ import { type ReactNode, useCallback, useRef, useState } from 'react';
 /** Call Electron IPC if available */
 const invoke = async (channel: string, ...args: unknown[]): Promise<void> => {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const api = (window as any).phantomOS;
+    const api = window.phantomOS;
     if (api?.invoke) await api.invoke(channel, ...args);
   } catch (err) {
     console.error(`[IPC] ${channel} failed:`, err);

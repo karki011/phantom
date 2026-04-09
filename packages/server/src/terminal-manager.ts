@@ -4,6 +4,7 @@
  * Falls back to direct node-pty spawn if the daemon isn't running.
  * @author Subash Karki
  */
+import { logger } from './logger.js';
 import * as pty from 'node-pty';
 import { homedir } from 'node:os';
 import { existsSync } from 'node:fs';
@@ -38,7 +39,7 @@ export const initDaemonClient = async (): Promise<boolean> => {
   // Check if daemon is reachable
   const reachable = await DaemonClient.isDaemonReachable();
   if (!reachable) {
-    console.log('[TerminalManager] Daemon not reachable, using direct PTY fallback');
+    logger.info('TerminalManager', 'Daemon not reachable, using direct PTY fallback');
     daemonAvailable = false;
     return false;
   }
@@ -70,7 +71,7 @@ export const initDaemonClient = async (): Promise<boolean> => {
     });
 
     daemonClient.on('connected', () => {
-      console.log('[TerminalManager] Daemon reconnected');
+      logger.info('TerminalManager', 'Daemon reconnected');
       daemonAvailable = true;
     });
 
@@ -80,7 +81,7 @@ export const initDaemonClient = async (): Promise<boolean> => {
 
     await daemonClient.connect();
     daemonAvailable = true;
-    console.log('[TerminalManager] Connected to terminal daemon');
+    logger.info('TerminalManager', 'Connected to terminal daemon');
     return true;
   } catch (err) {
     console.warn(
