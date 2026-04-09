@@ -107,11 +107,29 @@ function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
   return { tabs: [tab], activeTabId: tab.id };
 }
 
+/** Pane kinds that are ephemeral — don't survive workspace switches */
+const EPHEMERAL_KINDS = new Set(['terminal']);
+
 function saveWorkspaceState<TData>(wsId: string, state: WorkspaceState<TData>): void {
   try {
+    // Filter out ephemeral tabs (terminals with dead processes) — only persist restorable ones
+    const persistableTabs = state.tabs.filter((tab) => {
+      const panes = Object.values(tab.panes);
+      // Keep tabs where at least one pane is non-ephemeral
+      return panes.some((p) => !EPHEMERAL_KINDS.has(p.kind));
+    });
+
+    // Ensure at least the Home tab exists
+    const tabsToSave = persistableTabs.length > 0 ? persistableTabs : state.tabs.slice(0, 1);
+
+    // If active tab was filtered out, switch to first remaining tab
+    const activeTabId = tabsToSave.some((t) => t.id === state.activeTabId)
+      ? state.activeTabId
+      : tabsToSave[0]?.id ?? null;
+
     localStorage.setItem(
       storageKey(wsId),
-      JSON.stringify({ tabs: state.tabs, activeTabId: state.activeTabId }),
+      JSON.stringify({ tabs: tabsToSave, activeTabId }),
     );
   } catch { /* ignore quota errors */ }
 }

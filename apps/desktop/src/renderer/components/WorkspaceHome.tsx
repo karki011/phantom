@@ -6,6 +6,7 @@
  * @author Subash Karki
  */
 import {
+  ActionIcon,
   Button,
   Center,
   Group,
@@ -375,149 +376,170 @@ export function WorkspaceHome() {
   }
 
   return (
-    <Center h="100%" style={{ overflow: 'auto' }}>
-      <Stack align="center" gap="xl" maw={900} w="100%" px="xl" py="xl">
+    <div style={{ height: '100%', overflow: 'auto', padding: '24px' }}>
+      <Stack align="center" gap="lg" maw={1100} w="100%" mx="auto">
         {/* Rank Header */}
         <RankHeader profile={profile} />
 
-        {/* Project Recipes — auto-detected commands */}
-        {projectProfile && projectProfile.recipes.length > 0 && (
-          <>
-            <Group gap="xs" w="100%">
-              <Text fz="xs" fw={600} c="var(--phantom-accent-glow)" tt="uppercase" style={{ letterSpacing: '0.08em' }}>
-                {projectProfile.type} · {projectProfile.buildSystem}
-              </Text>
-            </Group>
-            <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} w="100%" spacing="sm">
-              {projectProfile.recipes.slice(0, 8).map((recipe) => (
-                <Paper
-                  key={recipe.id}
-                  p="md"
-                  bg="var(--phantom-surface-card)"
-                  radius="md"
-                  onClick={() => store.addPaneAsTab('terminal', {
-                    cwd: workspace?.worktreePath ?? project?.repoPath,
-                    initialCommand: recipe.command,
-                  } as Record<string, unknown>, recipe.label)}
-                  style={{
-                    cursor: 'pointer',
-                    border: '1px solid var(--phantom-border-subtle)',
-                    transition: 'border-color 0.2s, box-shadow 0.2s',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--phantom-accent-glow)';
-                    e.currentTarget.style.boxShadow = '0 0 12px color-mix(in srgb, var(--phantom-accent-glow) 30%, transparent)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--phantom-border-subtle)';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  <Stack align="center" gap="xs">
-                    <div style={{ color: 'var(--phantom-accent-glow)' }}>
-                      {RECIPE_ICONS[recipe.category] ?? <Settings2 size={20} />}
-                    </div>
-                    <Text fw={600} fz="0.78rem" c="var(--phantom-text-primary)" ta="center" lineClamp={1}>
-                      {recipe.label}
-                    </Text>
-                    <Text fz="0.65rem" c="var(--phantom-text-muted)" ta="center" lineClamp={1} ff="'JetBrains Mono', monospace">
-                      {recipe.command}
-                    </Text>
-                  </Stack>
-                </Paper>
-              ))}
-            </SimpleGrid>
-          </>
-        )}
-
-        {/* Tools */}
-        <Group gap="xs" w="100%">
-          <Text fz="xs" fw={600} c="var(--phantom-text-muted)" tt="uppercase" style={{ letterSpacing: '0.08em' }}>
-            Tools
-          </Text>
-        </Group>
-        <SimpleGrid cols={{ base: 2, sm: 5 }} w="100%" spacing="md">
-          <QuickActionCard
-            icon={<TerminalIcon size={24} style={{ color: 'var(--phantom-accent-glow)' }} />}
-            label="Terminal"
-            shortcut="Ctrl+`"
-            onClick={openTerminal}
-          />
-          <QuickActionCard
-            icon={<FileCode size={24} style={{ color: 'var(--phantom-accent-glow)' }} />}
-            label="Editor"
-            shortcut="Ctrl+N"
-            onClick={openEditor}
-          />
-          <QuickActionCard
-            icon={<Sparkles size={24} style={{ color: 'var(--phantom-accent-gold)' }} />}
-            label="New Session"
-            shortcut="Ctrl+J"
-            onClick={openClaude}
-          />
-          <QuickActionCard
-            icon={<BarChart3 size={24} style={{ color: 'var(--phantom-accent-glow)' }} />}
-            label="Hunter Stats"
-            shortcut="Ctrl+H"
-            onClick={() => navigate('hunter-stats')}
-          />
-          <QuickActionCard
-            icon={<MessageSquare size={24} style={{ color: 'var(--phantom-accent-glow)' }} />}
-            label="Chat"
-            shortcut="Ctrl+K"
-            onClick={openChat}
-          />
-        </SimpleGrid>
-
-        {/* Info Cards */}
-        <SimpleGrid cols={{ base: 1, sm: 2 }} w="100%" spacing="md">
-          <GitStatusCard state={gitStatusState} />
-          <DailyQuestsCard quests={questSummary} />
-        </SimpleGrid>
-
-        {/* Recent Chats */}
-        {recentChats.length > 0 && (
-          <Paper
-            p="md"
-            bg="var(--phantom-surface-card)"
-            radius="md"
-            w="100%"
-            style={{ border: '1px solid var(--phantom-border-subtle)' }}
-          >
-            <Group gap="xs" mb="sm">
-              <MessageSquare size={14} style={{ color: 'var(--phantom-accent-glow)' }} />
-              <Text fz="xs" fw={600} c="var(--phantom-text-secondary)">Recent Chats</Text>
-            </Group>
-            <Stack gap={4}>
-              {recentChats.map((chat) => (
-                <Group
-                  key={chat.id}
-                  gap="sm"
-                  py={4}
-                  px={6}
-                  style={{
-                    cursor: 'pointer',
-                    borderRadius: 4,
-                    transition: 'background-color 100ms ease',
-                  }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                  onClick={() => {
-                    store.addPaneAsTab('chat', { cwd: workspace?.worktreePath, conversationId: chat.id } as Record<string, unknown>, 'Chat');
-                  }}
-                >
-                  <MessageSquare size={12} style={{ color: 'var(--phantom-text-muted)', flexShrink: 0 }} />
-                  <Text fz="0.78rem" c="var(--phantom-text-primary)" lineClamp={1} style={{ flex: 1 }}>
-                    {chat.title}
+        {/* Two-column layout: Recipes | Tools + Info */}
+        <SimpleGrid cols={{ base: 1, md: 2 }} w="100%" spacing="lg">
+          {/* LEFT COLUMN — Project Recipes */}
+          <Stack gap="md">
+            {projectProfile && projectProfile.recipes.length > 0 && (
+              <Paper
+                p="md"
+                bg="var(--phantom-surface-card)"
+                radius="md"
+                style={{ border: '1px solid var(--phantom-border-subtle)' }}
+              >
+                <Group gap="xs" mb="sm">
+                  <Text fz="xs" fw={600} c="var(--phantom-accent-glow)" tt="uppercase" style={{ letterSpacing: '0.08em' }}>
+                    {projectProfile.type} · {projectProfile.buildSystem}
                   </Text>
-                  <Text fz="0.65rem" c="var(--phantom-text-muted)" style={{ flexShrink: 0 }}>
-                    {formatRelativeTime(chat.updatedAt)}
+                  <Text fz="xs" c="var(--phantom-text-muted)">
+                    {projectProfile.recipes.length} commands
                   </Text>
                 </Group>
-              ))}
-            </Stack>
-          </Paper>
-        )}
+                <Stack gap={2}>
+                  {projectProfile.recipes.map((recipe) => (
+                    <Group
+                      key={recipe.id}
+                      gap="sm"
+                      wrap="nowrap"
+                      py={5}
+                      px={8}
+                      style={{
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        transition: 'background-color 100ms ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                      }}
+                      onClick={() => store.addPaneAsTab('terminal', {
+                        cwd: workspace?.worktreePath ?? project?.repoPath,
+                        initialCommand: recipe.command,
+                      } as Record<string, unknown>, recipe.label)}
+                    >
+                      <ActionIcon
+                        size="xs"
+                        variant="filled"
+                        color="green"
+                        radius="xl"
+                        style={{ flexShrink: 0 }}
+                      >
+                        <Play size={10} />
+                      </ActionIcon>
+                      <Text fz="0.78rem" fw={500} c="var(--phantom-text-primary)" style={{ minWidth: 80 }}>
+                        {recipe.label}
+                      </Text>
+                      <Text fz="0.7rem" c="var(--phantom-text-muted)" ff="'JetBrains Mono', monospace" truncate style={{ flex: 1 }}>
+                        {recipe.command}
+                      </Text>
+                    </Group>
+                  ))}
+                </Stack>
+              </Paper>
+            )}
+
+            {/* Recent Chats */}
+            {recentChats.length > 0 && (
+              <Paper
+                p="md"
+                bg="var(--phantom-surface-card)"
+                radius="md"
+                style={{ border: '1px solid var(--phantom-border-subtle)' }}
+              >
+                <Group gap="xs" mb="sm">
+                  <MessageSquare size={14} style={{ color: 'var(--phantom-accent-glow)' }} />
+                  <Text fz="xs" fw={600} c="var(--phantom-text-secondary)">Recent Chats</Text>
+                </Group>
+                <Stack gap={4}>
+                  {recentChats.map((chat) => (
+                    <Group
+                      key={chat.id}
+                      gap="sm"
+                      py={4}
+                      px={6}
+                      style={{
+                        cursor: 'pointer',
+                        borderRadius: 4,
+                        transition: 'background-color 100ms ease',
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      onClick={() => {
+                        store.addPaneAsTab('chat', { cwd: workspace?.worktreePath, conversationId: chat.id } as Record<string, unknown>, 'Chat');
+                      }}
+                    >
+                      <MessageSquare size={12} style={{ color: 'var(--phantom-text-muted)', flexShrink: 0 }} />
+                      <Text fz="0.78rem" c="var(--phantom-text-primary)" lineClamp={1} style={{ flex: 1 }}>
+                        {chat.title}
+                      </Text>
+                      <Text fz="0.65rem" c="var(--phantom-text-muted)" style={{ flexShrink: 0 }}>
+                        {formatRelativeTime(chat.updatedAt)}
+                      </Text>
+                    </Group>
+                  ))}
+                </Stack>
+              </Paper>
+            )}
+          </Stack>
+
+          {/* RIGHT COLUMN — Tools + Info */}
+          <Stack gap="md">
+            {/* Tools */}
+            <Paper
+              p="md"
+              bg="var(--phantom-surface-card)"
+              radius="md"
+              style={{ border: '1px solid var(--phantom-border-subtle)' }}
+            >
+              <Text fz="xs" fw={600} c="var(--phantom-text-muted)" tt="uppercase" mb="sm" style={{ letterSpacing: '0.08em' }}>
+                Tools
+              </Text>
+              <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="sm">
+                <QuickActionCard
+                  icon={<TerminalIcon size={20} style={{ color: 'var(--phantom-accent-glow)' }} />}
+                  label="Terminal"
+                  shortcut="Ctrl+`"
+                  onClick={openTerminal}
+                />
+                <QuickActionCard
+                  icon={<FileCode size={20} style={{ color: 'var(--phantom-accent-glow)' }} />}
+                  label="Editor"
+                  shortcut="Ctrl+N"
+                  onClick={openEditor}
+                />
+                <QuickActionCard
+                  icon={<Sparkles size={20} style={{ color: 'var(--phantom-accent-gold)' }} />}
+                  label="New Session"
+                  shortcut="Ctrl+J"
+                  onClick={openClaude}
+                />
+                <QuickActionCard
+                  icon={<BarChart3 size={20} style={{ color: 'var(--phantom-accent-glow)' }} />}
+                  label="Hunter Stats"
+                  shortcut="Ctrl+H"
+                  onClick={() => navigate('hunter-stats')}
+                />
+                <QuickActionCard
+                  icon={<MessageSquare size={20} style={{ color: 'var(--phantom-accent-glow)' }} />}
+                  label="Chat"
+                  shortcut="Ctrl+K"
+                  onClick={openChat}
+                />
+              </SimpleGrid>
+            </Paper>
+
+            {/* Git Status + Daily Quests */}
+            <GitStatusCard state={gitStatusState} />
+            <DailyQuestsCard quests={questSummary} />
+          </Stack>
+        </SimpleGrid>
 
         {/* Quote */}
         <Text
@@ -530,6 +552,6 @@ export function WorkspaceHome() {
           &ldquo;{quote}&rdquo;
         </Text>
       </Stack>
-    </Center>
+    </div>
   );
 }
