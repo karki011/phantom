@@ -47,6 +47,7 @@ export const useChat = (cwd?: string, workspaceId?: string | null, projectContex
   const [sending, setSending] = useState(false);
   const [model, setModel] = useState('sonnet');
   const abortRef = useRef<AbortController | null>(null);
+  const skipNextLoadRef = useRef(false);
 
   // Load conversations list on mount / workspace change
   useEffect(() => {
@@ -77,6 +78,12 @@ export const useChat = (cwd?: string, workspaceId?: string | null, projectContex
       return;
     }
 
+    // Skip DB load right after creating a new conversation (no messages in DB yet)
+    if (skipNextLoadRef.current) {
+      skipNextLoadRef.current = false;
+      return;
+    }
+
     fetch(`/api/chat/history?conversationId=${activeConversationId}&limit=100`)
       .then((r) => r.json())
       .then((rows: { id: string; role: string; content: string; model?: string; createdAt: number }[]) => {
@@ -101,6 +108,7 @@ export const useChat = (cwd?: string, workspaceId?: string | null, projectContex
       });
       const conv = await resp.json() as ChatConversation;
       setConversations((prev) => [conv, ...prev]);
+      skipNextLoadRef.current = true;
       setActiveConversationId(conv.id);
       setMessages([]);
     } catch { /* ignore */ }
@@ -122,6 +130,7 @@ export const useChat = (cwd?: string, workspaceId?: string | null, projectContex
     });
     const conv = await resp.json() as ChatConversation;
     setConversations((prev) => [conv, ...prev]);
+    skipNextLoadRef.current = true; // Don't load from DB — no messages yet
     setActiveConversationId(conv.id);
     return conv.id;
   }, [activeConversationId, workspaceId, model]);

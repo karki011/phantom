@@ -40,6 +40,31 @@ const CURSOR_KEYFRAMES = `
   0%, 50% { opacity: 1; }
   51%, 100% { opacity: 0; }
 }
+@keyframes shadow-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+@keyframes shadow-orbit {
+  0% { transform: rotate(0deg) translateX(16px) rotate(0deg); }
+  100% { transform: rotate(360deg) translateX(16px) rotate(-360deg); }
+}
+@keyframes shadow-rise {
+  0% { opacity: 0; transform: translateY(8px) scale(0.5); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-20px) scale(0.2); }
+}
+@keyframes gate-glow {
+  0%, 100% { box-shadow: 0 0 8px var(--phantom-accent-glow), inset 0 0 8px rgba(6,182,212,0.1); }
+  50% { box-shadow: 0 0 20px var(--phantom-accent-glow), 0 0 40px rgba(168,85,247,0.3), inset 0 0 12px rgba(6,182,212,0.2); }
+}
+@keyframes text-flicker {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+@keyframes scan-line {
+  0% { top: 0%; }
+  100% { top: 100%; }
+}
 `;
 
 let keyframesInjected = false;
@@ -128,19 +153,70 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
             {message.content}
           </Text>
+        ) : message.streaming && !message.content ? (
+          /* "Arise" loading — waiting for first token */
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 4px' }}>
+            {/* Shadow gate portal */}
+            <div style={{
+              position: 'relative',
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              border: '2px solid var(--phantom-accent-glow)',
+              animation: 'gate-glow 2s ease-in-out infinite',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              {/* Orbiting particles */}
+              {[0, 1, 2].map((i) => (
+                <div key={i} style={{
+                  position: 'absolute',
+                  width: 4,
+                  height: 4,
+                  borderRadius: '50%',
+                  backgroundColor: i === 1 ? '#a855f7' : 'var(--phantom-accent-glow)',
+                  animation: `shadow-orbit ${1.5 + i * 0.3}s linear infinite`,
+                  animationDelay: `${i * 0.5}s`,
+                }} />
+              ))}
+              {/* Center eye */}
+              <div style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: 'var(--phantom-accent-glow)',
+                animation: 'shadow-pulse 1.5s ease-in-out infinite',
+              }} />
+            </div>
+            {/* Text */}
+            <div>
+              <Text fz="0.75rem" fw={700} ff="'Orbitron', sans-serif" c="var(--phantom-accent-glow)" style={{ animation: 'text-flicker 2s ease-in-out infinite', letterSpacing: '0.1em' }}>
+                ARISE
+              </Text>
+              <Text fz="0.65rem" c="var(--phantom-text-muted)" style={{ animation: 'text-flicker 3s ease-in-out infinite' }}>
+                Shadow extraction in progress...
+              </Text>
+            </div>
+          </div>
         ) : (
           <>
             <Markdown components={markdownComponents}>{message.content}</Markdown>
             {message.streaming && (
-              <span
-                style={{
-                  animation: 'blink-cursor 1s step-end infinite',
-                  color: 'var(--phantom-accent-glow)',
-                  fontWeight: 700,
-                  marginLeft: 2,
-                }}
-              >
-                ▌
+              /* Shadow particles cursor — text is flowing */
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, marginLeft: 4, verticalAlign: 'middle' }}>
+                {[0, 1, 2].map((i) => (
+                  <span key={i} style={{
+                    display: 'inline-block',
+                    width: 4,
+                    height: 4,
+                    borderRadius: '50%',
+                    backgroundColor: i === 1 ? '#a855f7' : 'var(--phantom-accent-glow)',
+                    animation: `shadow-rise 1.2s ease-out infinite`,
+                    animationDelay: `${i * 0.2}s`,
+                  }} />
+                ))}
               </span>
             )}
           </>
