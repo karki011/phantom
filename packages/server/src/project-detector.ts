@@ -128,7 +128,8 @@ const extractNpmRecipes = (repoPath: string): Recipe[] => {
     const scripts: Record<string, string> = pkg.scripts ?? {};
 
     const useBun = fileExists(repoPath, 'bun.lock') || fileExists(repoPath, 'bun.lockb');
-    const runner = useBun ? 'bun run' : 'npm run';
+    const usePnpm = fileExists(repoPath, 'pnpm-lock.yaml');
+    const runner = useBun ? 'bun run' : usePnpm ? 'pnpm' : 'npm run';
 
     return Object.entries(scripts).map(([name, cmd]) => {
       const category = categorize(name);
@@ -341,14 +342,16 @@ export const detectProject = (repoPath: string): ProjectProfile => {
 
   if (hasPackageJson && (hasNxJson || hasTurboJson)) {
     type = 'monorepo';
-    buildSystem = hasNxJson ? 'nx' : 'turbo';
+    const pkgMgr = fileExists(repoPath, 'pnpm-lock.yaml') ? 'pnpm' : fileExists(repoPath, 'bun.lock') ? 'bun' : 'npm';
+    buildSystem = `${hasNxJson ? 'nx' : 'turbo'}+${pkgMgr}`;
   } else if (hasPyproject) {
     type = 'python';
     buildSystem = 'pyproject';
   } else if (hasPackageJson) {
     type = 'node';
     const useBun = fileExists(repoPath, 'bun.lock') || fileExists(repoPath, 'bun.lockb');
-    buildSystem = useBun ? 'bun' : 'npm';
+    const usePnpm = fileExists(repoPath, 'pnpm-lock.yaml');
+    buildSystem = useBun ? 'bun' : usePnpm ? 'pnpm' : 'npm';
   } else if (hasCargoToml) {
     type = 'rust';
     buildSystem = 'cargo';
@@ -360,31 +363,27 @@ export const detectProject = (repoPath: string): ProjectProfile => {
     buildSystem = 'make';
   }
 
-  // Collect recipes from all available sources
+  // Collect recipes — prioritize the primary build system's commands
   let recipes: Recipe[] = [];
 
-  if (hasMakefile) {
-    recipes.push(...extractMakefileRecipes(repoPath));
-  }
-
-  if (hasPackageJson) {
-    recipes.push(...extractNpmRecipes(repoPath));
-  }
-
-  if (hasPyproject) {
-    recipes.push(...extractPythonRecipes(repoPath));
-  }
-
-  if (hasNxJson) {
-    recipes.push(...extractNxRecipes(repoPath));
-  }
-
-  if (hasCargoToml) {
-    recipes.push(...extractCargoRecipes(repoPath));
-  }
-
-  if (hasGoMod) {
-    recipes.push(...extractGoRecipes(repoPath));
+  if (type === 'monorepo' || type === 'node') {
+    // Node/monorepo: package.json scripts first, then Nx, Makefile last (if at all)
+    if (hasPackageJson) recipes.push(...extractNpmRecipes(repoPath));
+    if (hasNxJson) recipes.push(...extractNxRecipes(repoPath));
+    // Only include Makefile for node projects if very few npm scripts detected
+    if (hasMakefile && recipes.length < 3) recipes.push(...extractMakefileRecipes(repoPath));
+  } else if (type === 'python') {
+    // Python: pyproject first, then Makefile (common for make test/lint)
+    if (hasPyproject) recipes.push(...extractPythonRecipes(repoPath));
+    if (hasMakefile) recipes.push(...extractMakefileRecipes(repoPath));
+  } else if (type === 'rust') {
+    if (hasCargoToml) recipes.push(...extractCargoRecipes(repoPath));
+  } else if (type === 'go') {
+    if (hasGoMod) recipes.push(...extractGoRecipes(repoPath));
+  } else {
+    // Infra/unknown: Makefile is primary
+    if (hasMakefile) recipes.push(...extractMakefileRecipes(repoPath));
+    if (hasPackageJson) recipes.push(...extractNpmRecipes(repoPath));
   }
 
   // Deduplicate by id and cap at MAX_RECIPES
