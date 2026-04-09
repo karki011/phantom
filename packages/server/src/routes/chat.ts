@@ -6,6 +6,9 @@
  */
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { desc, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db, chatMessages, chatConversations } from '@phantom-os/db';
@@ -185,6 +188,31 @@ chatRoutes.delete('/chat/history', (c) => {
   }
 
   return c.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// POST /chat/upload — Save an uploaded file to temp directory, return path
+// ---------------------------------------------------------------------------
+
+chatRoutes.post('/chat/upload', async (c) => {
+  const body = await c.req.parseBody();
+  const file = body['file'];
+
+  if (!file || typeof file === 'string') {
+    return c.json({ error: 'No file provided' }, 400);
+  }
+
+  const uploadDir = join(tmpdir(), 'phantom-chat-uploads');
+  mkdirSync(uploadDir, { recursive: true });
+
+  const ext = file.name?.split('.').pop() ?? 'bin';
+  const filename = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const filePath = join(uploadDir, filename);
+
+  const buffer = await file.arrayBuffer();
+  writeFileSync(filePath, Buffer.from(buffer));
+
+  return c.json({ path: filePath, name: file.name, size: buffer.byteLength });
 });
 
 // ---------------------------------------------------------------------------

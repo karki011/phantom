@@ -9,6 +9,7 @@
 import { Group, Menu, Text, UnstyledButton } from '@mantine/core';
 import {
   ChevronRight,
+  ClipboardCopy,
   File,
   FileCode,
   FileJson,
@@ -99,6 +100,12 @@ export function FileTreeItem({
       <UnstyledButton
         onClick={handleClick}
         onContextMenu={handleContextMenu}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/plain', entry.relativePath);
+          e.dataTransfer.setData('application/x-phantom-file', entry.relativePath);
+          e.dataTransfer.effectAllowed = 'copy';
+        }}
         style={{
           display: 'block',
           width: '100%',
@@ -178,6 +185,14 @@ export function FileTreeItem({
               <Menu.Divider />
             </>
           )}
+          <Menu.Item
+            fz="0.8rem"
+            leftSection={<ClipboardCopy size={14} />}
+            onClick={() => navigator.clipboard.writeText(entry.relativePath)}
+          >
+            Copy Path
+          </Menu.Item>
+          <Menu.Divider />
           <Menu.Item fz="0.8rem">Rename</Menu.Item>
           <Menu.Item fz="0.8rem" color="red">
             Delete

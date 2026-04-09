@@ -4,6 +4,7 @@
  */
 import {
   ActionIcon,
+  Badge,
   Group,
   Paper,
   ScrollArea,
@@ -14,7 +15,7 @@ import {
   Tooltip,
 } from '@mantine/core';
 import { useAtomValue } from 'jotai';
-import { Bot, MessageSquare, Plus, Send, Trash2, User } from 'lucide-react';
+import { Bot, MessageSquare, Plus, Send, Trash2, User, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import { activeWorkspaceAtom } from '../../atoms/workspaces';
@@ -272,12 +273,31 @@ export const ChatPane = ({ paneId: _paneId, cwd }: ChatPaneProps) => {
   // Find active conversation for title display
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
   const [input, setInput] = useState('');
+  const [attachments, setAttachments] = useState<{ path: string; name: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Inject keyframes on mount
   useEffect(() => {
     injectKeyframes();
+  }, []);
+
+  // Upload a file to the server and add to attachments
+  const uploadFile = useCallback(async (file: File) => {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const resp = await fetch('/api/chat/upload', { method: 'POST', body: formData });
+      const data = await resp.json() as { path: string; name: string };
+      setAttachments((prev) => [...prev, { path: data.path, name: data.name }]);
+    } catch {
+      // Upload failed silently
+    } finally {
+      setUploading(false);
+    }
   }, []);
 
   // Auto-scroll to bottom on new messages
@@ -291,12 +311,23 @@ export const ChatPane = ({ paneId: _paneId, cwd }: ChatPaneProps) => {
   }, [messages]);
 
   const handleSend = useCallback(() => {
-    if (!input.trim() || sending) return;
-    const text = input;
+    if ((!input.trim() && attachments.length === 0) || sending) return;
+
+    let fullMessage = input.trim();
+    if (attachments.length > 0) {
+      const fileRefs = attachments
+        .map((att) => `[Attached file: ${att.name} at ${att.path}]`)
+        .join('\n');
+      fullMessage = fullMessage
+        ? `${fullMessage}\n\n${fileRefs}\n\nPlease look at the attached file(s).`
+        : `${fileRefs}\n\nPlease look at the attached file(s) and describe what you see.`;
+    }
+
+    send(fullMessage);
     setInput('');
-    send(text);
+    setAttachments([]);
     inputRef.current?.focus();
-  }, [input, sending, send]);
+  }, [input, attachments, sending, send]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -365,8 +396,46 @@ export const ChatPane = ({ paneId: _paneId, cwd }: ChatPaneProps) => {
           display: 'flex',
           flexDirection: 'column',
           minWidth: 0,
+          position: 'relative',
+        }}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+
+          // Check for file paths dragged from the file tree
+          const filePath = e.dataTransfer?.getData('application/x-phantom-file');
+          if (filePath) {
+            setAttachments((prev) => [...prev, { path: filePath, name: filePath.split('/').pop() ?? filePath }]);
+            return;
+          }
+
+          // Check for regular file drops (from OS or other sources)
+          const files = e.dataTransfer?.files;
+          if (files) {
+            for (const file of files) {
+              uploadFile(file);
+            }
+          }
         }}
       >
+        {/* Drag-drop overlay */}
+        {dragOver && (
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 10,
+            backgroundColor: 'rgba(69, 153, 172, 0.1)',
+            border: '2px dashed var(--phantom-accent-glow)',
+            borderRadius: 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <Text c="var(--phantom-accent-glow)" fw={600}>Drop files here</Text>
+          </div>
+        )}
         {/* ---- Header ---- */}
         <Group
           justify="space-between"
@@ -441,61 +510,98 @@ export const ChatPane = ({ paneId: _paneId, cwd }: ChatPaneProps) => {
         )}
 
         {/* ---- Input ---- */}
-        <Group
-          gap="xs"
-          px="md"
-          py="sm"
-          align="flex-end"
+        <div
           style={{
             borderTop: '1px solid var(--phantom-border-subtle)',
             flexShrink: 0,
             backgroundColor: 'var(--phantom-surface-bg)',
           }}
         >
-          <Textarea
-            ref={inputRef}
-            placeholder="Ask Claude..."
-            value={input}
-            onChange={(e) => setInput(e.currentTarget.value)}
-            onKeyDown={handleKeyDown}
-            disabled={sending}
-            autosize
-            minRows={1}
-            maxRows={6}
-            style={{ flex: 1 }}
-            styles={{
-              input: {
-                backgroundColor: 'var(--phantom-surface-card)',
-                borderColor: 'var(--phantom-border-subtle)',
-                color: 'var(--phantom-text-primary)',
-                fontSize: '0.88rem',
-                fontFamily: 'inherit',
-                '&::placeholder': {
-                  color: 'var(--phantom-text-muted)',
-                },
-              },
-            }}
-          />
-          <Tooltip label="Send message" position="top">
-            <ActionIcon
-              variant="filled"
-              size="lg"
-              onClick={handleSend}
-              disabled={!input.trim() || sending}
-              style={{
-                backgroundColor: input.trim() && !sending
-                  ? 'var(--phantom-accent-glow)'
-                  : 'var(--phantom-surface-card)',
-                color: input.trim() && !sending
-                  ? 'var(--phantom-surface-bg)'
-                  : 'var(--phantom-text-muted)',
-                transition: 'all 0.15s ease',
+          {/* Attachment badges */}
+          {attachments.length > 0 && (
+            <Group gap={4} px="xs" pt={4}>
+              {attachments.map((att, i) => (
+                <Badge
+                  key={i}
+                  size="sm"
+                  variant="light"
+                  rightSection={
+                    <ActionIcon size="xs" variant="transparent" onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}>
+                      <X size={10} />
+                    </ActionIcon>
+                  }
+                  style={{ backgroundColor: 'var(--phantom-surface-elevated)', color: 'var(--phantom-text-secondary)' }}
+                >
+                  {att.name}
+                </Badge>
+              ))}
+              {uploading && <Text fz="0.7rem" c="var(--phantom-text-muted)">Uploading...</Text>}
+            </Group>
+          )}
+
+          <Group
+            gap="xs"
+            px="md"
+            py="sm"
+            align="flex-end"
+          >
+            <Textarea
+              ref={inputRef}
+              placeholder="Ask Claude... (paste images or drag files)"
+              value={input}
+              onChange={(e) => setInput(e.currentTarget.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={(e) => {
+                const items = e.clipboardData?.items;
+                if (!items) return;
+                for (const item of items) {
+                  if (item.type.startsWith('image/')) {
+                    e.preventDefault();
+                    const file = item.getAsFile();
+                    if (file) uploadFile(file);
+                    return;
+                  }
+                }
               }}
-            >
-              <Send size={16} />
-            </ActionIcon>
-          </Tooltip>
-        </Group>
+              disabled={sending}
+              autosize
+              minRows={1}
+              maxRows={6}
+              style={{ flex: 1 }}
+              styles={{
+                input: {
+                  backgroundColor: 'var(--phantom-surface-card)',
+                  borderColor: 'var(--phantom-border-subtle)',
+                  color: 'var(--phantom-text-primary)',
+                  fontSize: '0.88rem',
+                  fontFamily: 'inherit',
+                  '&::placeholder': {
+                    color: 'var(--phantom-text-muted)',
+                  },
+                },
+              }}
+            />
+            <Tooltip label="Send message" position="top">
+              <ActionIcon
+                variant="filled"
+                size="lg"
+                onClick={handleSend}
+                disabled={(!input.trim() && attachments.length === 0) || sending}
+                style={{
+                  backgroundColor: (input.trim() || attachments.length > 0) && !sending
+                    ? 'var(--phantom-accent-glow)'
+                    : 'var(--phantom-surface-card)',
+                  color: (input.trim() || attachments.length > 0) && !sending
+                    ? 'var(--phantom-surface-bg)'
+                    : 'var(--phantom-text-muted)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <Send size={16} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+        </div>
       </Stack>
     </div>
   );
