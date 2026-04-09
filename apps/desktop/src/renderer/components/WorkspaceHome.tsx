@@ -31,6 +31,16 @@ import { useRouter } from '../hooks/useRouter';
 // Constants
 // ---------------------------------------------------------------------------
 
+const formatRelativeTime = (ts: number): string => {
+  const ms = Date.now() - ts;
+  const min = Math.floor(ms / 60_000);
+  if (min < 1) return 'now';
+  if (min < 60) return `${min}m`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h`;
+  return `${Math.floor(hr / 24)}d`;
+};
+
 const QUOTES = [
   'I alone level up.',
   'Arise.',
@@ -237,6 +247,16 @@ export function WorkspaceHome() {
   const gitPath = workspace?.worktreePath ?? project?.repoPath ?? null;
 
   const [gitStatusState, setGitStatusState] = useState<GitStatusState>('loading');
+  const [recentChats, setRecentChats] = useState<{ id: string; title: string; updatedAt: number }[]>([]);
+
+  // Fetch recent chats for this workspace
+  useEffect(() => {
+    if (!workspace?.id) return;
+    fetch(`/api/chat/conversations?workspaceId=${workspace.id}&limit=5`)
+      .then((r) => r.json())
+      .then((convs) => setRecentChats(convs))
+      .catch(() => {});
+  }, [workspace?.id]);
 
   // Fetch git status via IPC
   useEffect(() => {
@@ -383,6 +403,50 @@ export function WorkspaceHome() {
           <GitStatusCard state={gitStatusState} />
           <DailyQuestsCard quests={questSummary} />
         </SimpleGrid>
+
+        {/* Recent Chats */}
+        {recentChats.length > 0 && (
+          <Paper
+            p="md"
+            bg="var(--phantom-surface-card)"
+            radius="md"
+            w="100%"
+            style={{ border: '1px solid var(--phantom-border-subtle)' }}
+          >
+            <Group gap="xs" mb="sm">
+              <MessageSquare size={14} style={{ color: 'var(--phantom-accent-glow)' }} />
+              <Text fz="xs" fw={600} c="var(--phantom-text-secondary)">Recent Chats</Text>
+            </Group>
+            <Stack gap={4}>
+              {recentChats.map((chat) => (
+                <Group
+                  key={chat.id}
+                  gap="sm"
+                  py={4}
+                  px={6}
+                  style={{
+                    cursor: 'pointer',
+                    borderRadius: 4,
+                    transition: 'background-color 100ms ease',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  onClick={() => {
+                    store.addPaneAsTab('chat', { cwd: workspace?.worktreePath, conversationId: chat.id } as Record<string, unknown>, 'Chat');
+                  }}
+                >
+                  <MessageSquare size={12} style={{ color: 'var(--phantom-text-muted)', flexShrink: 0 }} />
+                  <Text fz="0.78rem" c="var(--phantom-text-primary)" lineClamp={1} style={{ flex: 1 }}>
+                    {chat.title}
+                  </Text>
+                  <Text fz="0.65rem" c="var(--phantom-text-muted)" style={{ flexShrink: 0 }}>
+                    {formatRelativeTime(chat.updatedAt)}
+                  </Text>
+                </Group>
+              ))}
+            </Stack>
+          </Paper>
+        )}
 
         {/* Quote */}
         <Text

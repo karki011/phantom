@@ -216,7 +216,7 @@ chatRoutes.post('/chat/upload', async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /chat — Send a message to Claude, return response as JSON
+// POST /chat — Send a message to Claude, stream NDJSON response
 // ---------------------------------------------------------------------------
 
 chatRoutes.post('/chat', async (c) => {
@@ -230,48 +230,106 @@ chatRoutes.post('/chat', async (c) => {
   const prompt = buildPrompt(message, context, projectContext);
   const modelFlag = model ?? 'sonnet';
 
-  // Use plain text output — simplest and most reliable
+  // Use stream-json output for real-time streaming
   // Do NOT use --bare (disables enterprise OAuth/keychain auth)
   // --dangerously-skip-permissions lets Claude read files/run commands when asked
   const args = [
     '-p', prompt,
+    '--output-format', 'stream-json',
+    '--verbose',
     '--model', modelFlag,
     '--no-session-persistence',
     '--dangerously-skip-permissions',
   ];
 
-  return new Promise<Response>((resolve) => {
-    const proc = spawn('claude', args, {
-      cwd: cwd || process.env.HOME,
-      env: { ...process.env },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+  const proc = spawn('claude', args, {
+    cwd: cwd || process.env.HOME,
+    env: { ...process.env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 
-    let stdout = '';
-    let stderr = '';
+  const encoder = new TextEncoder();
 
-    proc.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
+  const readable = new ReadableStream({
+    start(controller) {
+      let buffer = '';
+      let fullText = '';
+      let doneSent = false;
 
-    proc.stderr.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
+      const sendChunk = (obj: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
+      };
 
-    proc.on('close', (code) => {
-      if (code !== 0 && !stdout.trim()) {
-        const errMsg = stderr.trim() || `claude exited with code ${code}`;
-        logger.debug('Chat', `error: ${errMsg}`);
-        resolve(c.json({ error: errMsg }, 500));
-        return;
-      }
+      proc.stdout.on('data', (chunk: Buffer) => {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
 
-      resolve(c.json({ content: stdout.trim(), model: modelFlag }));
-    });
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data = JSON.parse(line);
 
-    proc.on('error', (err) => {
-      logger.error('Chat', `spawn error: ${err.message}`);
-      resolve(c.json({ error: err.message }, 500));
-    });
+            // Extract text from assistant messages
+            if (data.type === 'assistant' && data.message?.content) {
+              for (const block of data.message.content) {
+                if (block.type === 'text' && block.text) {
+                  fullText += block.text;
+                  sendChunk({ type: 'delta', content: block.text });
+                }
+              }
+            }
+
+            // Final result
+            if (data.type === 'result') {
+              const resultText = typeof data.result === 'string' ? data.result : '';
+              if (resultText && !fullText) {
+                sendChunk({ type: 'delta', content: resultText });
+              }
+              sendChunk({ type: 'done', content: resultText || fullText });
+              doneSent = true;
+            }
+          } catch {
+            // Skip non-JSON lines
+          }
+        }
+      });
+
+      proc.stderr.on('data', (chunk: Buffer) => {
+        logger.debug('Chat', `stderr: ${chunk.toString().trim()}`);
+      });
+
+      proc.on('close', (_code) => {
+        // Process remaining buffer
+        if (buffer.trim()) {
+          try {
+            const data = JSON.parse(buffer);
+            if (data.type === 'result') {
+              const resultText = typeof data.result === 'string' ? data.result : '';
+              sendChunk({ type: 'done', content: resultText || fullText });
+              doneSent = true;
+            }
+          } catch { /* skip */ }
+        }
+        // Ensure a done event is always sent
+        if (!doneSent) {
+          sendChunk({ type: 'done', content: fullText });
+        }
+        controller.close();
+      });
+
+      proc.on('error', (err) => {
+        sendChunk({ type: 'error', message: err.message });
+        controller.close();
+      });
+    },
+  });
+
+  return new Response(readable, {
+    headers: {
+      'Content-Type': 'application/x-ndjson',
+      'Transfer-Encoding': 'chunked',
+      'Cache-Control': 'no-cache',
+    },
   });
 });

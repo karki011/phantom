@@ -178,17 +178,60 @@ export const useChat = (cwd?: string, workspaceId?: string | null, projectContex
         throw new Error((err as { error?: string }).error ?? `Chat failed: ${response.status}`);
       }
 
-      const data = await response.json() as { content?: string; error?: string };
+      if (!response.body) throw new Error('No response body');
 
-      if (data.error) {
-        throw new Error(data.error);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = '';
+      let ndjsonBuffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        ndjsonBuffer += decoder.decode(value, { stream: true });
+        const lines = ndjsonBuffer.split('\n');
+        ndjsonBuffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const event = JSON.parse(line);
+            if (event.type === 'delta') {
+              accumulated += event.content;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsg.id
+                    ? { ...m, content: accumulated, streaming: true }
+                    : m,
+                ),
+              );
+            } else if (event.type === 'done') {
+              // Use the full content from done event if we missed deltas
+              const finalContent = accumulated || event.content || '';
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsg.id
+                    ? { ...m, content: finalContent, streaming: false }
+                    : m,
+                ),
+              );
+              accumulated = finalContent;
+            } else if (event.type === 'error') {
+              throw new Error(event.message);
+            }
+          } catch (parseErr) {
+            if ((parseErr as Error).message && !(parseErr as Error).message.includes('JSON')) {
+              throw parseErr; // Re-throw non-parse errors
+            }
+          }
+        }
       }
 
+      // Ensure streaming is cleared
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === assistantMsg.id
-            ? { ...m, content: data.content ?? '', streaming: false }
-            : m,
+          m.id === assistantMsg.id ? { ...m, streaming: false } : m,
         ),
       );
 
@@ -199,7 +242,7 @@ export const useChat = (cwd?: string, workspaceId?: string | null, projectContex
         body: JSON.stringify({
           messages: [
             { id: userMsg.id, conversationId: convId, workspaceId, role: 'user', content: text.trim(), createdAt: userMsg.timestamp },
-            { id: assistantMsg.id, conversationId: convId, workspaceId, role: 'assistant', content: data.content ?? '', model, createdAt: Date.now() },
+            { id: assistantMsg.id, conversationId: convId, workspaceId, role: 'assistant', content: accumulated, model, createdAt: Date.now() },
           ],
         }),
       })
