@@ -19,7 +19,7 @@ import {
 } from '@mantine/core';
 import { usePaneStore } from '@phantom-os/panes';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { AlertTriangle, BarChart3, FileCode, GitBranch, Sword, Target, Terminal as TerminalIcon, Trash2 } from 'lucide-react';
+import { AlertTriangle, BarChart3, FileCode, GitBranch, Sparkles, Target, Terminal as TerminalIcon, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { activeWorkspaceAtom, deleteWorkspaceAtom, projectsAtom } from '../atoms/workspaces';
@@ -269,6 +269,35 @@ export function WorkspaceHome() {
 
   const openTerminal = useCallback(() => store.addPaneAsTab('terminal', { cwd: workspace?.worktreePath } as Record<string, unknown>, 'Terminal'), [store, workspace]);
   const openEditor = useCallback(() => store.addPaneAsTab('editor', {} as Record<string, unknown>, 'Editor'), [store]);
+  const openClaude = useCallback(() => store.addPaneAsTab('terminal', { cwd: workspace?.worktreePath, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>, 'Claude'), [store, workspace]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key.toLowerCase()) {
+          case 'j':
+            e.preventDefault();
+            openClaude();
+            break;
+          case 'h':
+            e.preventDefault();
+            navigate('hunter-stats');
+            break;
+          case 'n':
+            e.preventDefault();
+            openEditor();
+            break;
+          case '`':
+            e.preventDefault();
+            openTerminal();
+            break;
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [openClaude, openTerminal, openEditor, navigate]);
 
   // Guard: worktree was deleted externally
   if (workspace && workspace.worktreeValid === false) {
@@ -321,10 +350,10 @@ export function WorkspaceHome() {
             onClick={openEditor}
           />
           <QuickActionCard
-            icon={<Sword size={24} style={{ color: 'var(--phantom-accent-gold)' }} />}
-            label="New Quest"
-            shortcut="Ctrl+Q"
-            onClick={openTerminal}
+            icon={<Sparkles size={24} style={{ color: 'var(--phantom-accent-gold)' }} />}
+            label="New Session"
+            shortcut="Ctrl+J"
+            onClick={openClaude}
           />
           <QuickActionCard
             icon={<BarChart3 size={24} style={{ color: 'var(--phantom-accent-glow)' }} />}

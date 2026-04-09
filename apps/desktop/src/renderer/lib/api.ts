@@ -180,6 +180,9 @@ export const updateHunterName = (name: string): Promise<void> =>
     body: JSON.stringify({ name }),
   });
 
+export const stopSession = (id: string): Promise<{ ok: boolean; id: string }> =>
+  fetchApi<{ ok: boolean; id: string }>(`/api/sessions/${id}/stop`, { method: 'POST' });
+
 // ---------------------------------------------------------------------------
 // Session messages (on-demand JSONL viewer)
 // ---------------------------------------------------------------------------

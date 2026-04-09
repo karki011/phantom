@@ -2,7 +2,7 @@
  * PhantomOS Session Routes
  * @author Subash Karki
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { desc, eq, like, or } from 'drizzle-orm';
@@ -82,6 +82,38 @@ sessionRoutes.get('/sessions/:id', (c) => {
   return c.json({ ...session, tasks: sessionTasks });
 });
 
+/** POST /sessions/:id/stop — Stop a running session by killing its PID */
+sessionRoutes.post('/sessions/:id/stop', (c) => {
+  const id = c.req.param('id');
+
+  const session = db.select().from(sessions).where(eq(sessions.id, id)).get();
+  if (!session) {
+    return c.json({ error: 'Session not found' }, 404);
+  }
+
+  if (session.status !== 'active') {
+    return c.json({ error: 'Session is not active' }, 400);
+  }
+
+  const pid = session.pid;
+  if (!pid || pid <= 0) {
+    return c.json({ error: 'No valid PID for session' }, 400);
+  }
+
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    // Process may already be gone
+  }
+
+  db.update(sessions)
+    .set({ status: 'completed', endedAt: Date.now() })
+    .where(eq(sessions.id, id))
+    .run();
+
+  return c.json({ ok: true, id });
+});
+
 /** GET /sessions/:id/messages — Load conversation from JSONL on demand */
 sessionRoutes.get('/sessions/:id/messages', async (c) => {
   const id = c.req.param('id');
@@ -102,8 +134,21 @@ sessionRoutes.get('/sessions/:id/messages', async (c) => {
 
   if (!jsonlPath) return c.json({ messages: [] });
 
-  // Parse JSONL — only user and assistant messages
-  const content = readFileSync(jsonlPath, 'utf-8');
+  // For incremental polling, only read the tail of the file (last 200KB)
+  // to avoid re-reading 10-50MB JSONL files every 3 seconds
+  const after = c.req.query('after');
+  let content: string;
+  if (after) {
+    const stat = statSync(jsonlPath);
+    const tailSize = Math.min(stat.size, 200_000);
+    const buf = Buffer.alloc(tailSize);
+    const fd = openSync(jsonlPath, 'r');
+    readSync(fd, buf, 0, tailSize, stat.size - tailSize);
+    closeSync(fd);
+    content = buf.toString('utf-8');
+  } else {
+    content = readFileSync(jsonlPath, 'utf-8');
+  }
   const messages: Array<{
     role: string;
     content: string;
@@ -147,6 +192,10 @@ sessionRoutes.get('/sessions/:id/messages', async (c) => {
     }
   }
 
-  // Return last N messages (most recent)
-  return c.json({ messages: messages.slice(-limit) });
+  // Filter: ?after=<timestamp> returns only newer messages
+  const filtered = after
+    ? messages.filter((m) => m.timestamp > after)
+    : messages.slice(-limit);
+
+  return c.json({ messages: filtered });
 });

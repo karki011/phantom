@@ -84,7 +84,11 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
       </Group>
 
       {/* Center: Connection status */}
-      <Group gap="0.375rem">
+      <Group
+        gap="0.375rem"
+        style={{ cursor: activeSessions > 0 ? 'pointer' : 'default', WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        onClick={() => { if (activeSessions > 0) navigate('sessions'); }}
+      >
         <Circle
           size={10}
           fill={isConnected ? 'var(--phantom-status-active)' : 'var(--phantom-status-danger)'}

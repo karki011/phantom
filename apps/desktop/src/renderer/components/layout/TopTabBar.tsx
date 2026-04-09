@@ -24,6 +24,14 @@ const TABS: TabDef[] = [
 export function TopTabBar() {
   const [activeTab, setActiveTab] = useAtom(activeTopTabAtom);
 
+  const handleTabClick = (tabId: TopLevelTab) => {
+    setActiveTab(tabId);
+    // Reset to cockpit home when clicking the Cockpit tab (clears sub-route)
+    if (tabId === 'cockpit') {
+      window.location.hash = 'cockpit';
+    }
+  };
+
   return (
     <div
       style={{
@@ -44,7 +52,7 @@ export function TopTabBar() {
         return (
           <UnstyledButton
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabClick(tab.id)}
             style={{
               display: 'flex',
               alignItems: 'center',

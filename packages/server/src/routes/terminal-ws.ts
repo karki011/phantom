@@ -69,6 +69,12 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
                 // Pass onData as initialListener — it's attached to the session
                 // BEFORE the daemon subscription, preventing lost output.
                 session = await createPty(termId, msg.cwd || undefined, msg.cols, msg.rows, onData);
+                // Auto-run initial command if provided (e.g. "claude --dangerously-skip-permissions")
+                if (msg.initialCommand && session) {
+                  setTimeout(() => {
+                    writePty(termId, msg.initialCommand + '\n');
+                  }, 300); // Small delay to let shell initialize
+                }
               } catch (err) {
                 console.error(`[TerminalWS] Failed to spawn PTY for ${termId}:`, err);
                 ws.send(JSON.stringify({

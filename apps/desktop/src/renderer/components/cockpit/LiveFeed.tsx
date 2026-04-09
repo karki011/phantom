@@ -35,10 +35,13 @@ import {
   Wand,
   Zap,
 } from 'lucide-react';
+import { useSetAtom } from 'jotai';
 import { type ReactNode, useState, useCallback, useRef, useEffect } from 'react';
 
 import type { FeedEvent, FeedFilter, GroupedFeedEvent } from '../../atoms/liveFeed';
+import { viewingSessionIdAtom } from '../../atoms/sessionViewer';
 import { useLiveFeed } from '../../hooks/useLiveFeed';
+import { useRouter } from '../../hooks/useRouter';
 import { useSessions } from '../../hooks/useSessions';
 
 // ---------------------------------------------------------------------------
@@ -191,8 +194,8 @@ const ActivitySummary = ({ summary }: { summary: { edits: number; reads: number;
 // Active Session Card
 // ---------------------------------------------------------------------------
 
-const ActiveSessionCard = ({ session }: { session: { id: string; name: string | null; repo: string | null; taskCount: number; completedTasks: number; startedAt: number } }) => {
-  const label = session.name ?? session.repo ?? session.id.slice(0, 8);
+const ActiveSessionCard = ({ session, onClick }: { session: { id: string; name: string | null; repo: string | null; taskCount: number; completedTasks: number; startedAt: number }; onClick?: () => void }) => {
+  const label = session.repo ?? session.name ?? session.id.slice(0, 8);
   const progress = session.taskCount > 0 ? (session.completedTasks / session.taskCount) * 100 : 0;
   const elapsed = getRelativeTime(session.startedAt);
 
@@ -200,11 +203,20 @@ const ActiveSessionCard = ({ session }: { session: { id: string; name: string | 
     <Box
       py={6}
       px={8}
+      onClick={onClick}
       style={{
         borderRadius: 6,
         background: 'var(--phantom-surface-elevated)',
         border: '0.0625rem solid var(--phantom-border-subtle)',
         borderLeft: '0.1875rem solid var(--phantom-status-warning)',
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'border-color 150ms ease',
+      }}
+      onMouseEnter={(e: React.MouseEvent<HTMLDivElement>) => {
+        if (onClick) e.currentTarget.style.borderColor = 'var(--phantom-accent-glow)';
+      }}
+      onMouseLeave={(e: React.MouseEvent<HTMLDivElement>) => {
+        e.currentTarget.style.borderColor = 'var(--phantom-border-subtle)';
       }}
     >
       <Group gap="sm" justify="space-between" wrap="nowrap">
@@ -377,6 +389,8 @@ const EmptyState = () => (
 export const LiveFeed = () => {
   const { grouped, summary, filter, setFilter } = useLiveFeed();
   const { active, recent } = useSessions();
+  const { navigate } = useRouter();
+  const setViewingSession = useSetAtom(viewingSessionIdAtom);
   const [paused, setPaused] = useState(false);
   const [pausedSnapshot, setPausedSnapshot] = useState<GroupedFeedEvent[]>([]);
 
@@ -462,7 +476,14 @@ export const LiveFeed = () => {
           {active
             .sort((a, b) => b.startedAt - a.startedAt)
             .map((session) => (
-              <ActiveSessionCard key={session.id} session={session} />
+              <ActiveSessionCard
+                key={session.id}
+                session={session}
+                onClick={() => {
+                  setViewingSession(session.id);
+                  navigate('session-viewer');
+                }}
+              />
             ))}
         </Stack>
       )}

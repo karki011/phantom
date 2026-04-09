@@ -14,6 +14,7 @@ import { activeTopTabAtom } from '../atoms/system';
 export type Route =
   | 'cockpit'
   | 'sessions'
+  | 'session-viewer'
   | 'history'
   | 'tokens'
   | 'profile'
@@ -26,6 +27,7 @@ export type Route =
 const VALID_ROUTES = new Set<Route>([
   'cockpit',
   'sessions',
+  'session-viewer',
   'history',
   'tokens',
   'profile',
@@ -46,6 +48,7 @@ const parseHash = (): Route => {
 /** Routes that are cockpit sub-views (not the dashboard itself) */
 export const COCKPIT_SUB_ROUTES = new Set<Route>([
   'sessions',
+  'session-viewer',
   'history',
   'tokens',
   'profile',

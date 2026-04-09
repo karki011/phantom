@@ -22,11 +22,14 @@ export const useTerminal = (
   containerRef: React.RefObject<HTMLDivElement | null>,
   paneId: string,
   cwd?: string,
+  initialCommand?: string,
 ) => {
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const cwdRef = useRef(cwd);
   cwdRef.current = cwd;
+  const initialCommandRef = useRef(initialCommand);
+  initialCommandRef.current = initialCommand;
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
@@ -77,6 +80,7 @@ export const useTerminal = (
             cwd: cwdRef.current || null,
             cols: dims?.cols ?? 80,
             rows: dims?.rows ?? 24,
+            initialCommand: initialCommandRef.current || undefined,
           }));
         }
       };

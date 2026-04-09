@@ -10,6 +10,7 @@ import { useTerminal } from './useTerminal.js';
 interface TerminalPaneProps {
   paneId: string;
   cwd?: string;
+  initialCommand?: string;
 }
 
 const overlayStyles = `
@@ -64,9 +65,9 @@ const overlayStyles = `
   }
 `;
 
-export const TerminalPane = ({ paneId, cwd }: TerminalPaneProps) => {
+export const TerminalPane = ({ paneId, cwd, initialCommand }: TerminalPaneProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { connected } = useTerminal(containerRef, paneId, cwd);
+  const { connected } = useTerminal(containerRef, paneId, cwd, initialCommand);
 
   // Remove overlay from DOM after fade-out transition (300ms)
   const [overlayMounted, setOverlayMounted] = useState(true);

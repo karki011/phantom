@@ -44,12 +44,20 @@ export const paneDefinitions: Record<string, PaneDefinition> = {
     icon: '▶',
     render: (pane: Pane) =>
       createElement(Suspense, { fallback: createElement(Loading) },
-        createElement(TerminalPane, { paneId: pane.id, cwd: pane.data?.cwd as string | undefined }),
+        createElement(TerminalPane, {
+          paneId: pane.id,
+          cwd: pane.data?.cwd as string | undefined,
+          initialCommand: pane.data?.initialCommand as string | undefined,
+        }),
       ),
     defaultTitle: 'Terminal',
     component: ({ pane }: { pane: Pane }) =>
       createElement(Suspense, { fallback: createElement(Loading) },
-        createElement(TerminalPane, { paneId: pane.id, cwd: pane.data?.cwd as string | undefined }),
+        createElement(TerminalPane, {
+          paneId: pane.id,
+          cwd: pane.data?.cwd as string | undefined,
+          initialCommand: pane.data?.initialCommand as string | undefined,
+        }),
       ),
   },
   editor: {
