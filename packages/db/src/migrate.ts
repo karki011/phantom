@@ -189,6 +189,39 @@ export const runMigrations = (sqlite: Database.Database): void => {
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_workspaces_is_active ON workspaces(is_active)`);
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_workspace_sections_project_id ON workspace_sections(project_id)`);
 
+  // ---------------------------------------------------------------------------
+  // Chat Conversations & History Tables
+  // ---------------------------------------------------------------------------
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS chat_conversations (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT,
+      title TEXT NOT NULL,
+      model TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+  `);
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_chat_conv_workspace ON chat_conversations(workspace_id)`);
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      model TEXT,
+      created_at INTEGER NOT NULL
+    );
+  `);
+
+  // Add conversation_id to existing chat_messages (may already exist)
+  try { sqlite.exec('ALTER TABLE chat_messages ADD COLUMN conversation_id TEXT'); } catch {}
+
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_chat_messages_workspace_id ON chat_messages(workspace_id)`);
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at)`);
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id)`);
+
   // Cleanup stale data on boot
   cleanupStaleData(sqlite);
 };

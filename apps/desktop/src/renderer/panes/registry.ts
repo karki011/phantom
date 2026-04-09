@@ -17,6 +17,9 @@ const EditorPane = lazy(() =>
 const WorkspaceHome = lazy(() =>
   import('../components/WorkspaceHome').then((m) => ({ default: m.WorkspaceHome })),
 );
+const ChatPane = lazy(() =>
+  import('../components/chat/ChatPane').then((m) => ({ default: m.ChatPane })),
+);
 
 const Loading = () =>
   createElement(
@@ -74,6 +77,26 @@ export const paneDefinitions: Record<string, PaneDefinition> = {
         createElement(EditorPane, { paneId: pane.id, ...pane.data }),
       ),
   },
+  chat: {
+    kind: 'chat',
+    title: 'Chat',
+    icon: '💬',
+    render: (pane: Pane) =>
+      createElement(Suspense, { fallback: createElement(Loading) },
+        createElement(ChatPane, {
+          paneId: pane.id,
+          cwd: pane.data?.cwd as string | undefined,
+        }),
+      ),
+    defaultTitle: 'Chat',
+    component: ({ pane }: { pane: Pane }) =>
+      createElement(Suspense, { fallback: createElement(Loading) },
+        createElement(ChatPane, {
+          paneId: pane.id,
+          cwd: pane.data?.cwd as string | undefined,
+        }),
+      ),
+  },
   'workspace-home': {
     kind: 'workspace-home',
     title: 'Home',
@@ -97,4 +120,5 @@ export const paneDefinitions: Record<string, PaneDefinition> = {
 export const paneMenu = [
   { kind: 'terminal', label: 'Terminal', icon: '▶' },
   { kind: 'editor', label: 'Editor', icon: '📝' },
+  { kind: 'chat', label: 'Chat', icon: '💬' },
 ];

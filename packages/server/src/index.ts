@@ -28,6 +28,7 @@ import { projectRoutes } from './routes/projects.js';
 import { workspaceRoutes } from './routes/workspaces.js';
 import { workspaceFileRoutes } from './routes/workspace-files.js';
 import { hunterStatsRoutes } from './routes/hunter-stats.js';
+import { chatRoutes } from './routes/chat.js';
 import { API_PORT } from '@phantom-os/shared';
 import type { Server } from 'node:http';
 import { setupTerminalWs } from './routes/terminal-ws.js';
@@ -84,6 +85,7 @@ app.route('/api', projectRoutes);
 app.route('/api', workspaceRoutes);
 app.route('/api', workspaceFileRoutes);
 app.route('/api', hunterStatsRoutes);
+app.route('/api', chatRoutes);
 
 // SSE endpoint
 app.get('/events', (c) => {

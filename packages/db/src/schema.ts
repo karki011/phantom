@@ -143,3 +143,26 @@ export const workspaces = sqliteTable('workspaces', {
   isActive: integer('is_active').default(0),
   createdAt: integer('created_at').notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// Chat Conversations & History
+// ---------------------------------------------------------------------------
+
+export const chatConversations = sqliteTable('chat_conversations', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id'),
+  title: text('title').notNull(),
+  model: text('model'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export const chatMessages = sqliteTable('chat_messages', {
+  id: text('id').primaryKey(),
+  conversationId: text('conversation_id').references(() => chatConversations.id),
+  workspaceId: text('workspace_id'),  // null = global chat (no workspace)
+  role: text('role').notNull(),       // 'user' | 'assistant'
+  content: text('content').notNull(),
+  model: text('model'),
+  createdAt: integer('created_at').notNull(),
+});

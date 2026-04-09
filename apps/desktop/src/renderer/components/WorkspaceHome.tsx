@@ -19,7 +19,7 @@ import {
 } from '@mantine/core';
 import { usePaneStore } from '@phantom-os/panes';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { AlertTriangle, BarChart3, FileCode, GitBranch, Sparkles, Target, Terminal as TerminalIcon, Trash2 } from 'lucide-react';
+import { AlertTriangle, BarChart3, FileCode, GitBranch, MessageSquare, Sparkles, Target, Terminal as TerminalIcon, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { activeWorkspaceAtom, deleteWorkspaceAtom, projectsAtom } from '../atoms/workspaces';
@@ -274,6 +274,7 @@ export function WorkspaceHome() {
   const openTerminal = useCallback(() => store.addPaneAsTab('terminal', { cwd: workspace?.worktreePath } as Record<string, unknown>, 'Terminal'), [store, workspace]);
   const openEditor = useCallback(() => store.addPaneAsTab('editor', {} as Record<string, unknown>, 'Editor'), [store]);
   const openClaude = useCallback(() => store.addPaneAsTab('terminal', { cwd: workspace?.worktreePath, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>, 'Claude'), [store, workspace]);
+  const openChat = useCallback(() => store.addPaneAsTab('chat', { cwd: workspace?.worktreePath } as Record<string, unknown>, 'Chat'), [store, workspace]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -292,6 +293,10 @@ export function WorkspaceHome() {
             e.preventDefault();
             openEditor();
             break;
+          case 'k':
+            e.preventDefault();
+            openChat();
+            break;
           case '`':
             e.preventDefault();
             openTerminal();
@@ -301,7 +306,7 @@ export function WorkspaceHome() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [openClaude, openTerminal, openEditor, navigate]);
+  }, [openClaude, openTerminal, openEditor, openChat, navigate]);
 
   // Guard: worktree was deleted externally
   if (workspace && workspace.worktreeValid === false) {
@@ -340,7 +345,7 @@ export function WorkspaceHome() {
         <RankHeader profile={profile} />
 
         {/* Quick Actions */}
-        <SimpleGrid cols={{ base: 2, sm: 4 }} w="100%" spacing="md">
+        <SimpleGrid cols={{ base: 2, sm: 5 }} w="100%" spacing="md">
           <QuickActionCard
             icon={<TerminalIcon size={24} style={{ color: 'var(--phantom-accent-glow)' }} />}
             label="Terminal"
@@ -364,6 +369,12 @@ export function WorkspaceHome() {
             label="Hunter Stats"
             shortcut="Ctrl+H"
             onClick={() => navigate('hunter-stats')}
+          />
+          <QuickActionCard
+            icon={<MessageSquare size={24} style={{ color: 'var(--phantom-accent-glow)' }} />}
+            label="Chat"
+            shortcut="Ctrl+K"
+            onClick={openChat}
           />
         </SimpleGrid>
 
