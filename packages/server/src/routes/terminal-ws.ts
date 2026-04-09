@@ -69,11 +69,31 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
                 // Pass onData as initialListener — it's attached to the session
                 // BEFORE the daemon subscription, preventing lost output.
                 session = await createPty(termId, msg.cwd || undefined, msg.cols, msg.rows, onData);
-                // Auto-run initial command if provided (e.g. "claude --dangerously-skip-permissions")
+                // Auto-run initial command after shell is ready
+                // Wait for shell prompt by watching for output, then send command
                 if (msg.initialCommand && session) {
+                  let outputCount = 0;
+                  let sent = false;
+                  const checkReady = (data: string) => {
+                    if (sent) return;
+                    outputCount++;
+                    // Shell is ready when we've received a few output chunks
+                    // (prompt rendering, motd, etc.) or see common prompt chars
+                    if (outputCount >= 3 || /[$#%>❯➜]\s*$/.test(data)) {
+                      sent = true;
+                      session?.listeners.delete(checkReady);
+                      setTimeout(() => writePty(termId, msg.initialCommand + '\n'), 100);
+                    }
+                  };
+                  session.listeners.add(checkReady);
+                  // Fallback: send after 2s no matter what
                   setTimeout(() => {
-                    writePty(termId, msg.initialCommand + '\n');
-                  }, 300); // Small delay to let shell initialize
+                    if (!sent) {
+                      sent = true;
+                      session?.listeners.delete(checkReady);
+                      writePty(termId, msg.initialCommand + '\n');
+                    }
+                  }, 2000);
                 }
               } catch (err) {
                 console.error(`[TerminalWS] Failed to spawn PTY for ${termId}:`, err);
