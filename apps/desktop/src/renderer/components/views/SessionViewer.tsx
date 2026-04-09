@@ -189,75 +189,81 @@ const MetadataBar = ({ session }: { session: SessionData }) => {
   );
 };
 
-const ChatMessage = ({ message }: { message: SessionMessage }) => {
+/** Filter out empty messages (no content and no tool calls) */
+const isNonEmpty = (msg: SessionMessage): boolean =>
+  (msg.content?.trim().length ?? 0) > 0 || (msg.toolUse?.length ?? 0) > 0;
+
+const TimelineItem = ({ message }: { message: SessionMessage }) => {
   const isUser = message.role === 'user';
+  const hasContent = (message.content?.trim().length ?? 0) > 0;
+  const hasTools = (message.toolUse?.length ?? 0) > 0;
 
   return (
-    <Stack gap={4}>
-      <Paper
-        p="sm"
-        radius="md"
-        style={{
-          backgroundColor: isUser
-            ? 'var(--phantom-surface-elevated)'
-            : 'var(--phantom-surface-card)',
-          border: '1px solid var(--phantom-border-subtle)',
-          maxWidth: '85%',
-        }}
-      >
-        {/* Role indicator */}
-        <Group gap={6} mb={4}>
-          {isUser ? (
-            <User size={14} style={{ color: 'var(--phantom-accent-glow)' }} />
-          ) : (
-            <Bot size={14} style={{ color: '#a855f7' }} />
-          )}
-          <Text fz="0.75rem" fw={600} c="var(--phantom-text-secondary)">
-            {isUser ? 'You' : 'Assistant'}
+    <Group gap={0} wrap="nowrap" align="flex-start">
+      {/* Timeline rail */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 28, flexShrink: 0, paddingTop: 2 }}>
+        <div style={{
+          width: 22, height: 22, borderRadius: '50%',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: isUser ? 'var(--phantom-surface-elevated)' : 'var(--phantom-surface-card)',
+          border: `1.5px solid ${isUser ? 'var(--phantom-accent-glow)' : '#a855f7'}`,
+        }}>
+          {isUser
+            ? <User size={11} style={{ color: 'var(--phantom-accent-glow)' }} />
+            : <Bot size={11} style={{ color: '#a855f7' }} />}
+        </div>
+        <div style={{ flex: 1, width: 1, backgroundColor: 'var(--phantom-border-subtle)', minHeight: 12 }} />
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0, paddingBottom: 8 }}>
+        {/* Header: role + time */}
+        <Group gap={6} mb={2}>
+          <Text fz="0.72rem" fw={600} c={isUser ? 'var(--phantom-accent-glow)' : '#a855f7'}>
+            {isUser ? 'You' : 'Claude'}
           </Text>
           {message.timestamp && (
-            <Text fz="0.675rem" c="var(--phantom-text-muted)">
+            <Text fz="0.625rem" c="var(--phantom-text-muted)">
               {relativeTime(message.timestamp)}
             </Text>
           )}
         </Group>
 
-        {/* Message content */}
-        <Text
-          fz="0.85rem"
-          c="var(--phantom-text-primary)"
-          style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-        >
-          {message.content || '(empty message)'}
-        </Text>
-      </Paper>
+        {/* Text content */}
+        {hasContent && (
+          <Text
+            fz="0.82rem"
+            c="var(--phantom-text-primary)"
+            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.5 }}
+          >
+            {message.content}
+          </Text>
+        )}
 
-      {/* Tool call badges */}
-      {message.toolUse && message.toolUse.length > 0 && (
-        <Group gap={4} pl={8}>
-          {message.toolUse.map((tool, i) => (
-            <Badge
-              key={`${tool.name}-${i}`}
-              size="xs"
-              radius="sm"
-              variant="outline"
-              leftSection={
-                <Wrench
-                  size={10}
-                  style={{ display: 'flex', alignItems: 'center' }}
-                />
-              }
-              style={{
-                borderColor: 'var(--phantom-border-subtle)',
-                color: 'var(--phantom-text-secondary)',
-              }}
-            >
-              {tool.name}
-            </Badge>
-          ))}
-        </Group>
-      )}
-    </Stack>
+        {/* Tool call badges */}
+        {hasTools && (
+          <Group gap={4} mt={hasContent ? 4 : 0} wrap="wrap">
+            {message.toolUse!.map((tool, i) => (
+              <Badge
+                key={`${tool.name}-${i}`}
+                size="xs"
+                radius="sm"
+                variant="light"
+                leftSection={<Wrench size={9} style={{ display: 'flex' }} />}
+                style={{
+                  backgroundColor: 'var(--phantom-surface-elevated)',
+                  borderColor: 'var(--phantom-border-subtle)',
+                  color: 'var(--phantom-text-secondary)',
+                  fontSize: '0.625rem',
+                }}
+              >
+                {tool.name}
+              </Badge>
+            ))}
+          </Group>
+        )}
+      </div>
+    </Group>
   );
 };
 
@@ -312,10 +318,7 @@ export const SessionViewer = () => {
     return () => clearInterval(interval);
   }, [isActive, sessionId]);
 
-  // Auto-scroll to bottom on new messages
-  useEffect(() => {
-    scrollEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+  // Messages are rendered latest-first, so no auto-scroll needed
 
   // No session selected
   if (!sessionId) {
@@ -411,13 +414,10 @@ export const SessionViewer = () => {
             </Center>
           )}
 
-          {/* Message list */}
-          {messages.map((msg, i) => (
-            <ChatMessage key={`${msg.timestamp}-${i}`} message={msg} />
+          {/* Timeline — latest first, empty messages filtered */}
+          {[...messages].reverse().filter(isNonEmpty).map((msg, i) => (
+            <TimelineItem key={`${msg.timestamp}-${i}`} message={msg} />
           ))}
-
-          {/* Scroll anchor */}
-          <div ref={scrollEndRef} />
         </Stack>
       </ScrollArea>
 

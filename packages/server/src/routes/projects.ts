@@ -3,15 +3,24 @@
  * @author Subash Karki
  */
 import { randomUUID } from 'node:crypto';
-import { execSync } from 'node:child_process';
+import { exec, execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db, projects, workspaces, workspaceSections } from '@phantom-os/db';
 import { isGitRepo, getDefaultBranch, getRepoName, getWorktreeDir } from '../workspace-manager.js';
 import { removeWorktree } from '../workspace-manager.js';
+import { logger } from '../logger.js';
 
 export const projectRoutes = new Hono();
+
+/** Non-blocking git fetch — runs in background, doesn't block the response */
+const backgroundFetch = (repoPath: string): void => {
+  exec('git fetch origin', { cwd: repoPath, timeout: 15_000 }, (err) => {
+    if (err) logger.debug('Projects', `fetch failed for ${repoPath}: ${err.message}`);
+    else logger.debug('Projects', `fetched ${repoPath}`);
+  });
+};
 
 /** GET /projects — List all projects */
 projectRoutes.get('/projects', (c) => {
@@ -95,6 +104,9 @@ projectRoutes.post('/projects/open', async (c) => {
     .get();
 
   if (existing) {
+    // Fetch latest from remote in background so branch list stays current
+    backgroundFetch(repoPath);
+
     const firstWorkspace = db
       .select()
       .from(workspaces)
@@ -103,6 +115,9 @@ projectRoutes.post('/projects/open', async (c) => {
 
     return c.json({ project: existing, workspace: firstWorkspace ?? null });
   }
+
+  // Fetch remote refs before reading branches
+  backgroundFetch(repoPath);
 
   // Auto-detect project name from directory basename
   const name = getRepoName(repoPath);
@@ -158,6 +173,9 @@ projectRoutes.get('/projects/:id/branches', (c) => {
   if (!existsSync(project.repoPath)) {
     return c.json({ error: 'Repository path does not exist' }, 400);
   }
+
+  // Sync fetch so branch list includes latest remote refs
+  try { execSync('git fetch origin', { cwd: project.repoPath, timeout: 10_000, stdio: 'ignore' }); } catch { /* offline is fine */ }
 
   try {
     const output = execSync('git branch -a --no-color', {

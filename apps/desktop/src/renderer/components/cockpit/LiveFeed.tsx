@@ -194,21 +194,43 @@ const ActivitySummary = ({ summary }: { summary: { edits: number; reads: number;
 // Active Session Card
 // ---------------------------------------------------------------------------
 
-const ActiveSessionCard = ({ session, onClick }: { session: { id: string; name: string | null; repo: string | null; taskCount: number; completedTasks: number; startedAt: number }; onClick?: () => void }) => {
+const MODEL_COLORS: Record<string, string> = { opus: '#a855f7', sonnet: '#3b82f6', haiku: '#22c55e' };
+const getModelLabel = (model: string | null): string => {
+  if (!model) return '';
+  if (model.includes('opus')) return 'Opus';
+  if (model.includes('sonnet')) return 'Sonnet';
+  if (model.includes('haiku')) return 'Haiku';
+  return '';
+};
+const getModelColor = (model: string | null): string => {
+  if (!model) return 'var(--phantom-text-muted)';
+  const key = Object.keys(MODEL_COLORS).find((k) => model.toLowerCase().includes(k));
+  return key ? MODEL_COLORS[key] : 'var(--phantom-text-muted)';
+};
+const formatTokensCompact = (n: number): string => {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+};
+
+const ActiveSessionCard = ({ session, onClick }: { session: { id: string; name: string | null; repo: string | null; model?: string | null; inputTokens?: number; outputTokens?: number; contextUsedPct?: number | null; taskCount: number; completedTasks: number; startedAt: number }; onClick?: () => void }) => {
   const label = session.repo ?? session.name ?? session.id.slice(0, 8);
   const progress = session.taskCount > 0 ? (session.completedTasks / session.taskCount) * 100 : 0;
   const elapsed = getRelativeTime(session.startedAt);
+  const modelLabel = getModelLabel(session.model ?? null);
+  const tokens = (session.inputTokens ?? 0) + (session.outputTokens ?? 0);
+  const ctxPct = session.contextUsedPct ?? 0;
 
   return (
     <Box
-      py={6}
-      px={8}
+      py={8}
+      px={10}
       onClick={onClick}
       style={{
         borderRadius: 6,
         background: 'var(--phantom-surface-elevated)',
         border: '0.0625rem solid var(--phantom-border-subtle)',
-        borderLeft: '0.1875rem solid var(--phantom-status-warning)',
+        borderLeft: `0.1875rem solid ${getModelColor(session.model ?? null)}`,
         cursor: onClick ? 'pointer' : 'default',
         transition: 'border-color 150ms ease',
       }}
@@ -219,26 +241,43 @@ const ActiveSessionCard = ({ session, onClick }: { session: { id: string; name: 
         e.currentTarget.style.borderColor = 'var(--phantom-border-subtle)';
       }}
     >
+      {/* Row 1: Model + Name + Time */}
       <Group gap="sm" justify="space-between" wrap="nowrap">
         <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-          <Box style={{ color: 'var(--phantom-status-warning)', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            <Flame size={14} aria-hidden="true" style={{ animation: 'livefeed-pulse 2s ease-in-out infinite' }} />
-          </Box>
+          {modelLabel && (
+            <Badge size="xs" variant="light" style={{ backgroundColor: 'transparent', color: getModelColor(session.model ?? null), border: `1px solid ${getModelColor(session.model ?? null)}`, flexShrink: 0, fontSize: '0.6rem' }}>
+              {modelLabel}
+            </Badge>
+          )}
           <Text fz="0.8125rem" fw={600} c="var(--phantom-text-primary)" lineClamp={1} style={{ flex: 1 }}>
             {label}
           </Text>
         </Group>
-        <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>
-          {session.taskCount > 0 && (
-            <Text fz="0.6875rem" c="var(--phantom-text-muted)" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              {session.completedTasks}/{session.taskCount}
-            </Text>
-          )}
-          <Text fz="0.6875rem" c="var(--phantom-text-muted)" style={{ fontVariantNumeric: 'tabular-nums' }}>
-            {elapsed}
-          </Text>
-        </Group>
+        <Text fz="0.6875rem" c="var(--phantom-text-muted)" style={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+          {elapsed}
+        </Text>
       </Group>
+
+      {/* Row 2: Tokens + Context + Tasks */}
+      <Group gap={8} mt={4} wrap="nowrap">
+        {tokens > 0 && (
+          <Text fz="0.625rem" c="var(--phantom-text-muted)" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {formatTokensCompact(tokens)} tok
+          </Text>
+        )}
+        {ctxPct > 0 && (
+          <Text fz="0.625rem" c={ctxPct > 80 ? 'var(--phantom-status-danger)' : ctxPct > 50 ? 'var(--phantom-status-warning)' : 'var(--phantom-text-muted)'} style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {ctxPct}% ctx
+          </Text>
+        )}
+        {session.taskCount > 0 && (
+          <Text fz="0.625rem" c="var(--phantom-text-muted)" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {session.completedTasks}/{session.taskCount} tasks
+          </Text>
+        )}
+      </Group>
+
+      {/* Task progress bar */}
       {session.taskCount > 0 && (
         <Progress
           value={progress}

@@ -105,7 +105,7 @@ function QuickActionCard({
 }) {
   return (
     <Paper
-      p="lg"
+      p="xl"
       bg="var(--phantom-surface-card)"
       radius="md"
       onClick={onClick}
@@ -113,6 +113,10 @@ function QuickActionCard({
         cursor: 'pointer',
         border: '1px solid var(--phantom-border-subtle)',
         transition: 'border-color 0.2s, box-shadow 0.2s',
+        minHeight: '7rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.borderColor = 'var(--phantom-accent-glow)';
@@ -123,9 +127,9 @@ function QuickActionCard({
         e.currentTarget.style.boxShadow = 'none';
       }}
     >
-      <Stack align="center" gap="xs">
+      <Stack align="center" gap="sm">
         {icon}
-        <Text fw={600} fz="sm" c="var(--phantom-text-primary)">{label}</Text>
+        <Text fw={600} fz="md" c="var(--phantom-text-primary)">{label}</Text>
         <Kbd fz="xs">{shortcut}</Kbd>
       </Stack>
     </Paper>
