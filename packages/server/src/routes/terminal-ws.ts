@@ -46,17 +46,8 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
 
   ws.on('close', () => {
     session?.listeners.delete(onData);
-    // Keep PTY alive — user may switch worktrees and come back.
-    // Only unregister the WebSocket listener; the PTY continues running.
-    // If no client reconnects within 5 minutes, clean up the orphan.
-    const orphanTermId = termId;
-    setTimeout(() => {
-      const s = getPtySession(orphanTermId);
-      if (s && s.listeners.size === 0) {
-        unregisterProcess(orphanTermId);
-        destroyPty(orphanTermId);
-      }
-    }, 5 * 60 * 1000);
+    // Keep PTY alive — mimics real terminal behavior.
+    // Shell process persists until user explicitly closes the tab.
     session = undefined;
   });
 
