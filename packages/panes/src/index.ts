@@ -21,10 +21,33 @@ export type {
 } from './core/types.js';
 
 // ---------------------------------------------------------------------------
-// Core store (framework-agnostic)
+// Jotai atoms (framework-agnostic state)
 // ---------------------------------------------------------------------------
-export { paneStore, createPaneStore } from './core/store.js';
-export type { PaneStore } from './core/store.js';
+export {
+  paneStateAtom,
+  tabsAtom,
+  activeTabIdAtom,
+  activeTabAtom,
+  activePaneAtom,
+  addTabAtom,
+  removeTabAtom,
+  setActiveTabAtom,
+  reorderTabAtom,
+  addPaneAsTabAtom,
+  addPaneAtom,
+  closePaneAtom,
+  setActivePaneInTabAtom,
+  splitPaneAtom,
+  resizeSplitAtom,
+  equalizeTabAtom,
+  movePaneToSplitAtom,
+  movePaneToTabAtom,
+  switchWorkspaceAtom,
+  getTabAtom,
+  setupPaneAutoSave,
+  makePane,
+  makeTab,
+} from './core/atoms.js';
 
 // ---------------------------------------------------------------------------
 // Layout utilities
@@ -46,7 +69,15 @@ export {
 // React components
 // ---------------------------------------------------------------------------
 export { Workspace, type WorkspaceProps } from './react/Workspace.js';
-export { WorkspaceProvider, type WorkspaceProviderProps, usePaneStore, usePaneStoreSelector, usePaneStoreApi, usePaneRegistry } from './react/WorkspaceProvider.js';
+export {
+  WorkspaceProvider,
+  type WorkspaceProviderProps,
+  usePaneStore,
+  usePaneStoreSelector,
+  usePaneStoreApi,
+  usePaneRegistry,
+  type PaneStoreCompat,
+} from './react/WorkspaceProvider.js';
 export { TabBar, type TabBarProps, type PaneMenuItem } from './react/TabBar.js';
 export { TabContent, type TabContentProps } from './react/TabContent.js';
 export { LayoutRenderer, type LayoutRendererProps } from './react/LayoutRenderer.js';
@@ -60,3 +91,9 @@ export { DropZone, type DropZoneProps, PANE_DRAG_TYPE } from './react/DropZone.j
 export { usePanes, usePaneSelector } from './react/usePanes.js';
 export { PaneRegistryProvider, type PaneRegistryProviderProps } from './react/PaneRegistry.js';
 export { PaneLayout, type PaneLayoutProps } from './react/PaneLayout.js';
+
+// ---------------------------------------------------------------------------
+// Backward-compat: Zustand-like store shim + type alias
+// ---------------------------------------------------------------------------
+export { paneStore, createPaneStore, jotaiStore } from './core/store.js';
+export type { PaneStoreCompat as PaneStore } from './react/WorkspaceProvider.js';

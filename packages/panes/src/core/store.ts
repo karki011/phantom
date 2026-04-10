@@ -1,529 +1,142 @@
 /**
- * @phantom-os/panes — Zustand vanilla store
+ * @phantom-os/panes — Backward-compatible store shim
  * @author Subash Karki
  *
- * Framework-agnostic store using Zustand's vanilla createStore.
- * All state mutations are immutable.
+ * Provides a `paneStore` singleton with a Zustand-like `getState()` API
+ * backed by the Jotai atom store. This allows non-React code (e.g. useEffect
+ * callbacks) to call `paneStore.getState().switchWorkspace(id)` without changes.
+ *
+ * New code should use the Jotai atoms directly from `./atoms.js`.
  */
-import { createStore } from 'zustand/vanilla';
-import { subscribeWithSelector } from 'zustand/middleware';
+import { createStore as createJotaiStore } from 'jotai';
 import {
-  uid,
-  removePaneFromLayout,
-  replacePaneInLayout,
-  updateSplitAtPath,
-  equalizeLayout,
-  insertPaneAdjacentTo,
-  getLayoutPaneIds,
-} from './layout-utils.js';
-import type {
-  LayoutNode,
-  Pane,
-  PaneActions,
-  Tab,
-  WorkspaceState,
-} from './types.js';
+  paneStateAtom,
+  activeTabAtom,
+  activePaneAtom,
+  addTabAtom,
+  removeTabAtom,
+  setActiveTabAtom,
+  reorderTabAtom,
+  addPaneAsTabAtom,
+  addPaneAtom,
+  closePaneAtom,
+  setActivePaneInTabAtom,
+  splitPaneAtom,
+  resizeSplitAtom,
+  equalizeTabAtom,
+  movePaneToSplitAtom,
+  movePaneToTabAtom,
+  switchWorkspaceAtom,
+  getTabAtom,
+  setupPaneAutoSave,
+} from './atoms.js';
+import type { Pane, PaneActions, Tab, WorkspaceState } from './types.js';
 
 // ---------------------------------------------------------------------------
-// Factories
+// Store type — matches the old Zustand store shape for backward compat
 // ---------------------------------------------------------------------------
 
-function makePane<TData = Record<string, unknown>>(
-  kind: string,
-  data: TData = {} as TData,
-  title?: string,
-): Pane<TData> {
+export type PaneStore = WorkspaceState & PaneActions;
+
+// ---------------------------------------------------------------------------
+// Jotai store singleton — shared with WorkspaceProvider
+// ---------------------------------------------------------------------------
+
+/** The single Jotai store instance used across the app */
+export const jotaiStore = createJotaiStore();
+
+// ---------------------------------------------------------------------------
+// Compat shim — Zustand-like API surface over Jotai
+// ---------------------------------------------------------------------------
+
+function getState(): PaneStore {
+  const state = jotaiStore.get(paneStateAtom);
+  const activeTab = jotaiStore.get(activeTabAtom);
+  const activePane = jotaiStore.get(activePaneAtom);
+  const getTabFn = jotaiStore.get(getTabAtom);
+
   return {
-    id: uid(),
-    kind,
-    title: title ?? kind,
-    pinned: false,
-    createdAt: Date.now(),
-    data,
+    ...state,
+
+    // Tab operations
+    addTab: (label?: string) => jotaiStore.set(addTabAtom, label),
+    removeTab: (tabId: string) => jotaiStore.set(removeTabAtom, tabId),
+    setActiveTab: (tabId: string) => jotaiStore.set(setActiveTabAtom, tabId),
+    reorderTab: (from: number, to: number) =>
+      jotaiStore.set(reorderTabAtom, { from, to }),
+
+    // Pane operations
+    addPaneAsTab: (kind: string, data?: any, title?: string) =>
+      jotaiStore.set(addPaneAsTabAtom, { kind, data, title }),
+    addPane: (kind: string, data?: any, title?: string) =>
+      jotaiStore.set(addPaneAtom, { kind, data, title }),
+    closePane: (paneId: string) => jotaiStore.set(closePaneAtom, paneId),
+    setActivePaneInTab: (tabId: string, paneId: string) =>
+      jotaiStore.set(setActivePaneInTabAtom, { tabId, paneId }),
+
+    // Split operations
+    splitPane: (
+      paneId: string,
+      direction: 'horizontal' | 'vertical',
+      newKind: string,
+      newData?: any,
+      newTitle?: string,
+    ) =>
+      jotaiStore.set(splitPaneAtom, {
+        paneId,
+        direction,
+        newKind,
+        newData,
+        newTitle,
+      }),
+    resizeSplit: (tabId: string, path: number[], splitPercentage: number) =>
+      jotaiStore.set(resizeSplitAtom, { tabId, path, splitPercentage }),
+    equalizeTab: (tabId: string) => jotaiStore.set(equalizeTabAtom, tabId),
+
+    // DnD / move operations
+    movePaneToSplit: (
+      paneId: string,
+      targetPaneId: string,
+      direction: 'horizontal' | 'vertical',
+      position: 'before' | 'after',
+    ) =>
+      jotaiStore.set(movePaneToSplitAtom, {
+        paneId,
+        targetPaneId,
+        direction,
+        position,
+      }),
+    movePaneToTab: (paneId: string, targetTabId: string) =>
+      jotaiStore.set(movePaneToTabAtom, { paneId, targetTabId }),
+
+    // Workspace switching
+    switchWorkspace: (workspaceId: string) =>
+      jotaiStore.set(switchWorkspaceAtom, workspaceId),
+
+    // Utility
+    getActiveTab: () => activeTab,
+    getActivePane: () => activePane,
+    getTab: (tabId: string) => getTabFn(tabId),
   };
-}
-
-function makeTab<TData = Record<string, unknown>>(label: string): Tab<TData> {
-  const pane = makePane<TData>('workspace-home', undefined as TData, 'Home');
-  return {
-    id: uid(),
-    label,
-    createdAt: Date.now(),
-    activePaneId: pane.id,
-    layout: { type: 'pane', paneId: pane.id },
-    panes: { [pane.id]: pane },
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Per-workspace persistence
-// ---------------------------------------------------------------------------
-
-/** Current workspace ID — drives which localStorage key is used */
-let activeWorkspaceId: string | null = null;
-
-function storageKey(wsId: string): string {
-  return `phantom-os:panes:${wsId}`;
 }
 
 /**
- * Migrate persisted tabs: replace any lone "terminal" default pane with
- * "workspace-home" so users see the Hunter's Terminal on upgrade.
+ * Backward-compatible pane store singleton.
+ * Exposes `getState()` and `subscribe()` like a Zustand store.
+ *
+ * @deprecated New code should use Jotai atoms directly from `./atoms.js`.
  */
-function migrateState<TData>(state: WorkspaceState<TData>): WorkspaceState<TData> {
-  const tabs = state.tabs.map((tab) => {
-    const paneList = Object.values(tab.panes);
-    if (paneList.length === 1 && paneList[0].kind === 'terminal') {
-      const oldPane = paneList[0];
-      const newPane: Pane<TData> = { ...oldPane, kind: 'workspace-home', title: 'Home' };
-      return { ...tab, panes: { [newPane.id]: newPane } };
-    }
-    return tab;
-  });
-  return { ...state, tabs };
+export const paneStore = {
+  getState,
+  /** Subscribe to paneStateAtom changes */
+  subscribe: (callback: () => void) => {
+    return jotaiStore.sub(paneStateAtom, callback);
+  },
+};
+
+/**
+ * @deprecated Use Jotai atoms directly. Kept for backward compatibility.
+ */
+export function createPaneStore() {
+  return paneStore;
 }
-
-/** True until the first switchWorkspace call completes — on cold boot, strip dead terminals */
-let coldBoot = true;
-
-/** Filter out terminal tabs from persisted state (PTY processes are dead after restart) */
-function stripDeadTerminals<TData>(state: WorkspaceState<TData>): WorkspaceState<TData> {
-  const cleaned = state.tabs.filter((tab) => {
-    const panes = Object.values(tab.panes);
-    // Keep tabs that have at least one non-terminal pane
-    return panes.some((p) => p.kind !== 'terminal');
-  });
-  // Ensure at least one tab exists (Home)
-  if (cleaned.length === 0) {
-    const home = makeTab<TData>('Home');
-    return { tabs: [home], activeTabId: home.id };
-  }
-  const activeTabId = cleaned.some((t) => t.id === state.activeTabId)
-    ? state.activeTabId
-    : cleaned[0].id;
-  return { tabs: cleaned, activeTabId };
-}
-
-function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
-  // Load from SQLite via synchronous XHR (needed because switchWorkspace is sync)
-  try {
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', `/api/pane-states/${wsId}`, false); // synchronous
-    xhr.send();
-    if (xhr.status === 200) {
-      const saved = JSON.parse(xhr.responseText);
-      if (saved && saved.tabs && saved.tabs.length > 0) {
-        const state = migrateState(saved as WorkspaceState<TData>);
-        return coldBoot ? stripDeadTerminals(state) : state;
-      }
-    }
-  } catch { /* ignore — server may be starting up */ }
-
-  // Fallback: try localStorage (one-time migration from old persistence)
-  try {
-    const raw = localStorage.getItem(storageKey(wsId));
-    if (raw) {
-      localStorage.removeItem(storageKey(wsId)); // Clean up old storage
-      const saved = JSON.parse(raw) as WorkspaceState<TData>;
-      if (saved.tabs.length > 0) {
-        const state = migrateState(saved);
-        // Migrate to new API backend
-        fetch(`/api/pane-states/${wsId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: raw,
-        }).catch(() => {});
-        return coldBoot ? stripDeadTerminals(state) : state;
-      }
-    }
-  } catch { /* ignore */ }
-
-  // Legacy key migration
-  try {
-    const legacyKey = 'phantom-os:workspace';
-    const legacy = localStorage.getItem(legacyKey);
-    if (legacy) {
-      localStorage.removeItem(legacyKey);
-      const saved = JSON.parse(legacy) as WorkspaceState<TData>;
-      if (saved.tabs.length > 0) {
-        return coldBoot ? stripDeadTerminals(migrateState(saved)) : migrateState(saved);
-      }
-    }
-  } catch { /* ignore */ }
-
-  const tab = makeTab<TData>('Home');
-  return { tabs: [tab], activeTabId: tab.id };
-}
-
-/** Pane kinds that are ephemeral — don't survive workspace switches */
-const EPHEMERAL_KINDS = new Set<string>();
-
-/** Debounced save to SQLite via API — 300ms like Superset */
-let saveTimer: ReturnType<typeof setTimeout> | null = null;
-
-function saveWorkspaceState<TData>(wsId: string, state: WorkspaceState<TData>): void {
-  // Filter ephemeral kinds before saving
-  const persistableTabs = state.tabs.filter((tab) => {
-    const panes = Object.values(tab.panes);
-    return panes.some((p) => !EPHEMERAL_KINDS.has(p.kind));
-  });
-  const tabsToSave = persistableTabs.length > 0 ? persistableTabs : state.tabs.slice(0, 1);
-  const activeTabId = tabsToSave.some((t) => t.id === state.activeTabId)
-    ? state.activeTabId
-    : tabsToSave[0]?.id ?? null;
-
-  const payload = { tabs: tabsToSave, activeTabId };
-
-  // Debounce writes to avoid hammering the API
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    fetch(`/api/pane-states/${wsId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }).catch(() => { /* silent — server may be restarting */ });
-  }, 300);
-}
-
-// ---------------------------------------------------------------------------
-// Initial state — empty until switchWorkspace is called
-// ---------------------------------------------------------------------------
-
-function createInitialState<TData>(): WorkspaceState<TData> {
-  const tab = makeTab<TData>('Home');
-  return { tabs: [tab], activeTabId: tab.id };
-}
-
-// ---------------------------------------------------------------------------
-// Store type
-// ---------------------------------------------------------------------------
-
-export type PaneStore<TData = Record<string, unknown>> = WorkspaceState<TData> &
-  PaneActions<TData>;
-
-// ---------------------------------------------------------------------------
-// Store factory
-// ---------------------------------------------------------------------------
-
-export function createPaneStore<TData = Record<string, unknown>>() {
-  const initialState = createInitialState<TData>();
-
-  const store = createStore<PaneStore<TData>>()(
-    subscribeWithSelector((set, get) => ({
-      ...initialState,
-
-      // ---------------------------------------------------------------
-      // Tab operations
-      // ---------------------------------------------------------------
-
-      addTab: (label = 'New Tab') => {
-        const tab = makeTab<TData>(label);
-        set((s) => ({ ...s, tabs: [...s.tabs, tab], activeTabId: tab.id }));
-        return tab.id;
-      },
-
-      removeTab: (tabId) =>
-        set((s) => {
-          const tabs = s.tabs.filter((t) => t.id !== tabId);
-          if (tabs.length === 0) return s; // Prevent removing last tab
-          const activeTabId =
-            s.activeTabId === tabId ? tabs[0].id : s.activeTabId;
-          return { ...s, tabs, activeTabId };
-        }),
-
-      setActiveTab: (tabId) => set((s) => ({ ...s, activeTabId: tabId })),
-
-      reorderTab: (fromIndex, toIndex) =>
-        set((s) => {
-          const tabs = [...s.tabs];
-          const [moved] = tabs.splice(fromIndex, 1);
-          if (!moved) return s;
-          tabs.splice(toIndex, 0, moved);
-          return { ...s, tabs };
-        }),
-
-      // ---------------------------------------------------------------
-      // Pane operations
-      // ---------------------------------------------------------------
-
-      addPaneAsTab: (kind, data = {} as TData, title) => {
-        const pane = makePane<TData>(kind, data, title ?? kind);
-        const tab: Tab<TData> = {
-          id: uid(),
-          label: title ?? kind.charAt(0).toUpperCase() + kind.slice(1),
-          createdAt: Date.now(),
-          activePaneId: pane.id,
-          layout: { type: 'pane', paneId: pane.id },
-          panes: { [pane.id]: pane },
-        };
-        set((s) => ({ ...s, tabs: [...s.tabs, tab], activeTabId: tab.id }));
-        return tab.id;
-      },
-
-      addPane: (kind, data = {} as TData, title) => {
-        const state = get();
-        const tab = state.tabs.find((t) => t.id === state.activeTabId);
-        if (!tab) return '';
-
-        // Re-use existing unpinned pane of same kind
-        const existing = Object.values(tab.panes).find(
-          (p) => p.kind === kind && !p.pinned,
-        );
-        if (existing) {
-          const updated: Pane<TData> = {
-            ...existing,
-            data: data ?? existing.data,
-            title: title ?? existing.title,
-          };
-          set((s) => ({
-            ...s,
-            tabs: s.tabs.map((t) =>
-              t.id === tab.id
-                ? {
-                    ...t,
-                    panes: { ...t.panes, [existing.id]: updated },
-                    activePaneId: existing.id,
-                  }
-                : t,
-            ),
-          }));
-          return existing.id;
-        }
-
-        // Split from the active pane (or first pane)
-        const targetPaneId =
-          tab.activePaneId ?? Object.keys(tab.panes)[0];
-        if (!targetPaneId) return '';
-        return state.splitPane(targetPaneId, 'horizontal', kind, data, title);
-      },
-
-      closePane: (paneId) =>
-        set((s) => ({
-          ...s,
-          tabs: s.tabs.map((t) => {
-            if (!(paneId in t.panes)) return t;
-            const layout = removePaneFromLayout(t.layout, paneId) ?? t.layout;
-            const { [paneId]: _, ...panes } = t.panes;
-            const activePaneId =
-              t.activePaneId === paneId
-                ? Object.keys(panes)[0] ?? null
-                : t.activePaneId;
-            return { ...t, layout, panes, activePaneId };
-          }),
-        })),
-
-      setActivePaneInTab: (tabId, paneId) =>
-        set((s) => ({
-          ...s,
-          tabs: s.tabs.map((t) =>
-            t.id === tabId && paneId in t.panes
-              ? { ...t, activePaneId: paneId }
-              : t,
-          ),
-        })),
-
-      // ---------------------------------------------------------------
-      // Split operations
-      // ---------------------------------------------------------------
-
-      splitPane: (paneId, direction, newKind, newData = {} as TData, newTitle) => {
-        const tab = get().getActiveTab();
-        if (!tab) return '';
-        const newPane = makePane<TData>(newKind, newData, newTitle);
-        const newLayout = insertPaneAdjacentTo(
-          tab.layout,
-          paneId,
-          newPane.id,
-          direction,
-          'after',
-        );
-        set((s) => ({
-          ...s,
-          tabs: s.tabs.map((t) =>
-            t.id === tab.id
-              ? {
-                  ...t,
-                  layout: newLayout,
-                  panes: { ...t.panes, [newPane.id]: newPane },
-                  activePaneId: newPane.id,
-                }
-              : t,
-          ),
-        }));
-        return newPane.id;
-      },
-
-      resizeSplit: (tabId, path, splitPercentage) =>
-        set((s) => ({
-          ...s,
-          tabs: s.tabs.map((t) =>
-            t.id === tabId
-              ? { ...t, layout: updateSplitAtPath(t.layout, path, splitPercentage) }
-              : t,
-          ),
-        })),
-
-      equalizeTab: (tabId) =>
-        set((s) => ({
-          ...s,
-          tabs: s.tabs.map((t) =>
-            t.id === tabId ? { ...t, layout: equalizeLayout(t.layout) } : t,
-          ),
-        })),
-
-      // ---------------------------------------------------------------
-      // DnD / move operations
-      // ---------------------------------------------------------------
-
-      movePaneToSplit: (paneId, targetPaneId, direction, position) => {
-        if (paneId === targetPaneId) return;
-        const state = get();
-        const tab = state.getActiveTab();
-        if (!tab) return;
-
-        // Find the pane data
-        const pane = tab.panes[paneId];
-        if (!pane) return;
-
-        // Remove the pane from its current position
-        const layoutAfterRemove = removePaneFromLayout(tab.layout, paneId);
-        if (!layoutAfterRemove) return; // Can't remove last pane
-
-        // Insert adjacent to target
-        const newLayout = insertPaneAdjacentTo(
-          layoutAfterRemove,
-          targetPaneId,
-          paneId,
-          direction,
-          position,
-        );
-
-        set((s) => ({
-          ...s,
-          tabs: s.tabs.map((t) =>
-            t.id === tab.id
-              ? { ...t, layout: newLayout, activePaneId: paneId }
-              : t,
-          ),
-        }));
-      },
-
-      movePaneToTab: (paneId, targetTabId) => {
-        const state = get();
-        // Find source tab
-        const sourceTab = state.tabs.find((t) => paneId in t.panes);
-        if (!sourceTab) return;
-        if (sourceTab.id === targetTabId) return;
-
-        const pane = sourceTab.panes[paneId];
-        if (!pane) return;
-
-        // Remove from source
-        const sourceLayout = removePaneFromLayout(sourceTab.layout, paneId);
-        const { [paneId]: _, ...sourcePanes } = sourceTab.panes;
-        const sourceActivePaneId =
-          sourceTab.activePaneId === paneId
-            ? Object.keys(sourcePanes)[0] ?? null
-            : sourceTab.activePaneId;
-
-        // If removing this pane would leave the source tab empty, remove the tab
-        const sourceLayoutPaneIds = sourceLayout
-          ? getLayoutPaneIds(sourceLayout)
-          : [];
-
-        set((s) => {
-          let tabs = s.tabs.map((t) => {
-            if (t.id === sourceTab.id) {
-              if (sourceLayoutPaneIds.length === 0) return null; // Mark for removal
-              return {
-                ...t,
-                layout: sourceLayout!,
-                panes: sourcePanes,
-                activePaneId: sourceActivePaneId,
-              };
-            }
-            if (t.id === targetTabId) {
-              // Add pane to target tab's layout
-              const existingPaneIds = getLayoutPaneIds(t.layout);
-              const targetPaneId =
-                t.activePaneId ?? existingPaneIds[0];
-              const newLayout = targetPaneId
-                ? insertPaneAdjacentTo(
-                    t.layout,
-                    targetPaneId,
-                    paneId,
-                    'horizontal',
-                    'after',
-                  )
-                : ({ type: 'pane' as const, paneId });
-              return {
-                ...t,
-                layout: newLayout,
-                panes: { ...t.panes, [paneId]: pane },
-                activePaneId: paneId,
-              };
-            }
-            return t;
-          });
-
-          // Filter out null entries (removed tabs)
-          tabs = tabs.filter(Boolean) as Tab<TData>[];
-          if (tabs.length === 0) return s; // Safety: never empty
-
-          return { ...s, tabs };
-        });
-      },
-
-      // ---------------------------------------------------------------
-      // Workspace switching
-      // ---------------------------------------------------------------
-
-      switchWorkspace: (workspaceId: string) => {
-        // Save current workspace state
-        if (activeWorkspaceId) {
-          const current = get();
-          saveWorkspaceState(activeWorkspaceId, { tabs: current.tabs, activeTabId: current.activeTabId });
-        }
-        // Load target workspace state
-        activeWorkspaceId = workspaceId;
-        const loaded = loadWorkspaceState<TData>(workspaceId);
-        set((s) => ({ ...s, tabs: loaded.tabs, activeTabId: loaded.activeTabId }));
-        // After first switch, stop stripping terminals (only strip on cold boot)
-        coldBoot = false;
-      },
-
-      // ---------------------------------------------------------------
-      // Utility
-      // ---------------------------------------------------------------
-
-      getActiveTab: () => {
-        const s = get();
-        return s.tabs.find((t) => t.id === s.activeTabId);
-      },
-
-      getActivePane: () => {
-        const tab = get().getActiveTab();
-        if (!tab?.activePaneId) return undefined;
-        return tab.panes[tab.activePaneId];
-      },
-
-      getTab: (tabId) => {
-        return get().tabs.find((t) => t.id === tabId);
-      },
-    })),
-  );
-
-  // Auto-persist on state changes (saveWorkspaceState handles its own debounce)
-  store.subscribe(
-    (s) => ({ tabs: s.tabs, activeTabId: s.activeTabId }),
-    (slice) => {
-      if (!activeWorkspaceId) return; // No workspace active yet
-      saveWorkspaceState(activeWorkspaceId, slice);
-    },
-  );
-
-  return store;
-}
-
-/** Default singleton store instance */
-export const paneStore = createPaneStore();
