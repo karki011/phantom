@@ -13,7 +13,7 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import { Provider, useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import type { createStore } from 'jotai';
 import {
   paneStateAtom,
@@ -238,12 +238,10 @@ export function WorkspaceProvider({
   );
 
   return (
-    <Provider store={jotaiStore}>
-      <JotaiStoreContext value={jotaiStore}>
-        <PaneRegistryContext value={registry}>
-          {children}
-        </PaneRegistryContext>
-      </JotaiStoreContext>
-    </Provider>
+    <JotaiStoreContext value={jotaiStore}>
+      <PaneRegistryContext value={registry}>
+        {children}
+      </PaneRegistryContext>
+    </JotaiStoreContext>
   );
 }

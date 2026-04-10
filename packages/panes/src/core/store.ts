@@ -8,7 +8,7 @@
  *
  * New code should use the Jotai atoms directly from `./atoms.js`.
  */
-import { createStore as createJotaiStore } from 'jotai';
+import { getDefaultStore } from 'jotai';
 import {
   paneStateAtom,
   activeTabAtom,
@@ -42,8 +42,8 @@ export type PaneStore = WorkspaceState & PaneActions;
 // Jotai store singleton — shared with WorkspaceProvider
 // ---------------------------------------------------------------------------
 
-/** The single Jotai store instance used across the app */
-export const jotaiStore = createJotaiStore();
+/** Use Jotai's default store so ALL atoms (pane + app) share one store */
+export const jotaiStore = getDefaultStore();
 
 // ---------------------------------------------------------------------------
 // Compat shim — Zustand-like API surface over Jotai
@@ -140,3 +140,8 @@ export const paneStore = {
 export function createPaneStore() {
   return paneStore;
 }
+
+// ---------------------------------------------------------------------------
+// Auto-save: persist pane state to SQLite on every change
+// ---------------------------------------------------------------------------
+setupPaneAutoSave(jotaiStore);
