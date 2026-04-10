@@ -45,7 +45,7 @@ function FileRow({ file, worktreeId }: { file: GitFileChange; worktreeId: string
       );
       store.addPaneAsTab(
         'diff',
-        { original, modified, language, filePath: file.path } as Record<string, unknown>,
+        { original, modified, language, filePath: file.path, worktreeId } as Record<string, unknown>,
         `${fileName} (diff)`,
       );
     } catch {
