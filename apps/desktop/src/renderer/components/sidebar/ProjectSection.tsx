@@ -61,6 +61,20 @@ export function ProjectSection({
     if (isExpanded) refreshDiscovered();
   }, [isExpanded, refreshDiscovered]);
 
+  // Poll for new worktrees every 60s when expanded + on window focus
+  useEffect(() => {
+    if (!isExpanded) return;
+    const interval = setInterval(refreshDiscovered, 60_000);
+    const onFocus = () => refreshDiscovered();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') onFocus();
+    });
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [isExpanded, refreshDiscovered]);
+
   useEffect(() => {
     if (isRenaming) {
       const timer = setTimeout(() => {
