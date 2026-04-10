@@ -133,6 +133,10 @@ export function ProjectSection({
           setIsRenaming(true);
         }}
         onRedetect={handleRedetect}
+        onDiscoverWorktrees={() => {
+          if (!isExpanded) onToggle();
+          refreshDiscovered();
+        }}
         onRemoveProject={() => setShowRemoveDialog(true)}
       >
         <div
