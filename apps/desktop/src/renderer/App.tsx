@@ -17,7 +17,7 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { Flame, Trophy } from 'lucide-react';
 import { useEffect } from 'react';
 
-import { WorkspaceProvider, Workspace, paneStore } from '@phantom-os/panes';
+import { WorkspaceProvider, Workspace, switchWorkspaceAtom } from '@phantom-os/panes';
 import { paneDefinitions, paneMenu } from './panes/registry';
 import { unlockedCountAtom, refreshAchievementsAtom } from './atoms/achievements';
 import { activeTopTabAtom, fontScaleAtom, sseConnectionAtom } from './atoms/system';
@@ -91,11 +91,12 @@ export const App = () => {
   const refreshAchievements = useSetAtom(refreshAchievementsAtom);
 
   // Switch pane store when active worktree changes
+  const switchWorkspace = useSetAtom(switchWorkspaceAtom);
   useEffect(() => {
     if (activeWsId) {
-      paneStore.getState().switchWorkspace(activeWsId);
+      switchWorkspace(activeWsId);
     }
-  }, [activeWsId]);
+  }, [activeWsId, switchWorkspace]);
 
   // Apply font scale to document root
   useEffect(() => {
