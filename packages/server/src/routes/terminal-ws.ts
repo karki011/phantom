@@ -46,9 +46,8 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
 
   ws.on('close', () => {
     session?.listeners.delete(onData);
-    // Stateless: destroy PTY on disconnect. Fresh shell on reconnect.
-    unregisterProcess(termId);
-    if (session) destroyPty(termId);
+    // PTY stays alive — client uses deferred detach and may reattach.
+    // PTY is only destroyed when user explicitly closes the tab or app shuts down.
     session = undefined;
   });
 

@@ -86,48 +86,6 @@ function migrateState<TData>(state: WorkspaceState<TData>): WorkspaceState<TData
 /** True until the first switchWorkspace call completes — on cold boot, strip dead terminals */
 let coldBoot = true;
 
-/**
- * Stateless terminal restore: give terminal panes + their tabs fresh IDs.
- * This forces React to fully unmount/remount the TerminalPane component,
- * which creates a fresh xterm.js + WebSocket + PTY — like opening a new tab.
- * Pane data (cwd, metadata) is preserved so the new shell opens in the right dir.
- */
-function refreshTerminalPanes<TData>(state: WorkspaceState<TData>): WorkspaceState<TData> {
-  const tabs = state.tabs.map((tab) => {
-    const panes = Object.values(tab.panes);
-    const hasTerminal = panes.some((p) => p.kind === 'terminal');
-    if (!hasTerminal) return tab;
-
-    // Rebuild with fresh IDs for terminal panes
-    const newPanes: Record<string, Pane<TData>> = {};
-    let newActivePaneId = tab.activePaneId;
-    let layoutJson = JSON.stringify(tab.layout);
-
-    for (const pane of panes) {
-      if (pane.kind === 'terminal') {
-        const freshId = uid();
-        newPanes[freshId] = { ...pane, id: freshId };
-        if (tab.activePaneId === pane.id) newActivePaneId = freshId;
-        layoutJson = layoutJson.replaceAll(`"${pane.id}"`, `"${freshId}"`);
-      } else {
-        newPanes[pane.id] = pane;
-      }
-    }
-
-    return {
-      ...tab,
-      id: uid(), // Fresh tab ID too
-      panes: newPanes,
-      activePaneId: newActivePaneId,
-      layout: JSON.parse(layoutJson),
-    };
-  });
-
-  const activeIdx = state.tabs.findIndex((t) => t.id === state.activeTabId);
-  const activeTabId = activeIdx >= 0 ? tabs[activeIdx].id : tabs[0]?.id ?? null;
-  return { tabs, activeTabId };
-}
-
 /** Filter out terminal tabs from persisted state (PTY processes are dead after restart) */
 function stripDeadTerminals<TData>(state: WorkspaceState<TData>): WorkspaceState<TData> {
   const cleaned = state.tabs.filter((tab) => {
@@ -153,7 +111,7 @@ function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
       const saved = JSON.parse(raw) as WorkspaceState<TData>;
       if (saved.tabs.length > 0) {
         const state = migrateState(saved);
-        return coldBoot ? stripDeadTerminals(state) : refreshTerminalPanes(state);
+        return coldBoot ? stripDeadTerminals(state) : state;
       }
     }
   } catch { /* ignore */ }
@@ -167,7 +125,7 @@ function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
       const saved = JSON.parse(legacy) as WorkspaceState<TData>;
       if (saved.tabs.length > 0) {
         const state = migrateState(saved);
-        return coldBoot ? stripDeadTerminals(state) : refreshTerminalPanes(state);
+        return coldBoot ? stripDeadTerminals(state) : state;
       }
     }
   } catch { /* ignore */ }
