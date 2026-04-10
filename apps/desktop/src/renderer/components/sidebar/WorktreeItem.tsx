@@ -209,7 +209,7 @@ export function WorktreeItem({
           display: 'block',
           width: '100%',
           borderRadius: 4,
-          height: 28,
+          marginBottom: 2,
           backgroundColor: isActive
             ? 'var(--phantom-surface-hover)'
             : 'transparent',
@@ -226,9 +226,9 @@ export function WorktreeItem({
               'transparent';
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}>
-          <svg width="12" height="28" viewBox="0 0 12 28" style={{ flexShrink: 0, overflow: 'visible' }}>
-            <line x1="0.5" y1="0" x2="0.5" y2={isLast ? 14 : 28} stroke="var(--phantom-border-subtle)" strokeWidth="1" />
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'nowrap' }}>
+          <svg width="12" height="100%" viewBox="0 0 12 40" preserveAspectRatio="xMinYMin meet" style={{ flexShrink: 0, overflow: 'visible', marginTop: 2 }}>
+            <line x1="0.5" y1="0" x2="0.5" y2={isLast ? 14 : 40} stroke="var(--phantom-border-subtle)" strokeWidth="1" />
             <line x1="0.5" y1="14" x2="12" y2="14" stroke="var(--phantom-border-subtle)" strokeWidth="1" />
           </svg>
           <div
@@ -250,22 +250,27 @@ export function WorktreeItem({
               {worktree.name}
             </Text>
             {gitStatus && (gitStatus.added + gitStatus.modified + gitStatus.deleted + gitStatus.untracked > 0) && (
-              <div style={{ display: 'flex', gap: 6, marginTop: -1 }}>
-                {gitStatus.modified > 0 && (
-                  <span style={{ fontSize: '0.6rem', color: 'var(--phantom-accent-gold, #f59e0b)' }}>
-                    ~{gitStatus.modified}
-                  </span>
-                )}
-                {(gitStatus.added + gitStatus.untracked) > 0 && (
-                  <span style={{ fontSize: '0.6rem', color: 'var(--phantom-status-success, #22c55e)' }}>
-                    +{gitStatus.added + gitStatus.untracked}
-                  </span>
-                )}
-                {gitStatus.deleted > 0 && (
-                  <span style={{ fontSize: '0.6rem', color: 'var(--phantom-status-error, #ef4444)' }}>
-                    -{gitStatus.deleted}
-                  </span>
-                )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 1 }}>
+                <span style={{ fontSize: '0.6rem', color: 'var(--phantom-text-muted)' }}>
+                  {gitStatus.files.length} file{gitStatus.files.length !== 1 ? 's' : ''}
+                </span>
+                <div style={{ display: 'flex', gap: 5 }}>
+                  {gitStatus.modified > 0 && (
+                    <span style={{ fontSize: '0.6rem', color: 'var(--phantom-accent-gold, #f59e0b)' }}>
+                      ~{gitStatus.modified}
+                    </span>
+                  )}
+                  {(gitStatus.added + gitStatus.untracked) > 0 && (
+                    <span style={{ fontSize: '0.6rem', color: 'var(--phantom-status-success, #22c55e)' }}>
+                      +{gitStatus.added + gitStatus.untracked}
+                    </span>
+                  )}
+                  {gitStatus.deleted > 0 && (
+                    <span style={{ fontSize: '0.6rem', color: 'var(--phantom-status-error, #ef4444)' }}>
+                      -{gitStatus.deleted}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>
