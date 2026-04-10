@@ -43,6 +43,7 @@ export const createWindow = (): void => {
 
   // Show window when ready (prevents white flash)
   mainWindow.on('ready-to-show', () => {
+    mainWindow?.maximize();
     mainWindow?.show();
   });
 
