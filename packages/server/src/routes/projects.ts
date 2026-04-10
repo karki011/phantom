@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs';
 import { desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db, projects, workspaces, workspaceSections } from '@phantom-os/db';
-import { isGitRepo, getDefaultBranch, getRepoName, getWorktreeDir } from '../workspace-manager.js';
+import { isGitRepo, getDefaultBranch, getRepoName, getWorktreeDir, listWorktrees } from '../workspace-manager.js';
 import { removeWorktree } from '../workspace-manager.js';
 import { detectProject } from '../project-detector.js';
 import { logger } from '../logger.js';
@@ -245,6 +245,139 @@ projectRoutes.get('/projects/:id/branches', (c) => {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ error: `Failed to list branches: ${msg}` }, 500);
   }
+});
+
+/** GET /projects/:id/worktrees — Discover git worktrees not tracked in the DB */
+projectRoutes.get('/projects/:id/worktrees', async (c) => {
+  const id = c.req.param('id');
+  const project = db.select().from(projects).where(eq(projects.id, id)).get();
+  if (!project) return c.json({ error: 'Project not found' }, 404);
+
+  // Get all git worktrees for this repo
+  const allWorktrees = await listWorktrees(project.repoPath);
+
+  // Get all DB workspaces for this project (tracked worktree paths)
+  const trackedPaths = new Set(
+    db.select({ worktreePath: workspaces.worktreePath })
+      .from(workspaces)
+      .where(eq(workspaces.projectId, id))
+      .all()
+      .map((r) => r.worktreePath)
+      .filter(Boolean),
+  );
+
+  // Filter: only worktrees NOT in DB, NOT the main repo, and active within 7 days
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - SEVEN_DAYS_MS;
+
+  const discovered = allWorktrees
+    .filter((wt) => !wt.isBare && wt.path !== project.repoPath && !trackedPaths.has(wt.path))
+    .map((wt) => {
+      // Get last commit timestamp on this worktree's branch
+      let lastCommitMs = 0;
+      try {
+        const ts = execSync('git log -1 --format=%ct', {
+          cwd: wt.path, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 2000,
+        }).trim();
+        lastCommitMs = parseInt(ts, 10) * 1000;
+      } catch { /* treat as stale if we can't read */ }
+
+      return {
+        path: wt.path,
+        branch: wt.branch ?? 'unknown',
+        commit: wt.commit ?? '',
+        lastCommitMs,
+      };
+    })
+    .filter((wt) => wt.lastCommitMs > cutoff);
+
+  return c.json(discovered);
+});
+
+/** POST /projects/:id/worktrees/import — Import a discovered worktree as a workspace */
+projectRoutes.post('/projects/:id/worktrees/import', async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json<{ path: string; name?: string }>();
+
+  const project = db.select().from(projects).where(eq(projects.id, id)).get();
+  if (!project) return c.json({ error: 'Project not found' }, 404);
+
+  if (!body.path || !existsSync(body.path)) {
+    return c.json({ error: 'Worktree path does not exist' }, 400);
+  }
+
+  // Check not already tracked
+  const existing = db.select().from(workspaces)
+    .where(eq(workspaces.worktreePath, body.path))
+    .get();
+  if (existing) {
+    return c.json({ error: 'Worktree already imported' }, 409);
+  }
+
+  // Extract branch name from the worktree
+  let branch = 'unknown';
+  try {
+    branch = execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd: body.path,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+  } catch { /* use 'unknown' */ }
+
+  // Detect base branch — use git log to find nearest branch point (fast, single command)
+  let baseBranch = project.defaultBranch ?? 'main';
+  try {
+    // Find the most recent commit reachable from HEAD that's also on another branch
+    const result = execSync(
+      `git log --decorate=short --simplify-by-decoration --oneline --first-parent -20 "${branch}"`,
+      { cwd: body.path, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 3000 },
+    ).trim();
+    // Parse decorated refs — look for branch names other than our own
+    for (const line of result.split('\n')) {
+      const refMatch = line.match(/\(([^)]+)\)/);
+      if (!refMatch) continue;
+      const refs = refMatch[1].split(',').map((r) => r.trim()
+        .replace(/^HEAD -> /, '')
+        .replace(/^origin\//, ''));
+      const otherBranch = refs.find((r) => r !== branch && r !== 'HEAD' && !r.startsWith('tag:'));
+      if (otherBranch) {
+        baseBranch = otherBranch;
+        break;
+      }
+    }
+  } catch { /* fall back to project default */ }
+
+  const name = body.name || branch;
+
+  // Port allocation: pick from Auth0-allowed pool
+  const PORT_POOL = [8080, 8081, 8082];
+  const usedPorts = new Set(
+    db.select({ portBase: workspaces.portBase })
+      .from(workspaces)
+      .all()
+      .map((r) => r.portBase)
+      .filter((p): p is number => p !== null),
+  );
+  const portBase = PORT_POOL.find((p) => !usedPorts.has(p)) ?? null;
+
+  const workspace = {
+    id: randomUUID(),
+    projectId: id,
+    type: 'worktree' as const,
+    name,
+    branch,
+    baseBranch,
+    worktreePath: body.path,
+    portBase,
+    sectionId: null,
+    tabOrder: 0,
+    isActive: 1,
+    createdAt: Date.now(),
+  };
+
+  db.insert(workspaces).values(workspace).run();
+
+  return c.json(workspace, 201);
 });
 
 /** DELETE /projects/:id — Delete project and cascade workspaces */

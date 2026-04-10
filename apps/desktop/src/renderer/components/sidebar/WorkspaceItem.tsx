@@ -4,7 +4,7 @@
  *
  * @author Subash Karki
  */
-import { Badge, Button, Text, TextInput, UnstyledButton } from '@mantine/core';
+import { Button, Text, TextInput, Tooltip, UnstyledButton } from '@mantine/core';
 import { AlertTriangle, GitBranch } from 'lucide-react';
 import { useSetAtom } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -178,6 +178,18 @@ export function WorkspaceItem({
       onOpenTerminal={handleOpenTerminal}
       onDelete={() => setIsConfirmingDelete(true)}
     >
+      <Tooltip
+        label={[
+          workspace.branch && `Branch: ${workspace.branch}`,
+          workspace.baseBranch && workspace.baseBranch !== workspace.branch && `From: ${workspace.baseBranch}`,
+          workspace.worktreePath && `Path: ${workspace.worktreePath}`,
+        ].filter(Boolean).join('\n')}
+        multiline
+        position="right"
+        withArrow
+        openDelay={400}
+        styles={{ tooltip: { whiteSpace: 'pre-line', fontSize: '0.7rem', maxWidth: 320 } }}
+      >
       <UnstyledButton
         onClick={() => onSelect(workspace.id)}
         onDoubleClick={handleStartRename}
@@ -220,11 +232,8 @@ export function WorkspaceItem({
           />
           <Text
             fz="0.8rem"
-            c={
-              isActive
-                ? 'var(--phantom-text-primary)'
-                : 'var(--phantom-text-secondary)'
-            }
+            fw={isActive ? 500 : 400}
+            c="var(--phantom-text-primary)"
             truncate
             style={{ flex: 1 }}
           >
@@ -237,28 +246,9 @@ export function WorkspaceItem({
               title="Worktree missing — click to re-create or delete"
             />
           )}
-          {workspace.branch && workspace.branch !== workspace.name && (
-            <Badge
-              size="xs"
-              variant="light"
-              color="gray"
-              leftSection={
-                workspace.type === 'worktree' ? (
-                  <GitBranch size={9} style={{ marginRight: 2 }} />
-                ) : undefined
-              }
-              style={{ flexShrink: 0 }}
-            >
-              {workspace.branch}
-            </Badge>
-          )}
-          {workspace.baseBranch && workspace.baseBranch !== workspace.branch && (
-            <Text fz="0.65rem" c="var(--phantom-text-muted)" style={{ flexShrink: 0 }}>
-              from {workspace.baseBranch}
-            </Text>
-          )}
         </div>
       </UnstyledButton>
+      </Tooltip>
     </WorkspaceContextMenu>
   );
 }

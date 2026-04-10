@@ -83,7 +83,7 @@ export function FilesView() {
     (entry: FileEntry) => {
       if (!activeWorkspace) return;
       setSelectedFile(entry.relativePath);
-      store.addPane('editor', {
+      store.addPaneAsTab('editor', {
         filePath: entry.relativePath,
         workspaceId: activeWorkspace.id,
         repoPath: activeWorkspace.worktreePath,

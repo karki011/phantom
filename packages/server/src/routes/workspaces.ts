@@ -2,6 +2,7 @@
  * PhantomOS Workspace Routes
  * @author Subash Karki
  */
+import { exec } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { desc, eq } from 'drizzle-orm';
@@ -12,6 +13,53 @@ import {
   removeWorktree,
   getWorktreeDir,
 } from '../workspace-manager.js';
+import { logger } from '../logger.js';
+
+/** Run dependency installation in background based on project profile */
+const autoSetup = (worktreePath: string, profile: { buildSystem: string; type: string }): void => {
+  let cmd: string | null = null;
+
+  switch (profile.buildSystem) {
+    case 'pnpm':
+    case 'nx+pnpm':
+    case 'turbo+pnpm':
+      cmd = 'pnpm install --frozen-lockfile';
+      break;
+    case 'bun':
+    case 'nx+bun':
+    case 'turbo+bun':
+      cmd = 'bun install --frozen-lockfile';
+      break;
+    case 'npm':
+    case 'nx+npm':
+    case 'turbo+npm':
+      cmd = 'npm ci';
+      break;
+    case 'cargo':
+      cmd = 'cargo fetch';
+      break;
+    case 'go':
+      cmd = 'go mod download';
+      break;
+    case 'pyproject':
+      cmd = 'pip install -e ".[dev]" 2>/dev/null || pip install -e .';
+      break;
+    default:
+      break;
+  }
+
+  if (!cmd) return;
+
+  logger.info('Workspaces', `Auto-setup: running "${cmd}" in ${worktreePath}`);
+
+  exec(cmd, { cwd: worktreePath, timeout: 120_000 }, (err) => {
+    if (err) {
+      logger.warn('Workspaces', `Auto-setup failed in ${worktreePath}: ${err.message}`);
+    } else {
+      logger.info('Workspaces', `Auto-setup complete in ${worktreePath}`);
+    }
+  });
+};
 
 export const workspaceRoutes = new Hono();
 
@@ -76,6 +124,17 @@ workspaceRoutes.post('/workspaces', async (c) => {
     return c.json({ error: `Failed to create worktree: ${msg}` }, 500);
   }
 
+  // Port allocation: pick next available from Auth0-allowed pool
+  const PORT_POOL = [8080, 8081, 8082];
+  const usedPorts = new Set(
+    db.select({ portBase: workspaces.portBase })
+      .from(workspaces)
+      .all()
+      .map((r) => r.portBase)
+      .filter((p): p is number => p !== null),
+  );
+  const portBase = PORT_POOL.find((p) => !usedPorts.has(p)) ?? null;
+
   const workspace = {
     id: randomUUID(),
     projectId,
@@ -84,7 +143,7 @@ workspaceRoutes.post('/workspaces', async (c) => {
     branch,
     baseBranch: body.baseBranch ?? project.defaultBranch ?? null,
     worktreePath,
-    portBase: null,
+    portBase,
     sectionId: null,
     tabOrder: 0,
     isActive: 1,
@@ -92,6 +151,14 @@ workspaceRoutes.post('/workspaces', async (c) => {
   };
 
   db.insert(workspaces).values(workspace).run();
+
+  // Auto-setup: install dependencies in background
+  if (project.profile) {
+    try {
+      const profile = JSON.parse(project.profile);
+      autoSetup(workspace.worktreePath, profile);
+    } catch { /* ignore parse errors */ }
+  }
 
   return c.json(workspace, 201);
 });
@@ -160,4 +227,24 @@ workspaceRoutes.patch('/workspaces/:id', async (c) => {
     .get();
 
   return c.json(updated);
+});
+
+/** POST /workspaces/:id/assign-port — Backfill portBase for existing workspaces */
+workspaceRoutes.post('/workspaces/:id/assign-port', (c) => {
+  const id = c.req.param('id');
+  const workspace = db.select().from(workspaces).where(eq(workspaces.id, id)).get();
+  if (!workspace) return c.json({ error: 'Workspace not found' }, 404);
+  if (workspace.portBase !== null) return c.json({ portBase: workspace.portBase });
+
+  const PORT_POOL = [8080, 8081, 8082];
+  const usedPorts = new Set(
+    db.select({ portBase: workspaces.portBase })
+      .from(workspaces)
+      .all()
+      .map((r) => r.portBase)
+      .filter((p): p is number => p !== null),
+  );
+  const portBase = PORT_POOL.find((p) => !usedPorts.has(p)) ?? null;
+  db.update(workspaces).set({ portBase }).where(eq(workspaces.id, id)).run();
+  return c.json({ portBase });
 });

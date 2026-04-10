@@ -27,6 +27,8 @@ import { taskRoutes } from './routes/tasks.js';
 import { projectRoutes } from './routes/projects.js';
 import { workspaceRoutes } from './routes/workspaces.js';
 import { workspaceFileRoutes } from './routes/workspace-files.js';
+import { serverRoutes } from './routes/servers.js';
+import { initProcessRegistry } from './process-registry.js';
 import { hunterStatsRoutes } from './routes/hunter-stats.js';
 import { chatRoutes } from './routes/chat.js';
 import { API_PORT } from '@phantom-os/shared';
@@ -59,6 +61,12 @@ const broadcast = (event: string, data: unknown): void => {
 };
 
 // ---------------------------------------------------------------------------
+// Initialize Process Registry
+// ---------------------------------------------------------------------------
+
+initProcessRegistry(broadcast);
+
+// ---------------------------------------------------------------------------
 // Database Bootstrap
 // ---------------------------------------------------------------------------
 
@@ -86,6 +94,7 @@ app.route('/api', workspaceRoutes);
 app.route('/api', workspaceFileRoutes);
 app.route('/api', hunterStatsRoutes);
 app.route('/api', chatRoutes);
+app.route('/api', serverRoutes);
 
 // SSE endpoint
 app.get('/events', (c) => {

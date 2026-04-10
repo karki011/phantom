@@ -424,3 +424,47 @@ export const getProjectProfile = (projectId: string): Promise<ProjectProfile> =>
 
 export const detectProjectProfile = (projectId: string): Promise<ProjectProfile> =>
   fetchApi<ProjectProfile>(`/api/projects/${projectId}/detect`, { method: 'POST' });
+
+// ---------------------------------------------------------------------------
+// Running Servers (Multi-Server Dashboard)
+// ---------------------------------------------------------------------------
+
+export interface RunningServer {
+  termId: string;
+  workspaceId: string;
+  projectId: string;
+  recipe: string;
+  recipeLabel: string;
+  category: string;
+  port: number | null;
+  pid: number | null;
+  startedAt: number;
+}
+
+export const getRunningServers = (workspaceId?: string): Promise<RunningServer[]> =>
+  fetchApi<RunningServer[]>(`/api/servers${workspaceId ? `?workspaceId=${workspaceId}` : ''}`);
+
+export const stopServer = (termId: string): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/servers/${termId}/stop`, { method: 'POST' });
+
+// ---------------------------------------------------------------------------
+// Discovered Worktrees
+// ---------------------------------------------------------------------------
+
+export interface DiscoveredWorktree {
+  path: string;
+  branch: string;
+  commit: string;
+}
+
+export const getDiscoveredWorktrees = (projectId: string): Promise<DiscoveredWorktree[]> =>
+  fetchApi<DiscoveredWorktree[]>(`/api/projects/${projectId}/worktrees`);
+
+export const importWorktree = (
+  projectId: string,
+  data: { path: string; name?: string },
+): Promise<WorkspaceData> =>
+  fetchApi<WorkspaceData>(`/api/projects/${projectId}/worktrees/import`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });

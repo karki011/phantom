@@ -35,7 +35,7 @@ export interface ProjectProfile {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const MAX_RECIPES = 20;
+const MAX_RECIPES = 75;
 
 const fileExists = (repoPath: string, name: string): boolean => {
   try {

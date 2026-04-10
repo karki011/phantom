@@ -138,14 +138,14 @@ const buildPtyEnv = (): Record<string, string> => {
   return env;
 };
 
-const createDirectPty = (id: string, cwd?: string, cols?: number, rows?: number): PtySession => {
+const createDirectPty = (id: string, cwd?: string, cols?: number, rows?: number, envOverrides?: Record<string, string>): PtySession => {
   const shell = resolveShell();
   const ptyProcess = pty.spawn(shell, [], {
     name: 'xterm-256color',
     cols: cols || 80,
     rows: rows || 24,
     cwd: cwd || homedir(),
-    env: buildPtyEnv(),
+    env: { ...buildPtyEnv(), ...envOverrides },
   });
 
   const session: PtySession = {
@@ -177,6 +177,7 @@ export const createPty = async (
   rows?: number,
   /** Pre-attach a listener BEFORE daemon subscription to avoid losing initial output */
   initialListener?: (data: string) => void,
+  envOverrides?: Record<string, string>,
 ): Promise<PtySession> => {
   // Try daemon first
   if (daemonAvailable && daemonClient?.connected) {
@@ -205,7 +206,7 @@ export const createPty = async (
   }
 
   // Fallback to direct PTY
-  const session = createDirectPty(id, cwd, cols, rows);
+  const session = createDirectPty(id, cwd, cols, rows, envOverrides);
   if (initialListener) session.listeners.add(initialListener);
   return session;
 };

@@ -32,6 +32,7 @@ import { useHunter } from '../hooks/useHunter';
 import { useProjectProfile } from '../hooks/useProjectProfile';
 import { useQuests } from '../hooks/useQuests';
 import { useRouter } from '../hooks/useRouter';
+import { RunningServersCard } from './RunningServersCard';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -131,7 +132,7 @@ function QuickActionCard({
 }) {
   return (
     <Paper
-      p="xl"
+      p="md"
       bg="var(--phantom-surface-card)"
       radius="md"
       onClick={onClick}
@@ -139,7 +140,7 @@ function QuickActionCard({
         cursor: 'pointer',
         border: '1px solid var(--phantom-border-subtle)',
         transition: 'border-color 0.2s, box-shadow 0.2s',
-        minHeight: '7rem',
+        minHeight: '5.5rem',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -377,12 +378,20 @@ export function WorkspaceHome() {
 
   return (
     <div style={{ height: '100%', overflow: 'auto', padding: '24px' }}>
-      <Stack align="center" gap="lg" maw={1100} w="100%" mx="auto">
+      <Stack align="center" gap="lg" maw={1400} w="100%" mx="auto">
         {/* Rank Header */}
         <RankHeader profile={profile} />
 
         {/* Two-column layout: Recipes | Tools + Info */}
-        <SimpleGrid cols={{ base: 1, md: 2 }} w="100%" spacing="lg">
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)',
+            gap: 'var(--mantine-spacing-lg)',
+            width: '100%',
+            alignItems: 'start',
+          }}
+        >
           {/* LEFT COLUMN — Project Recipes */}
           <Stack gap="md">
             {projectProfile && projectProfile.recipes.length > 0 && (
@@ -400,7 +409,7 @@ export function WorkspaceHome() {
                     {projectProfile.recipes.length} commands
                   </Text>
                 </Group>
-                <Stack gap={2}>
+                <Stack gap={2} style={{ maxHeight: '60vh', overflowY: 'auto' }}>
                   {projectProfile.recipes.map((recipe) => (
                     <Group
                       key={recipe.id}
@@ -419,10 +428,19 @@ export function WorkspaceHome() {
                       onMouseLeave={(e) => {
                         (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
                       }}
-                      onClick={() => store.addPaneAsTab('terminal', {
-                        cwd: workspace?.worktreePath ?? project?.repoPath,
-                        initialCommand: recipe.command,
-                      } as Record<string, unknown>, recipe.label)}
+                      onClick={() => {
+                        const port = recipe.category === 'serve' ? workspace?.portBase : null;
+                        store.addPaneAsTab('terminal', {
+                          cwd: workspace?.worktreePath ?? project?.repoPath,
+                          initialCommand: recipe.command,
+                          workspaceId: workspace?.id,
+                          projectId: project?.id,
+                          recipeCommand: recipe.command,
+                          recipeLabel: recipe.label,
+                          recipeCategory: recipe.category,
+                          port,
+                        } as Record<string, unknown>, recipe.label);
+                      }}
                     >
                       <ActionIcon
                         size="xs"
@@ -535,11 +553,14 @@ export function WorkspaceHome() {
               </SimpleGrid>
             </Paper>
 
+            {/* Running Servers */}
+            {workspace?.id && <RunningServersCard workspaceId={workspace.id} />}
+
             {/* Git Status + Daily Quests */}
             <GitStatusCard state={gitStatusState} />
             <DailyQuestsCard quests={questSummary} />
           </Stack>
-        </SimpleGrid>
+        </div>
 
         {/* Quote */}
         <Text

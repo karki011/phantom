@@ -23,6 +23,14 @@ export const useTerminal = (
   paneId: string,
   cwd?: string,
   initialCommand?: string,
+  metadata?: {
+    workspaceId?: string;
+    projectId?: string;
+    recipeCommand?: string;
+    recipeLabel?: string;
+    recipeCategory?: string;
+    port?: number | null;
+  },
 ) => {
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -30,6 +38,8 @@ export const useTerminal = (
   cwdRef.current = cwd;
   const initialCommandRef = useRef(initialCommand);
   initialCommandRef.current = initialCommand;
+  const metadataRef = useRef(metadata);
+  metadataRef.current = metadata;
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
@@ -75,12 +85,20 @@ export const useTerminal = (
       ws.onopen = () => {
         const dims = fit.proposeDimensions();
         if (ws) {
+          const md = metadataRef.current;
           ws.send(JSON.stringify({
             type: 'init',
             cwd: cwdRef.current || null,
             cols: dims?.cols ?? 80,
             rows: dims?.rows ?? 24,
             initialCommand: initialCommandRef.current || undefined,
+            ...(md?.workspaceId && { workspaceId: md.workspaceId }),
+            ...(md?.projectId && { projectId: md.projectId }),
+            ...(md?.recipeCommand && { recipeCommand: md.recipeCommand }),
+            ...(md?.recipeLabel && { recipeLabel: md.recipeLabel }),
+            ...(md?.recipeCategory && { recipeCategory: md.recipeCategory }),
+            ...(md?.port != null && { port: md.port }),
+            ...(md?.port != null && { env: { PORT: String(md.port) } }),
           }));
         }
       };

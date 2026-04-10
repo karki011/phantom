@@ -15,6 +15,7 @@ import {
   destroyPty,
   getPtySession,
 } from '../terminal-manager.js';
+import { registerProcess, unregisterProcess } from '../process-registry.js';
 
 export const setupTerminalWs = (
   server: HttpServer | HttpsServer,
@@ -45,6 +46,8 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
 
   ws.on('close', () => {
     session?.listeners.delete(onData);
+    // Unregister from process registry before destroying
+    unregisterProcess(termId);
     // Destroy the PTY process when the WebSocket closes to prevent ghost sessions
     if (session) destroyPty(termId);
     session = undefined;
@@ -68,7 +71,7 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
               try {
                 // Pass onData as initialListener — it's attached to the session
                 // BEFORE the daemon subscription, preventing lost output.
-                session = await createPty(termId, msg.cwd || undefined, msg.cols, msg.rows, onData);
+                session = await createPty(termId, msg.cwd || undefined, msg.cols, msg.rows, onData, msg.env);
                 // Auto-run initial command after shell is ready
                 // Wait for shell prompt by watching for output, then send command
                 if (msg.initialCommand && session) {
@@ -94,6 +97,20 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
                       writePty(termId, msg.initialCommand + '\n');
                     }
                   }, 2000);
+                }
+                // Register in process registry if this is a recipe run
+                if (msg.recipeCommand) {
+                  registerProcess({
+                    termId,
+                    workspaceId: msg.workspaceId ?? '',
+                    projectId: msg.projectId ?? '',
+                    recipe: msg.recipeCommand,
+                    recipeLabel: msg.recipeLabel ?? msg.recipeCommand,
+                    category: msg.recipeCategory ?? 'custom',
+                    port: msg.port ?? null,
+                    pid: session?.pty?.pid ?? null,
+                    startedAt: Date.now(),
+                  });
                 }
               } catch (err) {
                 console.error(`[TerminalWS] Failed to spawn PTY for ${termId}:`, err);

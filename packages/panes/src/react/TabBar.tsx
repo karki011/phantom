@@ -46,6 +46,7 @@ const tabStyle = (active: boolean): CSSProperties => ({
   color: active ? '#fff' : 'rgba(255,255,255,0.55)',
   border: 'none',
   whiteSpace: 'nowrap',
+  maxWidth: 160,
 });
 
 const closeStyle: CSSProperties = {
@@ -200,7 +201,10 @@ export function TabBar({ paneMenu }: TabBarProps) {
           onDrop={(e) => onTabDrop(e, i)}
           onDragEnd={onTabDragEnd}
         >
-          <span>{t.label}</span>
+          <span
+            title={t.label}
+            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >{t.label}</span>
           {tabs.length > 1 && !Object.values(t.panes).some((p) => p.kind === 'workspace-home') && (
             <button
               type="button"

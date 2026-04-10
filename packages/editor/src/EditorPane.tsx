@@ -49,6 +49,7 @@ export const EditorPane = ({
 }: EditorPaneProps) => {
   const [content, setContent] = useState<string>(initialValue ?? '');
   const [loading, setLoading] = useState(!!workspaceId && !!filePath);
+  const [editorFontSize, setEditorFontSize] = useState(13);
 
   // Configure Monaco with workspace tsconfig + types (once per workspace root)
   useEffect(() => {
@@ -140,25 +141,44 @@ export const EditorPane = ({
   }
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative' }} data-pane-id={paneId}>
-      {dirty && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 4,
-            right: 12,
-            zIndex: 10,
-            fontSize: 11,
-            color: 'var(--phantom-text-muted, #888)',
-            background: 'var(--phantom-surface-card, #1e1e1e)',
-            padding: '2px 8px',
-            borderRadius: 4,
-            opacity: 0.8,
-          }}
+    <div style={{ width: '100%', height: '100%', position: 'relative', display: 'flex', flexDirection: 'column' }} data-pane-id={paneId}>
+      {/* Editor toolbar */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '2px 8px',
+          height: 24,
+          flexShrink: 0,
+          background: 'var(--phantom-surface-card, #1e1e1e)',
+          borderBottom: '1px solid var(--phantom-border-subtle, #333)',
+          fontSize: 11,
+          color: 'var(--phantom-text-muted, #888)',
+        }}
+      >
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {getFileName(filePath)}
+        </span>
+        {dirty && <span style={{ color: 'var(--phantom-accent-gold, #f59e0b)' }}>{saving ? 'Saving...' : 'Modified'}</span>}
+        <button
+          type="button"
+          onClick={() => setEditorFontSize((s) => Math.max(8, s - 1))}
+          style={{ background: 'none', border: 'none', color: 'var(--phantom-text-muted, #888)', cursor: 'pointer', padding: '0 2px', fontSize: 13, lineHeight: 1 }}
+          title="Decrease font size"
         >
-          {saving ? 'Saving...' : 'Modified'}
-        </div>
-      )}
+          −
+        </button>
+        <span style={{ minWidth: 20, textAlign: 'center' }}>{editorFontSize}</span>
+        <button
+          type="button"
+          onClick={() => setEditorFontSize((s) => Math.min(28, s + 1))}
+          style={{ background: 'none', border: 'none', color: 'var(--phantom-text-muted, #888)', cursor: 'pointer', padding: '0 2px', fontSize: 13, lineHeight: 1 }}
+          title="Increase font size"
+        >
+          +
+        </button>
+      </div>
       <LazyEditor
         height="100%"
         language={language ?? detectLanguage(filePath)}
@@ -167,7 +187,7 @@ export const EditorPane = ({
         theme="vs-dark"
         options={{
           minimap: { enabled: false },
-          fontSize: 14,
+          fontSize: editorFontSize,
           fontFamily: 'JetBrains Mono, monospace',
           lineNumbers: 'on',
           scrollBeyondLastLine: false,

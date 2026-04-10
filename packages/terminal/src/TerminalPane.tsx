@@ -11,6 +11,12 @@ interface TerminalPaneProps {
   paneId: string;
   cwd?: string;
   initialCommand?: string;
+  workspaceId?: string;
+  projectId?: string;
+  recipeCommand?: string;
+  recipeLabel?: string;
+  recipeCategory?: string;
+  port?: number | null;
 }
 
 const overlayStyles = `
@@ -65,9 +71,26 @@ const overlayStyles = `
   }
 `;
 
-export const TerminalPane = ({ paneId, cwd, initialCommand }: TerminalPaneProps) => {
+export const TerminalPane = ({
+  paneId,
+  cwd,
+  initialCommand,
+  workspaceId,
+  projectId,
+  recipeCommand,
+  recipeLabel,
+  recipeCategory,
+  port,
+}: TerminalPaneProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { connected } = useTerminal(containerRef, paneId, cwd, initialCommand);
+  const { connected } = useTerminal(containerRef, paneId, cwd, initialCommand, {
+    workspaceId,
+    projectId,
+    recipeCommand,
+    recipeLabel,
+    recipeCategory,
+    port,
+  });
 
   // Remove overlay from DOM after fade-out transition (300ms)
   const [overlayMounted, setOverlayMounted] = useState(true);

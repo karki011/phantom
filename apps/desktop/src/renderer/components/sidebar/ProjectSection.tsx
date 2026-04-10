@@ -13,12 +13,12 @@ import {
   Tooltip,
   UnstyledButton,
 } from '@mantine/core';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ChevronRight, GitBranch, Plus, RefreshCw, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSetAtom } from 'jotai';
-import type { ProjectData, WorkspaceData } from '../../lib/api';
-import { renameProject } from '../../lib/api';
-import { refreshProjectsAtom } from '../../atoms/workspaces';
+import type { DiscoveredWorktree, ProjectData, WorkspaceData } from '../../lib/api';
+import { detectProjectProfile, getDiscoveredWorktrees, importWorktree, renameProject } from '../../lib/api';
+import { refreshProjectsAtom, refreshWorkspacesAtom } from '../../atoms/workspaces';
 import { WorkspaceItem } from './WorkspaceItem';
 import { InlineWorkspaceInput } from './InlineWorkspaceInput';
 import { ProjectContextMenu } from './ProjectContextMenu';
@@ -46,8 +46,20 @@ export function ProjectSection({
   const [renameValue, setRenameValue] = useState(project.name);
   const [isHovered, setIsHovered] = useState(false);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
+  const [discovered, setDiscovered] = useState<DiscoveredWorktree[]>([]);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const refreshProjects = useSetAtom(refreshProjectsAtom);
+  const refreshWorkspaces = useSetAtom(refreshWorkspacesAtom);
+
+  const refreshDiscovered = useCallback(() => {
+    if (project.id) {
+      getDiscoveredWorktrees(project.id).then(setDiscovered).catch(() => setDiscovered([]));
+    }
+  }, [project.id]);
+
+  useEffect(() => {
+    if (isExpanded) refreshDiscovered();
+  }, [isExpanded, refreshDiscovered]);
 
   useEffect(() => {
     if (isRenaming) {
@@ -58,6 +70,25 @@ export function ProjectSection({
       return () => clearTimeout(timer);
     }
   }, [isRenaming]);
+
+  const handleRedetect = useCallback(async () => {
+    try {
+      await detectProjectProfile(project.id);
+      refreshProjects();
+    } catch {
+      // silent — detection may take time; sidebar refreshes on next poll
+    }
+  }, [project.id, refreshProjects]);
+
+  const handleImportWorktree = useCallback(async (path: string, branch: string) => {
+    try {
+      await importWorktree(project.id, { path, name: branch });
+      refreshWorkspaces();
+      refreshProjects();
+      // Remove from discovered list
+      setDiscovered((prev) => prev.filter((d) => d.path !== path));
+    } catch { /* silent */ }
+  }, [project.id, refreshWorkspaces, refreshProjects]);
 
   const handleAddWorkspace = useCallback(() => {
     setShowNewInput(true);
@@ -101,6 +132,7 @@ export function ProjectSection({
           setRenameValue(project.name);
           setIsRenaming(true);
         }}
+        onRedetect={handleRedetect}
         onRemoveProject={() => setShowRemoveDialog(true)}
       >
         <div
@@ -212,6 +244,80 @@ export function ProjectSection({
               isLast={index === workspaces.length - 1}
             />
           ))}
+          {discovered.length > 0 && (
+            <div
+              style={{
+                marginTop: 8,
+                marginBottom: 4,
+                padding: '6px 8px',
+                borderRadius: 6,
+                background: 'linear-gradient(135deg, color-mix(in srgb, var(--phantom-accent-glow) 12%, var(--phantom-surface-card)), color-mix(in srgb, var(--phantom-accent-purple) 10%, var(--phantom-surface-card)))',
+                border: '1px solid color-mix(in srgb, var(--phantom-accent-glow) 25%, transparent)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                <Sparkles size={10} style={{ color: 'var(--phantom-accent-glow)' }} />
+                <Text
+                  fz="0.6rem"
+                  fw={700}
+                  tt="uppercase"
+                  c="var(--phantom-accent-glow)"
+                  style={{ letterSpacing: '0.1em', textShadow: '0 0 8px var(--phantom-accent-glow)', flex: 1 }}
+                >
+                  Discovered
+                </Text>
+                <Tooltip label="Refresh" position="right">
+                  <ActionIcon
+                    size={14}
+                    variant="subtle"
+                    onClick={refreshDiscovered}
+                    aria-label="Refresh discovered worktrees"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <RefreshCw size={9} style={{ color: 'var(--phantom-accent-glow)' }} />
+                  </ActionIcon>
+                </Tooltip>
+              </div>
+              {discovered.map((wt) => (
+                <div
+                  key={wt.path}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '4px 6px',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    transition: 'background-color 100ms ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--phantom-accent-glow) 10%, transparent)';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                  }}
+                >
+                  <GitBranch size={12} style={{ color: 'var(--phantom-accent-cyan)', flexShrink: 0 }} />
+                  <Text fz="0.75rem" c="var(--phantom-text-primary)" truncate style={{ flex: 1 }}>
+                    {wt.branch}
+                  </Text>
+                  <Tooltip label="Import workspace" position="right">
+                    <ActionIcon
+                      size={18}
+                      variant="light"
+                      color="teal"
+                      radius="xl"
+                      onClick={() => handleImportWorktree(wt.path, wt.branch)}
+                      aria-label={`Import ${wt.branch}`}
+                      style={{ flexShrink: 0 }}
+                    >
+                      <Plus size={10} />
+                    </ActionIcon>
+                  </Tooltip>
+                </div>
+              ))}
+            </div>
+          )}
           {workspaces.length === 0 && !showNewInput && (
             <UnstyledButton
               onClick={handleAddWorkspace}

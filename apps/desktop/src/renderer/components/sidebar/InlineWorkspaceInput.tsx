@@ -128,7 +128,7 @@ export function InlineWorkspaceInput({
       opened
       onClose={onDone}
       title={projectName ? `New Workspace — ${projectName}` : 'New Workspace'}
-      size="md"
+      size="lg"
       centered
       padding="xl"
       radius="md"

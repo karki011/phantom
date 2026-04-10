@@ -5,13 +5,14 @@
  * @author Subash Karki
  */
 import { Menu } from '@mantine/core';
-import { Edit3, FolderPlus, Trash2 } from 'lucide-react';
+import { Edit3, FolderPlus, RefreshCw, Trash2 } from 'lucide-react';
 import { type ReactNode, useCallback, useRef, useState } from 'react';
 
 interface ProjectContextMenuProps {
   children: ReactNode;
   onAddWorkspace: () => void;
   onRename: () => void;
+  onRedetect: () => void;
   onRemoveProject: () => void;
 }
 
@@ -19,6 +20,7 @@ export function ProjectContextMenu({
   children,
   onAddWorkspace,
   onRename,
+  onRedetect,
   onRemoveProject,
 }: ProjectContextMenuProps) {
   const [opened, setOpened] = useState(false);
@@ -92,6 +94,12 @@ export function ProjectContextMenu({
             onClick={() => queueAction(onRename)}
           >
             Rename Project
+          </Menu.Item>
+          <Menu.Item
+            leftSection={<RefreshCw size={14} />}
+            onClick={() => queueAction(onRedetect)}
+          >
+            Re-detect Recipes
           </Menu.Item>
           <Menu.Divider />
           <Menu.Item
