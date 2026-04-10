@@ -1,10 +1,7 @@
 /**
- * useTerminal — Superset-inspired terminal lifecycle hook.
- *
- * Uses module-level state (state.ts) so xterm + WebSocket survive React
- * unmount/remount cycles. On unmount, detach is deferred by DETACH_DELAY_MS.
- * If the component remounts before the timeout fires, the existing session
- * is reattached to the new DOM container — zero flicker, no reconnection.
+ * useTerminal — Terminal lifecycle hook.
+ * Creates xterm.js + WebSocket on mount, cleans up on unmount.
+ * Simple and reliable — no session reuse across mounts.
  *
  * @author Subash Karki
  */
@@ -13,15 +10,15 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { getTerminalTheme } from './theme.js';
-import {
-  sessions,
-  pendingDetaches,
-  DETACH_DELAY_MS,
-  type TerminalSession,
-} from './state.js';
 
 /** Port the Hono API server listens on — must match @phantom-os/shared API_PORT */
 const API_PORT = 3849;
+
+/**
+ * Guard against React StrictMode double-mount creating duplicate PTYs.
+ * If a terminal for this paneId is being set up, skip the duplicate.
+ */
+const initializing = new Set<string>();
 
 export const useTerminal = (
   containerRef: React.RefObject<HTMLDivElement | null>,
@@ -51,52 +48,10 @@ export const useTerminal = (
     const container = containerRef.current;
     if (!container) return;
 
-    // ---------------------------------------------------------------
-    // 1. Check for pending detach — cancel it, session is still alive
-    // ---------------------------------------------------------------
-    const pendingTimeout = pendingDetaches.get(paneId);
-    if (pendingTimeout) {
-      clearTimeout(pendingTimeout);
-      pendingDetaches.delete(paneId);
-    }
+    // StrictMode guard: skip if already initializing this paneId
+    if (initializing.has(paneId)) return;
+    initializing.add(paneId);
 
-    // ---------------------------------------------------------------
-    // 2. Reattach existing session (deferred detach was cancelled)
-    // ---------------------------------------------------------------
-    const existing = sessions.get(paneId);
-    if (existing) {
-      // Reattach xterm to new container DOM element
-      existing.term.open(container);
-      existing.fit.fit();
-      termRef.current = existing.term;
-      fitRef.current = existing.fit;
-      setConnected(existing.connected);
-
-      // Re-setup ResizeObserver for the new container
-      existing.observer?.disconnect();
-      const observer = new ResizeObserver(() => {
-        existing.fit.fit();
-        const dims = existing.fit.proposeDimensions();
-        if (dims && existing.ws && existing.ws.readyState === WebSocket.OPEN) {
-          existing.ws.send(JSON.stringify({
-            type: 'resize', cols: dims.cols, rows: dims.rows,
-          }));
-        }
-      });
-      observer.observe(container);
-      existing.observer = observer;
-
-      // Cleanup: deferred detach on unmount
-      return () => {
-        observer.disconnect();
-        existing.observer = null;
-        scheduleDetach(paneId);
-      };
-    }
-
-    // ---------------------------------------------------------------
-    // 3. Fresh session — create xterm + WebSocket + PTY
-    // ---------------------------------------------------------------
     const term = new Terminal({
       theme: getTerminalTheme(),
       fontFamily: 'JetBrains Mono, monospace',
@@ -112,15 +67,7 @@ export const useTerminal = (
     termRef.current = term;
     fitRef.current = fit;
 
-    const session: TerminalSession = {
-      term,
-      fit,
-      ws: null,
-      connected: false,
-      observer: null,
-    };
-    sessions.set(paneId, session);
-
+    let ws: WebSocket | null = null;
     let opened = false;
 
     const openTerminal = () => {
@@ -132,13 +79,12 @@ export const useTerminal = (
 
       const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
       const wsUrl = `${proto}://localhost:${API_PORT}/ws/terminal/${paneId}`;
-      const ws = new WebSocket(wsUrl);
-      session.ws = ws;
+      ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
         const dims = fit.proposeDimensions();
         const md = metadataRef.current;
-        ws.send(JSON.stringify({
+        ws!.send(JSON.stringify({
           type: 'init',
           cwd: cwdRef.current || null,
           cols: dims?.cols ?? 80,
@@ -162,7 +108,6 @@ export const useTerminal = (
             term.write(msg.data);
             if (!gotFirstOutput) {
               gotFirstOutput = true;
-              session.connected = true;
               setConnected(true);
             }
           }
@@ -175,11 +120,10 @@ export const useTerminal = (
 
       ws.onclose = () => {
         term.write('\r\n\x1b[90m[Disconnected]\x1b[0m\r\n');
-        session.connected = false;
       };
 
       term.onData((data) => {
-        if (ws.readyState === WebSocket.OPEN) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'input', data }));
         }
       });
@@ -194,43 +138,21 @@ export const useTerminal = (
       }
       fit.fit();
       const dims = fit.proposeDimensions();
-      if (dims && session.ws && session.ws.readyState === WebSocket.OPEN) {
-        session.ws.send(JSON.stringify({
+      if (dims && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
           type: 'resize', cols: dims.cols, rows: dims.rows,
         }));
       }
     });
     observer.observe(container);
-    session.observer = observer;
 
-    // Cleanup: deferred detach on unmount
     return () => {
       observer.disconnect();
-      session.observer = null;
-      scheduleDetach(paneId);
+      ws?.close();
+      term.dispose();
+      initializing.delete(paneId);
     };
   }, [containerRef, paneId]);
 
   return { terminal: termRef, fit: fitRef, connected };
 };
-
-// ---------------------------------------------------------------------------
-// Deferred detach — schedules cleanup after DETACH_DELAY_MS
-// ---------------------------------------------------------------------------
-
-function scheduleDetach(paneId: string): void {
-  // If already pending, don't double-schedule
-  if (pendingDetaches.has(paneId)) return;
-
-  const timeout = setTimeout(() => {
-    const session = sessions.get(paneId);
-    if (session) {
-      session.ws?.close();
-      session.term.dispose();
-      sessions.delete(paneId);
-    }
-    pendingDetaches.delete(paneId);
-  }, DETACH_DELAY_MS);
-
-  pendingDetaches.set(paneId, timeout);
-}
