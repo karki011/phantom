@@ -86,6 +86,23 @@ function migrateState<TData>(state: WorkspaceState<TData>): WorkspaceState<TData
 /** True until the first switchWorkspace call completes — on cold boot, strip dead terminals */
 let coldBoot = true;
 
+/**
+ * Give tabs fresh IDs so React fully remounts terminal components (fresh xterm + WebSocket).
+ * Pane IDs stay the SAME so the server can reconnect to existing PTY sessions.
+ */
+function refreshTabIds<TData>(state: WorkspaceState<TData>): WorkspaceState<TData> {
+  const hasTerminal = state.tabs.some((tab) =>
+    Object.values(tab.panes).some((p) => p.kind === 'terminal'),
+  );
+  if (!hasTerminal) return state;
+
+  const tabs = state.tabs.map((tab) => ({ ...tab, id: uid() }));
+  const activeTabId = state.activeTabId
+    ? tabs[state.tabs.findIndex((t) => t.id === state.activeTabId)]?.id ?? tabs[0]?.id
+    : tabs[0]?.id;
+  return { tabs, activeTabId };
+}
+
 /** Filter out terminal tabs from persisted state (PTY processes are dead after restart) */
 function stripDeadTerminals<TData>(state: WorkspaceState<TData>): WorkspaceState<TData> {
   const cleaned = state.tabs.filter((tab) => {
@@ -111,7 +128,7 @@ function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
       const saved = JSON.parse(raw) as WorkspaceState<TData>;
       if (saved.tabs.length > 0) {
         const state = migrateState(saved);
-        return coldBoot ? stripDeadTerminals(state) : state;
+        return coldBoot ? stripDeadTerminals(state) : refreshTabIds(state);
       }
     }
   } catch { /* ignore */ }
@@ -125,7 +142,7 @@ function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
       const saved = JSON.parse(legacy) as WorkspaceState<TData>;
       if (saved.tabs.length > 0) {
         const state = migrateState(saved);
-        return coldBoot ? stripDeadTerminals(state) : state;
+        return coldBoot ? stripDeadTerminals(state) : refreshTabIds(state);
       }
     }
   } catch { /* ignore */ }
