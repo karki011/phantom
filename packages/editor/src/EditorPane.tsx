@@ -48,7 +48,7 @@ export const EditorPane = ({
   onChange,
 }: EditorPaneProps) => {
   const [content, setContent] = useState<string>(initialValue ?? '');
-  const [loading, setLoading] = useState(!!worktreeId && !!filePath);
+  const [loading, setLoading] = useState(!!filePath);
   const [editorFontSize, setEditorFontSize] = useState(13);
 
   // Configure Monaco with workspace tsconfig + types (once per workspace root)
@@ -62,11 +62,16 @@ export const EditorPane = ({
   const contentRef = useRef(content);
   contentRef.current = content;
 
-  // Fetch file content from workspace API
+  // Fetch file content — worktree API or generic file-read API
   useEffect(() => {
-    if (!worktreeId || !filePath) return;
+    if (!filePath) return;
     setLoading(true);
-    fetch(`/api/worktrees/${worktreeId}/file?path=${encodeURIComponent(filePath)}`)
+
+    const url = worktreeId
+      ? `/api/worktrees/${worktreeId}/file?path=${encodeURIComponent(filePath)}`
+      : `/api/file-read?path=${encodeURIComponent(filePath)}`;
+
+    fetch(url)
       .then((r) => {
         if (!r.ok) throw new Error(`Failed to load: ${r.status}`);
         return r.json();
@@ -93,16 +98,24 @@ export const EditorPane = ({
     [onChange],
   );
 
-  // Save file to workspace API
+  // Save file — worktree API or generic file-write API
   const saveFile = useCallback(async () => {
-    if (!worktreeId || !filePath || saving) return;
+    if (!filePath || saving) return;
     setSaving(true);
     try {
-      await fetch(`/api/worktrees/${worktreeId}/file`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: filePath, content: contentRef.current }),
-      });
+      if (worktreeId) {
+        await fetch(`/api/worktrees/${worktreeId}/file`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: filePath, content: contentRef.current }),
+        });
+      } else {
+        await fetch('/api/file-write', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: filePath, content: contentRef.current }),
+        });
+      }
       setDirty(false);
     } finally {
       setSaving(false);
@@ -111,7 +124,7 @@ export const EditorPane = ({
 
   // Ctrl+S / Cmd+S to save
   useEffect(() => {
-    if (!worktreeId || !filePath) return;
+    if (!filePath) return;
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();

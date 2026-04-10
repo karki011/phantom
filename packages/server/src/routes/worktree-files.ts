@@ -3,7 +3,8 @@
  * @author Subash Karki
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, normalize } from 'node:path';
+import { homedir } from 'node:os';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db, worktrees } from '@phantom-os/db';
@@ -20,7 +21,8 @@ const safePath = (worktreeRoot: string, relativePath: string): string | null => 
   const cleaned = relativePath.replace(/^\/+/, '') || '.';
   const resolved = resolve(worktreeRoot, cleaned);
   // CRITICAL: Prevent path traversal — resolved path must start with worktree root
-  if (!resolved.startsWith(worktreeRoot)) {
+  const rootWithSlash = worktreeRoot.endsWith('/') ? worktreeRoot : worktreeRoot + '/';
+  if (!resolved.startsWith(rootWithSlash) && resolved !== worktreeRoot) {
     return null;
   }
   return resolved;
@@ -230,6 +232,59 @@ worktreeFileRoutes.delete('/worktrees/:id/file', (c) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ error: `Failed to delete: ${msg}` }, 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Generic file read (for plans, configs, etc. outside worktrees)
+// ---------------------------------------------------------------------------
+
+/** Allowed directories for generic file reads */
+const ALLOWED_READ_PREFIXES = [
+  join(homedir(), '.claude', 'plans'),
+  join(homedir(), '.phantom-os'),
+];
+
+/** GET /file-read?path=<absolute_path> — Read a file from allowed directories */
+worktreeFileRoutes.get('/file-read', (c) => {
+  const filePath = c.req.query('path');
+  if (!filePath) return c.json({ error: 'path query parameter is required' }, 400);
+
+  const normalized = normalize(filePath);
+  const allowed = ALLOWED_READ_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+  if (!allowed) return c.json({ error: 'Path not in allowed directories' }, 403);
+
+  if (!existsSync(normalized)) return c.json({ error: 'File not found' }, 404);
+
+  try {
+    const fileStat = statSync(normalized);
+    if (fileStat.isDirectory()) return c.json({ error: 'Path is a directory' }, 400);
+    if (fileStat.size > 10 * 1024 * 1024) return c.json({ error: 'File too large (>10MB)' }, 413);
+
+    const content = readFileSync(normalized, 'utf-8');
+    return c.json({ content, mtime: fileStat.mtimeMs });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ error: `Failed to read file: ${msg}` }, 500);
+  }
+});
+
+/** PUT /file-write?path=<absolute_path> — Write a file in allowed directories */
+worktreeFileRoutes.put('/file-write', async (c) => {
+  const body = await c.req.json<{ path: string; content: string }>();
+  if (!body.path || body.content === undefined) return c.json({ error: 'path and content required' }, 400);
+
+  const normalized = normalize(body.path);
+  const allowed = ALLOWED_READ_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+  if (!allowed) return c.json({ error: 'Path not in allowed directories' }, 403);
+
+  try {
+    writeFileSync(normalized, body.content, 'utf-8');
+    const fileStat = statSync(normalized);
+    return c.json({ ok: true, mtime: fileStat.mtimeMs });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ error: `Failed to write file: ${msg}` }, 500);
   }
 });
 
