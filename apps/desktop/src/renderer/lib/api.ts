@@ -441,3 +441,24 @@ export const importWorktree = (
     method: 'POST',
     body: JSON.stringify(data),
   });
+
+// ---------------------------------------------------------------------------
+// Git Status
+// ---------------------------------------------------------------------------
+
+export interface GitFileChange {
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'untracked';
+  path: string;
+  code: string;
+}
+
+export interface GitStatusResult {
+  added: number;
+  modified: number;
+  deleted: number;
+  untracked: number;
+  files: GitFileChange[];
+}
+
+export const getGitStatus = (worktreeId: string): Promise<GitStatusResult> =>
+  fetchApi<GitStatusResult>(`/api/worktrees/${worktreeId}/git-status`);

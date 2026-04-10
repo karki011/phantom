@@ -19,6 +19,7 @@ import {
 import { rightSidebarTabAtom } from '../../atoms/fileExplorer';
 import { ResizeHandle } from './ResizeHandle';
 import { FilesView } from './FilesView';
+import { ChangesView } from './ChangesView';
 
 const TABS = [
   { id: 'files' as const, label: 'Files' },
@@ -138,15 +139,7 @@ export function RightSidebar() {
         {activeTab === 'files' ? (
           <FilesView />
         ) : (
-          <Text
-            fz="0.75rem"
-            c="var(--phantom-text-muted)"
-            ta="center"
-            py="xl"
-            px="sm"
-          >
-            Changes view coming soon.
-          </Text>
+          <ChangesView />
         )}
       </div>
 

@@ -8,7 +8,8 @@ import { Button, Text, TextInput, Tooltip, UnstyledButton } from '@mantine/core'
 import { AlertTriangle } from 'lucide-react';
 import { useSetAtom } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { WorktreeData } from '../../lib/api';
+import type { GitStatusResult, WorktreeData } from '../../lib/api';
+import { getGitStatus } from '../../lib/api';
 import { deleteWorktreeAtom, updateWorktreeAtom } from '../../atoms/worktrees';
 import { showSystemNotification } from '../notifications/SystemToast';
 import { WorktreeContextMenu } from './WorktreeContextMenu';
@@ -33,7 +34,16 @@ export function WorktreeItem({
   const [renameValue, setRenameValue] = useState(worktree.name);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+
+  // Poll git status every 15s
+  useEffect(() => {
+    const fetch = () => getGitStatus(worktree.id).then(setGitStatus).catch(() => {});
+    fetch();
+    const interval = setInterval(fetch, 15_000);
+    return () => clearInterval(interval);
+  }, [worktree.id]);
 
   useEffect(() => {
     if (isRenaming) {
@@ -230,15 +240,35 @@ export function WorktreeItem({
               flexShrink: 0,
             }}
           />
-          <Text
-            fz="0.8rem"
-            fw={isActive ? 500 : 400}
-            c="var(--phantom-text-primary)"
-            truncate
-            style={{ flex: 1 }}
-          >
-            {worktree.name}
-          </Text>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              fz="0.8rem"
+              fw={isActive ? 500 : 400}
+              c="var(--phantom-text-primary)"
+              truncate
+            >
+              {worktree.name}
+            </Text>
+            {gitStatus && (gitStatus.added + gitStatus.modified + gitStatus.deleted + gitStatus.untracked > 0) && (
+              <div style={{ display: 'flex', gap: 6, marginTop: -1 }}>
+                {gitStatus.modified > 0 && (
+                  <span style={{ fontSize: '0.6rem', color: 'var(--phantom-accent-gold, #f59e0b)' }}>
+                    ~{gitStatus.modified}
+                  </span>
+                )}
+                {(gitStatus.added + gitStatus.untracked) > 0 && (
+                  <span style={{ fontSize: '0.6rem', color: 'var(--phantom-status-success, #22c55e)' }}>
+                    +{gitStatus.added + gitStatus.untracked}
+                  </span>
+                )}
+                {gitStatus.deleted > 0 && (
+                  <span style={{ fontSize: '0.6rem', color: 'var(--phantom-status-error, #ef4444)' }}>
+                    -{gitStatus.deleted}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
           {worktree.worktreeValid === false && (
             <AlertTriangle
               size={12}

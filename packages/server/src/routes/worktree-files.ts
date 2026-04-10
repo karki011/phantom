@@ -3,6 +3,7 @@
  * @author Subash Karki
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { join, resolve, normalize } from 'node:path';
 import { homedir } from 'node:os';
 import { eq } from 'drizzle-orm';
@@ -285,6 +286,75 @@ worktreeFileRoutes.put('/file-write', async (c) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ error: `Failed to write file: ${msg}` }, 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Git Status
+// ---------------------------------------------------------------------------
+
+interface GitFileChange {
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'untracked';
+  path: string;
+  /** Short status code from git (e.g. 'M', 'A', 'D', '??') */
+  code: string;
+}
+
+interface GitStatusResult {
+  added: number;
+  modified: number;
+  deleted: number;
+  untracked: number;
+  files: GitFileChange[];
+}
+
+/** Parse git status --porcelain=v1 output */
+function parseGitStatus(output: string): GitStatusResult {
+  const files: GitFileChange[] = [];
+  let added = 0, modified = 0, deleted = 0, untracked = 0;
+
+  for (const line of output.split('\n')) {
+    if (!line.trim()) continue;
+    const code = line.slice(0, 2);
+    const path = line.slice(3);
+
+    if (code === '??') {
+      files.push({ status: 'untracked', path, code: '??' });
+      untracked++;
+    } else if (code.includes('A')) {
+      files.push({ status: 'added', path, code: code.trim() });
+      added++;
+    } else if (code.includes('D')) {
+      files.push({ status: 'deleted', path, code: code.trim() });
+      deleted++;
+    } else if (code.includes('R')) {
+      files.push({ status: 'renamed', path, code: code.trim() });
+      modified++;
+    } else if (code.includes('M') || code.includes('U')) {
+      files.push({ status: 'modified', path, code: code.trim() });
+      modified++;
+    }
+  }
+
+  return { added, modified, deleted, untracked, files };
+}
+
+/** GET /worktrees/:id/git-status — Get git status summary for a worktree */
+worktreeFileRoutes.get('/worktrees/:id/git-status', (c) => {
+  const id = c.req.param('id');
+  const root = getWorktreeRoot(id);
+  if (!root) return c.json({ error: 'Worktree not found' }, 404);
+
+  try {
+    const output = execSync('git status --porcelain', {
+      cwd: root,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000,
+    });
+    return c.json(parseGitStatus(output));
+  } catch {
+    return c.json({ added: 0, modified: 0, deleted: 0, untracked: 0, files: [] });
   }
 });
 
