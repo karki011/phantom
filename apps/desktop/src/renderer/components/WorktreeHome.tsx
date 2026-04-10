@@ -18,22 +18,26 @@ import {
   Stack,
   Text,
   Title,
+  Tabs,
 } from '@mantine/core';
 import { usePaneStore } from '@phantom-os/panes';
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
   AlertTriangle, BarChart3, Beaker, Braces, FileCode, GitBranch,
-  Hammer, MessageSquare, Package, Play, Rocket, Settings2, Sparkles,
-  Target, Terminal as TerminalIcon, Trash2,
+  Hammer, MessageSquare, Package, Pencil, Play, Plus, Rocket, Settings2, Sparkles,
+  Star, Target, Terminal as TerminalIcon, Trash2,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { activeWorktreeAtom, deleteWorktreeAtom, projectsAtom } from '../atoms/worktrees';
+import type { CustomRecipe } from '../atoms/recipes';
 import { useHunter } from '../hooks/useHunter';
 import { useProjectProfile } from '../hooks/useProjectProfile';
+import { useRecipes, type EnrichedRecipe } from '../hooks/useRecipes';
 import { useQuests } from '../hooks/useQuests';
 import { useRouter } from '../hooks/useRouter';
 import { PlansCard } from './PlansCard';
+import { RecipeFormModal } from './RecipeFormModal';
 import { RunningServersCard } from './RunningServersCard';
 
 // ---------------------------------------------------------------------------
@@ -262,6 +266,42 @@ export function WorktreeHome() {
     : null;
   const { profile: projectProfile } = useProjectProfile(project?.id ?? null);
 
+  // Recipe favorites + custom recipes
+  const { allRecipes, favoriteRecipes, toggleFavorite, addCustomRecipe, editCustomRecipe, deleteCustomRecipe } = useRecipes(project?.id ?? null, projectProfile);
+  const [activeRecipeTab, setActiveRecipeTab] = useState<string | null>('all');
+  const hasSetInitialTab = useRef(false);
+  useEffect(() => {
+    if (!hasSetInitialTab.current && favoriteRecipes.length > 0) {
+      setActiveRecipeTab('favorites');
+      hasSetInitialTab.current = true;
+    }
+  }, [favoriteRecipes.length]);
+  const [recipeModal, setRecipeModal] = useState<{
+    opened: boolean;
+    mode: 'create' | 'edit';
+    recipeId?: string;
+    initialValues?: { label: string; command: string; category: CustomRecipe['category'] };
+  }>({ opened: false, mode: 'create' });
+
+  const handleCreateRecipe = useCallback((label: string, command: string, category: CustomRecipe['category']) => {
+    addCustomRecipe(label, command, category);
+  }, [addCustomRecipe]);
+
+  const handleEditRecipe = useCallback((label: string, command: string, category: CustomRecipe['category']) => {
+    if (recipeModal.recipeId) {
+      editCustomRecipe(recipeModal.recipeId, { label, command, category });
+    }
+  }, [editCustomRecipe, recipeModal.recipeId]);
+
+  const openEditModal = useCallback((recipe: EnrichedRecipe) => {
+    setRecipeModal({
+      opened: true,
+      mode: 'edit',
+      recipeId: recipe.id,
+      initialValues: { label: recipe.label, command: recipe.command, category: recipe.category },
+    });
+  }, []);
+
   // Prefer worktreePath (the checked-out path for this worktree), fall back to
   // the project's bare repoPath. Either is a valid git directory for IPC.
   const gitPath = worktree?.worktreePath ?? project?.repoPath ?? null;
@@ -431,72 +471,226 @@ export function WorktreeHome() {
                 <Text fz="xs" c="var(--phantom-status-warning)">Setup failed — check terminal for details</Text>
               </Paper>
             )}
-            {projectProfile && projectProfile.recipes.length > 0 && (
+            {allRecipes.length > 0 && (
               <Paper
                 p="md"
                 bg="var(--phantom-surface-card)"
                 radius="md"
                 style={{ border: '1px solid var(--phantom-border-subtle)' }}
               >
-                <Group gap="xs" mb="sm">
-                  <Text fz="xs" fw={600} c="var(--phantom-accent-glow)" tt="uppercase" style={{ letterSpacing: '0.08em' }}>
-                    {projectProfile.type} · {projectProfile.buildSystem}
-                  </Text>
-                  <Text fz="xs" c="var(--phantom-text-muted)">
-                    {projectProfile.recipes.length} commands
-                  </Text>
+                <Group gap="xs" mb="sm" justify="space-between">
+                  <Group gap="xs">
+                    <Text fz="xs" fw={600} c="var(--phantom-accent-glow)" tt="uppercase" style={{ letterSpacing: '0.08em' }}>
+                      {projectProfile?.type} · {projectProfile?.buildSystem}
+                    </Text>
+                    <Text fz="xs" c="var(--phantom-text-muted)">
+                      {allRecipes.length} commands
+                    </Text>
+                  </Group>
+                  <ActionIcon
+                    size="xs"
+                    variant="subtle"
+                    color="teal"
+                    onClick={() => setRecipeModal({ opened: true, mode: 'create' })}
+                    title="Create custom recipe"
+                    data-testid="create-recipe-button"
+                  >
+                    <Plus size={14} />
+                  </ActionIcon>
                 </Group>
-                <Stack gap={2} style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-                  {projectProfile.recipes.map((recipe) => (
-                    <Group
-                      key={recipe.id}
-                      gap="sm"
-                      wrap="nowrap"
-                      py={5}
-                      px={8}
-                      style={{
-                        borderRadius: 4,
-                        cursor: 'pointer',
-                        transition: 'background-color 100ms ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated)';
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                      }}
-                      onClick={() => {
-                        const port = recipe.category === 'serve' ? worktree?.portBase : null;
-                        store.addPaneAsTab('terminal', {
-                          cwd: worktree?.worktreePath ?? project?.repoPath,
-                          initialCommand: recipe.command,
-                          worktreeId: worktree?.id,
-                          projectId: project?.id,
-                          recipeCommand: recipe.command,
-                          recipeLabel: recipe.label,
-                          recipeCategory: recipe.category,
-                          port,
-                        } as Record<string, unknown>, recipe.label);
-                      }}
+
+                <Tabs value={activeRecipeTab} onChange={setActiveRecipeTab}>
+                  <Tabs.List
+                    style={{
+                      borderBottom: '1px solid var(--phantom-border-subtle)',
+                      '--tabs-list-border-size': '0px',
+                    } as React.CSSProperties}
+                  >
+                    <Tabs.Tab
+                      value="all"
+                      fz="xs"
+                      c={activeRecipeTab === 'all' ? 'var(--phantom-accent-glow)' : 'var(--phantom-text-muted)'}
+                      style={{ borderBottom: activeRecipeTab === 'all' ? '2px solid var(--phantom-accent-glow)' : 'none' }}
                     >
-                      <ActionIcon
-                        size="xs"
-                        variant="filled"
-                        color="green"
-                        radius="xl"
-                        style={{ flexShrink: 0 }}
-                      >
-                        <Play size={10} />
-                      </ActionIcon>
-                      <Text fz="0.78rem" fw={500} c="var(--phantom-text-primary)" style={{ minWidth: 80 }}>
-                        {recipe.label}
-                      </Text>
-                      <Text fz="0.7rem" c="var(--phantom-text-muted)" ff="'JetBrains Mono', monospace" truncate style={{ flex: 1 }}>
-                        {recipe.command}
-                      </Text>
-                    </Group>
-                  ))}
-                </Stack>
+                      All ({allRecipes.length})
+                    </Tabs.Tab>
+                    <Tabs.Tab
+                      value="favorites"
+                      fz="xs"
+                      c={activeRecipeTab === 'favorites' ? 'var(--phantom-accent-glow)' : 'var(--phantom-text-muted)'}
+                      style={{ borderBottom: activeRecipeTab === 'favorites' ? '2px solid var(--phantom-accent-glow)' : 'none' }}
+                    >
+                      <Group gap={4}>
+                        <Star size={12} />
+                        Favorites ({favoriteRecipes.length})
+                      </Group>
+                    </Tabs.Tab>
+                  </Tabs.List>
+
+                  <Tabs.Panel value="all">
+                    <Stack gap={2} style={{ maxHeight: '60vh', overflowY: 'auto' }} mt="xs">
+                      {allRecipes.map((recipe) => (
+                        <Group
+                          key={recipe.id}
+                          gap="sm"
+                          wrap="nowrap"
+                          py={5}
+                          px={8}
+                          style={{
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            transition: 'background-color 100ms ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated)';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                          }}
+                        >
+                          <ActionIcon
+                            size="xs"
+                            variant="transparent"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFavorite(recipe.id);
+                            }}
+                            style={{ flexShrink: 0 }}
+                          >
+                            <Star
+                              size={14}
+                              fill={recipe.favorite ? 'var(--phantom-accent-glow)' : 'none'}
+                              color={recipe.favorite ? 'var(--phantom-accent-glow)' : 'var(--phantom-text-muted)'}
+                            />
+                          </ActionIcon>
+                          <ActionIcon
+                            size="xs"
+                            variant="filled"
+                            color="green"
+                            radius="xl"
+                            style={{ flexShrink: 0 }}
+                            onClick={() => {
+                              const port = recipe.category === 'serve' ? worktree?.portBase : null;
+                              store.addPaneAsTab('terminal', {
+                                cwd: worktree?.worktreePath ?? project?.repoPath,
+                                initialCommand: recipe.command,
+                                worktreeId: worktree?.id,
+                                projectId: project?.id,
+                                recipeCommand: recipe.command,
+                                recipeLabel: recipe.label,
+                                recipeCategory: recipe.category,
+                                port,
+                              } as Record<string, unknown>, recipe.label);
+                            }}
+                          >
+                            <Play size={10} />
+                          </ActionIcon>
+                          <Text fz="0.78rem" fw={500} c="var(--phantom-text-primary)" style={{ minWidth: 80 }}>
+                            {recipe.label}
+                          </Text>
+                          <Text fz="0.7rem" c="var(--phantom-text-muted)" ff="'JetBrains Mono', monospace" truncate style={{ flex: 1 }}>
+                            {recipe.command}
+                          </Text>
+                          {!recipe.auto && (
+                            <Group gap={2} style={{ flexShrink: 0 }}>
+                              <ActionIcon size="xs" variant="transparent" onClick={(e) => { e.stopPropagation(); openEditModal(recipe); }}>
+                                <Pencil size={12} color="var(--phantom-text-muted)" />
+                              </ActionIcon>
+                              <ActionIcon size="xs" variant="transparent" onClick={(e) => { e.stopPropagation(); deleteCustomRecipe(recipe.id); }}>
+                                <Trash2 size={12} color="var(--phantom-text-muted)" />
+                              </ActionIcon>
+                            </Group>
+                          )}
+                        </Group>
+                      ))}
+                    </Stack>
+                  </Tabs.Panel>
+
+                  <Tabs.Panel value="favorites">
+                    <Stack gap={2} style={{ maxHeight: '60vh', overflowY: 'auto' }} mt="xs">
+                      {favoriteRecipes.length > 0 ? (
+                        favoriteRecipes.map((recipe) => (
+                          <Group
+                            key={recipe.id}
+                            gap="sm"
+                            wrap="nowrap"
+                            py={5}
+                            px={8}
+                            style={{
+                              borderRadius: 4,
+                              cursor: 'pointer',
+                              transition: 'background-color 100ms ease',
+                            }}
+                            onMouseEnter={(e) => {
+                              (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated)';
+                            }}
+                            onMouseLeave={(e) => {
+                              (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                            }}
+                          >
+                            <ActionIcon
+                              size="xs"
+                              variant="transparent"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleFavorite(recipe.id);
+                              }}
+                              style={{ flexShrink: 0 }}
+                            >
+                              <Star
+                                size={14}
+                                fill="var(--phantom-accent-glow)"
+                                color="var(--phantom-accent-glow)"
+                              />
+                            </ActionIcon>
+                            <ActionIcon
+                              size="xs"
+                              variant="filled"
+                              color="green"
+                              radius="xl"
+                              style={{ flexShrink: 0 }}
+                              onClick={() => {
+                                const port = recipe.category === 'serve' ? worktree?.portBase : null;
+                                store.addPaneAsTab('terminal', {
+                                  cwd: worktree?.worktreePath ?? project?.repoPath,
+                                  initialCommand: recipe.command,
+                                  worktreeId: worktree?.id,
+                                  projectId: project?.id,
+                                  recipeCommand: recipe.command,
+                                  recipeLabel: recipe.label,
+                                  recipeCategory: recipe.category,
+                                  port,
+                                } as Record<string, unknown>, recipe.label);
+                              }}
+                            >
+                              <Play size={10} />
+                            </ActionIcon>
+                            <Text fz="0.78rem" fw={500} c="var(--phantom-text-primary)" style={{ minWidth: 80 }}>
+                              {recipe.label}
+                            </Text>
+                            <Text fz="0.7rem" c="var(--phantom-text-muted)" ff="'JetBrains Mono', monospace" truncate style={{ flex: 1 }}>
+                              {recipe.command}
+                            </Text>
+                            {!recipe.auto && (
+                              <Group gap={2} style={{ flexShrink: 0 }}>
+                                <ActionIcon size="xs" variant="transparent" onClick={(e) => { e.stopPropagation(); openEditModal(recipe); }}>
+                                  <Pencil size={12} color="var(--phantom-text-muted)" />
+                                </ActionIcon>
+                                <ActionIcon size="xs" variant="transparent" onClick={(e) => { e.stopPropagation(); deleteCustomRecipe(recipe.id); }}>
+                                  <Trash2 size={12} color="var(--phantom-text-muted)" />
+                                </ActionIcon>
+                              </Group>
+                            )}
+                          </Group>
+                        ))
+                      ) : (
+                        <Text fz="xs" c="var(--phantom-text-muted)" ta="center" py="lg">
+                          Star a recipe to pin it here
+                        </Text>
+                      )}
+                    </Stack>
+                  </Tabs.Panel>
+                </Tabs>
               </Paper>
             )}
 
@@ -613,6 +807,14 @@ export function WorktreeHome() {
           &ldquo;{quote}&rdquo;
         </Text>
       </Stack>
+
+      <RecipeFormModal
+        opened={recipeModal.opened}
+        onClose={() => setRecipeModal({ opened: false, mode: 'create' })}
+        onSubmit={recipeModal.mode === 'create' ? handleCreateRecipe : handleEditRecipe}
+        mode={recipeModal.mode}
+        initialValues={recipeModal.initialValues}
+      />
     </div>
   );
 }
