@@ -83,12 +83,30 @@ function migrateState<TData>(state: WorkspaceState<TData>): WorkspaceState<TData
   return { ...state, tabs };
 }
 
+/** Filter out terminal tabs from persisted state (PTY processes are dead after restart) */
+function stripDeadTerminals<TData>(state: WorkspaceState<TData>): WorkspaceState<TData> {
+  const cleaned = state.tabs.filter((tab) => {
+    const panes = Object.values(tab.panes);
+    // Keep tabs that have at least one non-terminal pane
+    return panes.some((p) => p.kind !== 'terminal');
+  });
+  // Ensure at least one tab exists (Home)
+  if (cleaned.length === 0) {
+    const home = makeTab<TData>('Home');
+    return { tabs: [home], activeTabId: home.id };
+  }
+  const activeTabId = cleaned.some((t) => t.id === state.activeTabId)
+    ? state.activeTabId
+    : cleaned[0].id;
+  return { tabs: cleaned, activeTabId };
+}
+
 function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
   try {
     const raw = localStorage.getItem(storageKey(wsId));
     if (raw) {
       const saved = JSON.parse(raw) as WorkspaceState<TData>;
-      if (saved.tabs.length > 0) return migrateState(saved);
+      if (saved.tabs.length > 0) return stripDeadTerminals(migrateState(saved));
     }
   } catch { /* ignore */ }
 
@@ -99,7 +117,7 @@ function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
     if (legacy) {
       localStorage.removeItem(legacyKey); // Clean up legacy key
       const saved = JSON.parse(legacy) as WorkspaceState<TData>;
-      if (saved.tabs.length > 0) return migrateState(saved);
+      if (saved.tabs.length > 0) return stripDeadTerminals(migrateState(saved));
     }
   } catch { /* ignore */ }
 

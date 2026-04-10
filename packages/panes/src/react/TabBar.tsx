@@ -205,7 +205,7 @@ export function TabBar({ paneMenu }: TabBarProps) {
             title={t.label}
             style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
           >{t.label}</span>
-          {tabs.length > 1 && !Object.values(t.panes).some((p) => p.kind === 'workspace-home') && (
+          {!Object.values(t.panes).some((p) => p.kind === 'workspace-home') && (
             <button
               type="button"
               style={closeStyle}
