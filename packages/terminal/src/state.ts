@@ -102,7 +102,7 @@ export const attachSession = async (
   const term = new Terminal({
     theme: getTerminalTheme(),
     fontFamily: 'JetBrains Mono, monospace',
-    fontSize: 14,
+    fontSize: 12,
     cursorBlink: true,
     cursorStyle: 'bar',
   });

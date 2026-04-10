@@ -49,7 +49,7 @@ export const EditorPane = ({
 }: EditorPaneProps) => {
   const [content, setContent] = useState<string>(initialValue ?? '');
   const [loading, setLoading] = useState(!!filePath);
-  const [editorFontSize, setEditorFontSize] = useState(8);
+  const [editorFontSize, setEditorFontSize] = useState(12);
 
   // Configure Monaco with workspace tsconfig + types (once per workspace root)
   useEffect(() => {
