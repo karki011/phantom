@@ -33,6 +33,7 @@ import { useHunter } from '../hooks/useHunter';
 import { useProjectProfile } from '../hooks/useProjectProfile';
 import { useQuests } from '../hooks/useQuests';
 import { useRouter } from '../hooks/useRouter';
+import { PlansCard } from './PlansCard';
 import { RunningServersCard } from './RunningServersCard';
 
 // ---------------------------------------------------------------------------
@@ -133,7 +134,7 @@ function QuickActionCard({
 }) {
   return (
     <Paper
-      p="md"
+      p="sm"
       bg="var(--phantom-surface-card)"
       radius="md"
       onClick={onClick}
@@ -141,7 +142,7 @@ function QuickActionCard({
         cursor: 'pointer',
         border: '1px solid var(--phantom-border-subtle)',
         transition: 'border-color 0.2s, box-shadow 0.2s',
-        minHeight: '5.5rem',
+        minHeight: '4.5rem',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -155,10 +156,10 @@ function QuickActionCard({
         e.currentTarget.style.boxShadow = 'none';
       }}
     >
-      <Stack align="center" gap="sm">
+      <Stack align="center" gap={4}>
         {icon}
-        <Text fw={600} fz="md" c="var(--phantom-text-primary)">{label}</Text>
-        <Kbd fz="xs">{shortcut}</Kbd>
+        <Text fw={600} fz="sm" c="var(--phantom-text-primary)">{label}</Text>
+        <Kbd fz="0.65rem">{shortcut}</Kbd>
       </Stack>
     </Paper>
   );
@@ -408,11 +409,12 @@ export function WorktreeHome() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)',
+            gridTemplateColumns: 'minmax(0, 3fr) minmax(240px, 2fr)',
             gap: 'var(--mantine-spacing-lg)',
             width: '100%',
             alignItems: 'start',
           }}
+          className="phantom-home-grid"
         >
           {/* LEFT COLUMN — Project Recipes */}
           <Stack gap="md">
@@ -554,7 +556,7 @@ export function WorktreeHome() {
               <Text fz="xs" fw={600} c="var(--phantom-text-muted)" tt="uppercase" mb="sm" style={{ letterSpacing: '0.08em' }}>
                 Tools
               </Text>
-              <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="sm">
+              <SimpleGrid cols={2} spacing="sm">
                 <QuickActionCard
                   icon={<TerminalIcon size={20} style={{ color: 'var(--phantom-accent-glow)' }} />}
                   label="Terminal"
@@ -590,6 +592,9 @@ export function WorktreeHome() {
 
             {/* Running Servers */}
             {worktree?.id && <RunningServersCard worktreeId={worktree.id} />}
+
+            {/* Plans */}
+            {worktree?.id && <PlansCard worktreeId={worktree.id} />}
 
             {/* Git Status + Daily Quests */}
             <GitStatusCard state={gitStatusState} />
