@@ -81,16 +81,20 @@ export function WorktreeSidebar() {
     refreshWorktrees();
   }, [refreshProjects, refreshWorktrees]);
 
-  // Auto-expand the project containing the active worktree on startup
+  // Auto-expand the project containing the active worktree (once on startup)
+  const hasAutoExpanded = useRef(false);
   useEffect(() => {
-    if (!activeWorktreeId) return;
+    if (hasAutoExpanded.current || !activeWorktreeId || worktreesByProject.size === 0) return;
     for (const [projectId, wts] of worktreesByProject) {
-      if (wts.some((w) => w.id === activeWorktreeId) && !expandedProjects.includes(projectId)) {
-        setExpandedProjects((prev) => [...prev, projectId]);
+      if (wts.some((w) => w.id === activeWorktreeId)) {
+        hasAutoExpanded.current = true;
+        if (!expandedProjects.includes(projectId)) {
+          setExpandedProjects((prev) => [...prev, projectId]);
+        }
         break;
       }
     }
-  }, [activeWorktreeId, worktreesByProject, expandedProjects, setExpandedProjects]);
+  }, [activeWorktreeId, worktreesByProject]);
 
   const toggleProject = useCallback(
     (projectId: string) => {
