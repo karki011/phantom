@@ -1,6 +1,6 @@
 /**
  * useChat Hook — manages conversation state with Claude via /api/chat
- * Persists chat history to the DB and ties conversations to workspaces.
+ * Persists chat history to the DB and ties conversations to worktrees.
  * Supports multiple conversations with list, create, switch, and delete.
  * @author Subash Karki
  */
@@ -40,7 +40,7 @@ interface UseChatReturn {
 
 const uid = () => `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-export const useChat = (cwd?: string, workspaceId?: string | null, projectContext?: string): UseChatReturn => {
+export const useChat = (cwd?: string, worktreeId?: string | null, projectContext?: string): UseChatReturn => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -49,12 +49,12 @@ export const useChat = (cwd?: string, workspaceId?: string | null, projectContex
   const abortRef = useRef<AbortController | null>(null);
   const skipNextLoadRef = useRef(false);
 
-  // Load conversations list on mount / workspace change
+  // Load conversations list on mount / worktree change
   useEffect(() => {
-    if (workspaceId === undefined) return; // Wait for workspace info
+    if (worktreeId === undefined) return; // Wait for worktree info
 
-    const url = workspaceId
-      ? `/api/chat/conversations?workspaceId=${workspaceId}`
+    const url = worktreeId
+      ? `/api/chat/conversations?worktreeId=${worktreeId}`
       : '/api/chat/conversations';
 
     fetch(url)
@@ -69,7 +69,7 @@ export const useChat = (cwd?: string, workspaceId?: string | null, projectContex
         }
       })
       .catch(() => {});
-  }, [workspaceId]);
+  }, [worktreeId]);
 
   // Load messages when activeConversationId changes
   useEffect(() => {
@@ -104,7 +104,7 @@ export const useChat = (cwd?: string, workspaceId?: string | null, projectContex
       const resp = await fetch('/api/chat/conversations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId, model }),
+        body: JSON.stringify({ worktreeId, model }),
       });
       const conv = await resp.json() as ChatConversation;
       setConversations((prev) => [conv, ...prev]);
@@ -112,7 +112,7 @@ export const useChat = (cwd?: string, workspaceId?: string | null, projectContex
       setActiveConversationId(conv.id);
       setMessages([]);
     } catch { /* ignore */ }
-  }, [workspaceId, model]);
+  }, [worktreeId, model]);
 
   /** Select an existing conversation */
   const selectConversation = useCallback((id: string) => {
@@ -126,14 +126,14 @@ export const useChat = (cwd?: string, workspaceId?: string | null, projectContex
     const resp = await fetch('/api/chat/conversations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workspaceId, model }),
+      body: JSON.stringify({ worktreeId, model }),
     });
     const conv = await resp.json() as ChatConversation;
     setConversations((prev) => [conv, ...prev]);
     skipNextLoadRef.current = true; // Don't load from DB — no messages yet
     setActiveConversationId(conv.id);
     return conv.id;
-  }, [activeConversationId, workspaceId, model]);
+  }, [activeConversationId, worktreeId, model]);
 
   const send = useCallback(async (text: string) => {
     if (!text.trim() || sending) return;
@@ -250,8 +250,8 @@ export const useChat = (cwd?: string, workspaceId?: string | null, projectContex
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [
-            { id: userMsg.id, conversationId: convId, workspaceId, role: 'user', content: text.trim(), createdAt: userMsg.timestamp },
-            { id: assistantMsg.id, conversationId: convId, workspaceId, role: 'assistant', content: accumulated, model, createdAt: Date.now() },
+            { id: userMsg.id, conversationId: convId, worktreeId, role: 'user', content: text.trim(), createdAt: userMsg.timestamp },
+            { id: assistantMsg.id, conversationId: convId, worktreeId, role: 'assistant', content: accumulated, model, createdAt: Date.now() },
           ],
         }),
       })
@@ -285,7 +285,7 @@ export const useChat = (cwd?: string, workspaceId?: string | null, projectContex
       setSending(false);
       abortRef.current = null;
     }
-  }, [messages, sending, model, cwd, workspaceId, projectContext, ensureConversation]);
+  }, [messages, sending, model, cwd, worktreeId, projectContext, ensureConversation]);
 
   /** Delete a conversation and its messages */
   const deleteConversation = useCallback(async (id: string) => {
@@ -297,20 +297,20 @@ export const useChat = (cwd?: string, workspaceId?: string | null, projectContex
     }
   }, [activeConversationId]);
 
-  /** Legacy clear — clears all history for the workspace */
+  /** Legacy clear — clears all history for the worktree */
   const clear = useCallback(() => {
     abortRef.current?.abort();
     setMessages([]);
     setSending(false);
 
     // Clear DB history
-    const url = workspaceId
-      ? `/api/chat/history?workspaceId=${workspaceId}`
+    const url = worktreeId
+      ? `/api/chat/history?worktreeId=${worktreeId}`
       : '/api/chat/history';
     fetch(url, { method: 'DELETE' }).catch(() => {});
     setConversations([]);
     setActiveConversationId(null);
-  }, [workspaceId]);
+  }, [worktreeId]);
 
   return {
     messages,

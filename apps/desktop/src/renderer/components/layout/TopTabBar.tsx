@@ -18,7 +18,7 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { id: 'cockpit', label: 'Cockpit', icon: Home },
-  { id: 'workspace', label: 'Worktree', icon: Code2 },
+  { id: 'worktree', label: 'Worktree', icon: Code2 },
 ];
 
 export function TopTabBar() {

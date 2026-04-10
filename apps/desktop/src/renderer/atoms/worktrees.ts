@@ -11,7 +11,6 @@ import {
   type ProjectData,
   type WorktreeData,
   getProjects,
-  createProject,
   getWorktrees,
   createWorktree as apiCreateWorktree,
   deleteWorktree as apiDeleteWorktree,
@@ -43,15 +42,6 @@ export const refreshProjectsAtom = atom(null, async (_get, set) => {
     set(projectsLoadingAtom, false);
   }
 });
-
-export const createProjectAtom = atom(
-  null,
-  async (_get, set, params: { repoPath: string; name?: string }) => {
-    const project = await createProject(params);
-    set(projectsDataAtom, (prev) => [...prev, project]);
-    return project;
-  },
-);
 
 // ---------------------------------------------------------------------------
 // Worktrees

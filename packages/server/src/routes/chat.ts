@@ -1,7 +1,7 @@
 /**
  * PhantomOS Chat Routes — Talk to Claude via CLI pipe
  * Uses `claude -p` with JSON output for reliable responses.
- * Includes chat history persistence, worktree context, and conversation management.
+ * Includes chat history persistence, per-worktree context, and conversation management.
  * @author Subash Karki
  */
 import { spawn } from 'node:child_process';
@@ -58,11 +58,11 @@ const buildPrompt = (message: string, context?: ChatMessage[], projectContext?: 
 
 /** GET /chat/conversations — List conversations for a worktree */
 chatRoutes.get('/chat/conversations', (c) => {
-  const workspaceId = c.req.query('workspaceId') ?? null;
+  const worktreeId = c.req.query('worktreeId') ?? c.req.query('workspaceId') ?? null;
   const limit = Number(c.req.query('limit')) || 20;
 
-  const rows = workspaceId
-    ? db.select().from(chatConversations).where(eq(chatConversations.workspaceId, workspaceId)).orderBy(desc(chatConversations.updatedAt)).limit(limit).all()
+  const rows = worktreeId
+    ? db.select().from(chatConversations).where(eq(chatConversations.workspaceId, worktreeId)).orderBy(desc(chatConversations.updatedAt)).limit(limit).all()
     : db.select().from(chatConversations).where(sql`${chatConversations.workspaceId} IS NULL`).orderBy(desc(chatConversations.updatedAt)).limit(limit).all();
 
   return c.json(rows);
@@ -70,20 +70,21 @@ chatRoutes.get('/chat/conversations', (c) => {
 
 /** POST /chat/conversations — Create a new conversation */
 chatRoutes.post('/chat/conversations', async (c) => {
-  const body = await c.req.json<{ workspaceId?: string; title?: string; model?: string }>();
+  const body = await c.req.json<{ worktreeId?: string; workspaceId?: string; title?: string; model?: string }>();
+  const worktreeId = body.worktreeId ?? body.workspaceId ?? null;
   const id = randomUUID();
   const now = Date.now();
 
   db.insert(chatConversations).values({
     id,
-    workspaceId: body.workspaceId ?? null,
+    workspaceId: worktreeId,
     title: body.title ?? 'New Chat',
     model: body.model ?? 'sonnet',
     createdAt: now,
     updatedAt: now,
   }).run();
 
-  return c.json({ id, workspaceId: body.workspaceId ?? null, title: body.title ?? 'New Chat', model: body.model ?? 'sonnet', createdAt: now, updatedAt: now }, 201);
+  return c.json({ id, workspaceId: worktreeId, title: body.title ?? 'New Chat', model: body.model ?? 'sonnet', createdAt: now, updatedAt: now }, 201);
 });
 
 /** DELETE /chat/conversations/:id — Delete a conversation and its messages */
@@ -100,14 +101,14 @@ chatRoutes.delete('/chat/conversations/:id', (c) => {
 
 chatRoutes.get('/chat/history', (c) => {
   const conversationId = c.req.query('conversationId');
-  const workspaceId = c.req.query('workspaceId') ?? null;
+  const worktreeId = c.req.query('worktreeId') ?? c.req.query('workspaceId') ?? null;
   const limit = Number(c.req.query('limit')) || 50;
 
   let rows;
   if (conversationId) {
     rows = db.select().from(chatMessages).where(eq(chatMessages.conversationId, conversationId)).orderBy(desc(chatMessages.createdAt)).limit(limit).all();
-  } else if (workspaceId) {
-    rows = db.select().from(chatMessages).where(eq(chatMessages.workspaceId, workspaceId)).orderBy(desc(chatMessages.createdAt)).limit(limit).all();
+  } else if (worktreeId) {
+    rows = db.select().from(chatMessages).where(eq(chatMessages.workspaceId, worktreeId)).orderBy(desc(chatMessages.createdAt)).limit(limit).all();
   } else {
     rows = db.select().from(chatMessages).where(sql`${chatMessages.workspaceId} IS NULL`).orderBy(desc(chatMessages.createdAt)).limit(limit).all();
   }
@@ -125,6 +126,7 @@ chatRoutes.post('/chat/save', async (c) => {
     messages: {
       id: string;
       conversationId?: string;
+      worktreeId?: string;
       workspaceId?: string;
       role: string;
       content: string;
@@ -137,7 +139,7 @@ chatRoutes.post('/chat/save', async (c) => {
     db.insert(chatMessages).values({
       id: msg.id,
       conversationId: msg.conversationId ?? null,
-      workspaceId: msg.workspaceId ?? null,
+      workspaceId: msg.worktreeId ?? msg.workspaceId ?? null,
       role: msg.role,
       content: msg.content,
       model: msg.model ?? null,
@@ -169,19 +171,19 @@ chatRoutes.post('/chat/save', async (c) => {
 
 chatRoutes.delete('/chat/history', (c) => {
   const conversationId = c.req.query('conversationId');
-  const workspaceId = c.req.query('workspaceId') ?? null;
+  const worktreeId = c.req.query('worktreeId') ?? c.req.query('workspaceId') ?? null;
 
   if (conversationId) {
     db.delete(chatMessages).where(eq(chatMessages.conversationId, conversationId)).run();
     db.delete(chatConversations).where(eq(chatConversations.id, conversationId)).run();
-  } else if (workspaceId) {
+  } else if (worktreeId) {
     // Delete all conversations + messages for worktree
-    const convs = db.select({ id: chatConversations.id }).from(chatConversations).where(eq(chatConversations.workspaceId, workspaceId)).all();
+    const convs = db.select({ id: chatConversations.id }).from(chatConversations).where(eq(chatConversations.workspaceId, worktreeId)).all();
     for (const conv of convs) {
       db.delete(chatMessages).where(eq(chatMessages.conversationId, conv.id)).run();
     }
-    db.delete(chatConversations).where(eq(chatConversations.workspaceId, workspaceId)).run();
-    db.delete(chatMessages).where(eq(chatMessages.workspaceId, workspaceId)).run();
+    db.delete(chatConversations).where(eq(chatConversations.workspaceId, worktreeId)).run();
+    db.delete(chatMessages).where(eq(chatMessages.workspaceId, worktreeId)).run();
   } else {
     db.delete(chatMessages).where(sql`${chatMessages.workspaceId} IS NULL`).run();
     db.delete(chatConversations).where(sql`${chatConversations.workspaceId} IS NULL`).run();

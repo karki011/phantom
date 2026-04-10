@@ -101,17 +101,6 @@ export interface DailyQuestData {
   xpReward: number;
 }
 
-export interface DashboardStats {
-  activeSessions: number;
-  todayTasks: number;
-  totalSessions: number;
-  totalTasks: number;
-  streak: number;
-  achievementsUnlocked: number;
-  totalTokens: number;
-  totalCost: number;
-}
-
 // ---------------------------------------------------------------------------
 // Base URL
 // ---------------------------------------------------------------------------
@@ -170,9 +159,6 @@ export const getAchievements = (): Promise<AchievementData[]> =>
 
 export const getDailyQuests = (): Promise<DailyQuestData[]> =>
   fetchApi<DailyQuestData[]>('/api/quests/daily');
-
-export const getStats = (): Promise<DashboardStats> =>
-  fetchApi<DashboardStats>('/api/stats');
 
 export const updateHunterName = (name: string): Promise<void> =>
   fetchApi<void>('/api/hunter/name', {
@@ -244,11 +230,6 @@ export interface FileEntry {
 
 export interface DirectoryListing {
   entries: FileEntry[];
-}
-
-export interface FileContent {
-  content: string;
-  mtime: number;
 }
 
 export const getProjects = (): Promise<ProjectData[]> =>
@@ -330,14 +311,6 @@ export const getDirectoryListing = (
 ): Promise<DirectoryListing> =>
   fetchApi<DirectoryListing>(
     `/api/worktrees/${worktreeId}/files?path=${encodeURIComponent(path)}`,
-  );
-
-export const getFileContent = (
-  worktreeId: string,
-  path: string,
-): Promise<FileContent> =>
-  fetchApi<FileContent>(
-    `/api/worktrees/${worktreeId}/file?path=${encodeURIComponent(path)}`,
   );
 
 // ---------------------------------------------------------------------------

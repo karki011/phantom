@@ -270,7 +270,7 @@ export function WorktreeHome() {
   // Fetch recent chats for this worktree
   useEffect(() => {
     if (!worktree?.id) return;
-    fetch(`/api/chat/conversations?workspaceId=${worktree.id}&limit=5`)
+    fetch(`/api/chat/conversations?worktreeId=${worktree.id}&limit=5`)
       .then((r) => r.json())
       .then((convs) => setRecentChats(convs))
       .catch(() => {});
@@ -554,7 +554,7 @@ export function WorktreeHome() {
             </Paper>
 
             {/* Running Servers */}
-            {worktree?.id && <RunningServersCard workspaceId={worktree.id} />}
+            {worktree?.id && <RunningServersCard worktreeId={worktree.id} />}
 
             {/* Git Status + Daily Quests */}
             <GitStatusCard state={gitStatusState} />

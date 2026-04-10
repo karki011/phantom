@@ -201,19 +201,19 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
               <div>
                 <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Project</Text>
                 <Text fz="xs" c="var(--phantom-text-secondary)">
-                  A git repository you've opened. Each project tracks its repo path, default branch, and workspaces.
+                  A git repository you've opened. Each project tracks its repo path, default branch, and worktrees.
                 </Text>
               </div>
               <div>
-                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Workspace</Text>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Worktree</Text>
                 <Text fz="xs" c="var(--phantom-text-secondary)">
-                  An isolated working copy of a project. Your first workspace uses the main branch directly. Each additional workspace creates a <strong>git worktree</strong> — a separate directory with its own branch and files, so you can work on multiple features without stashing or switching branches.
+                  An isolated working copy of a project. Your first worktree uses the main branch directly. Each additional worktree creates a <strong>git worktree</strong> — a separate directory with its own branch and files, so you can work on multiple features without stashing or switching branches.
                 </Text>
               </div>
               <div>
                 <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Panes</Text>
                 <Text fz="xs" c="var(--phantom-text-secondary)">
-                  Split your workspace into terminals, editors, session dashboards, and more. Drag panes to rearrange, split horizontally or vertically.
+                  Split your worktree into terminals, editors, session dashboards, and more. Drag panes to rearrange, split horizontally or vertically.
                 </Text>
               </div>
               <div>

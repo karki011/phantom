@@ -5,7 +5,7 @@
  * @author Subash Karki
  */
 import { Button, Text, TextInput, Tooltip, UnstyledButton } from '@mantine/core';
-import { AlertTriangle, GitBranch } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { useSetAtom } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { WorktreeData } from '../../lib/api';

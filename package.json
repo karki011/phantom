@@ -12,6 +12,8 @@
     "dev:api": "turbo dev:api --filter=@phantom-os/server",
     "dev:all": "turbo dev dev:api",
     "dev:desktop": "turbo dev --filter=@phantom-os/desktop",
+    "test": "vitest",
+    "test:run": "vitest run",
     "postinstall": "chmod +x node_modules/.bun/node-pty@*/node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true; bash scripts/patch-electron-name.sh"
   },
   "dependencies": {
@@ -19,9 +21,10 @@
     "better-sqlite3": "^12.0.0"
   },
   "devDependencies": {
-    "turbo": "^2.9.4",
     "tsx": "^4.21.0",
-    "typescript": "~6.0.2"
+    "turbo": "^2.9.4",
+    "typescript": "~6.0.2",
+    "vitest": "^4.1.4"
   },
   "trustedDependencies": [
     "better-sqlite3",

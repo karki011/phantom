@@ -1,5 +1,5 @@
 /**
- * RunningServersCard — shows running processes for the active workspace
+ * RunningServersCard — shows running processes for the active worktree
  * @author Subash Karki
  */
 import { ActionIcon, Badge, Group, Paper, Stack, Text, Tooltip } from '@mantine/core';
@@ -19,15 +19,15 @@ const formatUptime = (startedAt: number): string => {
 };
 
 interface RunningServersCardProps {
-  workspaceId: string;
+  worktreeId: string;
 }
 
-export function RunningServersCard({ workspaceId }: RunningServersCardProps) {
+export function RunningServersCard({ worktreeId }: RunningServersCardProps) {
   const [servers, setServers] = useState<RunningServer[]>([]);
 
   const refresh = useCallback(() => {
-    getRunningServers(workspaceId).then(setServers).catch(() => {});
-  }, [workspaceId]);
+    getRunningServers(worktreeId).then(setServers).catch(() => {});
+  }, [worktreeId]);
 
   // Poll every 3 seconds + SSE events
   useEffect(() => {

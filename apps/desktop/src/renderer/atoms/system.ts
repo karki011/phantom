@@ -13,7 +13,7 @@ import { atomWithStorage } from 'jotai/utils';
 
 export type FontScale = 0.9 | 1.0 | 1.1 | 1.25 | 1.5;
 export type ThemeMode = 'dark' | 'light';
-export type TopLevelTab = 'cockpit' | 'workspace';
+export type TopLevelTab = 'cockpit' | 'worktree';
 
 export interface SystemNotification {
   id: string;

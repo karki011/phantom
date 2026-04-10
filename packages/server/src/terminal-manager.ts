@@ -66,7 +66,7 @@ export const initDaemonClient = async (): Promise<boolean> => {
     });
 
     daemonClient.on('disconnected', () => {
-      console.warn('[TerminalManager] Daemon disconnected');
+      logger.warn('TerminalManager', 'Daemon disconnected');
       daemonAvailable = false;
     });
 
@@ -76,7 +76,7 @@ export const initDaemonClient = async (): Promise<boolean> => {
     });
 
     daemonClient.on('error', (err: Error) => {
-      console.error('[TerminalManager] Daemon client error:', err.message);
+      logger.warn('TerminalManager', `Daemon client error: ${err.message}`);
     });
 
     await daemonClient.connect();
@@ -84,10 +84,7 @@ export const initDaemonClient = async (): Promise<boolean> => {
     logger.info('TerminalManager', 'Connected to terminal daemon');
     return true;
   } catch (err) {
-    console.warn(
-      '[TerminalManager] Failed to connect to daemon:',
-      (err as Error).message,
-    );
+    logger.warn('TerminalManager', `Failed to connect to daemon: ${(err as Error).message}`);
     daemonClient = null;
     daemonAvailable = false;
     return false;
@@ -198,10 +195,7 @@ export const createPty = async (
       return session;
     } catch (err) {
       sessions.delete(id); // Clean up on failure
-      console.warn(
-        `[TerminalManager] Daemon createOrAttach failed for ${id}, falling back:`,
-        (err as Error).message,
-      );
+      logger.warn('TerminalManager', `Daemon createOrAttach failed for ${id}, falling back: ${(err as Error).message}`);
     }
   }
 
@@ -219,7 +213,7 @@ export const createPtySync = (id: string, cwd?: string): PtySession => {
   if (daemonAvailable && daemonClient?.connected) {
     // Fire-and-forget the daemon createOrAttach
     daemonClient.createOrAttach(id, { cwd }).catch((err) => {
-      console.warn(`[TerminalManager] Async daemon create failed for ${id}:`, err);
+      logger.warn('TerminalManager', `Async daemon create failed for ${id}: ${(err as Error).message}`);
     });
 
     const session: PtySession = {
@@ -267,7 +261,7 @@ export const destroyPty = (id: string): void => {
 
   if (session.daemonManaged && daemonClient?.connected) {
     daemonClient.kill(id).catch((err) => {
-      console.warn(`[TerminalManager] Daemon kill failed for ${id}:`, err);
+      logger.warn('TerminalManager', `Daemon kill failed for ${id}: ${(err as Error).message}`);
     });
   } else if (session.pty) {
     session.pty.kill();
