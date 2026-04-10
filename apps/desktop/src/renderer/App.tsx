@@ -1,13 +1,13 @@
 /**
  * PhantomOS App Shell
- * Two top-level tabs: Cockpit (gamification dashboard) and Workspace (editor/terminal/files).
- * Welcome page shown when Workspace tab is active but no workspace is selected.
+ * Two top-level tabs: Cockpit (gamification dashboard) and Worktree (editor/terminal/files).
+ * Welcome page shown when Worktree tab is active but no worktree is selected.
  *
  * Layout:
  *   [Header]
- *   [TopTabBar: Cockpit | Workspace]
+ *   [TopTabBar: Cockpit | Worktree]
  *   Cockpit tab  -> full-width dashboard + sub-views (no sidebars)
- *   Workspace tab -> [LeftSidebar | Pane workspace or WelcomePage | RightSidebar]
+ *   Worktree tab -> [LeftSidebar | Pane worktree or WelcomePage | RightSidebar]
  *   [Footer]
  *
  * @author Subash Karki
@@ -21,7 +21,7 @@ import { WorkspaceProvider, Workspace, paneStore } from '@phantom-os/panes';
 import { paneDefinitions, paneMenu } from './panes/registry';
 import { unlockedCountAtom, refreshAchievementsAtom } from './atoms/achievements';
 import { activeTopTabAtom, fontScaleAtom, sseConnectionAtom } from './atoms/system';
-import { activeWorkspaceAtom, activeWorkspaceIdAtom } from './atoms/workspaces';
+import { activeWorktreeAtom, activeWorktreeIdAtom } from './atoms/worktrees';
 import { Cockpit } from './components/cockpit/Cockpit';
 import { TopTabBar } from './components/layout/TopTabBar';
 import { SystemHeader } from './components/layout/SystemHeader';
@@ -36,7 +36,7 @@ import { AchievementsView } from './components/views/AchievementsView';
 import { DailyQuestsView } from './components/views/DailyQuestsView';
 import { HunterStatsView } from './components/hunter-stats/HunterStatsView';
 import { SessionViewer } from './components/views/SessionViewer';
-import { WorkspaceSidebar } from './components/sidebar/WorkspaceSidebar';
+import { WorktreeSidebar } from './components/sidebar/WorktreeSidebar';
 import { RightSidebar } from './components/sidebar/RightSidebar';
 import { useHunter } from './hooks/useHunter';
 import { type Route, useRouter } from './hooks/useRouter';
@@ -85,12 +85,12 @@ export const App = () => {
   const fontScale = useAtomValue(fontScaleAtom);
   const sseState = useAtomValue(sseConnectionAtom);
   const activeTab = useAtomValue(activeTopTabAtom);
-  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
-  const activeWsId = useAtomValue(activeWorkspaceIdAtom);
+  const activeWorktree = useAtomValue(activeWorktreeAtom);
+  const activeWsId = useAtomValue(activeWorktreeIdAtom);
   const achievementCount = useAtomValue(unlockedCountAtom);
   const refreshAchievements = useSetAtom(refreshAchievementsAtom);
 
-  // Switch pane store when active workspace changes
+  // Switch pane store when active worktree changes
   useEffect(() => {
     if (activeWsId) {
       paneStore.getState().switchWorkspace(activeWsId);
@@ -171,12 +171,12 @@ export const App = () => {
               )}
             </div>
           ) : (
-            /* ── Workspace tab: sidebars + pane workspace or welcome page ── */
+            /* ── Worktree tab: sidebars + pane worktree or welcome page ── */
             <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-              <WorkspaceSidebar />
+              <WorktreeSidebar />
 
               <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
-                {activeWorkspace ? (
+                {activeWorktree ? (
                   <Workspace
                     paneMenu={paneMenu}
                     style={{
@@ -190,7 +190,7 @@ export const App = () => {
                 )}
               </div>
 
-              {activeWorkspace && <RightSidebar />}
+              {activeWorktree && <RightSidebar />}
             </div>
           )}
         </div>

@@ -205,7 +205,7 @@ export const getSessionMessages = async (
 };
 
 // ---------------------------------------------------------------------------
-// Projects & Workspaces
+// Projects & Worktrees
 // ---------------------------------------------------------------------------
 
 export interface ProjectData {
@@ -218,7 +218,7 @@ export interface ProjectData {
   createdAt: number;
 }
 
-export interface WorkspaceData {
+export interface WorktreeData {
   id: string;
   projectId: string;
   type: string;
@@ -263,33 +263,33 @@ export const createProject = (data: {
     body: JSON.stringify(data),
   });
 
-export const getWorkspaces = (projectId?: string): Promise<WorkspaceData[]> =>
-  fetchApi<WorkspaceData[]>(
-    `/api/workspaces${projectId ? `?projectId=${projectId}` : ''}`,
+export const getWorktrees = (projectId?: string): Promise<WorktreeData[]> =>
+  fetchApi<WorktreeData[]>(
+    `/api/worktrees${projectId ? `?projectId=${projectId}` : ''}`,
   );
 
-export const createWorkspace = (data: {
+export const createWorktree = (data: {
   projectId: string;
   name?: string;
   branch?: string;
   baseBranch?: string;
-}): Promise<WorkspaceData> =>
-  fetchApi<WorkspaceData>('/api/workspaces', {
+}): Promise<WorktreeData> =>
+  fetchApi<WorktreeData>('/api/worktrees', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 
-export const updateWorkspace = (
+export const updateWorktree = (
   id: string,
   data: Partial<{ name: string; branch: string }>,
-): Promise<WorkspaceData> =>
-  fetchApi<WorkspaceData>(`/api/workspaces/${id}`, {
+): Promise<WorktreeData> =>
+  fetchApi<WorktreeData>(`/api/worktrees/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
 
-export const deleteWorkspace = (id: string): Promise<void> =>
-  fetchApi<void>(`/api/workspaces/${id}`, { method: 'DELETE' });
+export const deleteWorktree = (id: string): Promise<void> =>
+  fetchApi<void>(`/api/worktrees/${id}`, { method: 'DELETE' });
 
 export const deleteProject = (id: string, deleteWorktrees = false): Promise<void> =>
   fetchApi<void>(`/api/projects/${id}`, {
@@ -305,7 +305,7 @@ export const renameProject = (id: string, name: string): Promise<ProjectData> =>
 
 export interface OpenRepositoryResult {
   project: ProjectData;
-  workspace: WorkspaceData;
+  worktree: WorktreeData;
 }
 
 export const openRepository = (repoPath: string): Promise<OpenRepositoryResult> =>
@@ -325,19 +325,19 @@ export const getProjectBranches = (projectId: string): Promise<BranchesData> =>
   fetchApi<BranchesData>(`/api/projects/${projectId}/branches`);
 
 export const getDirectoryListing = (
-  workspaceId: string,
+  worktreeId: string,
   path: string,
 ): Promise<DirectoryListing> =>
   fetchApi<DirectoryListing>(
-    `/api/workspaces/${workspaceId}/files?path=${encodeURIComponent(path)}`,
+    `/api/worktrees/${worktreeId}/files?path=${encodeURIComponent(path)}`,
   );
 
 export const getFileContent = (
-  workspaceId: string,
+  worktreeId: string,
   path: string,
 ): Promise<FileContent> =>
   fetchApi<FileContent>(
-    `/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`,
+    `/api/worktrees/${worktreeId}/file?path=${encodeURIComponent(path)}`,
   );
 
 // ---------------------------------------------------------------------------
@@ -441,8 +441,8 @@ export interface RunningServer {
   startedAt: number;
 }
 
-export const getRunningServers = (workspaceId?: string): Promise<RunningServer[]> =>
-  fetchApi<RunningServer[]>(`/api/servers${workspaceId ? `?workspaceId=${workspaceId}` : ''}`);
+export const getRunningServers = (worktreeId?: string): Promise<RunningServer[]> =>
+  fetchApi<RunningServer[]>(`/api/servers${worktreeId ? `?workspaceId=${worktreeId}` : ''}`);
 
 export const stopServer = (termId: string): Promise<{ ok: boolean }> =>
   fetchApi<{ ok: boolean }>(`/api/servers/${termId}/stop`, { method: 'POST' });
@@ -463,8 +463,8 @@ export const getDiscoveredWorktrees = (projectId: string): Promise<DiscoveredWor
 export const importWorktree = (
   projectId: string,
   data: { path: string; name?: string },
-): Promise<WorkspaceData> =>
-  fetchApi<WorkspaceData>(`/api/projects/${projectId}/worktrees/import`, {
+): Promise<WorktreeData> =>
+  fetchApi<WorktreeData>(`/api/projects/${projectId}/worktrees/import`, {
     method: 'POST',
     body: JSON.stringify(data),
   });

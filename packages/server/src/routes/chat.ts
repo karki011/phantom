@@ -1,7 +1,7 @@
 /**
  * PhantomOS Chat Routes — Talk to Claude via CLI pipe
  * Uses `claude -p` with JSON output for reliable responses.
- * Includes chat history persistence, workspace context, and conversation management.
+ * Includes chat history persistence, worktree context, and conversation management.
  * @author Subash Karki
  */
 import { spawn } from 'node:child_process';
@@ -56,7 +56,7 @@ const buildPrompt = (message: string, context?: ChatMessage[], projectContext?: 
 // Conversation CRUD
 // ---------------------------------------------------------------------------
 
-/** GET /chat/conversations — List conversations for a workspace */
+/** GET /chat/conversations — List conversations for a worktree */
 chatRoutes.get('/chat/conversations', (c) => {
   const workspaceId = c.req.query('workspaceId') ?? null;
   const limit = Number(c.req.query('limit')) || 20;
@@ -95,7 +95,7 @@ chatRoutes.delete('/chat/conversations/:id', (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /chat/history — Load chat messages (by conversation or workspace)
+// GET /chat/history — Load chat messages (by conversation or worktree)
 // ---------------------------------------------------------------------------
 
 chatRoutes.get('/chat/history', (c) => {
@@ -164,7 +164,7 @@ chatRoutes.post('/chat/save', async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// DELETE /chat/history — Clear chat history (by conversation or workspace)
+// DELETE /chat/history — Clear chat history (by conversation or worktree)
 // ---------------------------------------------------------------------------
 
 chatRoutes.delete('/chat/history', (c) => {
@@ -175,7 +175,7 @@ chatRoutes.delete('/chat/history', (c) => {
     db.delete(chatMessages).where(eq(chatMessages.conversationId, conversationId)).run();
     db.delete(chatConversations).where(eq(chatConversations.id, conversationId)).run();
   } else if (workspaceId) {
-    // Delete all conversations + messages for workspace
+    // Delete all conversations + messages for worktree
     const convs = db.select({ id: chatConversations.id }).from(chatConversations).where(eq(chatConversations.workspaceId, workspaceId)).all();
     for (const conv of convs) {
       db.delete(chatMessages).where(eq(chatMessages.conversationId, conv.id)).run();

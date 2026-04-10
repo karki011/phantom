@@ -1,6 +1,6 @@
 /**
  * TopTabBar Component
- * Two top-level tabs: Cockpit (gamification dashboard) and Workspace (editor/terminal/files)
+ * Two top-level tabs: Cockpit (gamification dashboard) and Worktree (editor/terminal/files)
  *
  * @author Subash Karki
  */
@@ -18,7 +18,7 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { id: 'cockpit', label: 'Cockpit', icon: Home },
-  { id: 'workspace', label: 'Workspace', icon: Code2 },
+  { id: 'workspace', label: 'Worktree', icon: Code2 },
 ];
 
 export function TopTabBar() {

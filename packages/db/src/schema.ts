@@ -106,7 +106,7 @@ export const activityLog = sqliteTable('activity_log', {
 });
 
 // ---------------------------------------------------------------------------
-// Workspace System
+// Worktree System
 // ---------------------------------------------------------------------------
 
 export const projects = sqliteTable('projects', {
@@ -120,7 +120,7 @@ export const projects = sqliteTable('projects', {
   createdAt: integer('created_at').notNull(),
 });
 
-export const workspaceSections = sqliteTable('workspace_sections', {
+export const worktreeSections = sqliteTable('workspace_sections', {
   id: text('id').primaryKey(),
   projectId: text('project_id').notNull().references(() => projects.id),
   name: text('name').notNull(),
@@ -130,7 +130,7 @@ export const workspaceSections = sqliteTable('workspace_sections', {
   createdAt: integer('created_at').notNull(),
 });
 
-export const workspaces = sqliteTable('workspaces', {
+export const worktrees = sqliteTable('workspaces', {
   id: text('id').primaryKey(),
   projectId: text('project_id').notNull().references(() => projects.id),
   type: text('type').notNull(), // 'worktree' | 'branch'
@@ -138,7 +138,7 @@ export const workspaces = sqliteTable('workspaces', {
   branch: text('branch').notNull(),
   worktreePath: text('worktree_path'),
   portBase: integer('port_base'),
-  sectionId: text('section_id').references(() => workspaceSections.id),
+  sectionId: text('section_id').references(() => worktreeSections.id),
   baseBranch: text('base_branch'),
   tabOrder: integer('tab_order').default(0),
   isActive: integer('is_active').default(0),

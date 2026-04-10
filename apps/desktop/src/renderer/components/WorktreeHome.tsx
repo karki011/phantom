@@ -1,6 +1,6 @@
 /**
- * WorkspaceHome — "Hunter's Terminal"
- * Default pane content for workspace tabs. Shows rank, quick actions,
+ * WorktreeHome — "Hunter's Terminal"
+ * Default pane content for worktree tabs. Shows rank, quick actions,
  * git status, daily quests, and a Solo Leveling quote.
  *
  * @author Subash Karki
@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { activeWorkspaceAtom, deleteWorkspaceAtom, projectsAtom } from '../atoms/workspaces';
+import { activeWorktreeAtom, deleteWorktreeAtom, projectsAtom } from '../atoms/worktrees';
 import { useHunter } from '../hooks/useHunter';
 import { useProjectProfile } from '../hooks/useProjectProfile';
 import { useQuests } from '../hooks/useQuests';
@@ -246,35 +246,35 @@ function DailyQuestsCard({ quests }: { quests: { total: number; completed: numbe
 // Main component
 // ---------------------------------------------------------------------------
 
-export function WorkspaceHome() {
+export function WorktreeHome() {
   const { profile } = useHunter();
   const { quests } = useQuests();
   const { navigate } = useRouter();
   const store = usePaneStore();
-  const workspace = useAtomValue(activeWorkspaceAtom);
+  const worktree = useAtomValue(activeWorktreeAtom);
   const projects = useAtomValue(projectsAtom);
-  const deleteWorkspace = useSetAtom(deleteWorkspaceAtom);
+  const deleteWorktree = useSetAtom(deleteWorktreeAtom);
 
-  const project = workspace
-    ? projects.find((p) => p.id === workspace.projectId) ?? null
+  const project = worktree
+    ? projects.find((p) => p.id === worktree.projectId) ?? null
     : null;
   const { profile: projectProfile } = useProjectProfile(project?.id ?? null);
 
-  // Prefer worktreePath (the checked-out path for this workspace), fall back to
+  // Prefer worktreePath (the checked-out path for this worktree), fall back to
   // the project's bare repoPath. Either is a valid git directory for IPC.
-  const gitPath = workspace?.worktreePath ?? project?.repoPath ?? null;
+  const gitPath = worktree?.worktreePath ?? project?.repoPath ?? null;
 
   const [gitStatusState, setGitStatusState] = useState<GitStatusState>('loading');
   const [recentChats, setRecentChats] = useState<{ id: string; title: string; updatedAt: number }[]>([]);
 
-  // Fetch recent chats for this workspace
+  // Fetch recent chats for this worktree
   useEffect(() => {
-    if (!workspace?.id) return;
-    fetch(`/api/chat/conversations?workspaceId=${workspace.id}&limit=5`)
+    if (!worktree?.id) return;
+    fetch(`/api/chat/conversations?workspaceId=${worktree.id}&limit=5`)
       .then((r) => r.json())
       .then((convs) => setRecentChats(convs))
       .catch(() => {});
-  }, [workspace?.id]);
+  }, [worktree?.id]);
 
   // Fetch git status via IPC
   useEffect(() => {
@@ -309,10 +309,10 @@ export function WorkspaceHome() {
     return { total, completed, availableXp };
   }, [quests]);
 
-  const openTerminal = useCallback(() => store.addPaneAsTab('terminal', { cwd: workspace?.worktreePath } as Record<string, unknown>, 'Terminal'), [store, workspace]);
+  const openTerminal = useCallback(() => store.addPaneAsTab('terminal', { cwd: worktree?.worktreePath } as Record<string, unknown>, 'Terminal'), [store, worktree]);
   const openEditor = useCallback(() => store.addPaneAsTab('editor', {} as Record<string, unknown>, 'Editor'), [store]);
-  const openClaude = useCallback(() => store.addPaneAsTab('terminal', { cwd: workspace?.worktreePath, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>, 'Claude'), [store, workspace]);
-  const openChat = useCallback(() => store.addPaneAsTab('chat', { cwd: workspace?.worktreePath } as Record<string, unknown>, 'Chat'), [store, workspace]);
+  const openClaude = useCallback(() => store.addPaneAsTab('terminal', { cwd: worktree?.worktreePath, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>, 'Claude'), [store, worktree]);
+  const openChat = useCallback(() => store.addPaneAsTab('chat', { cwd: worktree?.worktreePath } as Record<string, unknown>, 'Chat'), [store, worktree]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -347,7 +347,7 @@ export function WorkspaceHome() {
   }, [openClaude, openTerminal, openEditor, openChat, navigate]);
 
   // Guard: worktree was deleted externally
-  if (workspace && workspace.worktreeValid === false) {
+  if (worktree && worktree.worktreeValid === false) {
     return (
       <Center h="100%">
         <Stack align="center" gap="md" maw={420} px="md">
@@ -356,10 +356,10 @@ export function WorkspaceHome() {
             Worktree Not Found
           </Title>
           <Text fz="sm" c="var(--phantom-text-secondary)" ta="center">
-            The git worktree for this workspace was deleted externally.
+            The git worktree for this worktree was deleted externally.
           </Text>
           <Text fz="xs" c="var(--phantom-text-muted)" ta="center" ff="monospace">
-            Path: {workspace.worktreePath}
+            Path: {worktree.worktreePath}
           </Text>
           <Button
             variant="light"
@@ -367,9 +367,9 @@ export function WorkspaceHome() {
             size="sm"
             leftSection={<Trash2 size={14} />}
             mt="sm"
-            onClick={() => deleteWorkspace(workspace.id)}
+            onClick={() => deleteWorktree(worktree.id)}
           >
-            Delete Workspace
+            Delete Worktree
           </Button>
         </Stack>
       </Center>
@@ -429,11 +429,11 @@ export function WorkspaceHome() {
                         (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
                       }}
                       onClick={() => {
-                        const port = recipe.category === 'serve' ? workspace?.portBase : null;
+                        const port = recipe.category === 'serve' ? worktree?.portBase : null;
                         store.addPaneAsTab('terminal', {
-                          cwd: workspace?.worktreePath ?? project?.repoPath,
+                          cwd: worktree?.worktreePath ?? project?.repoPath,
                           initialCommand: recipe.command,
-                          workspaceId: workspace?.id,
+                          worktreeId: worktree?.id,
                           projectId: project?.id,
                           recipeCommand: recipe.command,
                           recipeLabel: recipe.label,
@@ -490,7 +490,7 @@ export function WorkspaceHome() {
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                       onClick={() => {
-                        store.addPaneAsTab('chat', { cwd: workspace?.worktreePath, conversationId: chat.id } as Record<string, unknown>, 'Chat');
+                        store.addPaneAsTab('chat', { cwd: worktree?.worktreePath, conversationId: chat.id } as Record<string, unknown>, 'Chat');
                       }}
                     >
                       <MessageSquare size={12} style={{ color: 'var(--phantom-text-muted)', flexShrink: 0 }} />
@@ -554,7 +554,7 @@ export function WorkspaceHome() {
             </Paper>
 
             {/* Running Servers */}
-            {workspace?.id && <RunningServersCard workspaceId={workspace.id} />}
+            {worktree?.id && <RunningServersCard workspaceId={worktree.id} />}
 
             {/* Git Status + Daily Quests */}
             <GitStatusCard state={gitStatusState} />

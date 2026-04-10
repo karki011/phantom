@@ -1,5 +1,5 @@
 /**
- * WorkspaceItem — single workspace entry in the left sidebar
+ * WorktreeItem — single worktree entry in the left sidebar
  * Supports inline rename (double-click), inline delete confirm, and context menu
  *
  * @author Subash Karki
@@ -8,29 +8,29 @@ import { Button, Text, TextInput, Tooltip, UnstyledButton } from '@mantine/core'
 import { AlertTriangle, GitBranch } from 'lucide-react';
 import { useSetAtom } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { WorkspaceData } from '../../lib/api';
-import { deleteWorkspaceAtom, updateWorkspaceAtom } from '../../atoms/workspaces';
+import type { WorktreeData } from '../../lib/api';
+import { deleteWorktreeAtom, updateWorktreeAtom } from '../../atoms/worktrees';
 import { showSystemNotification } from '../notifications/SystemToast';
-import { WorkspaceContextMenu } from './WorkspaceContextMenu';
+import { WorktreeContextMenu } from './WorktreeContextMenu';
 
-interface WorkspaceItemProps {
-  workspace: WorkspaceData;
+interface WorktreeItemProps {
+  worktree: WorktreeData;
   isActive: boolean;
   onSelect: (id: string) => void;
   isLast?: boolean;
 }
 
-export function WorkspaceItem({
-  workspace,
+export function WorktreeItem({
+  worktree,
   isActive,
   onSelect,
   isLast,
-}: WorkspaceItemProps) {
-  const deleteWorkspace = useSetAtom(deleteWorkspaceAtom);
-  const updateWorkspace = useSetAtom(updateWorkspaceAtom);
+}: WorktreeItemProps) {
+  const deleteWorktree = useSetAtom(deleteWorktreeAtom);
+  const updateWorktree = useSetAtom(updateWorktreeAtom);
 
   const [isRenaming, setIsRenaming] = useState(false);
-  const [renameValue, setRenameValue] = useState(workspace.name);
+  const [renameValue, setRenameValue] = useState(worktree.name);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -43,23 +43,23 @@ export function WorkspaceItem({
   }, [isRenaming]);
 
   const handleStartRename = useCallback(() => {
-    setRenameValue(workspace.name);
+    setRenameValue(worktree.name);
     setIsRenaming(true);
-  }, [workspace.name]);
+  }, [worktree.name]);
 
   const handleRenameSubmit = useCallback(async () => {
     const newName = renameValue.trim();
-    if (!newName || newName === workspace.name) {
+    if (!newName || newName === worktree.name) {
       setIsRenaming(false);
       return;
     }
     try {
-      await updateWorkspace({ id: workspace.id, data: { name: newName } });
+      await updateWorktree({ id: worktree.id, data: { name: newName } });
     } catch {
       // Error handled at atom level
     }
     setIsRenaming(false);
-  }, [renameValue, workspace.id, workspace.name, updateWorkspace]);
+  }, [renameValue, worktree.id, worktree.name, updateWorktree]);
 
   const handleRenameKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -77,30 +77,30 @@ export function WorkspaceItem({
   const handleDelete = useCallback(async () => {
     setIsDeleting(true);
     try {
-      await deleteWorkspace(workspace.id);
+      await deleteWorktree(worktree.id);
       showSystemNotification(
-        'Workspace Deleted',
-        `"${workspace.name}" has been deleted.`,
+        'Worktree Deleted',
+        `"${worktree.name}" has been deleted.`,
         'success',
       );
     } catch {
       showSystemNotification(
         'Error',
-        `Failed to delete "${workspace.name}".`,
+        `Failed to delete "${worktree.name}".`,
         'warning',
       );
     } finally {
       setIsDeleting(false);
       setIsConfirmingDelete(false);
     }
-  }, [workspace.id, workspace.name, deleteWorkspace]);
+  }, [worktree.id, worktree.name, deleteWorktree]);
 
   const handleOpenTerminal = useCallback(() => {
     const api = window.phantomOS;
     if (api?.invoke) {
-      api.invoke('phantom:open-terminal', { workspaceId: workspace.id });
+      api.invoke('phantom:open-terminal', { worktreeId: worktree.id });
     }
-  }, [workspace.id]);
+  }, [worktree.id]);
 
   // Inline delete confirmation
   if (isConfirmingDelete) {
@@ -172,17 +172,17 @@ export function WorkspaceItem({
   }
 
   return (
-    <WorkspaceContextMenu
-      workspacePath={workspace.worktreePath ?? undefined}
+    <WorktreeContextMenu
+      worktreePath={worktree.worktreePath ?? undefined}
       onRename={handleStartRename}
       onOpenTerminal={handleOpenTerminal}
       onDelete={() => setIsConfirmingDelete(true)}
     >
       <Tooltip
         label={[
-          workspace.branch && `Branch: ${workspace.branch}`,
-          workspace.baseBranch && workspace.baseBranch !== workspace.branch && `From: ${workspace.baseBranch}`,
-          workspace.worktreePath && `Path: ${workspace.worktreePath}`,
+          worktree.branch && `Branch: ${worktree.branch}`,
+          worktree.baseBranch && worktree.baseBranch !== worktree.branch && `From: ${worktree.baseBranch}`,
+          worktree.worktreePath && `Path: ${worktree.worktreePath}`,
         ].filter(Boolean).join('\n')}
         multiline
         position="right"
@@ -191,7 +191,7 @@ export function WorkspaceItem({
         styles={{ tooltip: { whiteSpace: 'pre-line', fontSize: '0.7rem', maxWidth: 320 } }}
       >
       <UnstyledButton
-        onClick={() => onSelect(workspace.id)}
+        onClick={() => onSelect(worktree.id)}
         onDoubleClick={handleStartRename}
         py={4}
         px="sm"
@@ -226,7 +226,7 @@ export function WorkspaceItem({
               width: 8,
               height: 8,
               borderRadius: '50%',
-              backgroundColor: workspace.color || 'var(--phantom-accent-cyan)',
+              backgroundColor: worktree.color || 'var(--phantom-accent-cyan)',
               flexShrink: 0,
             }}
           />
@@ -237,9 +237,9 @@ export function WorkspaceItem({
             truncate
             style={{ flex: 1 }}
           >
-            {workspace.name}
+            {worktree.name}
           </Text>
-          {workspace.worktreeValid === false && (
+          {worktree.worktreeValid === false && (
             <AlertTriangle
               size={12}
               style={{ color: 'var(--phantom-status-warning)', flexShrink: 0 }}
@@ -249,6 +249,6 @@ export function WorkspaceItem({
         </div>
       </UnstyledButton>
       </Tooltip>
-    </WorkspaceContextMenu>
+    </WorktreeContextMenu>
   );
 }

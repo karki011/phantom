@@ -1,6 +1,6 @@
 /**
- * WorkspaceSidebar — left sidebar with project/workspace list
- * 2-click workspace flow: no modals for the happy path
+ * WorktreeSidebar — left sidebar with project/worktree list
+ * 2-click worktree flow: no modals for the happy path
  *
  * @author Subash Karki
  */
@@ -22,7 +22,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
-  activeWorkspaceIdAtom,
+  activeWorktreeIdAtom,
   expandedProjectsAtom,
   leftSidebarCollapsedAtom,
   leftSidebarWidthAtom,
@@ -30,9 +30,9 @@ import {
   projectsAtom,
   projectsLoadingStateAtom,
   refreshProjectsAtom,
-  refreshWorkspacesAtom,
-  workspacesByProjectAtom,
-} from '../../atoms/workspaces';
+  refreshWorktreesAtom,
+  worktreesByProjectAtom,
+} from '../../atoms/worktrees';
 import { showSystemNotification } from '../notifications/SystemToast';
 import { ResizeHandle } from './ResizeHandle';
 import { ProjectSection } from './ProjectSection';
@@ -48,17 +48,17 @@ const pickFolder = async (): Promise<string | null> => {
     }
     return window.prompt('Enter repository path:');
   } catch (err) {
-    console.error('[WorkspaceSidebar] Folder picker failed:', err);
+    console.error('[WorktreeSidebar] Folder picker failed:', err);
     return window.prompt('Enter repository path:');
   }
 };
 
-export function WorkspaceSidebar() {
+export function WorktreeSidebar() {
   const projects = useAtomValue(projectsAtom);
   const loading = useAtomValue(projectsLoadingStateAtom);
-  const workspacesByProject = useAtomValue(workspacesByProjectAtom);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useAtom(
-    activeWorkspaceIdAtom,
+  const worktreesByProject = useAtomValue(worktreesByProjectAtom);
+  const [activeWorktreeId, setActiveWorktreeId] = useAtom(
+    activeWorktreeIdAtom,
   );
   const [expandedProjects, setExpandedProjects] = useAtom(
     expandedProjectsAtom,
@@ -67,19 +67,19 @@ export function WorkspaceSidebar() {
   const [width, setWidth] = useAtom(leftSidebarWidthAtom);
 
   const refreshProjects = useSetAtom(refreshProjectsAtom);
-  const refreshWorkspaces = useSetAtom(refreshWorkspacesAtom);
+  const refreshWorktrees = useSetAtom(refreshWorktreesAtom);
   const openRepo = useSetAtom(openRepositoryAtom);
 
   const [isDragOver, setIsDragOver] = useState(false);
 
-  // Track which project should show inline workspace input from header "+"
+  // Track which project should show inline worktree input from header "+"
   const [inlineInputProjectId, setInlineInputProjectId] = useState<string | null>(null);
 
   // Fetch on mount
   useEffect(() => {
     refreshProjects();
-    refreshWorkspaces();
-  }, [refreshProjects, refreshWorkspaces]);
+    refreshWorktrees();
+  }, [refreshProjects, refreshWorktrees]);
 
   const toggleProject = useCallback(
     (projectId: string) => {
@@ -108,7 +108,7 @@ export function WorkspaceSidebar() {
         'Failed to open repository.',
         'warning',
       );
-      console.error('[WorkspaceSidebar] openRepository failed:', err);
+      console.error('[WorktreeSidebar] openRepository failed:', err);
     }
   }, [openRepo]);
 
@@ -241,15 +241,15 @@ export function WorkspaceSidebar() {
         }}
       >
         <Text fz="0.8rem" fw={700} c="var(--phantom-text-primary)">
-          Workspaces
+          Worktrees
         </Text>
         <Group gap={4}>
-          <Tooltip label="New workspace">
+          <Tooltip label="New worktree">
             <ActionIcon
               variant="subtle"
               size="xs"
               onClick={handleHeaderPlusClick}
-              aria-label="New workspace"
+              aria-label="New worktree"
             >
               <Plus size={14} style={{ color: 'var(--phantom-text-muted)' }} />
             </ActionIcon>
@@ -291,11 +291,11 @@ export function WorkspaceSidebar() {
               )}
               <ProjectSection
                 project={project}
-                workspaces={workspacesByProject.get(project.id) ?? []}
+                worktrees={worktreesByProject.get(project.id) ?? []}
                 isExpanded={expandedProjects.includes(project.id)}
-                activeWorkspaceId={activeWorkspaceId}
+                activeWorktreeId={activeWorktreeId}
                 onToggle={() => toggleProject(project.id)}
-                onSelectWorkspace={setActiveWorkspaceId}
+                onSelectWorktree={setActiveWorktreeId}
               />
             </div>
           ))}

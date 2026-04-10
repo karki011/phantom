@@ -10,7 +10,7 @@ import { type ReactNode, useCallback, useRef, useState } from 'react';
 
 interface ProjectContextMenuProps {
   children: ReactNode;
-  onAddWorkspace: () => void;
+  onAddWorktree: () => void;
   onRename: () => void;
   onRedetect: () => void;
   onRemoveProject: () => void;
@@ -18,7 +18,7 @@ interface ProjectContextMenuProps {
 
 export function ProjectContextMenu({
   children,
-  onAddWorkspace,
+  onAddWorktree,
   onRename,
   onRedetect,
   onRemoveProject,
@@ -85,9 +85,9 @@ export function ProjectContextMenu({
         <Menu.Dropdown>
           <Menu.Item
             leftSection={<FolderPlus size={14} />}
-            onClick={() => queueAction(onAddWorkspace)}
+            onClick={() => queueAction(onAddWorktree)}
           >
-            Add Workspace
+            Add Worktree
           </Menu.Item>
           <Menu.Item
             leftSection={<Edit3 size={14} />}

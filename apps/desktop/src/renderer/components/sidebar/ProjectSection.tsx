@@ -1,6 +1,6 @@
 /**
- * ProjectSection — collapsible project group in the workspace sidebar
- * Supports hover "+" button, inline workspace input, context menu, and inline rename
+ * ProjectSection — collapsible project group in the worktree sidebar
+ * Supports hover "+" button, inline worktree input, context menu, and inline rename
  *
  * @author Subash Karki
  */
@@ -16,30 +16,30 @@ import {
 import { ChevronRight, GitBranch, Plus, RefreshCw, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSetAtom } from 'jotai';
-import type { DiscoveredWorktree, ProjectData, WorkspaceData } from '../../lib/api';
+import type { DiscoveredWorktree, ProjectData, WorktreeData } from '../../lib/api';
 import { detectProjectProfile, getDiscoveredWorktrees, importWorktree, renameProject } from '../../lib/api';
-import { refreshProjectsAtom, refreshWorkspacesAtom } from '../../atoms/workspaces';
-import { WorkspaceItem } from './WorkspaceItem';
-import { InlineWorkspaceInput } from './InlineWorkspaceInput';
+import { refreshProjectsAtom, refreshWorktreesAtom } from '../../atoms/worktrees';
+import { WorktreeItem } from './WorktreeItem';
+import { InlineWorktreeInput } from './InlineWorktreeInput';
 import { ProjectContextMenu } from './ProjectContextMenu';
 import { RemoveProjectDialog } from './RemoveProjectDialog';
 
 interface ProjectSectionProps {
   project: ProjectData;
-  workspaces: WorkspaceData[];
+  worktrees: WorktreeData[];
   isExpanded: boolean;
-  activeWorkspaceId: string | null;
+  activeWorktreeId: string | null;
   onToggle: () => void;
-  onSelectWorkspace: (id: string) => void;
+  onSelectWorktree: (id: string) => void;
 }
 
 export function ProjectSection({
   project,
-  workspaces,
+  worktrees,
   isExpanded,
-  activeWorkspaceId,
+  activeWorktreeId,
   onToggle,
-  onSelectWorkspace,
+  onSelectWorktree,
 }: ProjectSectionProps) {
   const [showNewInput, setShowNewInput] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -49,7 +49,7 @@ export function ProjectSection({
   const [discovered, setDiscovered] = useState<DiscoveredWorktree[]>([]);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const refreshProjects = useSetAtom(refreshProjectsAtom);
-  const refreshWorkspaces = useSetAtom(refreshWorkspacesAtom);
+  const refreshWorktrees = useSetAtom(refreshWorktreesAtom);
 
   const refreshDiscovered = useCallback(() => {
     if (project.id) {
@@ -83,14 +83,14 @@ export function ProjectSection({
   const handleImportWorktree = useCallback(async (path: string, branch: string) => {
     try {
       await importWorktree(project.id, { path, name: branch });
-      refreshWorkspaces();
+      refreshWorktrees();
       refreshProjects();
       // Remove from discovered list
       setDiscovered((prev) => prev.filter((d) => d.path !== path));
     } catch { /* silent */ }
-  }, [project.id, refreshWorkspaces, refreshProjects]);
+  }, [project.id, refreshWorktrees, refreshProjects]);
 
-  const handleAddWorkspace = useCallback(() => {
+  const handleAddWorktree = useCallback(() => {
     setShowNewInput(true);
     if (!isExpanded) onToggle();
   }, [isExpanded, onToggle]);
@@ -127,7 +127,7 @@ export function ProjectSection({
   return (
     <div>
       <ProjectContextMenu
-        onAddWorkspace={handleAddWorkspace}
+        onAddWorktree={handleAddWorktree}
         onRename={() => {
           setRenameValue(project.name);
           setIsRenaming(true);
@@ -208,18 +208,18 @@ export function ProjectSection({
               </Text>
             )}
             <Text fz="0.7rem" c="var(--phantom-text-muted)">
-              {workspaces.length}
+              {worktrees.length}
             </Text>
-            {!isRenaming && workspaces.length > 0 && (
-              <Tooltip label="New workspace" position="right">
+            {!isRenaming && worktrees.length > 0 && (
+              <Tooltip label="New worktree" position="right">
                 <ActionIcon
                   variant="subtle"
                   size={18}
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleAddWorkspace();
+                    handleAddWorktree();
                   }}
-                  aria-label="New workspace"
+                  aria-label="New worktree"
                   style={{ flexShrink: 0 }}
                 >
                   <Plus
@@ -235,13 +235,13 @@ export function ProjectSection({
 
       <Collapse expanded={isExpanded}>
         <div style={{ paddingLeft: 24, position: 'relative' }}>
-          {workspaces.map((ws, index) => (
-            <WorkspaceItem
+          {worktrees.map((ws, index) => (
+            <WorktreeItem
               key={ws.id}
-              workspace={ws}
-              isActive={ws.id === activeWorkspaceId}
-              onSelect={onSelectWorkspace}
-              isLast={index === workspaces.length - 1}
+              worktree={ws}
+              isActive={ws.id === activeWorktreeId}
+              onSelect={onSelectWorktree}
+              isLast={index === worktrees.length - 1}
             />
           ))}
           {discovered.length > 0 && (
@@ -301,7 +301,7 @@ export function ProjectSection({
                   <Text fz="0.75rem" c="var(--phantom-text-primary)" truncate style={{ flex: 1 }}>
                     {wt.branch}
                   </Text>
-                  <Tooltip label="Import workspace" position="right">
+                  <Tooltip label="Import worktree" position="right">
                     <ActionIcon
                       size={18}
                       variant="light"
@@ -318,9 +318,9 @@ export function ProjectSection({
               ))}
             </div>
           )}
-          {workspaces.length === 0 && !showNewInput && (
+          {worktrees.length === 0 && !showNewInput && (
             <UnstyledButton
-              onClick={handleAddWorkspace}
+              onClick={handleAddWorktree}
               py={6}
               px="sm"
               style={{
@@ -334,11 +334,11 @@ export function ProjectSection({
               }}
             >
               <Plus size={12} />
-              Create new workspace
+              Create new worktree
             </UnstyledButton>
           )}
           {showNewInput && (
-            <InlineWorkspaceInput
+            <InlineWorktreeInput
               projectId={project.id}
               projectName={project.name}
               onDone={() => setShowNewInput(false)}
@@ -352,7 +352,7 @@ export function ProjectSection({
         onClose={() => setShowRemoveDialog(false)}
         projectId={project.id}
         projectName={project.name}
-        workspaceCount={workspaces.length}
+        worktreeCount={worktrees.length}
       />
     </div>
   );

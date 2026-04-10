@@ -59,7 +59,7 @@ export const isDirLoadingAtom = atom((get) => (path: string) =>
 );
 
 // ---------------------------------------------------------------------------
-// Fetch directory entries for a workspace
+// Fetch directory entries for a worktree
 // ---------------------------------------------------------------------------
 
 export const fetchDirectoryAtom = atom(
@@ -67,17 +67,17 @@ export const fetchDirectoryAtom = atom(
   async (
     get,
     set,
-    params: { workspaceId: string; path: string },
+    params: { worktreeId: string; path: string },
   ) => {
-    const { workspaceId, path } = params;
-    const cacheKey = `${workspaceId}:${path}`;
+    const { worktreeId, path } = params;
+    const cacheKey = `${worktreeId}:${path}`;
 
     // Mark loading
     set(loadingDirsAtom, (prev: Set<string>) => new Set([...prev, cacheKey]));
 
     try {
       const result: DirectoryListing = await getDirectoryListing(
-        workspaceId,
+        worktreeId,
         path,
       );
       set(fileTreeDataAtom, (prev: Map<string, FileEntry[]>) => {
@@ -98,7 +98,7 @@ export const fetchDirectoryAtom = atom(
 );
 
 // ---------------------------------------------------------------------------
-// Clear file tree (on workspace switch)
+// Clear file tree (on worktree switch)
 // ---------------------------------------------------------------------------
 
 export const clearFileTreeAtom = atom(null, (_get, set) => {

@@ -7,9 +7,9 @@ import { exec, execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { db, projects, workspaces, workspaceSections } from '@phantom-os/db';
-import { isGitRepo, getDefaultBranch, getRepoName, getWorktreeDir, listWorktrees } from '../workspace-manager.js';
-import { removeWorktree } from '../workspace-manager.js';
+import { db, projects, worktrees, worktreeSections } from '@phantom-os/db';
+import { isGitRepo, getDefaultBranch, getRepoName, getWorktreeDir, listWorktrees } from '../worktree-manager.js';
+import { removeWorktree } from '../worktree-manager.js';
 import { detectProject } from '../project-detector.js';
 import { logger } from '../logger.js';
 
@@ -80,7 +80,7 @@ projectRoutes.post('/projects', async (c) => {
   return c.json(project, 201);
 });
 
-/** POST /projects/open — Open (or create) a project + default workspace in one call */
+/** POST /projects/open — Open (or create) a project + default worktree in one call */
 projectRoutes.post('/projects/open', async (c) => {
   const body = await c.req.json<{ repoPath: string }>();
   const { repoPath } = body;
@@ -97,7 +97,7 @@ projectRoutes.post('/projects/open', async (c) => {
     return c.json({ error: 'Path is not a git repository' }, 400);
   }
 
-  // If project already exists, return it with its first workspace
+  // If project already exists, return it with its first worktree
   const existing = db
     .select()
     .from(projects)
@@ -108,13 +108,13 @@ projectRoutes.post('/projects/open', async (c) => {
     // Fetch latest from remote in background so branch list stays current
     backgroundFetch(repoPath);
 
-    const firstWorkspace = db
+    const firstWorktree = db
       .select()
-      .from(workspaces)
-      .where(eq(workspaces.projectId, existing.id))
+      .from(worktrees)
+      .where(eq(worktrees.projectId, existing.id))
       .get();
 
-    return c.json({ project: existing, workspace: firstWorkspace ?? null });
+    return c.json({ project: existing, worktree: firstWorktree ?? null });
   }
 
   // Fetch remote refs before reading branches
@@ -140,7 +140,7 @@ projectRoutes.post('/projects/open', async (c) => {
   const profile = detectProject(repoPath);
   db.update(projects).set({ profile: JSON.stringify(profile) }).where(eq(projects.id, project.id)).run();
 
-  return c.json({ project, workspace: null }, 201);
+  return c.json({ project, worktree: null }, 201);
 });
 
 /** POST /projects/:id/detect — Re-detect project profile */
@@ -256,11 +256,11 @@ projectRoutes.get('/projects/:id/worktrees', async (c) => {
   // Get all git worktrees for this repo
   const allWorktrees = await listWorktrees(project.repoPath);
 
-  // Get all DB workspaces for this project (tracked worktree paths)
+  // Get all DB worktrees for this project (tracked worktree paths)
   const trackedPaths = new Set(
-    db.select({ worktreePath: workspaces.worktreePath })
-      .from(workspaces)
-      .where(eq(workspaces.projectId, id))
+    db.select({ worktreePath: worktrees.worktreePath })
+      .from(worktrees)
+      .where(eq(worktrees.projectId, id))
       .all()
       .map((r) => r.worktreePath)
       .filter(Boolean),
@@ -294,7 +294,7 @@ projectRoutes.get('/projects/:id/worktrees', async (c) => {
   return c.json(discovered);
 });
 
-/** POST /projects/:id/worktrees/import — Import a discovered worktree as a workspace */
+/** POST /projects/:id/worktrees/import — Import a discovered worktree into the DB */
 projectRoutes.post('/projects/:id/worktrees/import', async (c) => {
   const id = c.req.param('id');
   const body = await c.req.json<{ path: string; name?: string }>();
@@ -307,10 +307,10 @@ projectRoutes.post('/projects/:id/worktrees/import', async (c) => {
   }
 
   // Check not already tracked
-  const existing = db.select().from(workspaces)
-    .where(eq(workspaces.worktreePath, body.path))
+  const existingWt = db.select().from(worktrees)
+    .where(eq(worktrees.worktreePath, body.path))
     .get();
-  if (existing) {
+  if (existingWt) {
     return c.json({ error: 'Worktree already imported' }, 409);
   }
 
@@ -352,15 +352,15 @@ projectRoutes.post('/projects/:id/worktrees/import', async (c) => {
   // Port allocation: pick from Auth0-allowed pool
   const PORT_POOL = [8080, 8081, 8082];
   const usedPorts = new Set(
-    db.select({ portBase: workspaces.portBase })
-      .from(workspaces)
+    db.select({ portBase: worktrees.portBase })
+      .from(worktrees)
       .all()
       .map((r) => r.portBase)
       .filter((p): p is number => p !== null),
   );
   const portBase = PORT_POOL.find((p) => !usedPorts.has(p)) ?? null;
 
-  const workspace = {
+  const worktree = {
     id: randomUUID(),
     projectId: id,
     type: 'worktree' as const,
@@ -375,12 +375,12 @@ projectRoutes.post('/projects/:id/worktrees/import', async (c) => {
     createdAt: Date.now(),
   };
 
-  db.insert(workspaces).values(workspace).run();
+  db.insert(worktrees).values(worktree).run();
 
-  return c.json(workspace, 201);
+  return c.json(worktree, 201);
 });
 
-/** DELETE /projects/:id — Delete project and cascade workspaces */
+/** DELETE /projects/:id — Delete project and cascade worktrees */
 projectRoutes.delete('/projects/:id', async (c) => {
   const id = c.req.param('id');
 
@@ -389,22 +389,22 @@ projectRoutes.delete('/projects/:id', async (c) => {
     return c.json({ error: 'Project not found' }, 404);
   }
 
-  // Remove all worktrees for this project's workspaces
-  const projectWorkspaces = db
+  // Remove all git worktrees for this project
+  const projectWorktrees = db
     .select()
-    .from(workspaces)
-    .where(eq(workspaces.projectId, id))
+    .from(worktrees)
+    .where(eq(worktrees.projectId, id))
     .all();
 
-  for (const ws of projectWorkspaces) {
-    if (ws.worktreePath) {
-      await removeWorktree(ws.worktreePath);
+  for (const wt of projectWorktrees) {
+    if (wt.worktreePath) {
+      await removeWorktree(wt.worktreePath);
     }
   }
 
-  // Cascade delete: workspaces, sections, then project
-  db.delete(workspaces).where(eq(workspaces.projectId, id)).run();
-  db.delete(workspaceSections).where(eq(workspaceSections.projectId, id)).run();
+  // Cascade delete: worktrees, sections, then project
+  db.delete(worktrees).where(eq(worktrees.projectId, id)).run();
+  db.delete(worktreeSections).where(eq(worktreeSections.projectId, id)).run();
   db.delete(projects).where(eq(projects.id, id)).run();
 
   return c.json({ ok: true });

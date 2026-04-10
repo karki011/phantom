@@ -10,8 +10,8 @@ export const serverRoutes = new Hono();
 
 /** GET /servers — List running processes */
 serverRoutes.get('/servers', (c) => {
-  const workspaceId = c.req.query('workspaceId');
-  return c.json(getProcesses(workspaceId || undefined));
+  const worktreeId = c.req.query('worktreeId');
+  return c.json(getProcesses(worktreeId || undefined));
 });
 
 /** POST /servers/:termId/stop — Stop a running process */

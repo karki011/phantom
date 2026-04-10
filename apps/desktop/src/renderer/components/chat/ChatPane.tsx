@@ -18,7 +18,7 @@ import { useAtomValue } from 'jotai';
 import { Bot, MessageSquare, Plus, Send, Trash2, User, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
-import { activeWorkspaceAtom } from '../../atoms/workspaces';
+import { activeWorktreeAtom } from '../../atoms/worktrees';
 import { useChat, type ChatMessage, type ChatConversation } from '../../hooks/useChat';
 
 /* ------------------------------------------------------------------ */
@@ -322,15 +322,15 @@ interface ChatPaneProps {
 }
 
 export const ChatPane = ({ paneId: _paneId, cwd }: ChatPaneProps) => {
-  const workspace = useAtomValue(activeWorkspaceAtom);
+  const worktree = useAtomValue(activeWorktreeAtom);
 
   // Build project context string for the LLM prompt
   const projectContext = useMemo(() => {
-    if (!workspace) return undefined;
-    const parts = [`Workspace: ${workspace.name}`, `Branch: ${workspace.branch}`];
-    if (workspace.worktreePath) parts.push(`Path: ${workspace.worktreePath}`);
+    if (!worktree) return undefined;
+    const parts = [`Worktree: ${worktree.name}`, `Branch: ${worktree.branch}`];
+    if (worktree.worktreePath) parts.push(`Path: ${worktree.worktreePath}`);
     return parts.join(', ');
-  }, [workspace]);
+  }, [worktree]);
 
   const {
     messages,
@@ -344,7 +344,7 @@ export const ChatPane = ({ paneId: _paneId, cwd }: ChatPaneProps) => {
     deleteConversation,
     model,
     setModel,
-  } = useChat(cwd, workspace?.id ?? null, projectContext);
+  } = useChat(cwd, worktree?.id ?? null, projectContext);
 
   // Find active conversation for title display
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
@@ -527,9 +527,9 @@ export const ChatPane = ({ paneId: _paneId, cwd }: ChatPaneProps) => {
             <Text fw={600} size="sm" style={{ color: 'var(--phantom-text-primary)' }} lineClamp={1}>
               {activeConversation?.title ?? 'Chat'}
             </Text>
-            {workspace && (
+            {worktree && (
               <Text size="xs" style={{ color: 'var(--phantom-text-muted)' }}>
-                — {workspace.name}
+                — {worktree.name}
               </Text>
             )}
           </Group>

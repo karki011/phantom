@@ -1,5 +1,5 @@
 /**
- * WorkspaceContextMenu — right-click context menu for workspace items
+ * WorktreeContextMenu — right-click context menu for worktree items
  * Uses a pending action ref so callbacks fire cleanly after menu closes.
  *
  * @author Subash Karki
@@ -25,21 +25,21 @@ const invoke = async (channel: string, ...args: unknown[]): Promise<void> => {
   }
 };
 
-interface WorkspaceContextMenuProps {
+interface WorktreeContextMenuProps {
   children: ReactNode;
-  workspacePath?: string;
+  worktreePath?: string;
   onRename: () => void;
   onOpenTerminal: () => void;
   onDelete: () => void;
 }
 
-export function WorkspaceContextMenu({
+export function WorktreeContextMenu({
   children,
-  workspacePath,
+  worktreePath,
   onRename,
   onOpenTerminal,
   onDelete,
-}: WorkspaceContextMenuProps) {
+}: WorktreeContextMenuProps) {
   const [opened, setOpened] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const pendingAction = useRef<(() => void) | null>(null);
@@ -99,27 +99,27 @@ export function WorkspaceContextMenu({
           <Menu.Item
             leftSection={<FolderOpen size={14} />}
             onClick={() => {
-              if (workspacePath) invoke('phantom:open-in-finder', workspacePath);
+              if (worktreePath) invoke('phantom:open-in-finder', worktreePath);
             }}
-            disabled={!workspacePath}
+            disabled={!worktreePath}
           >
             Open in Finder
           </Menu.Item>
           <Menu.Item
             leftSection={<ExternalLink size={14} />}
             onClick={() => {
-              if (workspacePath) invoke('phantom:open-in-editor', workspacePath);
+              if (worktreePath) invoke('phantom:open-in-editor', worktreePath);
             }}
-            disabled={!workspacePath}
+            disabled={!worktreePath}
           >
             Open in Editor
           </Menu.Item>
           <Menu.Item
             leftSection={<Clipboard size={14} />}
             onClick={() => {
-              if (workspacePath) navigator.clipboard.writeText(workspacePath);
+              if (worktreePath) navigator.clipboard.writeText(worktreePath);
             }}
-            disabled={!workspacePath}
+            disabled={!worktreePath}
           >
             Copy Path
           </Menu.Item>
@@ -142,7 +142,7 @@ export function WorkspaceContextMenu({
             color="red"
             onClick={() => queueAction(onDelete)}
           >
-            Close Workspace
+            Close Worktree
           </Menu.Item>
         </Menu.Dropdown>
       </Menu>

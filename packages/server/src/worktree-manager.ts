@@ -1,5 +1,5 @@
 /**
- * PhantomOS Workspace Manager — Git worktree operations
+ * PhantomOS Worktree Manager — Git worktree operations
  * @author Subash Karki
  */
 import { execSync } from 'node:child_process';
@@ -77,7 +77,7 @@ export const removeWorktree = async (worktreePath: string): Promise<void> => {
     });
   } catch {
     // Fallback: prune if remove fails
-    console.warn(`[WorkspaceManager] Failed to remove worktree at ${worktreePath}`);
+    console.warn(`[WorktreeManager] Failed to remove worktree at ${worktreePath}`);
   }
 };
 

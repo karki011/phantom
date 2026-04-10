@@ -14,8 +14,8 @@ import { TerminalPane } from '@phantom-os/terminal';
 const EditorPane = lazy(() =>
   import('@phantom-os/editor').then((m) => ({ default: m.EditorPane })),
 );
-const WorkspaceHome = lazy(() =>
-  import('../components/WorkspaceHome').then((m) => ({ default: m.WorkspaceHome })),
+const WorktreeHome = lazy(() =>
+  import('../components/WorktreeHome').then((m) => ({ default: m.WorktreeHome })),
 );
 const ChatPane = lazy(() =>
   import('../components/chat/ChatPane').then((m) => ({ default: m.ChatPane })),
@@ -103,12 +103,12 @@ export const paneDefinitions: Record<string, PaneDefinition> = {
     icon: '⬡',
     render: (_pane: Pane) =>
       createElement(Suspense, { fallback: createElement(Loading) },
-        createElement(WorkspaceHome),
+        createElement(WorktreeHome),
       ),
     defaultTitle: 'Home',
     component: () =>
       createElement(Suspense, { fallback: createElement(Loading) },
-        createElement(WorkspaceHome),
+        createElement(WorktreeHome),
       ),
   },
 };

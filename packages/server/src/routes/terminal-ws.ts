@@ -102,7 +102,7 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
                 if (msg.recipeCommand) {
                   registerProcess({
                     termId,
-                    workspaceId: msg.workspaceId ?? '',
+                    worktreeId: msg.worktreeId ?? '',
                     projectId: msg.projectId ?? '',
                     recipe: msg.recipeCommand,
                     recipeLabel: msg.recipeLabel ?? msg.recipeCommand,

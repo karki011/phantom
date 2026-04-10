@@ -1,54 +1,54 @@
 /**
- * PhantomOS Workspace File Explorer Routes
+ * PhantomOS Worktree File Explorer Routes
  * @author Subash Karki
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { db, workspaces } from '@phantom-os/db';
+import { db, worktrees } from '@phantom-os/db';
 
-export const workspaceFileRoutes = new Hono();
+export const worktreeFileRoutes = new Hono();
 
 // ---------------------------------------------------------------------------
 // Path Sandboxing
 // ---------------------------------------------------------------------------
 
-/** Resolve and validate a path is within the workspace root. Returns null if invalid. */
-const safePath = (workspaceRoot: string, relativePath: string): string | null => {
+/** Resolve and validate a path is within the worktree root. Returns null if invalid. */
+const safePath = (worktreeRoot: string, relativePath: string): string | null => {
   // Strip leading slash — resolve('/path', '/') returns '/' not '/path/'
   const cleaned = relativePath.replace(/^\/+/, '') || '.';
-  const resolved = resolve(workspaceRoot, cleaned);
-  // CRITICAL: Prevent path traversal — resolved path must start with workspace root
-  if (!resolved.startsWith(workspaceRoot)) {
+  const resolved = resolve(worktreeRoot, cleaned);
+  // CRITICAL: Prevent path traversal — resolved path must start with worktree root
+  if (!resolved.startsWith(worktreeRoot)) {
     return null;
   }
   return resolved;
 };
 
-/** Get workspace root path or return 404 */
-const getWorkspaceRoot = (id: string): string | null => {
-  const workspace = db
+/** Get worktree root path or return 404 */
+const getWorktreeRoot = (id: string): string | null => {
+  const worktree = db
     .select()
-    .from(workspaces)
-    .where(eq(workspaces.id, id))
+    .from(worktrees)
+    .where(eq(worktrees.id, id))
     .get();
 
-  if (!workspace?.worktreePath) return null;
-  return workspace.worktreePath;
+  if (!worktree?.worktreePath) return null;
+  return worktree.worktreePath;
 };
 
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 
-/** GET /workspaces/:id/files — List directory contents */
-workspaceFileRoutes.get('/workspaces/:id/files', (c) => {
+/** GET /worktrees/:id/files — List directory contents */
+worktreeFileRoutes.get('/worktrees/:id/files', (c) => {
   const id = c.req.param('id');
   const relativePath = c.req.query('path') || '/';
 
-  const root = getWorkspaceRoot(id);
-  if (!root) return c.json({ error: 'Workspace not found' }, 404);
+  const root = getWorktreeRoot(id);
+  if (!root) return c.json({ error: 'Worktree not found' }, 404);
 
   const target = safePath(root, relativePath);
   if (!target) return c.json({ error: 'Invalid path' }, 403);
@@ -93,16 +93,16 @@ workspaceFileRoutes.get('/workspaces/:id/files', (c) => {
   }
 });
 
-/** GET /workspaces/:id/files/search — Recursive file name search */
-workspaceFileRoutes.get('/workspaces/:id/files/search', (c) => {
+/** GET /worktrees/:id/files/search — Recursive file name search */
+worktreeFileRoutes.get('/worktrees/:id/files/search', (c) => {
   const id = c.req.param('id');
   const query = c.req.query('q')?.toLowerCase();
   const limit = Math.min(Number(c.req.query('limit') || 50), 200);
 
   if (!query) return c.json({ error: 'q query parameter is required' }, 400);
 
-  const root = getWorkspaceRoot(id);
-  if (!root) return c.json({ error: 'Workspace not found' }, 404);
+  const root = getWorktreeRoot(id);
+  if (!root) return c.json({ error: 'Worktree not found' }, 404);
 
   const results: { name: string; relativePath: string; isDirectory: boolean; size: number; mtime: number }[] = [];
 
@@ -138,15 +138,15 @@ workspaceFileRoutes.get('/workspaces/:id/files/search', (c) => {
   return c.json({ entries: results });
 });
 
-/** GET /workspaces/:id/file — Read file content */
-workspaceFileRoutes.get('/workspaces/:id/file', (c) => {
+/** GET /worktrees/:id/file — Read file content */
+worktreeFileRoutes.get('/worktrees/:id/file', (c) => {
   const id = c.req.param('id');
   const relativePath = c.req.query('path');
 
   if (!relativePath) return c.json({ error: 'path query parameter is required' }, 400);
 
-  const root = getWorkspaceRoot(id);
-  if (!root) return c.json({ error: 'Workspace not found' }, 404);
+  const root = getWorktreeRoot(id);
+  if (!root) return c.json({ error: 'Worktree not found' }, 404);
 
   const target = safePath(root, relativePath);
   if (!target) return c.json({ error: 'Invalid path' }, 403);
@@ -174,8 +174,8 @@ workspaceFileRoutes.get('/workspaces/:id/file', (c) => {
   }
 });
 
-/** PUT /workspaces/:id/file — Write file content */
-workspaceFileRoutes.put('/workspaces/:id/file', async (c) => {
+/** PUT /worktrees/:id/file — Write file content */
+worktreeFileRoutes.put('/worktrees/:id/file', async (c) => {
   const id = c.req.param('id');
   const body = await c.req.json<{ path: string; content: string }>();
 
@@ -183,8 +183,8 @@ workspaceFileRoutes.put('/workspaces/:id/file', async (c) => {
     return c.json({ error: 'path and content are required' }, 400);
   }
 
-  const root = getWorkspaceRoot(id);
-  if (!root) return c.json({ error: 'Workspace not found' }, 404);
+  const root = getWorktreeRoot(id);
+  if (!root) return c.json({ error: 'Worktree not found' }, 404);
 
   const target = safePath(root, body.path);
   if (!target) return c.json({ error: 'Invalid path' }, 403);
@@ -202,22 +202,22 @@ workspaceFileRoutes.put('/workspaces/:id/file', async (c) => {
   }
 });
 
-/** DELETE /workspaces/:id/file — Delete a file or directory */
-workspaceFileRoutes.delete('/workspaces/:id/file', (c) => {
+/** DELETE /worktrees/:id/file — Delete a file or directory */
+worktreeFileRoutes.delete('/worktrees/:id/file', (c) => {
   const id = c.req.param('id');
   const relativePath = c.req.query('path');
 
   if (!relativePath) return c.json({ error: 'path query parameter is required' }, 400);
 
-  const root = getWorkspaceRoot(id);
-  if (!root) return c.json({ error: 'Workspace not found' }, 404);
+  const root = getWorktreeRoot(id);
+  if (!root) return c.json({ error: 'Worktree not found' }, 404);
 
   const target = safePath(root, relativePath);
   if (!target) return c.json({ error: 'Invalid path' }, 403);
 
-  // Prevent deleting the workspace root itself
+  // Prevent deleting the worktree root itself
   if (target === root) {
-    return c.json({ error: 'Cannot delete workspace root' }, 403);
+    return c.json({ error: 'Cannot delete worktree root' }, 403);
   }
 
   if (!existsSync(target)) {
@@ -233,8 +233,8 @@ workspaceFileRoutes.delete('/workspaces/:id/file', (c) => {
   }
 });
 
-/** POST /workspaces/:id/mkdir — Create a directory */
-workspaceFileRoutes.post('/workspaces/:id/mkdir', async (c) => {
+/** POST /worktrees/:id/mkdir — Create a directory */
+worktreeFileRoutes.post('/worktrees/:id/mkdir', async (c) => {
   const id = c.req.param('id');
   const body = await c.req.json<{ path: string }>();
 
@@ -242,8 +242,8 @@ workspaceFileRoutes.post('/workspaces/:id/mkdir', async (c) => {
     return c.json({ error: 'path is required' }, 400);
   }
 
-  const root = getWorkspaceRoot(id);
-  if (!root) return c.json({ error: 'Workspace not found' }, 404);
+  const root = getWorktreeRoot(id);
+  if (!root) return c.json({ error: 'Worktree not found' }, 404);
 
   const target = safePath(root, body.path);
   if (!target) return c.json({ error: 'Invalid path' }, 403);

@@ -7,7 +7,7 @@
 import { Button, Checkbox, Group, Modal, Text } from '@mantine/core';
 import { useSetAtom } from 'jotai';
 import { useCallback, useState } from 'react';
-import { deleteProjectAtom } from '../../atoms/workspaces';
+import { deleteProjectAtom } from '../../atoms/worktrees';
 import { showSystemNotification } from '../notifications/SystemToast';
 
 interface RemoveProjectDialogProps {
@@ -15,7 +15,7 @@ interface RemoveProjectDialogProps {
   onClose: () => void;
   projectId: string;
   projectName: string;
-  workspaceCount: number;
+  worktreeCount: number;
 }
 
 export function RemoveProjectDialog({
@@ -23,7 +23,7 @@ export function RemoveProjectDialog({
   onClose,
   projectId,
   projectName,
-  workspaceCount,
+  worktreeCount,
 }: RemoveProjectDialogProps) {
   const deleteProject = useSetAtom(deleteProjectAtom);
   const [deleteWorktrees, setDeleteWorktrees] = useState(false);
@@ -80,9 +80,9 @@ export function RemoveProjectDialog({
         },
       }}
     >
-      {workspaceCount > 0 && (
+      {worktreeCount > 0 && (
         <Text fz="0.8rem" c="var(--phantom-text-secondary)" mb="md">
-          {workspaceCount} workspace{workspaceCount !== 1 ? 's' : ''} will be
+          {worktreeCount} worktree{worktreeCount !== 1 ? 's' : ''} will be
           removed.
         </Text>
       )}

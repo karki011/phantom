@@ -7,7 +7,7 @@ import { logger } from './logger.js';
 
 export interface RunningProcess {
   termId: string;
-  workspaceId: string;
+  worktreeId: string;
   projectId: string;
   recipe: string;
   recipeLabel: string;
@@ -40,13 +40,13 @@ export const unregisterProcess = (termId: string): void => {
   if (!process) return;
   registry.delete(termId);
   logger.info('ProcessRegistry', `Unregistered: ${process.recipeLabel} (termId=${termId})`);
-  broadcastFn?.('server:stop', { termId, workspaceId: process.workspaceId });
+  broadcastFn?.('server:stop', { termId, worktreeId: process.worktreeId });
 };
 
-/** Get all running processes, optionally filtered by workspaceId */
-export const getProcesses = (workspaceId?: string): RunningProcess[] => {
+/** Get all running processes, optionally filtered by worktreeId */
+export const getProcesses = (worktreeId?: string): RunningProcess[] => {
   const all = Array.from(registry.values());
-  return workspaceId ? all.filter((p) => p.workspaceId === workspaceId) : all;
+  return worktreeId ? all.filter((p) => p.worktreeId === worktreeId) : all;
 };
 
 /** Lookup a single process by terminal ID */

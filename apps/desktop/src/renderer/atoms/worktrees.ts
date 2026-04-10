@@ -1,6 +1,6 @@
 /**
- * Workspaces & Projects Jotai Atoms
- * State management for the workspace sidebar system
+ * Worktrees & Projects Jotai Atoms
+ * State management for the worktree sidebar system
  *
  * @author Subash Karki
  */
@@ -9,13 +9,13 @@ import { atomWithStorage } from 'jotai/utils';
 
 import {
   type ProjectData,
-  type WorkspaceData,
+  type WorktreeData,
   getProjects,
   createProject,
-  getWorkspaces,
-  createWorkspace as apiCreateWorkspace,
-  deleteWorkspace as apiDeleteWorkspace,
-  updateWorkspace as apiUpdateWorkspace,
+  getWorktrees,
+  createWorktree as apiCreateWorktree,
+  deleteWorktree as apiDeleteWorktree,
+  updateWorktree as apiUpdateWorktree,
   deleteProject as apiDeleteProject,
   openRepository,
 } from '../lib/api';
@@ -54,32 +54,32 @@ export const createProjectAtom = atom(
 );
 
 // ---------------------------------------------------------------------------
-// Workspaces
+// Worktrees
 // ---------------------------------------------------------------------------
 
-const workspacesDataAtom = atom<WorkspaceData[]>([]);
-const workspacesLoadingAtom = atom(false);
-const workspacesErrorAtom = atom<unknown>(null);
+const worktreesDataAtom = atom<WorktreeData[]>([]);
+const worktreesLoadingAtom = atom(false);
+const worktreesErrorAtom = atom<unknown>(null);
 
-export const workspacesAtom = atom((get) => get(workspacesDataAtom));
-export const workspacesLoadingStateAtom = atom((get) => get(workspacesLoadingAtom));
+export const worktreesAtom = atom((get) => get(worktreesDataAtom));
+export const worktreesLoadingStateAtom = atom((get) => get(worktreesLoadingAtom));
 
-export const activeWorkspaceIdAtom = atomWithStorage<string | null>(
+export const activeWorktreeIdAtom = atomWithStorage<string | null>(
   'phantom-active-workspace',
   null,
 );
 
-export const activeWorkspaceAtom = atom((get) => {
-  const id = get(activeWorkspaceIdAtom);
+export const activeWorktreeAtom = atom((get) => {
+  const id = get(activeWorktreeIdAtom);
   if (!id) return null;
-  return get(workspacesDataAtom).find((w) => w.id === id) ?? null;
+  return get(worktreesDataAtom).find((w) => w.id === id) ?? null;
 });
 
-/** Workspaces grouped by projectId */
-export const workspacesByProjectAtom = atom((get) => {
-  const workspaces = get(workspacesDataAtom);
-  const grouped = new Map<string, WorkspaceData[]>();
-  for (const ws of workspaces) {
+/** Worktrees grouped by projectId */
+export const worktreesByProjectAtom = atom((get) => {
+  const worktrees = get(worktreesDataAtom);
+  const grouped = new Map<string, WorktreeData[]>();
+  for (const ws of worktrees) {
     const list = grouped.get(ws.projectId) ?? [];
     list.push(ws);
     grouped.set(ws.projectId, list);
@@ -87,54 +87,54 @@ export const workspacesByProjectAtom = atom((get) => {
   return grouped;
 });
 
-export const refreshWorkspacesAtom = atom(null, async (_get, set) => {
-  set(workspacesLoadingAtom, true);
+export const refreshWorktreesAtom = atom(null, async (_get, set) => {
+  set(worktreesLoadingAtom, true);
   try {
-    const data = await getWorkspaces();
-    set(workspacesDataAtom, data);
-    set(workspacesErrorAtom, null);
+    const data = await getWorktrees();
+    set(worktreesDataAtom, data);
+    set(worktreesErrorAtom, null);
   } catch (err) {
-    set(workspacesErrorAtom, err);
+    set(worktreesErrorAtom, err);
   } finally {
-    set(workspacesLoadingAtom, false);
+    set(worktreesLoadingAtom, false);
   }
 });
 
-export const createWorkspaceAtom = atom(
+export const createWorktreeAtom = atom(
   null,
   async (
     _get,
     set,
     params: { projectId: string; name?: string; branch?: string; baseBranch?: string },
   ) => {
-    const workspace = await apiCreateWorkspace(params);
-    set(workspacesDataAtom, (prev) => [...prev, workspace]);
-    set(activeWorkspaceIdAtom, workspace.id);
-    return workspace;
+    const worktree = await apiCreateWorktree(params);
+    set(worktreesDataAtom, (prev) => [...prev, worktree]);
+    set(activeWorktreeIdAtom, worktree.id);
+    return worktree;
   },
 );
 
-export const deleteWorkspaceAtom = atom(
+export const deleteWorktreeAtom = atom(
   null,
   async (get, set, id: string) => {
-    await apiDeleteWorkspace(id);
-    set(workspacesDataAtom, (prev) => prev.filter((w) => w.id !== id));
-    // If we deleted the active workspace, clear it
-    if (get(activeWorkspaceIdAtom) === id) {
-      set(activeWorkspaceIdAtom, null);
+    await apiDeleteWorktree(id);
+    set(worktreesDataAtom, (prev) => prev.filter((w) => w.id !== id));
+    // If we deleted the active worktree, clear it
+    if (get(activeWorktreeIdAtom) === id) {
+      set(activeWorktreeIdAtom, null);
     }
   },
 );
 
-export const updateWorkspaceAtom = atom(
+export const updateWorktreeAtom = atom(
   null,
   async (
     _get,
     set,
     params: { id: string; data: Partial<{ name: string; branch: string }> },
   ) => {
-    const updated = await apiUpdateWorkspace(params.id, params.data);
-    set(workspacesDataAtom, (prev) =>
+    const updated = await apiUpdateWorktree(params.id, params.data);
+    set(worktreesDataAtom, (prev) =>
       prev.map((w) => (w.id === params.id ? updated : w)),
     );
     return updated;
@@ -178,22 +178,22 @@ export const expandedProjectsAtom = atomWithStorage<string[]>(
 export const openRepositoryAtom = atom(
   null,
   async (_get, set, repoPath: string) => {
-    const { project, workspace } = await openRepository(repoPath);
+    const { project, worktree } = await openRepository(repoPath);
     set(projectsDataAtom, (prev) => {
       if (prev.some((p) => p.id === project.id)) return prev;
       return [...prev, project];
     });
-    if (workspace) {
-      set(workspacesDataAtom, (prev) => {
-        if (prev.some((w) => w.id === workspace.id)) return prev;
-        return [...prev, workspace];
+    if (worktree) {
+      set(worktreesDataAtom, (prev) => {
+        if (prev.some((w) => w.id === worktree.id)) return prev;
+        return [...prev, worktree];
       });
-      set(activeWorkspaceIdAtom, workspace.id);
+      set(activeWorktreeIdAtom, worktree.id);
     }
     set(expandedProjectsAtom, (prev) =>
       prev.includes(project.id) ? prev : [...prev, project.id],
     );
-    return { project, workspace };
+    return { project, worktree };
   },
 );
 
@@ -206,17 +206,17 @@ export const deleteProjectAtom = atom(
   async (get, set, params: { id: string; deleteWorktrees?: boolean }) => {
     await apiDeleteProject(params.id, params.deleteWorktrees);
     set(projectsDataAtom, (prev) => prev.filter((p) => p.id !== params.id));
-    // Remove workspaces belonging to the deleted project
-    const removed = get(workspacesDataAtom).filter(
+    // Remove worktrees belonging to the deleted project
+    const removed = get(worktreesDataAtom).filter(
       (w) => w.projectId === params.id,
     );
-    set(workspacesDataAtom, (prev) =>
+    set(worktreesDataAtom, (prev) =>
       prev.filter((w) => w.projectId !== params.id),
     );
-    // Clear active workspace if it belonged to the deleted project
-    const activeId = get(activeWorkspaceIdAtom);
+    // Clear active worktree if it belonged to the deleted project
+    const activeId = get(activeWorktreeIdAtom);
     if (activeId && removed.some((w) => w.id === activeId)) {
-      set(activeWorkspaceIdAtom, null);
+      set(activeWorktreeIdAtom, null);
     }
     // Remove from expanded
     set(expandedProjectsAtom, (prev) =>

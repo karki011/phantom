@@ -15,7 +15,7 @@ import { ChevronsRight } from 'lucide-react';
 import {
   rightSidebarCollapsedAtom,
   rightSidebarWidthAtom,
-} from '../../atoms/workspaces';
+} from '../../atoms/worktrees';
 import { rightSidebarTabAtom } from '../../atoms/fileExplorer';
 import { ResizeHandle } from './ResizeHandle';
 import { FilesView } from './FilesView';

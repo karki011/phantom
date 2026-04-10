@@ -1,7 +1,7 @@
 /**
  * WelcomePage Component
  * - No projects: shows Open Repository + Getting Started
- * - Has project but no workspaces: shows "Create your first workspace" form
+ * - Has project but no worktrees: shows "Create your first worktree" form
  *
  * @author Subash Karki
  */
@@ -29,12 +29,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
 
 import {
-  createWorkspaceAtom,
+  createWorktreeAtom,
   openRepositoryAtom,
   projectsAtom,
   refreshProjectsAtom,
-  workspacesAtom,
-} from '../atoms/workspaces';
+  worktreesAtom,
+} from '../atoms/worktrees';
 import { type BranchesData, getProjectBranches } from '../lib/api';
 import { showSystemNotification } from './notifications/SystemToast';
 
@@ -58,7 +58,7 @@ const slugify = (name: string): string =>
 
 const GETTING_STARTED = [
   { icon: BookOpen, title: 'Open a repository', description: 'Browse and open any local git repo to start working' },
-  { icon: GitBranch, title: 'Create a workspace', description: 'Each workspace is an isolated worktree with its own branch' },
+  { icon: GitBranch, title: 'Create a worktree', description: 'Each worktree is an isolated environment with its own branch' },
   { icon: LayoutPanelLeft, title: 'Split panes & terminals', description: 'Arrange editors, terminals, and dashboards side by side' },
   { icon: Gamepad2, title: 'Track XP & achievements', description: 'Earn XP, climb hunter ranks, and unlock achievements' },
 ];
@@ -78,8 +78,8 @@ const shortenPath = (fullPath: string): string => {
 // Create First Workspace Form
 // ---------------------------------------------------------------------------
 
-function CreateFirstWorkspace({ projectId, projectName, defaultBranch }: { projectId: string; projectName: string; defaultBranch: string }) {
-  const createWorkspace = useSetAtom(createWorkspaceAtom);
+function CreateFirstWorktree({ projectId, projectName, defaultBranch }: { projectId: string; projectName: string; defaultBranch: string }) {
+  const createWorktree = useSetAtom(createWorktreeAtom);
   const store = usePaneStore();
   const [name, setName] = useState('');
   const [baseBranch, setBaseBranch] = useState(defaultBranch);
@@ -132,20 +132,20 @@ function CreateFirstWorkspace({ projectId, projectName, defaultBranch }: { proje
     if (!wsName || !branch || submitting) return;
     setSubmitting(true);
     try {
-      const ws = await createWorkspace({ projectId, name: wsName, branch, baseBranch });
-      showSystemNotification('Workspace Created', `Created workspace "${wsName}"`, 'success');
-      // Auto-open Claude session in the new workspace
+      const ws = await createWorktree({ projectId, name: wsName, branch, baseBranch });
+      showSystemNotification('Worktree Created', `Created worktree "${wsName}"`, 'success');
+      // Auto-open Claude session in the new worktree
       if (ws?.worktreePath) {
         setTimeout(() => {
           store.addPaneAsTab('terminal', { cwd: ws.worktreePath, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>, 'Claude');
         }, 500);
       }
     } catch {
-      showSystemNotification('Error', 'Failed to create workspace', 'warning');
+      showSystemNotification('Error', 'Failed to create worktree', 'warning');
     } finally {
       setSubmitting(false);
     }
-  }, [name, newBranch, baseBranch, projectId, createWorkspace, submitting]);
+  }, [name, newBranch, baseBranch, projectId, createWorktree, submitting]);
 
   if (loading) {
     return (
@@ -163,10 +163,10 @@ function CreateFirstWorkspace({ projectId, projectName, defaultBranch }: { proje
         {projectName}
       </Text>
       <Text fz="1.5rem" fw={800} c="var(--phantom-text-primary)" mb={4}>
-        Create a workspace
+        Create a worktree
       </Text>
       <Text fz="sm" c="var(--phantom-text-muted)" mb={28}>
-        Workspaces are isolated task environments backed by git worktrees.
+        Worktrees are isolated task environments backed by git worktrees.
       </Text>
 
       <form onSubmit={(e) => { e.preventDefault(); if (name.trim() && baseBranch) handleSubmit(); }}>
@@ -226,7 +226,7 @@ function CreateFirstWorkspace({ projectId, projectName, defaultBranch }: { proje
 
 export function WelcomePage() {
   const projects = useAtomValue(projectsAtom);
-  const workspaces = useAtomValue(workspacesAtom);
+  const worktrees = useAtomValue(worktreesAtom);
   const refreshProjects = useSetAtom(refreshProjectsAtom);
   const openRepo = useSetAtom(openRepositoryAtom);
 
@@ -243,15 +243,15 @@ export function WelcomePage() {
     }
   }, [openRepo]);
 
-  // If we have a project but no workspaces → show "Create first workspace"
+  // If we have a project but no worktrees → show "Create first worktree"
   const firstProject = projects[0];
-  const hasWorkspaces = workspaces.length > 0;
+  const hasWorktrees = worktrees.length > 0;
 
-  if (firstProject && !hasWorkspaces) {
+  if (firstProject && !hasWorktrees) {
     return (
       <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', backgroundColor: 'var(--phantom-surface-bg)' }}>
         <div style={{ padding: '48px 32px' }}>
-          <CreateFirstWorkspace projectId={firstProject.id} projectName={firstProject.name} defaultBranch={firstProject.defaultBranch ?? 'main'} />
+          <CreateFirstWorktree projectId={firstProject.id} projectName={firstProject.name} defaultBranch={firstProject.defaultBranch ?? 'main'} />
         </div>
       </div>
     );

@@ -21,7 +21,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
 
 import { viewingSessionIdAtom } from '../../atoms/sessionViewer';
-import { activeWorkspaceAtom } from '../../atoms/workspaces';
+import { activeWorktreeAtom } from '../../atoms/worktrees';
 import { useSessions } from '../../hooks/useSessions';
 import { useRouter } from '../../hooks/useRouter';
 import { stopSession } from '../../lib/api';
@@ -66,7 +66,7 @@ export const ActiveSessions = () => {
   const { navigate } = useRouter();
   const setViewingSession = useSetAtom(viewingSessionIdAtom);
   const store = usePaneStore();
-  const workspace = useAtomValue(activeWorkspaceAtom);
+  const worktree = useAtomValue(activeWorktreeAtom);
   const [stoppingId, setStoppingId] = useState<string | null>(null);
 
   // Live timer update every 30s
@@ -101,7 +101,7 @@ export const ActiveSessions = () => {
 
   const handleRelaunch = useCallback(
     (cwd: string | null) => {
-      const targetCwd = cwd || workspace?.worktreePath;
+      const targetCwd = cwd || worktree?.worktreePath;
       if (!targetCwd) return;
       store.addPaneAsTab(
         'terminal',
@@ -109,7 +109,7 @@ export const ActiveSessions = () => {
         'Claude',
       );
     },
-    [store, workspace],
+    [store, worktree],
   );
 
   return (

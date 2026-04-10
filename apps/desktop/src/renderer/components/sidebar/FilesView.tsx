@@ -1,5 +1,5 @@
 /**
- * FilesView — file tree for the active workspace
+ * FilesView — file tree for the active worktree
  *
  * @author Subash Karki
  */
@@ -18,12 +18,12 @@ import {
   selectedFileAtom,
   toggleFolderAtom,
 } from '../../atoms/fileExplorer';
-import { activeWorkspaceAtom } from '../../atoms/workspaces';
+import { activeWorktreeAtom } from '../../atoms/worktrees';
 import type { FileEntry } from '../../lib/api';
 import { FileTreeItem } from './FileTreeItem';
 
 export function FilesView() {
-  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
+  const activeWorktree = useAtomValue(activeWorktreeAtom);
   const fileTree = useAtomValue(fileTreeAtom);
   const expandedFolders = useAtomValue(expandedFoldersAtom);
   const isDirLoading = useAtomValue(isDirLoadingAtom);
@@ -41,7 +41,7 @@ export function FilesView() {
 
   // Debounced server-side file search
   useEffect(() => {
-    if (!activeWorkspace || !searchQuery.trim()) {
+    if (!activeWorktree || !searchQuery.trim()) {
       setSearchResults(null);
       setSearchError(false);
       return;
@@ -49,50 +49,50 @@ export function FilesView() {
     setSearching(true);
     setSearchError(false);
     const timer = setTimeout(() => {
-      fetch(`/api/workspaces/${activeWorkspace.id}/files/search?q=${encodeURIComponent(searchQuery.trim())}`)
+      fetch(`/api/worktrees/${activeWorktree.id}/files/search?q=${encodeURIComponent(searchQuery.trim())}`)
         .then((r) => r.json())
         .then((data: { entries: FileEntry[] }) => setSearchResults(data.entries))
         .catch(() => { setSearchResults([]); setSearchError(true); })
         .finally(() => setSearching(false));
     }, 250);
     return () => clearTimeout(timer);
-  }, [searchQuery, activeWorkspace?.id]);
+  }, [searchQuery, activeWorktree?.id]);
 
-  // Fetch root when workspace changes
+  // Fetch root when worktree changes
   useEffect(() => {
-    if (activeWorkspace) {
+    if (activeWorktree) {
       clearFileTree();
-      fetchDirectory({ workspaceId: activeWorkspace.id, path: '/' });
+      fetchDirectory({ worktreeId: activeWorktree.id, path: '/' });
     }
-  }, [activeWorkspace?.id, fetchDirectory, clearFileTree]);
+  }, [activeWorktree?.id, fetchDirectory, clearFileTree]);
 
   // When a folder is expanded, fetch its children
   const handleToggleFolder = useCallback(
     (path: string) => {
-      if (!activeWorkspace) return;
+      if (!activeWorktree) return;
       toggleFolder(path);
-      const cacheKey = `${activeWorkspace.id}:${path}`;
+      const cacheKey = `${activeWorktree.id}:${path}`;
       if (!fileTree.has(cacheKey)) {
-        fetchDirectory({ workspaceId: activeWorkspace.id, path });
+        fetchDirectory({ worktreeId: activeWorktree.id, path });
       }
     },
-    [activeWorkspace, toggleFolder, fetchDirectory, fileTree],
+    [activeWorktree, toggleFolder, fetchDirectory, fileTree],
   );
 
   const handleFileClick = useCallback(
     (entry: FileEntry) => {
-      if (!activeWorkspace) return;
+      if (!activeWorktree) return;
       setSelectedFile(entry.relativePath);
       store.addPaneAsTab('editor', {
         filePath: entry.relativePath,
-        workspaceId: activeWorkspace.id,
-        repoPath: activeWorkspace.worktreePath,
+        worktreeId: activeWorktree.id,
+        repoPath: activeWorktree.worktreePath,
       } as Record<string, unknown>, entry.name);
     },
-    [activeWorkspace, setSelectedFile, store],
+    [activeWorktree, setSelectedFile, store],
   );
 
-  if (!activeWorkspace) {
+  if (!activeWorktree) {
     return (
       <Text
         fz="0.75rem"
@@ -101,12 +101,12 @@ export function FilesView() {
         py="xl"
         px="sm"
       >
-        Select a workspace to explore files.
+        Select a worktree to explore files.
       </Text>
     );
   }
 
-  if (activeWorkspace.worktreeValid === false) {
+  if (activeWorktree.worktreeValid === false) {
     return (
       <Text fz="0.75rem" c="var(--phantom-status-warning)" ta="center" py="xl" px="sm">
         Worktree missing. Cannot browse files.
@@ -114,7 +114,7 @@ export function FilesView() {
     );
   }
 
-  const rootKey = `${activeWorkspace.id}:/`;
+  const rootKey = `${activeWorktree.id}:/`;
   const rootEntries = fileTree.get(rootKey);
 
   if (!rootEntries) {
@@ -195,7 +195,7 @@ export function FilesView() {
             <FileTreeRecursive
               entries={rootEntries}
               depth={0}
-              workspaceId={activeWorkspace.id}
+              worktreeId={activeWorktree.id}
               fileTree={fileTree}
               expandedFolders={expandedFolders}
               selectedFile={selectedFile}
@@ -217,7 +217,7 @@ export function FilesView() {
 interface FileTreeRecursiveProps {
   entries: FileEntry[];
   depth: number;
-  workspaceId: string;
+  worktreeId: string;
   fileTree: Map<string, FileEntry[]>;
   expandedFolders: string[];
   selectedFile: string | null;
@@ -229,7 +229,7 @@ interface FileTreeRecursiveProps {
 function FileTreeRecursive({
   entries,
   depth,
-  workspaceId,
+  worktreeId,
   fileTree,
   expandedFolders,
   selectedFile,
@@ -247,7 +247,7 @@ function FileTreeRecursive({
     <>
       {sorted.map((entry) => {
         const isExpanded = expandedFolders.includes(entry.relativePath);
-        const cacheKey = `${workspaceId}:${entry.relativePath}`;
+        const cacheKey = `${worktreeId}:${entry.relativePath}`;
         const childEntries = fileTree.get(cacheKey);
         const loading = isDirLoading(cacheKey);
 
@@ -279,7 +279,7 @@ function FileTreeRecursive({
                 <FileTreeRecursive
                   entries={childEntries}
                   depth={depth + 1}
-                  workspaceId={workspaceId}
+                  worktreeId={worktreeId}
                   fileTree={fileTree}
                   expandedFolders={expandedFolders}
                   selectedFile={selectedFile}

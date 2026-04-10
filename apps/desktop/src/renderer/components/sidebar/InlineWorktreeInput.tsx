@@ -1,5 +1,5 @@
 /**
- * NewWorkspaceModal — modal form for creating workspaces
+ * NewWorktreeModal — modal form for creating worktrees
  * Shows name, base branch selector, and new branch name.
  *
  * @author Subash Karki
@@ -17,10 +17,10 @@ import {
 import { useSetAtom } from 'jotai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
-import { createWorkspaceAtom } from '../../atoms/workspaces';
+import { createWorktreeAtom } from '../../atoms/worktrees';
 import { type BranchesData, getProjectBranches } from '../../lib/api';
 
-interface InlineWorkspaceInputProps {
+interface InlineWorktreeInputProps {
   projectId: string;
   projectName?: string;
   defaultBranch?: string;
@@ -34,13 +34,13 @@ const slugify = (name: string): string =>
     .replace(/[^a-z0-9/]+/g, '-')
     .replace(/^-|-$/g, '');
 
-export function InlineWorkspaceInput({
+export function InlineWorktreeInput({
   projectId,
   projectName,
   defaultBranch,
   onDone,
-}: InlineWorkspaceInputProps) {
-  const createWorkspace = useSetAtom(createWorkspaceAtom);
+}: InlineWorktreeInputProps) {
+  const createWorktree = useSetAtom(createWorktreeAtom);
   const store = usePaneStore();
   const [name, setName] = useState('');
   const [baseBranch, setBaseBranch] = useState(defaultBranch ?? 'main');
@@ -80,7 +80,7 @@ export function InlineWorkspaceInput({
     }
   }, [loading]);
 
-  // Auto-generate branch name from workspace name
+  // Auto-generate branch name from worktree name
   useEffect(() => {
     if (!branchEdited && name.trim()) {
       setNewBranch(slugify(name));
@@ -103,14 +103,14 @@ export function InlineWorkspaceInput({
     if (!wsName || !branch || submitting) return;
     setSubmitting(true);
     try {
-      const ws = await createWorkspace({
+      const ws = await createWorktree({
         projectId,
         name: wsName,
         branch,
         baseBranch,
       });
       onDone();
-      // Auto-open Claude session in the new workspace
+      // Auto-open Claude session in the new worktree
       if (ws?.worktreePath) {
         setTimeout(() => {
           store.addPaneAsTab('terminal', { cwd: ws.worktreePath, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>, 'Claude');
@@ -121,13 +121,13 @@ export function InlineWorkspaceInput({
     } finally {
       setSubmitting(false);
     }
-  }, [name, newBranch, baseBranch, projectId, createWorkspace, onDone, submitting]);
+  }, [name, newBranch, baseBranch, projectId, createWorktree, onDone, submitting]);
 
   return (
     <Modal
       opened
       onClose={onDone}
-      title={projectName ? `New Workspace — ${projectName}` : 'New Workspace'}
+      title={projectName ? `New Worktree — ${projectName}` : 'New Worktree'}
       size="lg"
       centered
       padding="xl"
@@ -153,9 +153,9 @@ export function InlineWorkspaceInput({
           <Stack gap="lg">
             <TextInput
               ref={nameRef}
-              label="Workspace Name"
+              label="Worktree Name"
               placeholder="e.g. auth-fix"
-              description="A display name for this workspace"
+              description="A display name for this worktree"
               value={name}
               onChange={(e) => setName(e.currentTarget.value)}
               size="md"
@@ -177,7 +177,7 @@ export function InlineWorkspaceInput({
             <TextInput
               label="New Branch"
               placeholder="auto-generated from name"
-              description="A new git branch will be created for this workspace"
+              description="A new git branch will be created for this worktree"
               value={newBranch}
               onChange={(e) => {
                 setNewBranch(e.currentTarget.value);
@@ -203,7 +203,7 @@ export function InlineWorkspaceInput({
                 loading={submitting}
                 disabled={!name.trim() || !baseBranch}
               >
-                Create Workspace
+                Create Worktree
               </Button>
             </Group>
           </Stack>
