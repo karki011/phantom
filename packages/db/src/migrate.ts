@@ -225,6 +225,17 @@ export const runMigrations = (sqlite: Database.Database): void => {
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at)`);
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id)`);
 
+  // ---------------------------------------------------------------------------
+  // Pane State Persistence
+  // ---------------------------------------------------------------------------
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS pane_states (
+      worktree_id TEXT PRIMARY KEY,
+      state TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+  `);
+
   // Cleanup stale data on boot
   cleanupStaleData(sqlite);
 };

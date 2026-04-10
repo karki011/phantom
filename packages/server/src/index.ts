@@ -31,6 +31,7 @@ import { serverRoutes } from './routes/servers.js';
 import { initProcessRegistry } from './process-registry.js';
 import { hunterStatsRoutes } from './routes/hunter-stats.js';
 import { chatRoutes } from './routes/chat.js';
+import { paneStateRoutes } from './routes/pane-states.js';
 import { API_PORT } from '@phantom-os/shared';
 import type { Server } from 'node:http';
 import { setupTerminalWs } from './routes/terminal-ws.js';
@@ -96,6 +97,7 @@ app.route('/api', worktreeFileRoutes);
 app.route('/api', hunterStatsRoutes);
 app.route('/api', chatRoutes);
 app.route('/api', serverRoutes);
+app.route('/api', paneStateRoutes);
 
 // SSE endpoint
 app.get('/events', (c) => {

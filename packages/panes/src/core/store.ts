@@ -105,27 +105,48 @@ function stripDeadTerminals<TData>(state: WorkspaceState<TData>): WorkspaceState
 }
 
 function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
+  // Load from SQLite via synchronous XHR (needed because switchWorkspace is sync)
+  try {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', `/api/pane-states/${wsId}`, false); // synchronous
+    xhr.send();
+    if (xhr.status === 200) {
+      const saved = JSON.parse(xhr.responseText);
+      if (saved && saved.tabs && saved.tabs.length > 0) {
+        const state = migrateState(saved as WorkspaceState<TData>);
+        return coldBoot ? stripDeadTerminals(state) : state;
+      }
+    }
+  } catch { /* ignore — server may be starting up */ }
+
+  // Fallback: try localStorage (one-time migration from old persistence)
   try {
     const raw = localStorage.getItem(storageKey(wsId));
     if (raw) {
+      localStorage.removeItem(storageKey(wsId)); // Clean up old storage
       const saved = JSON.parse(raw) as WorkspaceState<TData>;
       if (saved.tabs.length > 0) {
         const state = migrateState(saved);
+        // Migrate to new API backend
+        fetch(`/api/pane-states/${wsId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: raw,
+        }).catch(() => {});
         return coldBoot ? stripDeadTerminals(state) : state;
       }
     }
   } catch { /* ignore */ }
 
-  // Also try migrating from the legacy global key (one-time)
+  // Legacy key migration
   try {
     const legacyKey = 'phantom-os:workspace';
     const legacy = localStorage.getItem(legacyKey);
     if (legacy) {
-      localStorage.removeItem(legacyKey); // Clean up legacy key
+      localStorage.removeItem(legacyKey);
       const saved = JSON.parse(legacy) as WorkspaceState<TData>;
       if (saved.tabs.length > 0) {
-        const state = migrateState(saved);
-        return coldBoot ? stripDeadTerminals(state) : state;
+        return coldBoot ? stripDeadTerminals(migrateState(saved)) : migrateState(saved);
       }
     }
   } catch { /* ignore */ }
@@ -137,28 +158,31 @@ function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
 /** Pane kinds that are ephemeral — don't survive workspace switches */
 const EPHEMERAL_KINDS = new Set<string>();
 
+/** Debounced save to SQLite via API — 300ms like Superset */
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
 function saveWorkspaceState<TData>(wsId: string, state: WorkspaceState<TData>): void {
-  try {
-    // Filter out ephemeral tabs (terminals with dead processes) — only persist restorable ones
-    const persistableTabs = state.tabs.filter((tab) => {
-      const panes = Object.values(tab.panes);
-      // Keep tabs where at least one pane is non-ephemeral
-      return panes.some((p) => !EPHEMERAL_KINDS.has(p.kind));
-    });
+  // Filter ephemeral kinds before saving
+  const persistableTabs = state.tabs.filter((tab) => {
+    const panes = Object.values(tab.panes);
+    return panes.some((p) => !EPHEMERAL_KINDS.has(p.kind));
+  });
+  const tabsToSave = persistableTabs.length > 0 ? persistableTabs : state.tabs.slice(0, 1);
+  const activeTabId = tabsToSave.some((t) => t.id === state.activeTabId)
+    ? state.activeTabId
+    : tabsToSave[0]?.id ?? null;
 
-    // Ensure at least the Home tab exists
-    const tabsToSave = persistableTabs.length > 0 ? persistableTabs : state.tabs.slice(0, 1);
+  const payload = { tabs: tabsToSave, activeTabId };
 
-    // If active tab was filtered out, switch to first remaining tab
-    const activeTabId = tabsToSave.some((t) => t.id === state.activeTabId)
-      ? state.activeTabId
-      : tabsToSave[0]?.id ?? null;
-
-    localStorage.setItem(
-      storageKey(wsId),
-      JSON.stringify({ tabs: tabsToSave, activeTabId }),
-    );
-  } catch { /* ignore quota errors */ }
+  // Debounce writes to avoid hammering the API
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    fetch(`/api/pane-states/${wsId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => { /* silent — server may be restarting */ });
+  }, 300);
 }
 
 // ---------------------------------------------------------------------------
@@ -489,15 +513,12 @@ export function createPaneStore<TData = Record<string, unknown>>() {
     })),
   );
 
-  // Auto-persist on state changes (debounced, per-workspace)
-  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  // Auto-persist on state changes (saveWorkspaceState handles its own debounce)
   store.subscribe(
     (s) => ({ tabs: s.tabs, activeTabId: s.activeTabId }),
     (slice) => {
       if (!activeWorkspaceId) return; // No workspace active yet
-      const wsId = activeWorkspaceId;
-      if (saveTimer) clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => saveWorkspaceState(wsId, slice), 300);
+      saveWorkspaceState(activeWorkspaceId, slice);
     },
   );
 

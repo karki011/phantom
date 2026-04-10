@@ -167,3 +167,13 @@ export const chatMessages = sqliteTable('chat_messages', {
   model: text('model'),
   createdAt: integer('created_at').notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// Pane State Persistence
+// ---------------------------------------------------------------------------
+
+export const paneStates = sqliteTable('pane_states', {
+  worktreeId: text('worktree_id').primaryKey(),
+  state: text('state').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
