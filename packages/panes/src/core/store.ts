@@ -83,6 +83,9 @@ function migrateState<TData>(state: WorkspaceState<TData>): WorkspaceState<TData
   return { ...state, tabs };
 }
 
+/** True until the first switchWorkspace call completes — on cold boot, strip dead terminals */
+let coldBoot = true;
+
 /** Filter out terminal tabs from persisted state (PTY processes are dead after restart) */
 function stripDeadTerminals<TData>(state: WorkspaceState<TData>): WorkspaceState<TData> {
   const cleaned = state.tabs.filter((tab) => {
@@ -106,7 +109,10 @@ function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
     const raw = localStorage.getItem(storageKey(wsId));
     if (raw) {
       const saved = JSON.parse(raw) as WorkspaceState<TData>;
-      if (saved.tabs.length > 0) return stripDeadTerminals(migrateState(saved));
+      if (saved.tabs.length > 0) {
+        const state = migrateState(saved);
+        return coldBoot ? stripDeadTerminals(state) : state;
+      }
     }
   } catch { /* ignore */ }
 
@@ -117,7 +123,10 @@ function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
     if (legacy) {
       localStorage.removeItem(legacyKey); // Clean up legacy key
       const saved = JSON.parse(legacy) as WorkspaceState<TData>;
-      if (saved.tabs.length > 0) return stripDeadTerminals(migrateState(saved));
+      if (saved.tabs.length > 0) {
+        const state = migrateState(saved);
+        return coldBoot ? stripDeadTerminals(state) : state;
+      }
     }
   } catch { /* ignore */ }
 
@@ -455,6 +464,8 @@ export function createPaneStore<TData = Record<string, unknown>>() {
         activeWorkspaceId = workspaceId;
         const loaded = loadWorkspaceState<TData>(workspaceId);
         set((s) => ({ ...s, tabs: loaded.tabs, activeTabId: loaded.activeTabId }));
+        // After first switch, stop stripping terminals (only strip on cold boot)
+        coldBoot = false;
       },
 
       // ---------------------------------------------------------------
