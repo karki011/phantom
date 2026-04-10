@@ -12,7 +12,8 @@ export const SESSIONS_DIR = join(CLAUDE_DIR, 'sessions');
 export const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
 export const TASKS_DIR = join(CLAUDE_DIR, 'tasks');
 export const TEAM_EVENTS_DIR = join(CLAUDE_DIR, 'team', 'events');
-export const DB_PATH = join(CLAUDE_DIR, 'phantom-os', 'phantom.db');
+export const PHANTOM_DATA_DIR = join(HOME, '.phantom-os');
+export const DB_PATH = join(PHANTOM_DATA_DIR, 'phantom.db');
 export const API_PORT = 3849;
 
 export const XP = {

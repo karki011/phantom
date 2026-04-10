@@ -127,10 +127,10 @@ bun run build
 
 ```bash
 # Add to ~/.zshrc
-alias poc="cd ~/.claude/phantom-os"
-alias pod="cd ~/.claude/phantom-os && bun run dev:desktop"
-alias pos="cd ~/.claude/phantom-os && bash scripts/start.sh"
-alias poa="cd ~/.claude/phantom-os && bun run dev:api"
+alias poc="cd ~/phantom-os"
+alias pod="cd ~/phantom-os && bun run dev:desktop"
+alias pos="cd ~/phantom-os && bash scripts/start.sh"
+alias poa="cd ~/phantom-os && bun run dev:api"
 ```
 
 ## How It Works
