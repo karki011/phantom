@@ -32,10 +32,13 @@ import { initProcessRegistry } from './process-registry.js';
 import { hunterStatsRoutes } from './routes/hunter-stats.js';
 import { chatRoutes } from './routes/chat.js';
 import { paneStateRoutes } from './routes/pane-states.js';
+import { plansRoutes } from './routes/plans.js';
 import { API_PORT } from '@phantom-os/shared';
 import type { Server } from 'node:http';
 import { setupTerminalWs } from './routes/terminal-ws.js';
+import { terminalRestoreRoutes } from './routes/terminal-restore.js';
 import { destroyAllPtys, initDaemonClient, disconnectDaemon } from './terminal-manager.js';
+import { startHistoryWriter, stopHistoryWriter, markAllExited } from './terminal-history.js';
 
 // ---------------------------------------------------------------------------
 // SSE Broadcast
@@ -98,6 +101,8 @@ app.route('/api', hunterStatsRoutes);
 app.route('/api', chatRoutes);
 app.route('/api', serverRoutes);
 app.route('/api', paneStateRoutes);
+app.route('/api', plansRoutes);
+app.route('/api', terminalRestoreRoutes);
 
 // SSE endpoint
 app.get('/events', (c) => {
@@ -203,6 +208,8 @@ startActivityPoller(broadcast);
 
 const shutdown = () => {
   logger.info('PhantomOS', 'Shutting down gracefully...');
+  stopHistoryWriter();
+  markAllExited();
   disconnectDaemon();
   destroyAllPtys();
   // Checkpoint WAL so no data is lost
@@ -231,6 +238,7 @@ const server = serve({ fetch: app.fetch, port: API_PORT }, (info) => {
 });
 
 setupTerminalWs(server as unknown as Server);
+startHistoryWriter();
 
 // Skip daemon — use direct PTY (node-pty) for terminal sessions.
 // The daemon has output routing bugs that cause black-screen terminals.

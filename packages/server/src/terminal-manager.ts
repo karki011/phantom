@@ -12,6 +12,9 @@ import { DaemonClient } from '@phantom-os/terminal/daemon';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
+/** Max scrollback buffer size (64KB, matches daemon) */
+const SCROLLBACK_MAX = 64 * 1024;
+
 export interface PtySession {
   id: string;
   /** Direct PTY — only set when running in fallback mode */
@@ -19,6 +22,8 @@ export interface PtySession {
   listeners: Set<(data: string) => void>;
   /** Whether this session is managed by the daemon */
   daemonManaged: boolean;
+  /** Rolling scrollback buffer for cold restore (direct PTY mode) */
+  scrollback: string;
 }
 
 // ─── State ─────────────────────────────────────────────────────────────
@@ -150,9 +155,15 @@ const createDirectPty = (id: string, cwd?: string, cols?: number, rows?: number,
     pty: ptyProcess,
     listeners: new Set(),
     daemonManaged: false,
+    scrollback: '',
   };
 
   ptyProcess.onData((data) => {
+    // Append to rolling scrollback buffer for cold restore
+    session.scrollback += data;
+    if (session.scrollback.length > SCROLLBACK_MAX) {
+      session.scrollback = session.scrollback.slice(-SCROLLBACK_MAX);
+    }
     for (const listener of session.listeners) {
       listener(data);
     }
@@ -187,6 +198,7 @@ export const createPty = async (
         pty: null,
         listeners: new Set(),
         daemonManaged: true,
+        scrollback: '',
       };
       if (initialListener) session.listeners.add(initialListener);
       sessions.set(id, session);
@@ -221,12 +233,20 @@ export const createPtySync = (id: string, cwd?: string): PtySession => {
       pty: null,
       listeners: new Set(),
       daemonManaged: true,
+      scrollback: '',
     };
     sessions.set(id, session);
     return session;
   }
 
   return createDirectPty(id, cwd);
+};
+
+/** Get scrollback buffer for a session (direct PTY mode) */
+export const getScrollback = (id: string): string | null => {
+  const session = sessions.get(id);
+  if (!session) return null;
+  return session.scrollback;
 };
 
 export const writePty = (id: string, data: string): void => {
@@ -269,6 +289,28 @@ export const destroyPty = (id: string): void => {
 
   session.listeners.clear();
   sessions.delete(id);
+};
+
+/**
+ * Detach a WebSocket listener from a PTY session WITHOUT killing it.
+ * The PTY stays alive in the daemon (or direct mode) for later reattach.
+ */
+export const detachPty = (id: string, listener?: (data: string) => void): void => {
+  const session = sessions.get(id);
+  if (!session) return;
+
+  if (listener) {
+    session.listeners.delete(listener);
+  }
+
+  // In daemon mode, tell daemon to stop forwarding output to this client
+  if (session.daemonManaged && daemonClient?.connected) {
+    daemonClient.detach(id).catch((err) => {
+      logger.warn('TerminalManager', `Daemon detach failed for ${id}: ${(err as Error).message}`);
+    });
+  }
+  // In direct PTY mode, we just remove the listener — PTY keeps running
+  // Do NOT delete session from sessions Map — it stays alive for reattach
 };
 
 export const getPtySession = (

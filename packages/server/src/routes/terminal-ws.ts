@@ -13,9 +13,11 @@ import {
   writePty,
   resizePty,
   destroyPty,
+  detachPty,
   getPtySession,
 } from '../terminal-manager.js';
 import { registerProcess, unregisterProcess } from '../process-registry.js';
+import { historyWriter } from '../terminal-history.js';
 
 export const setupTerminalWs = (
   server: HttpServer | HttpsServer,
@@ -24,7 +26,7 @@ export const setupTerminalWs = (
 
   server.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '', `http://${req.headers.host}`);
-    const match = url.pathname.match(/^\/ws\/terminal\/(.+)$/);
+    const match = url.pathname.match(/^\/ws\/terminal\/([a-zA-Z0-9_-]+)$/);
     if (!match) return;
 
     wss.handleUpgrade(req, socket, head, (ws) => {
@@ -45,10 +47,13 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
   };
 
   ws.on('close', () => {
-    session?.listeners.delete(onData);
-    // Clean up PTY when WebSocket closes
-    unregisterProcess(termId);
-    if (session) destroyPty(termId);
+    if (session) {
+      detachPty(termId, onData);
+      // Only unregister process if no other listeners remain
+      if (session.listeners.size === 0) {
+        unregisterProcess(termId);
+      }
+    }
     session = undefined;
   });
 
@@ -68,9 +73,23 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
           case 'init': {
             if (!session) {
               try {
+                const ALLOWED_ENV_KEYS = new Set(['PORT', 'NODE_ENV', 'CLAUDE_API_KEY']);
+                const safeEnv = msg.env
+                  ? Object.fromEntries(Object.entries(msg.env).filter(([k]: [string, unknown]) => ALLOWED_ENV_KEYS.has(k)))
+                  : undefined;
                 // Pass onData as initialListener — it's attached to the session
                 // BEFORE the daemon subscription, preventing lost output.
-                session = await createPty(termId, msg.cwd || undefined, msg.cols, msg.rows, onData, msg.env);
+                session = await createPty(termId, msg.cwd || undefined, msg.cols, msg.rows, onData, safeEnv);
+                // Record session for cold restore persistence
+                historyWriter.recordSession(termId, {
+                  worktreeId: msg.worktreeId ?? '',
+                  shell: process.env.SHELL || '/bin/zsh',
+                  cwd: msg.cwd || '',
+                  env: msg.env ? JSON.stringify(msg.env) : '',
+                  cols: msg.cols ?? 80,
+                  rows: msg.rows ?? 24,
+                });
+
                 // Auto-run initial command after shell is ready
                 // Wait for shell prompt by watching for output, then send command
                 if (msg.initialCommand && session) {
@@ -132,6 +151,14 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
             break;
           case 'resize':
             resizePty(termId, msg.cols, msg.rows);
+            break;
+          case 'kill':
+            if (session) {
+              historyWriter.markExited(termId);
+              destroyPty(termId);
+              unregisterProcess(termId);
+            }
+            ws.close(1000, 'Terminal killed');
             break;
         }
       } catch {

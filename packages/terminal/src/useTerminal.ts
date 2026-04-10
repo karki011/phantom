@@ -1,24 +1,18 @@
 /**
  * useTerminal — Terminal lifecycle hook.
- * Creates xterm.js + WebSocket on mount, cleans up on unmount.
- * Simple and reliable — no session reuse across mounts.
+ * Uses the Terminal Runtime Registry to persist sessions across
+ * React unmount/remount (worktree switches).
  *
  * @author Subash Karki
  */
-import { useEffect, useRef, useState } from 'react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
-import { getTerminalTheme } from './theme.js';
-
-/** Port the Hono API server listens on — must match @phantom-os/shared API_PORT */
-const API_PORT = 3849;
-
-/**
- * Guard against React StrictMode double-mount creating duplicate PTYs.
- * If a terminal for this paneId is being set up, skip the duplicate.
- */
-const initializing = new Set<string>();
+import { useEffect, useRef, useState, useCallback } from 'react';
+import '@xterm/xterm/css/xterm.css';
+import {
+  attachSession,
+  detachSession,
+  getSession,
+  type AttachOptions,
+} from './state.js';
 
 export const useTerminal = (
   containerRef: React.RefObject<HTMLDivElement | null>,
@@ -34,125 +28,63 @@ export const useTerminal = (
     port?: number | null;
   },
 ) => {
-  const termRef = useRef<Terminal | null>(null);
-  const fitRef = useRef<FitAddon | null>(null);
-  const cwdRef = useRef(cwd);
-  cwdRef.current = cwd;
-  const initialCommandRef = useRef(initialCommand);
-  initialCommandRef.current = initialCommand;
-  const metadataRef = useRef(metadata);
-  metadataRef.current = metadata;
   const [connected, setConnected] = useState(false);
+  const [showRestoreBanner, setShowRestoreBanner] = useState(false);
+  const attachedRef = useRef(false);
 
   useEffect(() => {
     const container = containerRef.current;
+    console.log(`[useTerminal] effect paneId=${paneId.slice(0,8)} container=${!!container} attachedRef=${attachedRef.current}`);
     if (!container) return;
+    if (attachedRef.current) return; // Prevent double-attach in StrictMode
 
-    // StrictMode guard: skip if already initializing this paneId
-    if (initializing.has(paneId)) return;
-    initializing.add(paneId);
+    attachedRef.current = true;
+    console.log(`[useTerminal] ATTACHING paneId=${paneId.slice(0,8)}`);
 
-    const term = new Terminal({
-      theme: getTerminalTheme(),
-      fontFamily: 'JetBrains Mono, monospace',
-      fontSize: 14,
-      cursorBlink: true,
-      cursorStyle: 'bar',
-    });
-
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.loadAddon(new WebLinksAddon());
-
-    termRef.current = term;
-    fitRef.current = fit;
-
-    let ws: WebSocket | null = null;
-    let opened = false;
-
-    const openTerminal = () => {
-      if (opened) return;
-      opened = true;
-
-      term.open(container);
-      fit.fit();
-
-      const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const wsUrl = `${proto}://localhost:${API_PORT}/ws/terminal/${paneId}`;
-      ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        const dims = fit.proposeDimensions();
-        const md = metadataRef.current;
-        ws!.send(JSON.stringify({
-          type: 'init',
-          cwd: cwdRef.current || null,
-          cols: dims?.cols ?? 80,
-          rows: dims?.rows ?? 24,
-          initialCommand: initialCommandRef.current || undefined,
-          ...(md?.workspaceId && { worktreeId: md.workspaceId }),
-          ...(md?.projectId && { projectId: md.projectId }),
-          ...(md?.recipeCommand && { recipeCommand: md.recipeCommand }),
-          ...(md?.recipeLabel && { recipeLabel: md.recipeLabel }),
-          ...(md?.recipeCategory && { recipeCategory: md.recipeCategory }),
-          ...(md?.port != null && { port: md.port }),
-          ...(md?.port != null && { env: { PORT: String(md.port) } }),
-        }));
-      };
-
-      let gotFirstOutput = false;
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'output') {
-            term.write(msg.data);
-            if (!gotFirstOutput) {
-              gotFirstOutput = true;
-              setConnected(true);
-            }
-          }
-        } catch { /* ignore */ }
-      };
-
-      ws.onerror = () => {
-        term.write('\r\n\x1b[33m[Connection error]\x1b[0m\r\n');
-      };
-
-      ws.onclose = () => {
-        term.write('\r\n\x1b[90m[Disconnected]\x1b[0m\r\n');
-      };
-
-      term.onData((data) => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'input', data }));
-        }
-      });
+    const opts: AttachOptions = {
+      cwd,
+      initialCommand,
+      metadata,
+      coldRestore: false, // Will be set by pane data if cold restoring
     };
 
-    const observer = new ResizeObserver(() => {
-      if (!opened) {
-        if (container.offsetWidth > 0 && container.offsetHeight > 0) {
-          openTerminal();
+    // Check if pane has coldRestore flag (set by atoms.ts on cold boot)
+    const paneEl = container.closest('[data-pane-id]');
+    if (paneEl?.getAttribute('data-cold-restore') === 'true') {
+      opts.coldRestore = true;
+    }
+
+    attachSession(paneId, container, opts).then((session) => {
+      setConnected(session.connected);
+      if (session.showRestoreBanner) {
+        setShowRestoreBanner(true);
+        session.showRestoreBanner = false;
+        // Auto-hide banner after 4 seconds
+        setTimeout(() => setShowRestoreBanner(false), 4000);
+      }
+
+      // Poll connected state from the session (WebSocket may connect async)
+      const interval = setInterval(() => {
+        const s = getSession(paneId);
+        if (s?.connected) {
+          setConnected(true);
+          clearInterval(interval);
         }
-        return;
-      }
-      fit.fit();
-      const dims = fit.proposeDimensions();
-      if (dims && ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'resize', cols: dims.cols, rows: dims.rows,
-        }));
-      }
+      }, 200);
+
+      // Clear interval after 10 seconds max
+      setTimeout(() => clearInterval(interval), 10000);
     });
-    observer.observe(container);
 
     return () => {
-      observer.disconnect();
-      ws?.close();
-      term.dispose();
-      initializing.delete(paneId);
+      console.log(`[useTerminal] CLEANUP paneId=${paneId.slice(0,8)} — calling detachSession`);
+      attachedRef.current = false;
+      detachSession(paneId);
     };
+  // cwd, initialCommand, and metadata are captured via refs — intentionally mount-time-only
   }, [containerRef, paneId]);
 
-  return { terminal: termRef, fit: fitRef, connected };
+  const dismissBanner = useCallback(() => setShowRestoreBanner(false), []);
+
+  return { connected, showRestoreBanner, dismissBanner };
 };

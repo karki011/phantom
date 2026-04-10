@@ -146,19 +146,32 @@ export const addPaneAsTabAtom = atom(
 );
 
 export const closePaneAtom = atom(null, (_get, set, paneId: string) => {
-  set(paneStateAtom, (s) => ({
-    ...s,
-    tabs: s.tabs.map((t) => {
-      if (!(paneId in t.panes)) return t;
-      const layout = removePaneFromLayout(t.layout, paneId) ?? t.layout;
-      const { [paneId]: _, ...panes } = t.panes;
-      const activePaneId =
-        t.activePaneId === paneId
-          ? Object.keys(panes)[0] ?? null
-          : t.activePaneId;
-      return { ...t, layout, panes, activePaneId };
-    }),
-  }));
+  set(paneStateAtom, (s) => {
+    // Check if any tab has this pane as a terminal — if so, dispatch kill event
+    for (const tab of s.tabs) {
+      const pane = tab.panes[paneId];
+      if (pane?.kind === 'terminal' && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('phantom:terminal-kill', { detail: { paneId } }),
+        );
+        break;
+      }
+    }
+
+    return {
+      ...s,
+      tabs: s.tabs.map((t) => {
+        if (!(paneId in t.panes)) return t;
+        const layout = removePaneFromLayout(t.layout, paneId) ?? t.layout;
+        const { [paneId]: _, ...panes } = t.panes;
+        const activePaneId =
+          t.activePaneId === paneId
+            ? Object.keys(panes)[0] ?? null
+            : t.activePaneId;
+        return { ...t, layout, panes, activePaneId };
+      }),
+    };
+  });
 });
 
 export const setActivePaneInTabAtom = atom(
@@ -446,20 +459,69 @@ let activeWorkspaceId: string | null = null;
 /** True until the first switchWorkspace call completes */
 let coldBoot = true;
 
-/** Filter out terminal tabs from persisted state (PTY processes are dead after restart) */
-function stripDeadTerminals(state: WorkspaceState): WorkspaceState {
-  const cleaned = state.tabs.filter((tab) => {
-    const panes = Object.values(tab.panes);
-    return panes.some((p) => p.kind !== 'terminal');
+/**
+ * On cold boot, check which terminal tabs have restorable sessions.
+ * Keep restorable terminals (mark for cold restore), strip dead ones.
+ */
+function restoreOrStripTerminals(state: WorkspaceState, worktreeId?: string): WorkspaceState {
+  // Try to fetch restorable sessions from the server
+  let restorableIds = new Set<string>();
+  if (worktreeId) {
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', `/api/terminal-sessions/${worktreeId}`, false);
+      xhr.send();
+      if (xhr.status === 200) {
+        const sessions = JSON.parse(xhr.responseText);
+        restorableIds = new Set(sessions.map((s: { paneId: string }) => s.paneId));
+      }
+    } catch {
+      // If server isn't ready, treat all as non-restorable
+    }
+  }
+
+  const processedTabs = state.tabs.map((tab) => {
+    const paneEntries = Object.entries(tab.panes);
+    const updatedPanes: Record<string, typeof tab.panes[string]> = {};
+
+    for (const [id, pane] of paneEntries) {
+      if (pane.kind === 'terminal') {
+        if (restorableIds.has(id)) {
+          // Mark for cold restore — TerminalPane will pick this up
+          updatedPanes[id] = { ...pane, data: { ...(pane.data as any), coldRestore: true } };
+        }
+        // else: drop the pane (dead terminal)
+      } else {
+        updatedPanes[id] = pane;
+      }
+    }
+
+    // If tab had only dead terminals, skip it
+    if (Object.keys(updatedPanes).length === 0) return null;
+
+    // Strip dead terminal panes from the layout tree (handles split tabs)
+    let layout = tab.layout;
+    for (const [id, pane] of paneEntries) {
+      if (pane.kind === 'terminal' && !updatedPanes[id]) {
+        const stripped = removePaneFromLayout(layout, id);
+        if (stripped) layout = stripped;
+      }
+    }
+
+    return { ...tab, layout, panes: updatedPanes };
   });
-  if (cleaned.length === 0) {
+
+  const validTabs = processedTabs.filter(Boolean) as typeof state.tabs;
+  if (validTabs.length === 0) {
     const home = makeTab();
     return { tabs: [home], activeTabId: home.id };
   }
-  const activeTabId = cleaned.some((t) => t.id === state.activeTabId)
+
+  const activeTabId = validTabs.some((t) => t.id === state.activeTabId)
     ? state.activeTabId
-    : cleaned[0].id;
-  return { tabs: cleaned, activeTabId };
+    : validTabs[0].id;
+
+  return { tabs: validTabs, activeTabId };
 }
 
 /**
@@ -479,17 +541,18 @@ function migrateState(state: WorkspaceState): WorkspaceState {
   return { ...state, tabs };
 }
 
-function loadState(wsId: string): WorkspaceState {
-  // Load from SQLite via synchronous XHR (needed because switchWorkspace is sync)
+async function loadState(wsId: string): Promise<WorkspaceState> {
   try {
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', `/api/pane-states/${wsId}`, false); // synchronous
-    xhr.send();
-    if (xhr.status === 200) {
-      const saved = JSON.parse(xhr.responseText);
+    const res = await fetch(`/api/pane-states/${wsId}`);
+    if (res.ok) {
+      const saved = await res.json();
       if (saved?.tabs?.length > 0) {
-        const state = migrateState(saved);
-        return coldBoot ? stripDeadTerminals(state) : state;
+        // On cold boot: strip dead terminals, then migrate old pane types
+        // On hot switch: return as-is — terminal panes must survive
+        if (coldBoot) {
+          return migrateState(restoreOrStripTerminals(saved, wsId));
+        }
+        return saved;
       }
     }
   } catch {
@@ -509,8 +572,10 @@ function loadState(wsId: string): WorkspaceState {
           headers: { 'Content-Type': 'application/json' },
           body: raw,
         }).catch(() => {});
-        const state = migrateState(saved);
-        return coldBoot ? stripDeadTerminals(state) : state;
+        if (coldBoot) {
+          return migrateState(restoreOrStripTerminals(saved, wsId));
+        }
+        return saved;
       }
     }
   } catch {
@@ -525,9 +590,10 @@ function loadState(wsId: string): WorkspaceState {
       localStorage.removeItem(legacyKey);
       const saved = JSON.parse(legacy);
       if (saved?.tabs?.length > 0) {
-        return coldBoot
-          ? stripDeadTerminals(migrateState(saved))
-          : migrateState(saved);
+        if (coldBoot) {
+          return migrateState(restoreOrStripTerminals(saved, wsId));
+        }
+        return saved;
       }
     }
   } catch {
@@ -555,7 +621,7 @@ function saveState(wsId: string, state: WorkspaceState): void {
 
 export const switchWorkspaceAtom = atom(
   null,
-  (get, set, workspaceId: string) => {
+  async (get, set, workspaceId: string) => {
     // Save current workspace state
     if (activeWorkspaceId) {
       const { tabs, activeTabId } = get(paneStateAtom);
@@ -563,7 +629,7 @@ export const switchWorkspaceAtom = atom(
     }
     // Load target workspace state
     activeWorkspaceId = workspaceId;
-    const loaded = loadState(workspaceId);
+    const loaded = await loadState(workspaceId);
     set(paneStateAtom, loaded);
     // After first switch, stop stripping terminals (only strip on cold boot)
     coldBoot = false;

@@ -177,3 +177,22 @@ export const paneStates = sqliteTable('pane_states', {
   state: text('state').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// Terminal Session Persistence (cold restore)
+// ---------------------------------------------------------------------------
+
+export const terminalSessions = sqliteTable('terminal_sessions', {
+  paneId: text('pane_id').primaryKey(),
+  worktreeId: text('worktree_id'),
+  shell: text('shell'),
+  cwd: text('cwd'),
+  env: text('env'),                                    // JSON-serialized env vars
+  cols: integer('cols'),
+  rows: integer('rows'),
+  scrollback: text('scrollback'),                      // last snapshot of terminal output
+  status: text('status').default('active'),             // 'active' | 'exited'
+  startedAt: integer('started_at'),
+  lastActiveAt: integer('last_active_at'),
+  endedAt: integer('ended_at'),
+});

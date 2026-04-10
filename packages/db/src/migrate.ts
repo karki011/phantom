@@ -236,6 +236,28 @@ export const runMigrations = (sqlite: Database.Database): void => {
     );
   `);
 
+  // ---------------------------------------------------------------------------
+  // Terminal Session Persistence (cold restore)
+  // ---------------------------------------------------------------------------
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS terminal_sessions (
+      pane_id TEXT PRIMARY KEY,
+      worktree_id TEXT,
+      shell TEXT,
+      cwd TEXT,
+      env TEXT,
+      cols INTEGER,
+      rows INTEGER,
+      scrollback TEXT,
+      status TEXT DEFAULT 'active',
+      started_at INTEGER,
+      last_active_at INTEGER,
+      ended_at INTEGER
+    );
+  `);
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_terminal_sessions_worktree ON terminal_sessions(worktree_id)`);
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_terminal_sessions_status ON terminal_sessions(status)`);
+
   // Cleanup stale data on boot
   cleanupStaleData(sqlite);
 };
