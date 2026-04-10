@@ -25,7 +25,7 @@ import { sessionRoutes } from './routes/sessions.js';
 import { statsRoutes } from './routes/stats.js';
 import { taskRoutes } from './routes/tasks.js';
 import { projectRoutes } from './routes/projects.js';
-import { worktreeRoutes } from './routes/worktrees.js';
+import { worktreeRoutes, initWorktreeBroadcast } from './routes/worktrees.js';
 import { worktreeFileRoutes } from './routes/worktree-files.js';
 import { serverRoutes } from './routes/servers.js';
 import { initProcessRegistry } from './process-registry.js';
@@ -65,6 +65,7 @@ const broadcast = (event: string, data: unknown): void => {
 // ---------------------------------------------------------------------------
 
 initProcessRegistry(broadcast);
+initWorktreeBroadcast(broadcast);
 
 // ---------------------------------------------------------------------------
 // Database Bootstrap

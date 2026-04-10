@@ -9,7 +9,7 @@ import { LazyEditor, configureMonacoForWorkspace } from './LazyMonaco.js';
 interface EditorPaneProps {
   paneId: string;
   filePath?: string;
-  workspaceId?: string;
+  worktreeId?: string;
   repoPath?: string;
   language?: string;
   value?: string;
@@ -41,14 +41,14 @@ const getFileName = (path?: string): string => {
 export const EditorPane = ({
   paneId,
   filePath,
-  workspaceId,
+  worktreeId,
   repoPath,
   language,
   value: initialValue,
   onChange,
 }: EditorPaneProps) => {
   const [content, setContent] = useState<string>(initialValue ?? '');
-  const [loading, setLoading] = useState(!!workspaceId && !!filePath);
+  const [loading, setLoading] = useState(!!worktreeId && !!filePath);
   const [editorFontSize, setEditorFontSize] = useState(13);
 
   // Configure Monaco with workspace tsconfig + types (once per workspace root)
@@ -64,9 +64,9 @@ export const EditorPane = ({
 
   // Fetch file content from workspace API
   useEffect(() => {
-    if (!workspaceId || !filePath) return;
+    if (!worktreeId || !filePath) return;
     setLoading(true);
-    fetch(`/api/workspaces/${workspaceId}/file?path=${encodeURIComponent(filePath)}`)
+    fetch(`/api/worktrees/${worktreeId}/file?path=${encodeURIComponent(filePath)}`)
       .then((r) => {
         if (!r.ok) throw new Error(`Failed to load: ${r.status}`);
         return r.json();
@@ -79,7 +79,7 @@ export const EditorPane = ({
         setContent(`// Failed to load ${filePath}`);
       })
       .finally(() => setLoading(false));
-  }, [workspaceId, filePath]);
+  }, [worktreeId, filePath]);
 
   // Handle content changes
   const handleChange = useCallback(
@@ -95,10 +95,10 @@ export const EditorPane = ({
 
   // Save file to workspace API
   const saveFile = useCallback(async () => {
-    if (!workspaceId || !filePath || saving) return;
+    if (!worktreeId || !filePath || saving) return;
     setSaving(true);
     try {
-      await fetch(`/api/workspaces/${workspaceId}/file`, {
+      await fetch(`/api/worktrees/${worktreeId}/file`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: filePath, content: contentRef.current }),
@@ -107,11 +107,11 @@ export const EditorPane = ({
     } finally {
       setSaving(false);
     }
-  }, [workspaceId, filePath, saving]);
+  }, [worktreeId, filePath, saving]);
 
   // Ctrl+S / Cmd+S to save
   useEffect(() => {
-    if (!workspaceId || !filePath) return;
+    if (!worktreeId || !filePath) return;
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
@@ -120,7 +120,7 @@ export const EditorPane = ({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [workspaceId, filePath, saveFile]);
+  }, [worktreeId, filePath, saveFile]);
 
   if (loading) {
     return (
@@ -192,7 +192,7 @@ export const EditorPane = ({
           lineNumbers: 'on',
           scrollBeyondLastLine: false,
           automaticLayout: true,
-          readOnly: !workspaceId && !onChange,
+          readOnly: !worktreeId && !onChange,
         }}
       />
     </div>

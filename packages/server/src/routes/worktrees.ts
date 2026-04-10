@@ -15,8 +15,21 @@ import {
 } from '../worktree-manager.js';
 import { logger } from '../logger.js';
 
+// ---------------------------------------------------------------------------
+// Broadcast injection (set once from index.ts at boot)
+// ---------------------------------------------------------------------------
+
+type Broadcast = (event: string, data: unknown) => void;
+let broadcastFn: Broadcast = () => {};
+export const initWorktreeBroadcast = (broadcast: Broadcast): void => { broadcastFn = broadcast; };
+
 /** Run dependency installation in background based on project profile */
-const autoSetup = (worktreePath: string, profile: { buildSystem: string; type: string }): void => {
+const autoSetup = (
+  worktreePath: string,
+  profile: { buildSystem: string; type: string },
+  worktreeId: string,
+  broadcast: Broadcast,
+): void => {
   let cmd: string | null = null;
 
   switch (profile.buildSystem) {
@@ -51,12 +64,15 @@ const autoSetup = (worktreePath: string, profile: { buildSystem: string; type: s
   if (!cmd) return;
 
   logger.info('Worktrees', `Auto-setup: running "${cmd}" in ${worktreePath}`);
+  broadcast('worktree:setup-start', { worktreeId, command: cmd });
 
   exec(cmd, { cwd: worktreePath, timeout: 120_000 }, (err) => {
     if (err) {
-      logger.warn('Worktrees', `Auto-setup failed in ${worktreePath}: ${err.message}`);
+      logger.warn('Worktrees', `Auto-setup failed: ${err.message}`);
+      broadcast('worktree:setup-done', { worktreeId, success: false, error: err.message });
     } else {
       logger.info('Worktrees', `Auto-setup complete in ${worktreePath}`);
+      broadcast('worktree:setup-done', { worktreeId, success: true });
     }
   });
 };
@@ -156,7 +172,7 @@ worktreeRoutes.post('/worktrees', async (c) => {
   if (project.profile) {
     try {
       const profile = JSON.parse(project.profile);
-      autoSetup(worktree.worktreePath, profile);
+      autoSetup(worktree.worktreePath, profile, worktree.id, broadcastFn);
     } catch { /* ignore parse errors */ }
   }
 

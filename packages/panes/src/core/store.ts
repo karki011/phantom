@@ -108,7 +108,7 @@ function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
 }
 
 /** Pane kinds that are ephemeral — don't survive workspace switches */
-const EPHEMERAL_KINDS = new Set(['terminal']);
+const EPHEMERAL_KINDS = new Set<string>();
 
 function saveWorkspaceState<TData>(wsId: string, state: WorkspaceState<TData>): void {
   try {

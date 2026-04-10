@@ -11,6 +11,7 @@ import {
   Center,
   Group,
   Kbd,
+  Loader,
   Paper,
   Progress,
   SimpleGrid,
@@ -266,6 +267,7 @@ export function WorktreeHome() {
 
   const [gitStatusState, setGitStatusState] = useState<GitStatusState>('loading');
   const [recentChats, setRecentChats] = useState<{ id: string; title: string; updatedAt: number }[]>([]);
+  const [setupStatus, setSetupStatus] = useState<'idle' | 'running' | 'done' | 'failed'>('idle');
 
   // Fetch recent chats for this worktree
   useEffect(() => {
@@ -274,6 +276,26 @@ export function WorktreeHome() {
       .then((r) => r.json())
       .then((convs) => setRecentChats(convs))
       .catch(() => {});
+  }, [worktree?.id]);
+
+  // Listen for auto-setup SSE events
+  useEffect(() => {
+    if (!worktree?.id) return;
+    const eventSource = new EventSource('/events');
+    eventSource.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'worktree:setup-start' && msg.data?.worktreeId === worktree.id) {
+          setSetupStatus('running');
+        }
+        if (msg.type === 'worktree:setup-done' && msg.data?.worktreeId === worktree.id) {
+          setSetupStatus(msg.data.success ? 'done' : 'failed');
+          // Auto-clear after 5 seconds
+          setTimeout(() => setSetupStatus('idle'), 5000);
+        }
+      } catch { /* ignore parse errors */ }
+    };
+    return () => eventSource.close();
   }, [worktree?.id]);
 
   // Fetch git status via IPC
@@ -394,6 +416,19 @@ export function WorktreeHome() {
         >
           {/* LEFT COLUMN — Project Recipes */}
           <Stack gap="md">
+            {setupStatus === 'running' && (
+              <Paper p="sm" bg="color-mix(in srgb, var(--phantom-accent-glow) 10%, var(--phantom-surface-card))" radius="md" style={{ border: '1px solid var(--phantom-accent-glow)' }}>
+                <Group gap="xs">
+                  <Loader size={14} color="var(--phantom-accent-glow)" />
+                  <Text fz="xs" c="var(--phantom-accent-glow)">Installing dependencies...</Text>
+                </Group>
+              </Paper>
+            )}
+            {setupStatus === 'failed' && (
+              <Paper p="sm" bg="color-mix(in srgb, var(--phantom-status-warning) 10%, var(--phantom-surface-card))" radius="md" style={{ border: '1px solid var(--phantom-status-warning)' }}>
+                <Text fz="xs" c="var(--phantom-status-warning)">Setup failed — check terminal for details</Text>
+              </Paper>
+            )}
             {projectProfile && projectProfile.recipes.length > 0 && (
               <Paper
                 p="md"
