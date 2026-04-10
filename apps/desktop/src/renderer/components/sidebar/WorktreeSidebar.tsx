@@ -81,6 +81,17 @@ export function WorktreeSidebar() {
     refreshWorktrees();
   }, [refreshProjects, refreshWorktrees]);
 
+  // Auto-expand the project containing the active worktree on startup
+  useEffect(() => {
+    if (!activeWorktreeId) return;
+    for (const [projectId, wts] of worktreesByProject) {
+      if (wts.some((w) => w.id === activeWorktreeId) && !expandedProjects.includes(projectId)) {
+        setExpandedProjects((prev) => [...prev, projectId]);
+        break;
+      }
+    }
+  }, [activeWorktreeId, worktreesByProject, expandedProjects, setExpandedProjects]);
+
   const toggleProject = useCallback(
     (projectId: string) => {
       setExpandedProjects((prev) =>
