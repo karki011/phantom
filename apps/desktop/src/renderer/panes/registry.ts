@@ -20,6 +20,9 @@ const WorktreeHome = lazy(() =>
 const ChatPane = lazy(() =>
   import('../components/chat/ChatPane').then((m) => ({ default: m.ChatPane })),
 );
+const DiffPane = lazy(() =>
+  import('@phantom-os/editor').then((m) => ({ default: m.DiffPane })),
+);
 
 const Loading = () =>
   createElement(
@@ -54,14 +57,6 @@ export const paneDefinitions: Record<string, PaneDefinition> = {
         }),
       ),
     defaultTitle: 'Terminal',
-    component: ({ pane }: { pane: Pane }) =>
-      createElement(Suspense, { fallback: createElement(Loading) },
-        createElement(TerminalPane, {
-          paneId: pane.id,
-          cwd: pane.data?.cwd as string | undefined,
-          initialCommand: pane.data?.initialCommand as string | undefined,
-        }),
-      ),
   },
   editor: {
     kind: 'editor',
@@ -72,10 +67,6 @@ export const paneDefinitions: Record<string, PaneDefinition> = {
         createElement(EditorPane, { paneId: pane.id, ...pane.data }),
       ),
     defaultTitle: 'Editor',
-    component: ({ pane }: { pane: Pane }) =>
-      createElement(Suspense, { fallback: createElement(Loading) },
-        createElement(EditorPane, { paneId: pane.id, ...pane.data }),
-      ),
   },
   chat: {
     kind: 'chat',
@@ -89,13 +80,16 @@ export const paneDefinitions: Record<string, PaneDefinition> = {
         }),
       ),
     defaultTitle: 'Chat',
-    component: ({ pane }: { pane: Pane }) =>
+  },
+  diff: {
+    kind: 'diff',
+    title: 'Diff',
+    icon: '±',
+    render: (pane: Pane) =>
       createElement(Suspense, { fallback: createElement(Loading) },
-        createElement(ChatPane, {
-          paneId: pane.id,
-          cwd: pane.data?.cwd as string | undefined,
-        }),
+        createElement(DiffPane, { paneId: pane.id, ...pane.data }),
       ),
+    defaultTitle: 'Diff',
   },
   'workspace-home': {
     kind: 'workspace-home',
@@ -106,10 +100,6 @@ export const paneDefinitions: Record<string, PaneDefinition> = {
         createElement(WorktreeHome),
       ),
     defaultTitle: 'Home',
-    component: () =>
-      createElement(Suspense, { fallback: createElement(Loading) },
-        createElement(WorktreeHome),
-      ),
   },
 };
 

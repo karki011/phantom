@@ -358,6 +358,44 @@ worktreeFileRoutes.get('/worktrees/:id/git-status', (c) => {
   }
 });
 
+/** GET /worktrees/:id/git-diff — Get HEAD vs working copy for a file */
+worktreeFileRoutes.get('/worktrees/:id/git-diff', (c) => {
+  const id = c.req.param('id');
+  const filePath = c.req.query('path');
+  if (!filePath) return c.json({ error: 'path query parameter is required' }, 400);
+
+  const root = getWorktreeRoot(id);
+  if (!root) return c.json({ error: 'Worktree not found' }, 404);
+
+  let original = '';
+  let modified = '';
+
+  // Get HEAD version
+  try {
+    original = execSync(`git show HEAD:${filePath}`, {
+      cwd: root,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000,
+    });
+  } catch {
+    // File is new (not in HEAD) — original stays empty
+  }
+
+  // Get working copy
+  const target = safePath(root, filePath);
+  if (target && existsSync(target)) {
+    try {
+      const fileStat = statSync(target);
+      if (!fileStat.isDirectory() && fileStat.size < 10 * 1024 * 1024) {
+        modified = readFileSync(target, 'utf-8');
+      }
+    } catch { /* ignore */ }
+  }
+
+  return c.json({ original, modified });
+});
+
 /** POST /worktrees/:id/mkdir — Create a directory */
 worktreeFileRoutes.post('/worktrees/:id/mkdir', async (c) => {
   const id = c.req.param('id');

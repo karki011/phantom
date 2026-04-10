@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
 import { activeWorktreeAtom } from '../../atoms/worktrees';
 import type { GitFileChange, GitStatusResult } from '../../lib/api';
-import { getGitStatus } from '../../lib/api';
+import { fetchApi, getGitStatus } from '../../lib/api';
 
 const STATUS_CONFIG = {
   modified: { label: 'Modified', icon: FilePen, color: 'var(--phantom-accent-gold, #f59e0b)' },
@@ -27,13 +27,35 @@ function FileRow({ file, worktreeId }: { file: GitFileChange; worktreeId: string
   const fileName = file.path.split('/').pop() ?? file.path;
   const dirPath = file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : '';
 
-  const handleClick = useCallback(() => {
+  const handleClick = useCallback(async () => {
     if (file.status === 'deleted') return;
-    store.addPaneAsTab(
-      'editor',
-      { filePath: file.path, worktreeId } as Record<string, unknown>,
-      fileName,
-    );
+
+    // Detect language from extension
+    const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+    const langMap: Record<string, string> = {
+      ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
+      json: 'json', md: 'markdown', yaml: 'yaml', yml: 'yaml',
+      py: 'python', css: 'css', html: 'html', sh: 'shell', sql: 'sql',
+    };
+    const language = langMap[ext] ?? 'plaintext';
+
+    try {
+      const { original, modified } = await fetchApi<{ original: string; modified: string }>(
+        `/api/worktrees/${worktreeId}/git-diff?path=${encodeURIComponent(file.path)}`,
+      );
+      store.addPaneAsTab(
+        'diff',
+        { original, modified, language, filePath: file.path } as Record<string, unknown>,
+        `${fileName} (diff)`,
+      );
+    } catch {
+      // Fallback to regular editor if diff fetch fails
+      store.addPaneAsTab(
+        'editor',
+        { filePath: file.path, worktreeId } as Record<string, unknown>,
+        fileName,
+      );
+    }
   }, [file, worktreeId, fileName, store]);
 
   return (
