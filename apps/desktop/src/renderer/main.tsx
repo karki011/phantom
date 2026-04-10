@@ -7,6 +7,7 @@ import '@mantine/core/styles.css';
 import { Notifications } from '@mantine/notifications';
 import '@mantine/notifications/styles.css';
 import { Provider as JotaiProvider } from 'jotai';
+import { jotaiStore } from '@phantom-os/panes';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -43,7 +44,7 @@ if (!container) throw new Error('Root element not found');
 
 createRoot(container).render(
   <StrictMode>
-    <JotaiProvider>
+    <JotaiProvider store={jotaiStore}>
       <ThemeProvider>
         <Notifications position="top-right" />
         <ErrorBoundary>

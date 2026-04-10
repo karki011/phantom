@@ -4,7 +4,7 @@
  * @author Subash Karki
  */
 import { db, terminalSessions } from '@phantom-os/db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
 import { logger } from './logger.js';
 import { getDaemonClient, getPtySession, getScrollback } from './terminal-manager.js';
 
@@ -90,7 +90,10 @@ export const getRestorableSessions = (worktreeId?: string) => {
       eq(terminalSessions.status, 'active'),
     ];
     if (worktreeId) {
-      conditions.push(eq(terminalSessions.worktreeId, worktreeId));
+      conditions.push(or(
+        eq(terminalSessions.worktreeId, worktreeId),
+        eq(terminalSessions.worktreeId, ''),
+      )!);
     }
     return db
       .select()

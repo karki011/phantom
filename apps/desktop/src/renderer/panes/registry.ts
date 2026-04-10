@@ -8,7 +8,9 @@
 
 import { lazy, Suspense, createElement } from 'react';
 import type { PaneDefinition, Pane } from '@phantom-os/panes';
+import { jotaiStore } from '@phantom-os/panes';
 import { TerminalPane } from '@phantom-os/terminal';
+import { activeWorktreeIdAtom } from '../atoms/worktrees';
 
 // Lazy-load heavy pane types (terminal has its own loading overlay)
 const EditorPane = lazy(() =>
@@ -54,6 +56,13 @@ export const paneDefinitions: Record<string, PaneDefinition> = {
           paneId: pane.id,
           cwd: pane.data?.cwd as string | undefined,
           initialCommand: pane.data?.initialCommand as string | undefined,
+          coldRestore: pane.data?.coldRestore as boolean | undefined,
+          workspaceId: (pane.data?.worktreeId as string | undefined) ?? jotaiStore.get(activeWorktreeIdAtom) ?? undefined,
+          projectId: pane.data?.projectId as string | undefined,
+          recipeCommand: pane.data?.recipeCommand as string | undefined,
+          recipeLabel: pane.data?.recipeLabel as string | undefined,
+          recipeCategory: pane.data?.recipeCategory as string | undefined,
+          port: pane.data?.port as number | null | undefined,
         }),
       ),
     defaultTitle: 'Terminal',

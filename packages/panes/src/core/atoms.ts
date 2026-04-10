@@ -544,8 +544,10 @@ function migrateState(state: WorkspaceState): WorkspaceState {
   const tabs = state.tabs.map((tab) => {
     const paneList = Object.values(tab.panes);
     if (paneList.length === 1 && paneList[0].kind === 'terminal') {
-      const oldPane = paneList[0];
-      const newPane = { ...oldPane, kind: 'workspace-home', title: 'Home' };
+      const pane = paneList[0];
+      // Don't migrate terminals marked for cold restore — they have active sessions
+      if ((pane.data as any)?.coldRestore) return tab;
+      const newPane = { ...pane, kind: 'workspace-home', title: 'Home' };
       return { ...tab, panes: { [newPane.id]: newPane } };
     }
     return tab;
@@ -631,20 +633,29 @@ function saveState(wsId: string, state: WorkspaceState): void {
   }, 300);
 }
 
+let switchingWorkspace = false;
+
 export const switchWorkspaceAtom = atom(
   null,
   async (get, set, workspaceId: string) => {
-    // Save current workspace state
-    if (activeWorkspaceId) {
-      const { tabs, activeTabId } = get(paneStateAtom);
-      saveState(activeWorkspaceId, { tabs, activeTabId });
+    // Prevent concurrent loads (StrictMode double-execution)
+    if (switchingWorkspace) return;
+    switchingWorkspace = true;
+    try {
+      // Save current workspace state
+      if (activeWorkspaceId) {
+        const { tabs, activeTabId } = get(paneStateAtom);
+        saveState(activeWorkspaceId, { tabs, activeTabId });
+      }
+      // Load target workspace state
+      activeWorkspaceId = workspaceId;
+      const loaded = await loadState(workspaceId);
+      set(paneStateAtom, loaded);
+      // After first switch, stop stripping terminals (only strip on cold boot)
+      coldBoot = false;
+    } finally {
+      switchingWorkspace = false;
     }
-    // Load target workspace state
-    activeWorkspaceId = workspaceId;
-    const loaded = await loadState(workspaceId);
-    set(paneStateAtom, loaded);
-    // After first switch, stop stripping terminals (only strip on cold boot)
-    coldBoot = false;
   },
 );
 
