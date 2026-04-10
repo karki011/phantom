@@ -87,19 +87,44 @@ function migrateState<TData>(state: WorkspaceState<TData>): WorkspaceState<TData
 let coldBoot = true;
 
 /**
- * Give tabs fresh IDs so React fully remounts terminal components (fresh xterm + WebSocket).
- * Pane IDs stay the SAME so the server can reconnect to existing PTY sessions.
+ * Stateless terminal restore: give terminal panes + their tabs fresh IDs.
+ * This forces React to fully unmount/remount the TerminalPane component,
+ * which creates a fresh xterm.js + WebSocket + PTY — like opening a new tab.
+ * Pane data (cwd, metadata) is preserved so the new shell opens in the right dir.
  */
-function refreshTabIds<TData>(state: WorkspaceState<TData>): WorkspaceState<TData> {
-  const hasTerminal = state.tabs.some((tab) =>
-    Object.values(tab.panes).some((p) => p.kind === 'terminal'),
-  );
-  if (!hasTerminal) return state;
+function refreshTerminalPanes<TData>(state: WorkspaceState<TData>): WorkspaceState<TData> {
+  const tabs = state.tabs.map((tab) => {
+    const panes = Object.values(tab.panes);
+    const hasTerminal = panes.some((p) => p.kind === 'terminal');
+    if (!hasTerminal) return tab;
 
-  const tabs = state.tabs.map((tab) => ({ ...tab, id: uid() }));
-  const activeTabId = state.activeTabId
-    ? tabs[state.tabs.findIndex((t) => t.id === state.activeTabId)]?.id ?? tabs[0]?.id
-    : tabs[0]?.id;
+    // Rebuild with fresh IDs for terminal panes
+    const newPanes: Record<string, Pane<TData>> = {};
+    let newActivePaneId = tab.activePaneId;
+    let layoutJson = JSON.stringify(tab.layout);
+
+    for (const pane of panes) {
+      if (pane.kind === 'terminal') {
+        const freshId = uid();
+        newPanes[freshId] = { ...pane, id: freshId };
+        if (tab.activePaneId === pane.id) newActivePaneId = freshId;
+        layoutJson = layoutJson.replaceAll(`"${pane.id}"`, `"${freshId}"`);
+      } else {
+        newPanes[pane.id] = pane;
+      }
+    }
+
+    return {
+      ...tab,
+      id: uid(), // Fresh tab ID too
+      panes: newPanes,
+      activePaneId: newActivePaneId,
+      layout: JSON.parse(layoutJson),
+    };
+  });
+
+  const activeIdx = state.tabs.findIndex((t) => t.id === state.activeTabId);
+  const activeTabId = activeIdx >= 0 ? tabs[activeIdx].id : tabs[0]?.id ?? null;
   return { tabs, activeTabId };
 }
 
@@ -128,7 +153,7 @@ function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
       const saved = JSON.parse(raw) as WorkspaceState<TData>;
       if (saved.tabs.length > 0) {
         const state = migrateState(saved);
-        return coldBoot ? stripDeadTerminals(state) : refreshTabIds(state);
+        return coldBoot ? stripDeadTerminals(state) : refreshTerminalPanes(state);
       }
     }
   } catch { /* ignore */ }
@@ -142,7 +167,7 @@ function loadWorkspaceState<TData>(wsId: string): WorkspaceState<TData> {
       const saved = JSON.parse(legacy) as WorkspaceState<TData>;
       if (saved.tabs.length > 0) {
         const state = migrateState(saved);
-        return coldBoot ? stripDeadTerminals(state) : refreshTabIds(state);
+        return coldBoot ? stripDeadTerminals(state) : refreshTerminalPanes(state);
       }
     }
   } catch { /* ignore */ }

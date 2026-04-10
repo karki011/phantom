@@ -46,8 +46,9 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
 
   ws.on('close', () => {
     session?.listeners.delete(onData);
-    // Keep PTY alive — mimics real terminal behavior.
-    // Shell process persists until user explicitly closes the tab.
+    // Stateless: destroy PTY on disconnect. Fresh shell on reconnect.
+    unregisterProcess(termId);
+    if (session) destroyPty(termId);
     session = undefined;
   });
 
