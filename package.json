@@ -17,8 +17,9 @@
     "postinstall": "chmod +x node_modules/.bun/node-pty@*/node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true; bash scripts/patch-electron-name.sh"
   },
   "dependencies": {
-    "node-pty": "^1.1.0",
-    "better-sqlite3": "^12.0.0"
+    "better-sqlite3": "^12.0.0",
+    "jotai": "^2.19.1",
+    "node-pty": "^1.1.0"
   },
   "devDependencies": {
     "tsx": "^4.21.0",
