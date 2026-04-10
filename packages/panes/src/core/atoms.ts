@@ -91,6 +91,18 @@ export const addTabAtom = atom(null, (_get, set, label = 'New Tab') => {
 
 export const removeTabAtom = atom(null, (_get, set, tabId: string) => {
   set(paneStateAtom, (s) => {
+    // Dispatch kill events for any terminal panes in the removed tab
+    const removedTab = s.tabs.find((t) => t.id === tabId);
+    if (removedTab && typeof window !== 'undefined') {
+      for (const pane of Object.values(removedTab.panes)) {
+        if (pane.kind === 'terminal') {
+          window.dispatchEvent(
+            new CustomEvent('phantom:terminal-kill', { detail: { paneId: pane.id } }),
+          );
+        }
+      }
+    }
+
     const tabs = s.tabs.filter((t) => t.id !== tabId);
     if (tabs.length === 0) return s; // Prevent removing last tab
     const activeTabId =
