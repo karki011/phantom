@@ -235,10 +235,11 @@ export const disposeSession = (paneId: string): void => {
 
   console.log(`[TermReg] DISPOSE ${paneId.slice(0,8)} — killing PTY + closing ws`);
 
-  // Send kill message to server before closing WebSocket
+  // Send kill message — server will close the ws after killing the PTY.
+  // Don't call ws.close() here — it races with the send and the kill message
+  // may not arrive before the close frame.
   if (session.ws && session.ws.readyState === WebSocket.OPEN) {
     session.ws.send(JSON.stringify({ type: 'kill' }));
-    session.ws.close();
   }
 
   // Disconnect observer
