@@ -16,7 +16,7 @@ import {
   useMantineColorScheme,
 } from '@mantine/core';
 import { useAtom } from 'jotai';
-import { ArrowLeft, Circle, Cpu, HelpCircle, MemoryStick, Moon, Palette, Sun, Swords, Type } from 'lucide-react';
+import { ArrowLeft, Circle, Cpu, HelpCircle, MemoryStick, Moon, Palette, Sun, Swords, Type, Zap } from 'lucide-react';
 import { themeRegistry } from '@phantom-os/theme';
 
 import { type FontScale, fontScaleAtom, themeNameAtom } from '../../atoms/system';
@@ -51,6 +51,7 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
   const { isEnabled, setPref } = usePreferences();
   const metrics = useSystemMetrics();
   const gamificationOn = isEnabled('gamification');
+  const cavemanOn = isEnabled('caveman');
 
   const isDark = colorScheme === 'dark';
   const isConnected = isBackendConnected ?? false;
@@ -221,6 +222,47 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
             />
           </ActionIcon>
         </Tooltip>
+
+        {/* Caveman Mode Toggle with Popover */}
+        <Popover width={280} position="bottom-end" withArrow shadow="md">
+          <Popover.Target>
+            <ActionIcon
+              variant="subtle"
+              size="lg"
+              onClick={() => setPref('caveman', cavemanOn ? 'false' : 'true')}
+              aria-label={cavemanOn ? 'Disable concise mode' : 'Enable concise mode'}
+            >
+              <Zap
+                size={18}
+                aria-hidden="true"
+                style={{
+                  color: cavemanOn
+                    ? 'var(--phantom-accent-gold)'
+                    : 'var(--phantom-text-muted)',
+                }}
+              />
+            </ActionIcon>
+          </Popover.Target>
+          <Popover.Dropdown
+            style={{
+              backgroundColor: 'var(--phantom-surface-card)',
+              borderColor: 'var(--phantom-border-subtle)',
+            }}
+          >
+            <Stack gap={6}>
+              <Text fw={600} fz="sm" c="var(--phantom-text-primary)">
+                Concise Mode {cavemanOn ? '(On)' : '(Off)'}
+              </Text>
+              <Text fz="xs" c="var(--phantom-text-secondary)" lh={1.4}>
+                Makes Claude respond with fewer tokens — cutting ~65-75% of output verbosity
+                while keeping full technical accuracy. Responses are terse and to-the-point.
+              </Text>
+              <Text fz="xs" c="var(--phantom-text-muted)" lh={1.4} fs="italic">
+                Same fix. Fewer words. Faster responses. Lower cost.
+              </Text>
+            </Stack>
+          </Popover.Dropdown>
+        </Popover>
 
         {/* Font Scale Menu */}
         <Menu shadow="md" width={120} position="bottom-end">
