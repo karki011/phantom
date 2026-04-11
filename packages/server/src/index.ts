@@ -38,6 +38,7 @@ import { API_PORT } from '@phantom-os/shared';
 import type { Server } from 'node:http';
 import { setupTerminalWs } from './routes/terminal-ws.js';
 import { terminalRestoreRoutes } from './routes/terminal-restore.js';
+import { systemMetricsRoutes } from './routes/system-metrics.js';
 import { destroyAllPtys, initDaemonClient, disconnectDaemon } from './terminal-manager.js';
 import { startHistoryWriter, stopHistoryWriter, markAllExited } from './terminal-history.js';
 
@@ -105,6 +106,7 @@ app.route('/api', paneStateRoutes);
 app.route('/api', plansRoutes);
 app.route('/api', preferencesRoutes);
 app.route('/api', terminalRestoreRoutes);
+app.route('/api', systemMetricsRoutes);
 
 // SSE endpoint
 app.get('/events', (c) => {
