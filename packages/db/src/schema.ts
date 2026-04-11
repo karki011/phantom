@@ -206,3 +206,41 @@ export const userPreferences = sqliteTable('user_preferences', {
   value: text('value').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// AI Engine: Graph Tables
+// ---------------------------------------------------------------------------
+
+export const graphNodes = sqliteTable('graph_nodes', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull().references(() => projects.id),
+  type: text('type').notNull(),  // 'file' | 'module' | 'function' | 'class' | 'type' | 'component'
+  path: text('path'),            // for file nodes
+  name: text('name'),            // for module/function/class/type/component nodes
+  contentHash: text('content_hash'),
+  metadata: text('metadata'),    // JSON
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export const graphEdges = sqliteTable('graph_edges', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull().references(() => projects.id),
+  sourceId: text('source_id').notNull().references(() => graphNodes.id),
+  targetId: text('target_id').notNull().references(() => graphNodes.id),
+  type: text('type').notNull(),  // 'imports' | 'depends_on' | 'exports' | 'co_changed' | etc.
+  weight: integer('weight').default(1),
+  metadata: text('metadata'),    // JSON
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export const graphMeta = sqliteTable('graph_meta', {
+  projectId: text('project_id').primaryKey().references(() => projects.id),
+  lastBuiltAt: integer('last_built_at'),
+  lastUpdatedAt: integer('last_updated_at'),
+  fileCount: integer('file_count').default(0),
+  edgeCount: integer('edge_count').default(0),
+  layer2Count: integer('layer2_count').default(0),
+  coverage: integer('coverage').default(0),  // percentage 0-100
+});

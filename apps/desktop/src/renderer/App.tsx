@@ -36,6 +36,7 @@ import { AchievementsView } from './components/views/AchievementsView';
 import { DailyQuestsView } from './components/views/DailyQuestsView';
 import { HunterStatsView } from './components/hunter-stats/HunterStatsView';
 import { SessionViewer } from './components/views/SessionViewer';
+import { SystemPlayground } from './components/system/SystemPlayground';
 import { WorktreeSidebar } from './components/sidebar/WorktreeSidebar';
 import { RightSidebar } from './components/sidebar/RightSidebar';
 import { useHunter } from './hooks/useHunter';
@@ -67,6 +68,8 @@ const ViewContent = ({ route }: { route: Route }) => {
       return <HunterStatsView />;
     case 'session-viewer':
       return <SessionViewer />;
+    case 'system':
+      return <SystemPlayground />;
     default:
       return null;
   }

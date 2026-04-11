@@ -258,6 +258,54 @@ export const runMigrations = (sqlite: Database.Database): void => {
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_terminal_sessions_worktree ON terminal_sessions(worktree_id)`);
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_terminal_sessions_status ON terminal_sessions(status)`);
 
+  // ---------------------------------------------------------------------------
+  // AI Engine: Graph Tables
+  // ---------------------------------------------------------------------------
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS graph_nodes (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      type TEXT NOT NULL,
+      path TEXT,
+      name TEXT,
+      content_hash TEXT,
+      metadata TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS graph_edges (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      source_id TEXT NOT NULL REFERENCES graph_nodes(id),
+      target_id TEXT NOT NULL REFERENCES graph_nodes(id),
+      type TEXT NOT NULL,
+      weight INTEGER DEFAULT 1,
+      metadata TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS graph_meta (
+      project_id TEXT PRIMARY KEY REFERENCES projects(id),
+      last_built_at INTEGER,
+      last_updated_at INTEGER,
+      file_count INTEGER DEFAULT 0,
+      edge_count INTEGER DEFAULT 0,
+      layer2_count INTEGER DEFAULT 0,
+      coverage INTEGER DEFAULT 0
+    );
+  `);
+
+  // Graph indexes
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_graph_nodes_project ON graph_nodes(project_id)`);
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_graph_nodes_type ON graph_nodes(type)`);
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_graph_nodes_path ON graph_nodes(path)`);
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_graph_edges_project ON graph_edges(project_id)`);
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_graph_edges_source ON graph_edges(source_id)`);
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_graph_edges_target ON graph_edges(target_id)`);
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_graph_edges_type ON graph_edges(type)`);
+
   // Cleanup stale data on boot
   cleanupStaleData(sqlite);
 };

@@ -1,0 +1,337 @@
+/**
+ * GraphEngineService — Manages graph instances for all projects
+ * LRU cache: max 3 projects in memory, hydrate from SQLite on demand
+ * @author Subash Karki
+ */
+import { db, sqlite, projects } from '@phantom-os/db';
+import { eq } from 'drizzle-orm';
+import {
+  EventBus,
+  InMemoryGraph,
+  GraphBuilder,
+  GraphQuery,
+  GraphPersistence,
+  IncrementalUpdater,
+  FileWatcher,
+  ASTEnricher,
+} from '@phantom-os/ai-engine';
+import type { GraphStats } from '@phantom-os/ai-engine';
+import { logger } from '../logger.js';
+
+type BroadcastFn = (event: string, data: unknown) => void;
+
+interface ProjectGraphContext {
+  graph: InMemoryGraph;
+  builder: GraphBuilder;
+  query: GraphQuery;
+  updater: IncrementalUpdater;
+  watcher: FileWatcher;
+  repoPath: string;
+}
+
+/** Max projects to keep in memory simultaneously */
+const MAX_IN_MEMORY = 3;
+
+class GraphEngineService {
+  /** LRU-ordered: most recently used at the end */
+  private lru: string[] = [];
+  private instances = new Map<string, ProjectGraphContext>();
+  private eventBus = new EventBus();
+  private persistence = new GraphPersistence(sqlite);
+  private broadcast: BroadcastFn = () => {};
+  private unsubscribe: (() => void) | null = null;
+  private building = new Set<string>();
+  private enriching = new Set<string>();
+
+  // ---------------------------------------------------------------------------
+  // Lifecycle
+  // ---------------------------------------------------------------------------
+
+  init(broadcast: BroadcastFn): void {
+    this.broadcast = broadcast;
+
+    this.unsubscribe = this.eventBus.onAll((event) => {
+      this.broadcast('graph', event);
+    });
+
+    // Check all projects — build graphs for any that don't have persisted data
+    const allProjects = db.select().from(projects).all();
+    let built = 0;
+    for (const project of allProjects) {
+      const meta = this.persistence.loadMeta(project.id);
+      if (!meta || meta.fileCount === 0) {
+        // No graph data yet — trigger background build
+        void this.buildProject(project.id, project.repoPath);
+        built++;
+      }
+    }
+
+    logger.info('GraphEngine', `Initialized (LRU mode, max ${MAX_IN_MEMORY} in memory). Queued ${built} builds for projects missing graph data.`);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
+  async buildProject(projectId: string, repoPath: string): Promise<void> {
+    if (this.building.has(projectId)) {
+      logger.info('GraphEngine', `Build already in progress for ${projectId} — skipping`);
+      return;
+    }
+    this.building.add(projectId);
+
+    const startTime = Date.now();
+    logger.info('GraphEngine', `Building graph for project ${projectId} at ${repoPath}`);
+
+    const ctx = this.ensureContext(projectId, repoPath);
+
+    // Clear in-memory graph before rebuild so old nodes don't linger
+    ctx.graph.clear();
+
+    try {
+      await ctx.builder.buildProject(projectId, repoPath);
+
+      if (!this.instances.has(projectId)) {
+        logger.info('GraphEngine', `Project ${projectId} removed during build — skipping persist`);
+        return;
+      }
+
+      // Clear old persisted data before saving fresh build
+      this.persistence.deleteProject(projectId);
+      this.persistGraph(projectId, ctx);
+
+      const stats = ctx.query.getStats(projectId);
+      stats.lastBuiltAt = Date.now();
+      this.persistence.saveMeta(stats);
+
+      const durationMs = Date.now() - startTime;
+      logger.info(
+        'GraphEngine',
+        `Graph built for ${projectId}: ${stats.fileCount} files, ${stats.totalEdges} edges in ${durationMs}ms`,
+      );
+
+      // Start file watcher after initial build completes
+      if (!ctx.watcher.isWatching()) {
+        ctx.watcher.start();
+      }
+
+      void this.enrichProject(projectId, repoPath, ctx);
+    } catch (err) {
+      logger.error('GraphEngine', `Graph build failed for project ${projectId}:`, err);
+    } finally {
+      this.building.delete(projectId);
+    }
+  }
+
+  getQuery(projectId: string): GraphQuery | null {
+    const ctx = this.resolve(projectId);
+    return ctx?.query ?? null;
+  }
+
+  getStats(projectId: string): GraphStats | null {
+    const ctx = this.resolve(projectId);
+    if (!ctx) return null;
+    return ctx.query.getStats(projectId);
+  }
+
+  /** Get all file paths in the graph for a project */
+  getFileList(projectId: string): Array<{ path: string }> {
+    const ctx = this.resolve(projectId);
+    if (!ctx) return [];
+    return ctx.graph
+      .getNodesByProject(projectId)
+      .filter((n) => n.type === 'file')
+      .map((n) => ({ path: (n as { path: string }).path }));
+  }
+
+  removeProject(projectId: string): void {
+    const ctx = this.instances.get(projectId);
+    if (ctx) {
+      ctx.watcher.stop();
+      ctx.updater.destroy();
+      ctx.graph.clear();
+      this.instances.delete(projectId);
+      this.lru = this.lru.filter((id) => id !== projectId);
+    }
+
+    try {
+      this.persistence.deleteProject(projectId);
+    } catch (err) {
+      logger.warn('GraphEngine', `Failed to delete persisted graph for ${projectId}:`, err);
+    }
+
+    logger.info('GraphEngine', `Removed graph for project ${projectId}`);
+  }
+
+  destroy(): void {
+    for (const [, ctx] of this.instances) {
+      ctx.watcher.stop();
+      ctx.updater.destroy();
+      ctx.graph.clear();
+    }
+    this.instances.clear();
+    this.lru = [];
+
+    if (this.unsubscribe) {
+      this.unsubscribe();
+      this.unsubscribe = null;
+    }
+
+    this.eventBus.removeAll();
+    logger.info('GraphEngine', 'Destroyed');
+  }
+
+  // ---------------------------------------------------------------------------
+  // LRU Management
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Resolve a project context — hydrate from SQLite if not in memory.
+   * Returns null if no persisted data exists.
+   */
+  private resolve(projectId: string): ProjectGraphContext | null {
+    // Already in memory — touch LRU
+    if (this.instances.has(projectId)) {
+      this.touch(projectId);
+      return this.instances.get(projectId)!;
+    }
+
+    // Try to hydrate from SQLite
+    const project = db.select().from(projects).where(eq(projects.id, projectId)).get();
+    if (!project) return null;
+
+    const hydrated = this.hydrateProject(projectId, project.repoPath);
+    return hydrated ? this.instances.get(projectId)! : null;
+  }
+
+  /**
+   * Ensure a context exists (for builds). Creates fresh if not in memory.
+   */
+  private ensureContext(projectId: string, repoPath: string): ProjectGraphContext {
+    if (this.instances.has(projectId)) {
+      this.touch(projectId);
+      return this.instances.get(projectId)!;
+    }
+    return this.createContext(projectId, repoPath);
+  }
+
+  /** Move a project to the end of the LRU (most recently used) */
+  private touch(projectId: string): void {
+    this.lru = this.lru.filter((id) => id !== projectId);
+    this.lru.push(projectId);
+  }
+
+  /** Evict the least recently used project if over capacity */
+  private evictIfNeeded(): void {
+    while (this.lru.length > MAX_IN_MEMORY) {
+      const evictId = this.lru.shift();
+      if (!evictId) break;
+
+      const ctx = this.instances.get(evictId);
+      if (ctx) {
+        // Persist before evicting
+        this.persistGraph(evictId, ctx);
+        ctx.watcher.stop();
+        ctx.updater.destroy();
+        ctx.graph.clear();
+        this.instances.delete(evictId);
+        logger.debug('GraphEngine', `Evicted project ${evictId} from memory (LRU)`);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internal
+  // ---------------------------------------------------------------------------
+
+  private async enrichProject(
+    projectId: string,
+    repoPath: string,
+    ctx: ProjectGraphContext,
+  ): Promise<void> {
+    if (this.enriching.has(projectId)) {
+      logger.info('GraphEngine', `Enrichment already in progress for ${projectId} — skipping`);
+      return;
+    }
+    this.enriching.add(projectId);
+
+    try {
+      const enricher = new ASTEnricher(ctx.graph, this.eventBus);
+      await enricher.enrichProject(projectId, repoPath);
+
+      if (!this.instances.has(projectId)) {
+        logger.info('GraphEngine', `Project ${projectId} removed during enrichment — skipping persist`);
+        return;
+      }
+
+      this.persistence.deleteProject(projectId);
+      this.persistGraph(projectId, ctx);
+
+      const stats = ctx.query.getStats(projectId);
+      stats.lastUpdatedAt = Date.now();
+      this.persistence.saveMeta(stats);
+
+      logger.info(
+        'GraphEngine',
+        `Layer 2 enrichment complete for ${projectId}: ${stats.layer2Count} AST nodes`,
+      );
+    } catch (err) {
+      logger.error('GraphEngine', `Layer 2 enrichment failed for project ${projectId}:`, err);
+    } finally {
+      this.enriching.delete(projectId);
+    }
+  }
+
+  private persistGraph(projectId: string, ctx: ProjectGraphContext): void {
+    const allNodes = ctx.graph.getAllNodes();
+    const allEdges = ctx.graph.getAllEdges();
+    this.persistence.saveNodes(allNodes);
+    this.persistence.saveEdges(allEdges);
+  }
+
+  private createContext(projectId: string, repoPath: string): ProjectGraphContext {
+    this.evictIfNeeded();
+
+    const graph = new InMemoryGraph();
+    const builder = new GraphBuilder(graph, this.eventBus);
+    const query = new GraphQuery(graph);
+    const updater = new IncrementalUpdater(graph, builder, this.eventBus, projectId, repoPath);
+    const watcher = new FileWatcher(updater, repoPath, this.eventBus);
+    watcher.setProjectId(projectId);
+
+    const ctx: ProjectGraphContext = { graph, builder, query, updater, watcher, repoPath };
+    this.instances.set(projectId, ctx);
+    this.touch(projectId);
+    return ctx;
+  }
+
+  private hydrateProject(projectId: string, repoPath: string): boolean {
+    const nodes = this.persistence.loadNodes(projectId);
+    const edges = this.persistence.loadEdges(projectId);
+
+    if (nodes.length === 0) return false;
+
+    const ctx = this.createContext(projectId, repoPath);
+
+    for (const node of nodes) {
+      ctx.graph.addNode(node);
+    }
+    for (const edge of edges) {
+      ctx.graph.addEdge(edge);
+    }
+
+    // Start file watcher after hydration
+    if (!ctx.watcher.isWatching()) {
+      ctx.watcher.start();
+    }
+
+    logger.debug(
+      'GraphEngine',
+      `Hydrated graph for ${projectId}: ${nodes.length} nodes, ${edges.length} edges`,
+    );
+    return true;
+  }
+}
+
+/** Singleton instance */
+export const graphEngine = new GraphEngineService();

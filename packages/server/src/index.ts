@@ -39,6 +39,9 @@ import type { Server } from 'node:http';
 import { setupTerminalWs } from './routes/terminal-ws.js';
 import { terminalRestoreRoutes } from './routes/terminal-restore.js';
 import { systemMetricsRoutes } from './routes/system-metrics.js';
+import { graphRoutes } from './routes/graph.js';
+import { graphEngine } from './services/graph-engine.js';
+import { startMcpServer, stopMcpServer } from './mcp/index.js';
 import { destroyAllPtys, initDaemonClient, disconnectDaemon } from './terminal-manager.js';
 import { startHistoryWriter, stopHistoryWriter, markAllExited } from './terminal-history.js';
 
@@ -81,6 +84,9 @@ runMigrations(sqlite);
 seedDatabase(db, sqlite);
 seedAchievements();
 
+// Initialize graph engine after migrations so tables exist
+graphEngine.init(broadcast);
+
 // ---------------------------------------------------------------------------
 // Hono App
 // ---------------------------------------------------------------------------
@@ -107,6 +113,7 @@ app.route('/api', plansRoutes);
 app.route('/api', preferencesRoutes);
 app.route('/api', terminalRestoreRoutes);
 app.route('/api', systemMetricsRoutes);
+app.route('/api', graphRoutes);
 
 // SSE endpoint
 app.get('/events', (c) => {
@@ -212,6 +219,8 @@ startActivityPoller(broadcast);
 
 const shutdown = () => {
   logger.info('PhantomOS', 'Shutting down gracefully...');
+  void stopMcpServer().catch(() => {});
+  graphEngine.destroy();
   stopHistoryWriter();
   markAllExited();
   disconnectDaemon();
@@ -243,6 +252,11 @@ const server = serve({ fetch: app.fetch, port: API_PORT }, (info) => {
 
 setupTerminalWs(server as unknown as Server);
 startHistoryWriter();
+
+// Start MCP server for external AI agent integration (non-fatal)
+startMcpServer().catch((err) =>
+  logger.warn('MCP', 'MCP server start failed (non-fatal):', err),
+);
 
 // Skip daemon — use direct PTY (node-pty) for terminal sessions.
 // The daemon has output routing bugs that cause black-screen terminals.

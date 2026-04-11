@@ -197,6 +197,7 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
             </Popover>
           </>
         )}
+
       </Group>
 
       {/* Right: Gamification toggle + Font scale + Theme toggle */}

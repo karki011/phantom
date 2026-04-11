@@ -14,6 +14,7 @@ import { isGitRepo, getDefaultBranch, getRepoName, getWorktreeDir, listWorktrees
 import { removeWorktree } from '../worktree-manager.js';
 import { detectProject } from '../project-detector.js';
 import { logger } from '../logger.js';
+import { graphEngine } from '../services/graph-engine.js';
 
 export const projectRoutes = new Hono();
 
@@ -78,6 +79,9 @@ projectRoutes.post('/projects', async (c) => {
   };
 
   db.insert(projects).values(project).run();
+
+  // Build graph in background — don't await
+  void graphEngine.buildProject(project.id, project.repoPath);
 
   return c.json(project, 201);
 });
@@ -187,6 +191,9 @@ projectRoutes.post('/projects/open', async (c) => {
   };
   db.insert(worktrees).values(branchEntry).run();
 
+  // Build graph in background — don't await
+  void graphEngine.buildProject(project.id, project.repoPath);
+
   return c.json({ project, worktree: branchEntry }, 201);
 });
 
@@ -275,6 +282,9 @@ projectRoutes.post('/projects/clone', async (c) => {
 
   // Fetch remote refs in background
   backgroundFetch(targetDir);
+
+  // Build graph in background — don't await
+  void graphEngine.buildProject(project.id, targetDir);
 
   return c.json({ project, worktree: branchEntry, clonePath: targetDir }, 201);
 });
@@ -526,6 +536,9 @@ projectRoutes.delete('/projects/:id', async (c) => {
       await removeWorktree(wt.worktreePath);
     }
   }
+
+  // Remove graph data for this project
+  graphEngine.removeProject(id);
 
   // Cascade delete: worktrees, sections, then project
   db.delete(worktrees).where(eq(worktrees.projectId, id)).run();
