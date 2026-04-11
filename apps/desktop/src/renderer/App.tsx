@@ -83,29 +83,38 @@ export const App = () => {
   // Periodic backend health polling
   const { isConnected } = useHealthCheck();
 
-  // Splash screen state
+  // Splash screen state — minimum 5s display regardless of connection speed
   const [splashDone, setSplashDone] = useState(false);
   const [splashStatus, setSplashStatus] = useState('Initializing The System...');
+  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
 
-  // Once connected, show "Ready" then hold for a moment, fade out, and unmount
+  // Minimum display time: 5 seconds no matter what
   useEffect(() => {
-    if (isConnected && !splashDone) {
+    const timer = setTimeout(() => setMinTimeElapsed(true), 5000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Only dismiss splash when BOTH connected AND minimum time elapsed
+  useEffect(() => {
+    if (isConnected && minTimeElapsed && !splashDone) {
       setSplashStatus('Ready');
-      // Hold splash for 10s so users see the branding
-      const timer = setTimeout(() => setSplashDone(true), 10000);
+      const timer = setTimeout(() => setSplashDone(true), 800);
       return () => clearTimeout(timer);
     }
-  }, [isConnected, splashDone]);
+    if (isConnected && !minTimeElapsed) {
+      setSplashStatus('Ready');
+    }
+  }, [isConnected, minTimeElapsed, splashDone]);
 
   // Progressive status messages while loading
   useEffect(() => {
     if (splashDone) return;
     const t1 = setTimeout(() => {
       if (!isConnected) setSplashStatus('Starting server...');
-    }, 3000);
+    }, 2000);
     const t2 = setTimeout(() => {
       if (!isConnected) setSplashStatus('Almost ready...');
-    }, 8000);
+    }, 4000);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
@@ -146,7 +155,7 @@ export const App = () => {
   return (
     <WorkspaceProvider definitions={paneDefinitions}>
     {!splashDone && (
-      <SplashScreen visible={!isConnected} status={splashStatus} />
+      <SplashScreen visible={!(isConnected && minTimeElapsed)} status={splashStatus} />
     )}
     <AppShell
       header={{ height: '3.5rem' }}
