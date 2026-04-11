@@ -85,6 +85,9 @@ class GraphEngineService {
 
     const ctx = this.ensureContext(projectId, repoPath);
 
+    // Clear in-memory graph before rebuild so old nodes don't linger
+    ctx.graph.clear();
+
     try {
       await ctx.builder.buildProject(projectId, repoPath);
 
