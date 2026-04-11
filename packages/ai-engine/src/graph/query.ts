@@ -180,7 +180,7 @@ export class GraphQuery {
       layer2Count: layer2.length,
       lastBuiltAt: 0,
       lastUpdatedAt: Date.now(),
-      coverage: 100,
+      coverage: files.length > 0 ? 100 : 0,
     };
   }
 

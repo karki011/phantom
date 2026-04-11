@@ -110,13 +110,18 @@ export const useGraphStatus = (): GraphStatus => {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled || !data) return;
-        const stats = data as GraphStats & { lastUpdated?: number };
+        // API returns engine's GraphStats shape: { fileCount, totalEdges, coverage, ... }
+        const apiStats = data as Record<string, unknown>;
+        const files = (apiStats.fileCount as number) ?? 0;
+        const edges = (apiStats.totalEdges as number) ?? 0;
+        const coverage = (apiStats.coverage as number) ?? 0;
+        const hasData = files > 0;
         setStatus((prev) => ({
           ...prev,
           projectId,
-          phase: prev.phase === 'idle' ? 'ready' : prev.phase,
-          stats: { files: stats.files, edges: stats.edges, coverage: stats.coverage },
-          lastUpdated: stats.lastUpdated ?? Date.now(),
+          phase: prev.phase === 'idle' && hasData ? 'ready' : prev.phase,
+          stats: { files, edges, coverage },
+          lastUpdated: (apiStats.lastUpdatedAt as number) ?? Date.now(),
         }));
       })
       .catch(() => {
@@ -147,10 +152,16 @@ export const useGraphStatus = (): GraphStatus => {
           return;
         }
 
-        const eventType = parsed.type ?? '';
+        // Server broadcasts: { type: 'graph', data: { type: 'graph:build:start', ... } }
+        // We need to unwrap: outer type is 'graph', inner data.type is the actual event
+        if (parsed.type !== 'graph' || !parsed.data) return;
+
+        const inner = parsed.data as Record<string, unknown>;
+        const eventType = (inner.type as string) ?? '';
         if (!eventType.startsWith('graph:')) return;
 
-        const graphEvent = { type: eventType, data: parsed.data } as GraphSSEEvent;
+        // Map inner event fields to our SSE event shape
+        const graphEvent = { type: eventType, data: inner } as GraphSSEEvent;
 
         setStatus((prev) => reduceGraphEvent(prev, graphEvent, projectIdRef.current));
       };
@@ -189,13 +200,24 @@ function reduceGraphEvent(
   event: GraphSSEEvent,
   projectId: string | null,
 ): GraphStatus {
+  // After SSE unwrapping, event.data is the full graph event object from the server.
+  // Server event shapes (from @phantom-os/ai-engine EventBus):
+  //   graph:build:start    → { projectId, phase, totalFiles, timestamp }
+  //   graph:build:progress → { projectId, phase, current, total, currentFile, timestamp }
+  //   graph:build:complete → { projectId, phase, stats: { files, edges, durationMs }, timestamp }
+  //   graph:build:error    → { projectId, phase, error, file?, timestamp }
+  //   graph:update:start   → { projectId, changedFiles, timestamp }
+  //   graph:update:complete→ { projectId, updatedNodes, updatedEdges, durationMs, timestamp }
+  //   graph:stale          → { projectId, staleFiles, timestamp }
+  const d = (event.data ?? {}) as Record<string, unknown>;
+
   switch (event.type) {
     case 'graph:build:start':
       return {
         ...prev,
         phase: 'building',
-        projectId: event.data.projectId ?? projectId,
-        progress: { current: 0, total: event.data.totalFiles, currentFile: '' },
+        projectId: (d.projectId as string) ?? projectId,
+        progress: { current: 0, total: (d.totalFiles as number) ?? 0, currentFile: '' },
         error: null,
       };
 
@@ -203,45 +225,47 @@ function reduceGraphEvent(
       return {
         ...prev,
         progress: prev.progress
-          ? { ...prev.progress, current: event.data.current, currentFile: event.data.currentFile }
-          : { current: event.data.current, total: 0, currentFile: event.data.currentFile },
+          ? { ...prev.progress, current: (d.current as number) ?? 0, currentFile: (d.currentFile as string) ?? '' }
+          : { current: (d.current as number) ?? 0, total: (d.total as number) ?? 0, currentFile: (d.currentFile as string) ?? '' },
       };
 
-    case 'graph:build:complete':
+    case 'graph:build:complete': {
+      const stats = (d.stats as Record<string, number>) ?? {};
       return {
         ...prev,
         phase: 'ready',
         progress: null,
         stats: {
-          files: event.data.files,
-          edges: event.data.edges,
-          coverage: event.data.coverage,
+          files: stats.files ?? 0,
+          edges: stats.edges ?? 0,
+          coverage: stats.files > 0 ? 100 : 0,
         },
         lastUpdated: Date.now(),
         error: null,
       };
+    }
 
     case 'graph:build:error':
       return {
         ...prev,
         phase: 'error',
         progress: null,
-        error: event.data.message,
+        error: (d.error as string) ?? 'Build failed',
       };
 
     case 'graph:enrich:start':
       return {
         ...prev,
         phase: 'enriching',
-        progress: { current: 0, total: event.data.totalFiles, currentFile: '' },
+        progress: { current: 0, total: (d.totalFiles as number) ?? 0, currentFile: '' },
       };
 
     case 'graph:enrich:progress':
       return {
         ...prev,
         progress: prev.progress
-          ? { ...prev.progress, current: event.data.current, currentFile: event.data.currentFile }
-          : { current: event.data.current, total: 0, currentFile: event.data.currentFile },
+          ? { ...prev.progress, current: (d.current as number) ?? 0, currentFile: (d.currentFile as string) ?? '' }
+          : { current: (d.current as number) ?? 0, total: 0, currentFile: (d.currentFile as string) ?? '' },
       };
 
     case 'graph:enrich:complete':
@@ -263,13 +287,7 @@ function reduceGraphEvent(
       return {
         ...prev,
         phase: 'ready',
-        stats: event.data
-          ? {
-              files: (event.data.files as number) ?? prev.stats?.files ?? 0,
-              edges: (event.data.edges as number) ?? prev.stats?.edges ?? 0,
-              coverage: (event.data.coverage as number) ?? prev.stats?.coverage ?? 0,
-            }
-          : prev.stats,
+        stats: prev.stats,
         lastUpdated: Date.now(),
       };
 

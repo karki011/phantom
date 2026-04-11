@@ -47,7 +47,7 @@ const formatNumber = (n: number): string =>
   n >= 1_000 ? `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n);
 
 const formatCoverage = (c: number): string =>
-  `${(c * 100).toFixed(0)}%`;
+  `${Math.round(c)}%`;
 
 const phaseColor: Record<GraphPhase, string> = {
   idle: 'var(--phantom-text-muted)',
