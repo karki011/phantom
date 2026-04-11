@@ -1,5 +1,6 @@
 /**
- * SessionViewer — Live chat-style session conversation viewer
+ * SessionViewer — Chat bubble-style session conversation viewer
+ * User messages right-aligned, Claude messages left-aligned with tool badges
  * @author Subash Karki
  */
 import {
@@ -104,88 +105,34 @@ const MetadataBar = ({ session }: { session: SessionData }) => {
     : Date.now() - session.startedAt;
 
   return (
-    <Paper
-      p="sm"
-      radius="md"
-      style={{
-        backgroundColor: 'var(--phantom-surface-card)',
-        border: '1px solid var(--phantom-border-subtle)',
-      }}
-    >
-      <Group gap="md" wrap="wrap">
-        {/* Model badge */}
-        <Badge
-          size="lg"
-          radius="xl"
-          style={{
-            backgroundColor: getModelColor(session.model),
-            color: '#fff',
-            fontFamily: 'Orbitron, sans-serif',
-            fontSize: '0.7rem',
-            letterSpacing: '0.05em',
-          }}
-        >
-          {getModelLabel(session.model)}
-        </Badge>
-
-        {/* Context usage */}
-        {session.contextUsedPct != null && (
-          <Group gap={4}>
-            <Hash size={14} style={{ color: 'var(--phantom-text-secondary)' }} />
-            <Text
-              fz="0.8rem"
-              ff="Orbitron, sans-serif"
-              c="var(--phantom-text-secondary)"
-            >
-              {session.contextUsedPct}% ctx
-            </Text>
-          </Group>
-        )}
-
-        {/* Token count */}
-        <Group gap={4}>
-          <Coins size={14} style={{ color: 'var(--phantom-text-secondary)' }} />
-          <Text
-            fz="0.8rem"
-            ff="Orbitron, sans-serif"
-            c="var(--phantom-text-secondary)"
-          >
-            {formatTokens(totalTokens)} tokens
-          </Text>
-        </Group>
-
-        {/* Duration */}
-        <Group gap={4}>
-          <Clock size={14} style={{ color: 'var(--phantom-text-secondary)' }} />
-          <Text
-            fz="0.8rem"
-            ff="Orbitron, sans-serif"
-            c="var(--phantom-text-secondary)"
-          >
-            {formatDuration(duration)}
-          </Text>
-        </Group>
-
-        {/* Cost */}
-        <Text
-          fz="0.8rem"
-          ff="Orbitron, sans-serif"
-          c="var(--phantom-text-secondary)"
-        >
-          {formatCost(session.estimatedCostMicros)}
+    <Group gap="md" wrap="wrap" px="sm" py={6}>
+      <Badge
+        size="sm"
+        radius="xl"
+        style={{
+          backgroundColor: getModelColor(session.model),
+          color: '#fff',
+          fontSize: '0.65rem',
+        }}
+      >
+        {getModelLabel(session.model)}
+      </Badge>
+      {session.contextUsedPct != null && (
+        <Text fz="0.73rem" c="var(--phantom-text-muted)">
+          <Hash size={11} style={{ display: 'inline', verticalAlign: '-1px' }} /> {session.contextUsedPct}% ctx
         </Text>
-
-        {/* Status badge */}
-        <Badge
-          size="sm"
-          radius="sm"
-          variant="light"
-          color={session.status === 'active' ? 'green' : 'gray'}
-        >
-          {session.status}
-        </Badge>
-      </Group>
-    </Paper>
+      )}
+      <Text fz="0.73rem" c="var(--phantom-text-muted)">
+        <Coins size={11} style={{ display: 'inline', verticalAlign: '-1px' }} /> {formatTokens(totalTokens)}
+      </Text>
+      <Text fz="0.73rem" c="var(--phantom-text-muted)">
+        <Clock size={11} style={{ display: 'inline', verticalAlign: '-1px' }} /> {formatDuration(duration)}
+      </Text>
+      <Text fz="0.73rem" c="var(--phantom-text-muted)">{formatCost(session.estimatedCostMicros)}</Text>
+      <Badge size="xs" radius="sm" variant="light" color={session.status === 'active' ? 'green' : 'gray'}>
+        {session.status}
+      </Badge>
+    </Group>
   );
 };
 
@@ -193,59 +140,72 @@ const MetadataBar = ({ session }: { session: SessionData }) => {
 const isNonEmpty = (msg: SessionMessage): boolean =>
   (msg.content?.trim().length ?? 0) > 0 || (msg.toolUse?.length ?? 0) > 0;
 
-const TimelineItem = ({ message }: { message: SessionMessage }) => {
+const ChatBubble = ({ message }: { message: SessionMessage }) => {
   const isUser = message.role === 'user';
   const hasContent = (message.content?.trim().length ?? 0) > 0;
   const hasTools = (message.toolUse?.length ?? 0) > 0;
 
   return (
-    <Group gap={0} wrap="nowrap" align="flex-start">
-      {/* Timeline rail */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 28, flexShrink: 0, paddingTop: 2 }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: isUser ? 'flex-end' : 'flex-start',
+        maxWidth: '85%',
+        alignSelf: isUser ? 'flex-end' : 'flex-start',
+      }}
+    >
+      {/* Sender + timestamp */}
+      <Group gap={6} mb={3} style={{ flexDirection: isUser ? 'row-reverse' : 'row' }}>
         <div style={{
-          width: 22, height: 22, borderRadius: '50%',
+          width: 20, height: 20, borderRadius: '50%',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backgroundColor: isUser ? 'var(--phantom-surface-elevated)' : 'var(--phantom-surface-card)',
-          border: `1.5px solid ${isUser ? 'var(--phantom-accent-glow)' : '#a855f7'}`,
+          backgroundColor: isUser ? 'var(--phantom-accent-glow)' : getModelColor(null),
+          flexShrink: 0,
         }}>
           {isUser
-            ? <User size={11} style={{ color: 'var(--phantom-accent-glow)' }} />
-            : <Bot size={11} style={{ color: '#a855f7' }} />}
+            ? <User size={10} style={{ color: '#000' }} />
+            : <Bot size={10} style={{ color: '#fff' }} />}
         </div>
-        <div style={{ flex: 1, width: 1, backgroundColor: 'var(--phantom-border-subtle)', minHeight: 12 }} />
-      </div>
-
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0, paddingBottom: 8 }}>
-        {/* Header: role + time */}
-        <Group gap={6} mb={2}>
-          <Text fz="0.72rem" fw={600} c={isUser ? 'var(--phantom-accent-glow)' : '#a855f7'}>
-            {isUser ? 'You' : 'Claude'}
+        <Text fz="0.68rem" fw={600} c={isUser ? 'var(--phantom-accent-glow)' : 'var(--phantom-accent-cyan)'}>
+          {isUser ? 'You' : 'Claude'}
+        </Text>
+        {message.timestamp && (
+          <Text fz="0.6rem" c="var(--phantom-text-muted)">
+            {relativeTime(message.timestamp)}
           </Text>
-          {message.timestamp && (
-            <Text fz="0.625rem" c="var(--phantom-text-muted)">
-              {relativeTime(message.timestamp)}
-            </Text>
-          )}
-        </Group>
+        )}
+      </Group>
 
-        {/* Text content */}
-        {hasContent && (
+      {/* Bubble */}
+      {hasContent && (
+        <div
+          style={{
+            padding: '8px 12px',
+            borderRadius: isUser ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+            backgroundColor: isUser
+              ? 'var(--phantom-accent-glow)'
+              : 'var(--phantom-surface-card)',
+            border: isUser ? 'none' : '1px solid var(--phantom-border-subtle)',
+            maxWidth: '100%',
+          }}
+        >
           <Text
             fz="0.82rem"
-            c="var(--phantom-text-primary)"
-            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.5 }}
+            c={isUser ? '#000' : 'var(--phantom-text-primary)'}
+            style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.55 }}
           >
             {message.content}
           </Text>
-        )}
+        </div>
+      )}
 
-        {/* Tool call badges */}
-        {hasTools && (
-          <Group gap={4} mt={hasContent ? 4 : 0} wrap="wrap">
-            {message.toolUse!.map((tool, i) => (
+      {/* Tool badges */}
+      {hasTools && (
+        <Stack gap={3} mt={4}>
+          {message.toolUse!.map((tool, i) => (
+            <Group key={`${tool.name}-${i}`} gap={6} wrap="nowrap">
               <Badge
-                key={`${tool.name}-${i}`}
                 size="xs"
                 radius="sm"
                 variant="light"
@@ -254,16 +214,22 @@ const TimelineItem = ({ message }: { message: SessionMessage }) => {
                   backgroundColor: 'var(--phantom-surface-elevated)',
                   borderColor: 'var(--phantom-border-subtle)',
                   color: 'var(--phantom-text-secondary)',
-                  fontSize: '0.625rem',
+                  fontSize: '0.6rem',
+                  flexShrink: 0,
                 }}
               >
                 {tool.name}
               </Badge>
-            ))}
-          </Group>
-        )}
-      </div>
-    </Group>
+              {tool.summary && (
+                <Text fz="0.65rem" c="var(--phantom-text-muted)" truncate ff="'JetBrains Mono', monospace">
+                  {tool.summary}
+                </Text>
+              )}
+            </Group>
+          ))}
+        </Stack>
+      )}
+    </div>
   );
 };
 
@@ -281,7 +247,7 @@ export const SessionViewer = () => {
   const { messages, loading: messagesLoading, error: messagesError } =
     useSessionMessages(sessionId, isActive);
 
-  const scrollEndRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Fetch session metadata
   useEffect(() => {
@@ -318,7 +284,12 @@ export const SessionViewer = () => {
     return () => clearInterval(interval);
   }, [isActive, sessionId]);
 
-  // Messages are rendered latest-first, so no auto-scroll needed
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages.length]);
 
   // No session selected
   if (!sessionId) {
@@ -342,10 +313,7 @@ export const SessionViewer = () => {
   if (sessionLoading) {
     return (
       <Stack gap="md">
-        <ViewHeader
-          title="Session Viewer"
-          icon={<MessageSquare size={22} />}
-        />
+        <ViewHeader title="Session Viewer" icon={<MessageSquare size={22} />} />
         <Center py="xl">
           <Loader size="sm" color="var(--phantom-accent-glow)" />
         </Center>
@@ -357,11 +325,7 @@ export const SessionViewer = () => {
   if (sessionError || !session) {
     return (
       <Stack gap="md">
-        <ViewHeader
-          title="Session Viewer"
-          icon={<MessageSquare size={22} />}
-          subtitle="Failed to load session"
-        />
+        <ViewHeader title="Session Viewer" icon={<MessageSquare size={22} />} subtitle="Failed to load session" />
         <Center py="xl">
           <Text fz="0.9rem" c="var(--phantom-status-error)">
             Failed to load session details. The session may no longer exist.
@@ -371,24 +335,70 @@ export const SessionViewer = () => {
     );
   }
 
+  const visibleMessages = [...messages].reverse().filter(isNonEmpty);
+
   return (
-    <Stack gap="md" h="100%">
-      <ViewHeader
-        title="Session Viewer"
-        icon={<MessageSquare size={22} />}
-        subtitle={session.firstPrompt ?? session.name ?? session.id}
-      />
-
-      {/* Metadata bar */}
-      <MetadataBar session={session} />
-
-      {/* Chat area */}
-      <ScrollArea
-        style={{ flex: 1, minHeight: 0 }}
-        offsetScrollbars
-        type="auto"
+    <Stack gap={0} h="100%" align="center" py="md" px="lg">
+      {/* Laptop frame */}
+      <div
+        style={{
+          maxWidth: 780,
+          width: '100%',
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          borderRadius: 12,
+          border: '1px solid var(--phantom-border-subtle)',
+          overflow: 'hidden',
+          backgroundColor: 'var(--phantom-surface-base, #111)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+        }}
       >
-        <Stack gap="md" p="xs">
+        {/* Title bar */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 12px',
+            backgroundColor: 'var(--phantom-surface-card)',
+            borderBottom: '1px solid var(--phantom-border-subtle)',
+            flexShrink: 0,
+          }}
+        >
+          {/* Traffic lights */}
+          <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#ff5f57' }} />
+            <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#febc2e' }} />
+            <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#28c840' }} />
+          </div>
+          <Text fz="0.7rem" fw={500} c="var(--phantom-text-secondary)" truncate style={{ flex: 1, textAlign: 'center' }}>
+            {session.firstPrompt ?? session.name ?? 'Session Viewer'}
+          </Text>
+          <Badge size="xs" radius="sm" variant="light" color={isActive ? 'green' : 'gray'}>
+            {session.status}
+          </Badge>
+        </div>
+
+        {/* Metadata bar */}
+        <MetadataBar session={session} />
+
+        {/* Chat area */}
+        <ScrollArea
+          style={{ flex: 1, minHeight: 0 }}
+          viewportRef={scrollRef}
+          offsetScrollbars
+          type="auto"
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              padding: '16px 20px',
+              width: '100%',
+            }}
+          >
           {/* Messages loading */}
           {messagesLoading && (
             <Center py="xl">
@@ -399,45 +409,40 @@ export const SessionViewer = () => {
           {/* Messages error */}
           {messagesError && !messagesLoading && (
             <Center py="xl">
-              <Text fz="0.9rem" c="var(--phantom-status-error)">
-                Failed to load messages.
-              </Text>
+              <Text fz="0.9rem" c="var(--phantom-status-error)">Failed to load messages.</Text>
             </Center>
           )}
 
           {/* Empty state */}
-          {!messagesLoading && !messagesError && messages.length === 0 && (
+          {!messagesLoading && !messagesError && visibleMessages.length === 0 && (
             <Center py="xl">
-              <Text fz="0.9rem" c="var(--phantom-text-muted)">
-                No messages yet.
-              </Text>
+              <Text fz="0.9rem" c="var(--phantom-text-muted)">No messages yet.</Text>
             </Center>
           )}
 
-          {/* Timeline — latest first, empty messages filtered */}
-          {[...messages].reverse().filter(isNonEmpty).map((msg) => (
-            <TimelineItem key={`${msg.timestamp}-${msg.type || msg.role}`} message={msg} />
+          {/* Chat bubbles */}
+          {visibleMessages.map((msg) => (
+            <ChatBubble key={`${msg.timestamp}-${msg.role}`} message={msg} />
           ))}
-        </Stack>
-      </ScrollArea>
+          </div>
+        </ScrollArea>
 
-      {/* Live indicator */}
-      {isActive && (
-        <Group gap={6} px="xs" pb="xs">
-          <div
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              backgroundColor: 'var(--phantom-status-success)',
-              animation: 'pulse 2s infinite',
-            }}
-          />
-          <Text fz="0.75rem" c="var(--phantom-text-secondary)">
-            Live — polling every 3s
-          </Text>
-        </Group>
-      )}
+        {/* Live indicator */}
+        {isActive && (
+          <Group gap={6} px="md" py={6} style={{ borderTop: '1px solid var(--phantom-border-subtle)', flexShrink: 0 }}>
+            <div
+              style={{
+                width: 8, height: 8, borderRadius: '50%',
+                backgroundColor: 'var(--phantom-status-success)',
+                animation: 'pulse 2s infinite',
+              }}
+            />
+            <Text fz="0.73rem" c="var(--phantom-text-secondary)">
+              Live — polling every 3s
+            </Text>
+          </Group>
+        )}
+      </div>
     </Stack>
   );
 };

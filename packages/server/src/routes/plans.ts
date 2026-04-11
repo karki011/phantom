@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { db, worktrees } from '@phantom-os/db';
+import { db, projects, worktrees } from '@phantom-os/db';
 
 const PLANS_DIR = join(homedir(), '.claude', 'plans');
 const CACHE_TTL = 10_000; // 10s cache
@@ -100,12 +100,19 @@ plansRoutes.get('/plans', async (c) => {
 
   const allPlans = await scanPlans();
 
-  // Build search terms from worktree fields — use full path for precision
+  // Look up the parent project for its name
+  const project = worktree.projectId
+    ? db.select().from(projects).where(eq(projects.id, worktree.projectId)).get()
+    : null;
+
+  // Build search terms from worktree + project fields
   const searchTerms: string[] = [];
-  // Full worktree path is the most precise match
   if (worktree.worktreePath) searchTerms.push(worktree.worktreePath.toLowerCase());
-  // Branch name is useful for plans that reference the branch
   if (worktree.branch) searchTerms.push(worktree.branch.toLowerCase());
+  if (worktree.name) searchTerms.push(worktree.name.toLowerCase());
+  // Project name is key — plans often reference the project by name
+  if (project?.name) searchTerms.push(project.name.toLowerCase());
+  if (project?.repoPath) searchTerms.push(project.repoPath.toLowerCase());
 
   // Filter plans whose content mentions any search term
   // Require terms to be at least 6 chars to avoid false positives
