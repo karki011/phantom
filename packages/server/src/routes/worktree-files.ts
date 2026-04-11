@@ -306,6 +306,8 @@ interface GitStatusResult {
   modified: number;
   deleted: number;
   untracked: number;
+  ahead: number;
+  behind: number;
   files: GitFileChange[];
 }
 
@@ -355,7 +357,7 @@ function parseGitStatus(output: string): GitStatusResult {
     }
   }
 
-  return { added, modified, deleted, untracked, files };
+  return { added, modified, deleted, untracked, ahead: 0, behind: 0, files };
 }
 
 /** GET /worktrees/:id/git-status — Get git status summary for a worktree */
@@ -365,15 +367,24 @@ worktreeFileRoutes.get('/worktrees/:id/git-status', (c) => {
   if (!root) return c.json({ error: 'Worktree not found' }, 404);
 
   try {
-    const output = execSync('git status --porcelain', {
+    const output = execSync('git status -b --porcelain', {
       cwd: root,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 5000,
     });
-    return c.json(parseGitStatus(output));
+    const result = parseGitStatus(output);
+
+    // Parse ahead/behind from the branch line (## branch...origin/branch [ahead N, behind M])
+    const branchLine = output.split('\n')[0] ?? '';
+    const aheadMatch = branchLine.match(/ahead (\d+)/);
+    const behindMatch = branchLine.match(/behind (\d+)/);
+    if (aheadMatch) result.ahead = parseInt(aheadMatch[1], 10);
+    if (behindMatch) result.behind = parseInt(behindMatch[1], 10);
+
+    return c.json(result);
   } catch {
-    return c.json({ added: 0, modified: 0, deleted: 0, untracked: 0, files: [] });
+    return c.json({ added: 0, modified: 0, deleted: 0, untracked: 0, ahead: 0, behind: 0, files: [] });
   }
 });
 

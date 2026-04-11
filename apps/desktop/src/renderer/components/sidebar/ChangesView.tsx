@@ -3,7 +3,7 @@
  * Shows staged and unstaged files with stage/unstage actions and commit input.
  * @author Subash Karki
  */
-import { ScrollArea, Text, Textarea } from '@mantine/core';
+import { ScrollArea, Text, Textarea, Tooltip } from '@mantine/core';
 import { useAtomValue } from 'jotai';
 import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw, Plus, Minus, Check, ArrowUp, ArrowDown, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
@@ -71,24 +71,26 @@ function FileRow({ file, worktreeId, onStage, onDiscard }: {
         </Text>
       )}
       {onDiscard && (
-        <div
-          onClick={(e) => { e.stopPropagation(); onDiscard(); }}
-          style={{ cursor: 'pointer', padding: 2, borderRadius: 3, display: 'flex', alignItems: 'center' }}
-          title="Discard changes"
-        >
-          <Undo2 size={12} style={{ color: 'var(--phantom-status-error, #ef4444)' }} />
-        </div>
+        <Tooltip label={file.status === 'untracked' ? 'Delete file' : 'Discard changes'} position="top" withArrow fz="xs">
+          <div
+            onClick={(e) => { e.stopPropagation(); onDiscard(); }}
+            style={{ cursor: 'pointer', padding: 2, borderRadius: 3, display: 'flex', alignItems: 'center' }}
+          >
+            <Undo2 size={12} style={{ color: 'var(--phantom-status-error, #ef4444)' }} />
+          </div>
+        </Tooltip>
       )}
       {onStage && (
-        <div
-          onClick={(e) => { e.stopPropagation(); onStage(); }}
-          style={{ cursor: 'pointer', padding: 2, borderRadius: 3, display: 'flex', alignItems: 'center' }}
-          title={file.staged ? 'Unstage' : 'Stage'}
-        >
-          {file.staged
-            ? <Minus size={12} style={{ color: 'var(--phantom-status-error, #ef4444)' }} />
-            : <Plus size={12} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />}
-        </div>
+        <Tooltip label={file.staged ? 'Unstage file' : 'Stage file'} position="top" withArrow fz="xs">
+          <div
+            onClick={(e) => { e.stopPropagation(); onStage(); }}
+            style={{ cursor: 'pointer', padding: 2, borderRadius: 3, display: 'flex', alignItems: 'center' }}
+          >
+            {file.staged
+              ? <Minus size={12} style={{ color: 'var(--phantom-status-error, #ef4444)' }} />
+              : <Plus size={12} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />}
+          </div>
+        </Tooltip>
       )}
     </div>
   );
@@ -197,35 +199,39 @@ export function ChangesView() {
         <Text fz="0.65rem" c="var(--phantom-text-muted)">
           {totalChanges} change{totalChanges !== 1 ? 's' : ''}
         </Text>
-        <div
-          onClick={handlePull}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 2, cursor: pulling ? 'default' : 'pointer',
-            color: pulling ? 'var(--phantom-accent-cyan)' : 'var(--phantom-text-muted)',
-            padding: '1px 4px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 600,
-          }}
-          title="Pull"
-        >
-          <ArrowDown size={10} />
-          {pulling ? 'Pulling...' : 'Pull'}
-        </div>
-        <div
-          onClick={handlePush}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 2, cursor: pushing ? 'default' : 'pointer',
-            color: pushing ? 'var(--phantom-accent-cyan)' : 'var(--phantom-text-muted)',
-            padding: '1px 4px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 600,
-          }}
-          title="Push"
-        >
-          <ArrowUp size={10} />
-          {pushing ? 'Pushing...' : 'Push'}
-        </div>
-        <RefreshCw
-          size={11}
-          style={{ color: 'var(--phantom-text-muted)', cursor: 'pointer', animation: loading ? 'spin 1s linear infinite' : 'none' }}
-          onClick={refresh}
-        />
+        <Tooltip label={status?.behind ? `Pull ${status.behind} commit${status.behind !== 1 ? 's' : ''} from remote` : 'Pull from remote'} position="bottom" withArrow fz="xs">
+          <div
+            onClick={handlePull}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 2, cursor: pulling ? 'default' : 'pointer',
+              color: pulling ? 'var(--phantom-accent-cyan)' : status?.behind ? 'var(--phantom-accent-gold, #f59e0b)' : 'var(--phantom-text-muted)',
+              padding: '1px 4px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 600,
+            }}
+          >
+            <ArrowDown size={10} />
+            {pulling ? 'Pulling...' : status?.behind ? `Pull ${status.behind}` : 'Pull'}
+          </div>
+        </Tooltip>
+        <Tooltip label={status?.ahead ? `Push ${status.ahead} commit${status.ahead !== 1 ? 's' : ''} to remote` : 'Push to remote'} position="bottom" withArrow fz="xs">
+          <div
+            onClick={handlePush}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 2, cursor: pushing ? 'default' : 'pointer',
+              color: pushing ? 'var(--phantom-accent-cyan)' : status?.ahead ? 'var(--phantom-status-success, #22c55e)' : 'var(--phantom-text-muted)',
+              padding: '1px 4px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 600,
+            }}
+          >
+            <ArrowUp size={10} />
+            {pushing ? 'Pushing...' : status?.ahead ? `Push ${status.ahead}` : 'Push'}
+          </div>
+        </Tooltip>
+        <Tooltip label="Refresh status" position="bottom" withArrow fz="xs">
+          <RefreshCw
+            size={11}
+            style={{ color: 'var(--phantom-text-muted)', cursor: 'pointer', animation: loading ? 'spin 1s linear infinite' : 'none' }}
+            onClick={refresh}
+          />
+        </Tooltip>
       </div>
 
       {/* File list */}
@@ -244,13 +250,14 @@ export function ChangesView() {
                     <Text fz="0.65rem" fw={700} tt="uppercase" c="var(--phantom-status-success, #22c55e)" style={{ letterSpacing: '0.05em', flex: 1 }}>
                       Staged ({stagedFiles.length})
                     </Text>
-                    <div
-                      onClick={() => { if (worktree) { gitUnstage(worktree.id, stagedFiles.map((f) => f.path)); refresh(); } }}
-                      style={{ cursor: 'pointer', padding: 2 }}
-                      title="Unstage All"
-                    >
-                      <Minus size={11} style={{ color: 'var(--phantom-text-muted)' }} />
-                    </div>
+                    <Tooltip label="Unstage all" position="top" withArrow fz="xs">
+                      <div
+                        onClick={() => { if (worktree) { gitUnstage(worktree.id, stagedFiles.map((f) => f.path)); refresh(); } }}
+                        style={{ cursor: 'pointer', padding: 2 }}
+                      >
+                        <Minus size={11} style={{ color: 'var(--phantom-text-muted)' }} />
+                      </div>
+                    </Tooltip>
                   </div>
                   {stagedFiles.map((file) => (
                     <FileRow key={`staged-${file.path}`} file={file} worktreeId={worktree.id} onStage={() => handleUnstage(file.path)} />
@@ -265,9 +272,11 @@ export function ChangesView() {
                     <Text fz="0.65rem" fw={700} tt="uppercase" c="var(--phantom-accent-gold, #f59e0b)" style={{ letterSpacing: '0.05em', flex: 1 }}>
                       Changes ({unstagedFiles.length})
                     </Text>
-                    <div onClick={handleStageAll} style={{ cursor: 'pointer', padding: 2 }} title="Stage All">
-                      <Plus size={11} style={{ color: 'var(--phantom-text-muted)' }} />
-                    </div>
+                    <Tooltip label="Stage all" position="top" withArrow fz="xs">
+                      <div onClick={handleStageAll} style={{ cursor: 'pointer', padding: 2 }}>
+                        <Plus size={11} style={{ color: 'var(--phantom-text-muted)' }} />
+                      </div>
+                    </Tooltip>
                   </div>
                   {unstagedFiles.map((file) => (
                     <FileRow

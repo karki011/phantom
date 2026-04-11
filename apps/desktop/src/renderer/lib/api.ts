@@ -495,6 +495,8 @@ export interface GitStatusResult {
   modified: number;
   deleted: number;
   untracked: number;
+  ahead: number;
+  behind: number;
   files: GitFileChange[];
 }
 
