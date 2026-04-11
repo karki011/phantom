@@ -179,6 +179,17 @@ export const Cockpit = () => {
                               <Text fz="0.6rem" c="var(--phantom-status-danger, #ef4444)">Graph error</Text>
                             </Group>
                           ) : null}
+                          {/* Playground link for graph-enabled projects */}
+                          {graphStatus.stats && (
+                            <Text
+                              fz="0.6rem"
+                              c="var(--phantom-accent-cyan)"
+                              style={{ cursor: 'pointer', textDecoration: 'underline', marginTop: 2 }}
+                              onClick={(e) => { e.stopPropagation(); navigate('system'); }}
+                            >
+                              Playground
+                            </Text>
+                          )}
                         </div>
                       )}
                     </div>
