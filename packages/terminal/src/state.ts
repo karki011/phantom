@@ -145,48 +145,85 @@ export const attachSession = async (
     }
   }
 
-  // Connect WebSocket
+  // Connect WebSocket with auto-reconnect
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const wsUrl = `${proto}://localhost:${API_PORT}/ws/terminal/${paneId}`;
-  const ws = new WebSocket(wsUrl);
-  session.ws = ws;
 
-  ws.onopen = () => {
-    session.connected = true;
-    const dims = fit.proposeDimensions();
-    const md = options?.metadata;
-    ws.send(JSON.stringify({
-      type: 'init',
-      cwd: options?.cwd || null,
-      cols: dims?.cols ?? 80,
-      rows: dims?.rows ?? 24,
-      initialCommand: options?.initialCommand || undefined,
-      ...(md?.workspaceId && { worktreeId: md.workspaceId }),
-      ...(md?.projectId && { projectId: md.projectId }),
-      ...(md?.recipeCommand && { recipeCommand: md.recipeCommand }),
-      ...(md?.recipeLabel && { recipeLabel: md.recipeLabel }),
-      ...(md?.recipeCategory && { recipeCategory: md.recipeCategory }),
-      ...(md?.port != null && { port: md.port }),
-    }));
-  };
+  let reconnectAttempts = 0;
+  const MAX_RECONNECT_ATTEMPTS = 20;
+  const RECONNECT_DELAYS = [500, 1000, 2000, 3000, 5000]; // escalating backoff
 
-  ws.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data);
-      if (msg.type === 'output') {
-        term.write(msg.data);
-        if (!session.connected) session.connected = true;
+  function connectWs(isReconnect = false) {
+    const ws = new WebSocket(wsUrl);
+    session.ws = ws;
+
+    ws.onopen = () => {
+      session.connected = true;
+      reconnectAttempts = 0;
+      const dims = fit.proposeDimensions();
+      const md = options?.metadata;
+      ws.send(JSON.stringify({
+        type: 'init',
+        cwd: options?.cwd || null,
+        cols: dims?.cols ?? 80,
+        rows: dims?.rows ?? 24,
+        initialCommand: isReconnect ? undefined : (options?.initialCommand || undefined),
+        reconnect: isReconnect || undefined,
+        ...(md?.workspaceId && { worktreeId: md.workspaceId }),
+        ...(md?.projectId && { projectId: md.projectId }),
+        ...(md?.recipeCommand && { recipeCommand: md.recipeCommand }),
+        ...(md?.recipeLabel && { recipeLabel: md.recipeLabel }),
+        ...(md?.recipeCategory && { recipeCategory: md.recipeCategory }),
+        ...(md?.port != null && { port: md.port }),
+      }));
+
+      if (isReconnect) {
+        term.write('\r\n\x1b[32m[Reconnected]\x1b[0m\r\n');
       }
-    } catch { /* ignore */ }
-  };
+    };
 
-  ws.onerror = () => {
-    term.write('\r\n\x1b[33m[Connection error]\x1b[0m\r\n');
-  };
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'output') {
+          term.write(msg.data);
+          if (!session.connected) session.connected = true;
+        }
+      } catch { /* ignore */ }
+    };
 
-  ws.onclose = () => {
-    session.connected = false;
-  };
+    ws.onerror = () => {
+      if (!isReconnect) {
+        term.write('\r\n\x1b[33m[Connection error]\x1b[0m\r\n');
+      }
+    };
+
+    ws.onclose = () => {
+      session.connected = false;
+
+      // Auto-reconnect unless session was disposed
+      if (!sessions.has(paneId)) return;
+      if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        term.write('\r\n\x1b[31m[Connection lost — max reconnect attempts reached. Close and reopen tab.]\x1b[0m\r\n');
+        return;
+      }
+
+      const delay = RECONNECT_DELAYS[Math.min(reconnectAttempts, RECONNECT_DELAYS.length - 1)];
+      reconnectAttempts++;
+
+      if (reconnectAttempts === 1) {
+        term.write('\r\n\x1b[33m[Connection lost — reconnecting...]\x1b[0m');
+      }
+
+      setTimeout(() => {
+        if (sessions.has(paneId)) {
+          connectWs(true);
+        }
+      }, delay);
+    };
+  }
+
+  connectWs(false);
 
   // Wire terminal input — references session.ws so reconnection would work
   term.onData((data) => {
