@@ -13,11 +13,13 @@
   "dependencies": {
     "@phantom-os/db": "workspace:*",
     "@phantom-os/shared": "workspace:*",
+    "chokidar": "^4.0.0",
     "typescript": "~6.0.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.5.2",
+    "@vitest/coverage-v8": "^4.1.4",
     "vitest": "^4.1.4"
   }
 }

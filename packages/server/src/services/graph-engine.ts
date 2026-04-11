@@ -12,6 +12,7 @@ import {
   GraphQuery,
   GraphPersistence,
   IncrementalUpdater,
+  FileWatcher,
   ASTEnricher,
 } from '@phantom-os/ai-engine';
 import type { GraphStats } from '@phantom-os/ai-engine';
@@ -24,6 +25,7 @@ interface ProjectGraphContext {
   builder: GraphBuilder;
   query: GraphQuery;
   updater: IncrementalUpdater;
+  watcher: FileWatcher;
   repoPath: string;
 }
 
@@ -84,6 +86,11 @@ class GraphEngineService {
         `Graph built for ${projectId}: ${stats.fileCount} files, ${stats.totalEdges} edges in ${durationMs}ms`,
       );
 
+      // Start file watcher after initial build completes
+      if (!ctx.watcher.isWatching()) {
+        ctx.watcher.start();
+      }
+
       void this.enrichProject(projectId, repoPath, ctx);
     } catch (err) {
       logger.error('GraphEngine', `Graph build failed for project ${projectId}:`, err);
@@ -104,6 +111,7 @@ class GraphEngineService {
   removeProject(projectId: string): void {
     const ctx = this.instances.get(projectId);
     if (ctx) {
+      ctx.watcher.stop();
       ctx.updater.destroy();
       ctx.graph.clear();
       this.instances.delete(projectId);
@@ -121,6 +129,7 @@ class GraphEngineService {
 
   destroy(): void {
     for (const [, ctx] of this.instances) {
+      ctx.watcher.stop();
       ctx.updater.destroy();
       ctx.graph.clear();
     }
@@ -186,6 +195,7 @@ class GraphEngineService {
       if (ctx) {
         // Persist before evicting
         this.persistGraph(evictId, ctx);
+        ctx.watcher.stop();
         ctx.updater.destroy();
         ctx.graph.clear();
         this.instances.delete(evictId);
@@ -241,8 +251,10 @@ class GraphEngineService {
     const builder = new GraphBuilder(graph, this.eventBus);
     const query = new GraphQuery(graph);
     const updater = new IncrementalUpdater(graph, builder, this.eventBus, projectId, repoPath);
+    const watcher = new FileWatcher(updater, repoPath, this.eventBus);
+    watcher.setProjectId(projectId);
 
-    const ctx: ProjectGraphContext = { graph, builder, query, updater, repoPath };
+    const ctx: ProjectGraphContext = { graph, builder, query, updater, watcher, repoPath };
     this.instances.set(projectId, ctx);
     this.touch(projectId);
     return ctx;
@@ -261,6 +273,11 @@ class GraphEngineService {
     }
     for (const edge of edges) {
       ctx.graph.addEdge(edge);
+    }
+
+    // Start file watcher after hydration
+    if (!ctx.watcher.isWatching()) {
+      ctx.watcher.start();
     }
 
     logger.debug(
