@@ -179,16 +179,31 @@ export const Cockpit = () => {
                               <Text fz="0.6rem" c="var(--phantom-status-danger, #ef4444)">Graph error</Text>
                             </Group>
                           ) : null}
-                          {/* Playground link for graph-enabled projects */}
-                          {graphStatus.stats && (
-                            <Text
-                              fz="0.6rem"
-                              c="var(--phantom-accent-cyan)"
-                              style={{ cursor: 'pointer', textDecoration: 'underline', marginTop: 2 }}
-                              onClick={(e) => { e.stopPropagation(); navigate('system'); }}
-                            >
-                              Playground
-                            </Text>
+                          {/* Graph actions */}
+                          {isGraphProject && (
+                            <Group gap={8} mt={2}>
+                              {graphStatus.stats && (
+                                <Text
+                                  fz="0.6rem"
+                                  c="var(--phantom-accent-cyan)"
+                                  style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                                  onClick={(e) => { e.stopPropagation(); navigate('system'); }}
+                                >
+                                  Playground
+                                </Text>
+                              )}
+                              <Text
+                                fz="0.6rem"
+                                c="var(--phantom-text-muted)"
+                                style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  fetch(`/api/graph/${encodeURIComponent(p.id)}/build`, { method: 'POST' }).catch(() => {});
+                                }}
+                              >
+                                Rebuild
+                              </Text>
+                            </Group>
                           )}
                         </div>
                       )}
