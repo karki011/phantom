@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.13",
+    "@phantom-os/ai-engine": "workspace:*",
     "@phantom-os/db": "workspace:*",
     "@phantom-os/gamification": "workspace:*",
     "@phantom-os/shared": "workspace:*",

@@ -39,6 +39,8 @@ import type { Server } from 'node:http';
 import { setupTerminalWs } from './routes/terminal-ws.js';
 import { terminalRestoreRoutes } from './routes/terminal-restore.js';
 import { systemMetricsRoutes } from './routes/system-metrics.js';
+import { graphRoutes } from './routes/graph.js';
+import { graphEngine } from './services/graph-engine.js';
 import { destroyAllPtys, initDaemonClient, disconnectDaemon } from './terminal-manager.js';
 import { startHistoryWriter, stopHistoryWriter, markAllExited } from './terminal-history.js';
 
@@ -81,6 +83,9 @@ runMigrations(sqlite);
 seedDatabase(db, sqlite);
 seedAchievements();
 
+// Initialize graph engine after migrations so tables exist
+graphEngine.init(broadcast);
+
 // ---------------------------------------------------------------------------
 // Hono App
 // ---------------------------------------------------------------------------
@@ -107,6 +112,7 @@ app.route('/api', plansRoutes);
 app.route('/api', preferencesRoutes);
 app.route('/api', terminalRestoreRoutes);
 app.route('/api', systemMetricsRoutes);
+app.route('/api', graphRoutes);
 
 // SSE endpoint
 app.get('/events', (c) => {
@@ -212,6 +218,7 @@ startActivityPoller(broadcast);
 
 const shutdown = () => {
   logger.info('PhantomOS', 'Shutting down gracefully...');
+  graphEngine.destroy();
   stopHistoryWriter();
   markAllExited();
   disconnectDaemon();
