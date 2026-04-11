@@ -115,6 +115,18 @@ export const setActiveTabAtom = atom(null, (_get, set, tabId: string) => {
   set(paneStateAtom, (s) => ({ ...s, activeTabId: tabId }));
 });
 
+export const renameTabAtom = atom(
+  null,
+  (_get, set, { tabId, label }: { tabId: string; label: string }) => {
+    set(paneStateAtom, (s) => ({
+      ...s,
+      tabs: s.tabs.map((t) =>
+        t.id === tabId ? { ...t, label } : t,
+      ),
+    }));
+  },
+);
+
 export const reorderTabAtom = atom(
   null,
   (_get, set, { from, to }: { from: number; to: number }) => {
