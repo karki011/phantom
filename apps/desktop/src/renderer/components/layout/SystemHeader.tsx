@@ -121,19 +121,49 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
         {metrics && (
           <>
             <Text fz="0.75rem" c="var(--phantom-text-muted)">|</Text>
-            <Group gap="0.375rem">
-              <Cpu size={12} aria-hidden="true" style={{ color: 'var(--phantom-accent-cyan)' }} />
-              <Text fz="0.75rem" c="var(--phantom-text-secondary)">
-                {metrics.cpu.usage}%
-              </Text>
-            </Group>
+            <Tooltip label={`CPU Usage: ${metrics.cpu.usage}%`} position="bottom" withArrow fz="xs">
+              <Group gap="0.375rem" style={{ cursor: 'default' }}>
+                <Cpu size={12} aria-hidden="true" style={{ color: 'var(--phantom-accent-cyan)' }} />
+                <Text fz="0.75rem" c="var(--phantom-text-secondary)">
+                  {metrics.cpu.usage}%
+                </Text>
+              </Group>
+            </Tooltip>
             <Text fz="0.75rem" c="var(--phantom-text-muted)">|</Text>
-            <Group gap="0.375rem">
-              <MemoryStick size={12} aria-hidden="true" style={{ color: 'var(--phantom-accent-gold, var(--phantom-status-warning))' }} />
-              <Text fz="0.75rem" c="var(--phantom-text-secondary)">
-                {formatBytes(metrics.memory.used)}/{formatBytes(metrics.memory.total)} GB
-              </Text>
-            </Group>
+            <Tooltip
+              label={
+                <div>
+                  <div style={{ marginBottom: 4, fontWeight: 600 }}>Memory: {formatBytes(metrics.memory.used)} / {formatBytes(metrics.memory.total)} GB ({metrics.memory.usedPercent}%)</div>
+                  {metrics.swap && metrics.swap.total > 0 && (
+                    <div style={{ marginBottom: 4, fontSize: '0.7rem', opacity: 0.85 }}>
+                      Swap: {metrics.swap.used > 0 ? `${formatBytes(metrics.swap.used)} used of ${formatBytes(metrics.swap.total)}` : 'not in use'} {metrics.swap.used > 0 ? <span style={{ color: '#ef4444' }}>(memory pressure)</span> : <span style={{ color: '#22c55e' }}>(healthy)</span>}
+                    </div>
+                  )}
+                  {metrics.topProcesses?.length > 0 && (
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: 4 }}>
+                      <div style={{ fontSize: '0.65rem', opacity: 0.7, marginBottom: 2 }}>Top Processes</div>
+                      {metrics.topProcesses.map((p) => (
+                        <div key={p.pid} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: '0.7rem' }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>{p.name}</span>
+                          <span style={{ flexShrink: 0, opacity: 0.8 }}>{p.memMB >= 1024 ? `${(p.memMB / 1024).toFixed(1)} GB` : `${p.memMB} MB`}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              }
+              position="bottom"
+              withArrow
+              multiline
+              w={240}
+            >
+              <Group gap="0.375rem" style={{ cursor: 'default' }}>
+                <MemoryStick size={12} aria-hidden="true" style={{ color: 'var(--phantom-accent-gold, var(--phantom-status-warning))' }} />
+                <Text fz="0.75rem" c="var(--phantom-text-secondary)">
+                  {formatBytes(metrics.memory.used)}/{formatBytes(metrics.memory.total)} GB
+                </Text>
+              </Group>
+            </Tooltip>
           </>
         )}
       </Group>

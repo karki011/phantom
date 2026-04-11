@@ -6,10 +6,18 @@
  */
 import { useEffect, useState } from 'react';
 
+export interface TopProcess {
+  name: string;
+  memMB: number;
+  pid: number;
+}
+
 export interface SystemMetrics {
   cpu: { usage: number; cores: number };
   memory: { used: number; total: number; usedPercent: number };
+  swap: { used: number; total: number };
   loadAvg: number[];
+  topProcesses: TopProcess[];
 }
 
 const POLL_INTERVAL_MS = 3_000;
