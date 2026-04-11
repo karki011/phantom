@@ -179,32 +179,30 @@ export const Cockpit = () => {
                               <Text fz="0.7rem" c="var(--phantom-status-danger, #ef4444)">Graph error</Text>
                             </Group>
                           ) : null}
-                          {/* Graph actions */}
-                          {isGraphProject && (
-                            <Group gap={10} mt={3}>
-                              {graphStatus.stats && (
-                                <Text
-                                  fz="0.7rem"
-                                  c="var(--phantom-accent-cyan)"
-                                  style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                                  onClick={(e) => { e.stopPropagation(); navigate('system'); }}
-                                >
-                                  Playground
-                                </Text>
-                              )}
+                          {/* Graph actions — always show Rebuild, Playground only when graph has data */}
+                          <Group gap={10} mt={3}>
+                            {isGraphProject && graphStatus.stats && (
                               <Text
                                 fz="0.7rem"
-                                c="var(--phantom-text-muted)"
+                                c="var(--phantom-accent-cyan)"
                                 style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  fetch(`/api/graph/${encodeURIComponent(p.id)}/build`, { method: 'POST' }).catch(() => {});
-                                }}
+                                onClick={(e) => { e.stopPropagation(); navigate('system'); }}
                               >
-                                Rebuild
+                                Playground
                               </Text>
-                            </Group>
-                          )}
+                            )}
+                            <Text
+                              fz="0.7rem"
+                              c="var(--phantom-text-muted)"
+                              style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                fetch(`/api/graph/${encodeURIComponent(p.id)}/build`, { method: 'POST' }).catch(() => {});
+                              }}
+                            >
+                              {isGraphProject ? 'Rebuild' : 'Build Graph'}
+                            </Text>
+                          </Group>
                         </div>
                       )}
                     </div>
