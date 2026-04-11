@@ -3,6 +3,7 @@
  * @author Subash Karki
  */
 export { TerminalPane } from './TerminalPane.js';
+export { TaskOverlayPanel } from './TaskOverlayPanel.js';
 export { useTerminal } from './useTerminal.js';
 export { getTerminalTheme } from './theme.js';
 export {

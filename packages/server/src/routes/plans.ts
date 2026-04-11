@@ -87,6 +87,47 @@ function toClientPlan({ _content, ...rest }: CachedPlan): PlanFile {
 
 export const plansRoutes = new Hono();
 
+/** GET /plans/by-cwd?cwd=<path> — List plan files matching a working directory */
+plansRoutes.get('/plans/by-cwd', async (c) => {
+  const cwd = c.req.query('cwd');
+  if (!cwd) return c.json({ branch: [], project: [] });
+
+  const allPlans = await scanPlans();
+
+  // Look up project by matching repo path
+  const allProjects = db.select().from(projects).all();
+  const project = allProjects.find((p) => p.repoPath && cwd.startsWith(p.repoPath));
+
+  // Build search terms from cwd and project
+  const branchTerms: string[] = [cwd.toLowerCase()];
+
+  // Look up worktree by path for branch name
+  const allWorktrees = db.select().from(worktrees).all();
+  const worktree = allWorktrees.find((w) => w.worktreePath && cwd.startsWith(w.worktreePath));
+  if (worktree?.branch) branchTerms.push(worktree.branch.toLowerCase());
+
+  const projectTerms: string[] = [];
+  if (project?.name) projectTerms.push(project.name.toLowerCase());
+  if (project?.repoPath) projectTerms.push(project.repoPath.toLowerCase());
+
+  const matchesTerm = (content: string, terms: string[]) =>
+    terms.some((term) => term.length >= 6 && content.includes(term));
+
+  const branchPlans: PlanFile[] = [];
+  const projectPlans: PlanFile[] = [];
+
+  for (const plan of allPlans) {
+    const content = plan._content.toLowerCase();
+    if (matchesTerm(content, branchTerms)) {
+      branchPlans.push(toClientPlan(plan));
+    } else if (matchesTerm(content, projectTerms)) {
+      projectPlans.push(toClientPlan(plan));
+    }
+  }
+
+  return c.json({ branch: branchPlans, project: projectPlans });
+});
+
 /** GET /plans?worktreeId=<id> — List plan files matching a worktree */
 plansRoutes.get('/plans', async (c) => {
   const worktreeId = c.req.query('worktreeId');

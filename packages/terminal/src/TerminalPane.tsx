@@ -7,6 +7,7 @@ import { useCallback, useRef, useState } from 'react';
 import '@xterm/xterm/css/xterm.css';
 import { useTerminal } from './useTerminal.js';
 import { getSession } from './state.js';
+import { TaskOverlayPanel } from './TaskOverlayPanel.js';
 
 interface TerminalPaneProps {
   paneId: string;
@@ -175,6 +176,9 @@ export const TerminalPane = ({
         data-pane-id={paneId}
         data-cold-restore={coldRestore ? 'true' : undefined}
       />
+
+      {/* Task overlay — only renders when incomplete tasks exist */}
+      {cwd && <TaskOverlayPanel cwd={cwd} />}
 
       {/* Inline keyframes for banner animation */}
       <style>{`

@@ -68,18 +68,24 @@ export const attachSession = async (
     // Move wrapper back into the visible container
     existing.container = container;
     container.appendChild(existing.wrapper);
-    existing.fit.fit();
 
-    // Repaint canvas — renderer skips frames while wrapper is detached
-    existing.term.refresh(0, existing.term.rows - 1);
+    // Defer fit() until after browser layout — calling it synchronously
+    // after appendChild measures the container before it has real dimensions,
+    // which collapses the PTY to ~8 cols.
+    requestAnimationFrame(() => {
+      existing.fit.fit();
 
-    // Send resize so server/PTY knows current dimensions
-    if (existing.ws && existing.ws.readyState === WebSocket.OPEN) {
-      const dims = existing.fit.proposeDimensions();
-      if (dims) {
-        existing.ws.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
+      // Repaint canvas — renderer skips frames while wrapper is detached
+      existing.term.refresh(0, existing.term.rows - 1);
+
+      // Send resize so server/PTY knows current dimensions
+      if (existing.ws && existing.ws.readyState === WebSocket.OPEN) {
+        const dims = existing.fit.proposeDimensions();
+        if (dims) {
+          existing.ws.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
+        }
       }
-    }
+    });
 
     // Resume ResizeObserver
     existing.observer?.disconnect();
@@ -127,7 +133,9 @@ export const attachSession = async (
   // Open xterm into the persistent wrapper (done ONCE)
   container.appendChild(wrapper);
   term.open(wrapper);
-  fit.fit();
+  // Defer initial fit — synchronous fit() before browser layout yields ~8 cols.
+  // The WebSocket onopen handler will call fit() again before sending init dims.
+  requestAnimationFrame(() => fit.fit());
 
   // If cold restore, fetch and write scrollback BEFORE connecting WebSocket
   if (options?.coldRestore) {
@@ -160,6 +168,9 @@ export const attachSession = async (
     ws.onopen = () => {
       session.connected = true;
       reconnectAttempts = 0;
+      // Re-fit to ensure accurate dimensions — the deferred rAF fit may
+      // not have fired yet if the WebSocket connected very quickly.
+      fit.fit();
       const dims = fit.proposeDimensions();
       const md = options?.metadata;
       ws.send(JSON.stringify({
