@@ -284,10 +284,13 @@ export const SessionViewer = () => {
     return () => clearInterval(interval);
   }, [isActive, sessionId]);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll only if already near the bottom (within 150px)
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const el = scrollRef.current;
+    if (!el) return;
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+    if (isNearBottom) {
+      el.scrollTop = el.scrollHeight;
     }
   }, [messages.length]);
 
@@ -338,19 +341,18 @@ export const SessionViewer = () => {
   const visibleMessages = [...messages].reverse().filter(isNonEmpty);
 
   return (
-    <div style={{ height: '100%', maxHeight: 'calc(100vh - 90px)', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 'var(--mantine-spacing-md) var(--mantine-spacing-lg)' }}>
+    <div style={{ height: 'calc(100vh - 150px)', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 'var(--mantine-spacing-md) var(--mantine-spacing-lg)', overflow: 'hidden' }}>
       {/* Laptop frame */}
       <div
         style={{
           maxWidth: 780,
           width: '100%',
-          flex: 1,
-          minHeight: 0,
+          height: '100%',
           display: 'flex',
           flexDirection: 'column',
           borderRadius: 12,
           border: '1px solid var(--phantom-border-subtle)',
-          overflow: 'auto',
+          overflow: 'hidden',
           backgroundColor: 'var(--phantom-surface-base, #111)',
           boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
         }}
