@@ -37,9 +37,12 @@ taskRoutes.get('/tasks/by-cwd', (c) => {
 
   if (matchingSessions.length === 0) return c.json([]);
 
-  // Include: all active sessions + the most recent completed session
+  // Include: all active sessions + most recent completed session (within 24h)
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   const activeSessions = matchingSessions.filter((s) => s.status === 'active');
-  const latestCompleted = matchingSessions.find((s) => s.status !== 'active');
+  const latestCompleted = matchingSessions.find(
+    (s) => s.status !== 'active' && (s.startedAt ?? 0) > cutoff,
+  );
   const relevantIds = new Set([
     ...activeSessions.map((s) => s.id),
     ...(latestCompleted ? [latestCompleted.id] : []),
