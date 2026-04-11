@@ -129,6 +129,16 @@ export function TabBar({ paneMenu }: TabBarProps) {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Tab context menu state
+  const [ctxTabId, setCtxTabId] = useState<string | null>(null);
+  const [ctxPos, setCtxPos] = useState({ x: 0, y: 0 });
+  const ctxRef = useRef<HTMLDivElement>(null);
+
+  // Inline rename state
+  const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
   // Close menu on outside click
   useEffect(() => {
     if (!menuOpen) return;
@@ -140,6 +150,57 @@ export function TabBar({ paneMenu }: TabBarProps) {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [menuOpen]);
+
+  // Close tab context menu on outside click
+  useEffect(() => {
+    if (!ctxTabId) return;
+    const handler = (e: MouseEvent) => {
+      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) {
+        setCtxTabId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [ctxTabId]);
+
+  // Focus rename input when it appears
+  useEffect(() => {
+    if (renamingTabId && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [renamingTabId]);
+
+  const handleTabContextMenu = useCallback(
+    (e: React.MouseEvent, tabId: string) => {
+      e.preventDefault();
+      setCtxPos({ x: e.clientX, y: e.clientY });
+      setCtxTabId(tabId);
+    },
+    [],
+  );
+
+  const startRename = useCallback(
+    (tabId: string) => {
+      const tab = tabs.find((t) => t.id === tabId);
+      if (!tab) return;
+      setRenameValue(tab.label);
+      setRenamingTabId(tabId);
+      setCtxTabId(null);
+    },
+    [tabs],
+  );
+
+  const commitRename = useCallback(() => {
+    if (renamingTabId && renameValue.trim()) {
+      store.renameTab(renamingTabId, renameValue.trim());
+    }
+    setRenamingTabId(null);
+  }, [renamingTabId, renameValue, store]);
+
+  const cancelRename = useCallback(() => {
+    setRenamingTabId(null);
+  }, []);
 
   const handleOpenPane = useCallback(
     (kind: string) => {
@@ -195,16 +256,43 @@ export function TabBar({ paneMenu }: TabBarProps) {
               : {}),
           }}
           onClick={() => store.setActiveTab(t.id)}
-          draggable
+          onContextMenu={(e) => handleTabContextMenu(e, t.id)}
+          onDoubleClick={() => startRename(t.id)}
+          draggable={renamingTabId !== t.id}
           onDragStart={(e) => onTabDragStart(e, i)}
           onDragOver={(e) => onTabDragOver(e, i)}
           onDrop={(e) => onTabDrop(e, i)}
           onDragEnd={onTabDragEnd}
         >
-          <span
-            title={t.label}
-            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-          >{t.label}</span>
+          {renamingTabId === t.id ? (
+            <input
+              ref={renameInputRef}
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename();
+                if (e.key === 'Escape') cancelRename();
+              }}
+              onBlur={commitRename}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(99,102,241,0.5)',
+                borderRadius: 3,
+                color: '#fff',
+                fontSize: 12,
+                padding: '1px 4px',
+                outline: 'none',
+                width: '100%',
+                maxWidth: 140,
+              }}
+            />
+          ) : (
+            <span
+              title={t.label}
+              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            >{t.label}</span>
+          )}
           {!Object.values(t.panes).some((p) => p.kind === 'workspace-home') && (
             <button
               type="button"
@@ -252,6 +340,45 @@ export function TabBar({ paneMenu }: TabBarProps) {
           </div>
         )}
       </div>
+      {/* Tab context menu */}
+      {ctxTabId && (
+        <div
+          ref={ctxRef}
+          style={{
+            position: 'fixed',
+            left: ctxPos.x,
+            top: ctxPos.y,
+            zIndex: 9999,
+            background: 'var(--pane-header-bg, #1a1a2e)',
+            border: '1px solid var(--pane-border, rgba(255,255,255,0.12))',
+            borderRadius: 6,
+            padding: '4px 0',
+            minWidth: 140,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          }}
+        >
+          <button
+            type="button"
+            style={menuItemStyle}
+            onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
+            onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
+            onClick={() => startRename(ctxTabId)}
+          >
+            Rename
+          </button>
+          {!tabs.find((t) => t.id === ctxTabId && Object.values(t.panes).some((p) => p.kind === 'workspace-home')) && (
+            <button
+              type="button"
+              style={{ ...menuItemStyle, color: 'rgba(255,100,100,0.9)' }}
+              onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
+              onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
+              onClick={() => { store.removeTab(ctxTabId); setCtxTabId(null); }}
+            >
+              Close Tab
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
