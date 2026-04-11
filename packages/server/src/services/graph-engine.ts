@@ -83,6 +83,12 @@ class GraphEngineService {
     try {
       await ctx.builder.buildProject(projectId, repoPath);
 
+      // Guard: project may have been removed while build was running
+      if (!this.instances.has(projectId)) {
+        logger.info('GraphEngine', `Project ${projectId} removed during build — skipping persist`);
+        return;
+      }
+
       // Persist to SQLite after build
       const allNodes = ctx.graph.getAllNodes();
       const allEdges = ctx.graph.getAllEdges();
@@ -177,6 +183,12 @@ class GraphEngineService {
     try {
       const enricher = new ASTEnricher(ctx.graph, this.eventBus);
       await enricher.enrichProject(projectId, repoPath);
+
+      // Guard: project may have been removed during enrichment
+      if (!this.instances.has(projectId)) {
+        logger.info('GraphEngine', `Project ${projectId} removed during enrichment — skipping persist`);
+        return;
+      }
 
       // Persist enriched nodes/edges to SQLite
       const allNodes = ctx.graph.getAllNodes();
