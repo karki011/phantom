@@ -117,7 +117,7 @@ export const Cockpit = () => {
                             <>
                               <Group gap={4} mb={2}>
                                 <GitGraph size={9} style={{ color: 'var(--phantom-accent-cyan)', animation: 'pulse-graph 1.2s ease-in-out infinite' }} />
-                                <Text fz="0.6rem" c="var(--phantom-text-muted)">
+                                <Text fz="0.7rem" c="var(--phantom-text-muted)">
                                   Mapping {graphStatus.progress.current.toLocaleString()}/{graphStatus.progress.total.toLocaleString()}
                                 </Text>
                               </Group>
@@ -131,19 +131,19 @@ export const Cockpit = () => {
                             </>
                           ) : graphStatus.stats ? (
                             <Group gap={6}>
-                              <Group gap={3}>
-                                <GitGraph size={9} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />
-                                <Text fz="0.6rem" c="var(--phantom-text-muted)">
+                              <Group gap={4}>
+                                <GitGraph size={11} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />
+                                <Text fz="0.7rem" c="var(--phantom-text-secondary)">
                                   {graphStatus.stats.files.toLocaleString()} files
                                 </Text>
                               </Group>
-                              <Text fz="0.6rem" c="var(--phantom-border-subtle)">|</Text>
-                              <Text fz="0.6rem" c="var(--phantom-text-muted)">
+                              <Text fz="0.7rem" c="var(--phantom-border-subtle)">|</Text>
+                              <Text fz="0.7rem" c="var(--phantom-text-secondary)">
                                 {graphStatus.stats.edges.toLocaleString()} connections
                               </Text>
                               <Popover width={260} position="bottom" shadow="md" withArrow>
                                 <Popover.Target>
-                                  <Info size={10} style={{ color: 'var(--phantom-text-muted)', cursor: 'pointer', flexShrink: 0 }} />
+                                  <Info size={11} style={{ color: 'var(--phantom-text-muted)', cursor: 'pointer', flexShrink: 0 }} />
                                 </Popover.Target>
                                 <Popover.Dropdown
                                   style={{
@@ -174,17 +174,17 @@ export const Cockpit = () => {
                               </Popover>
                             </Group>
                           ) : graphStatus.phase === 'error' ? (
-                            <Group gap={3}>
-                              <GitGraph size={9} style={{ color: 'var(--phantom-status-danger, #ef4444)' }} />
-                              <Text fz="0.6rem" c="var(--phantom-status-danger, #ef4444)">Graph error</Text>
+                            <Group gap={4}>
+                              <GitGraph size={11} style={{ color: 'var(--phantom-status-danger, #ef4444)' }} />
+                              <Text fz="0.7rem" c="var(--phantom-status-danger, #ef4444)">Graph error</Text>
                             </Group>
                           ) : null}
                           {/* Graph actions */}
                           {isGraphProject && (
-                            <Group gap={8} mt={2}>
+                            <Group gap={10} mt={3}>
                               {graphStatus.stats && (
                                 <Text
-                                  fz="0.6rem"
+                                  fz="0.7rem"
                                   c="var(--phantom-accent-cyan)"
                                   style={{ cursor: 'pointer', textDecoration: 'underline' }}
                                   onClick={(e) => { e.stopPropagation(); navigate('system'); }}
@@ -193,7 +193,7 @@ export const Cockpit = () => {
                                 </Text>
                               )}
                               <Text
-                                fz="0.6rem"
+                                fz="0.7rem"
                                 c="var(--phantom-text-muted)"
                                 style={{ cursor: 'pointer', textDecoration: 'underline' }}
                                 onClick={(e) => {
