@@ -91,8 +91,8 @@ export const App = () => {
   useEffect(() => {
     if (isConnected && !splashDone) {
       setSplashStatus('Ready');
-      // Hold splash for 5s minimum so users see the branding
-      const timer = setTimeout(() => setSplashDone(true), 5000);
+      // Hold splash for 10s so users see the branding
+      const timer = setTimeout(() => setSplashDone(true), 10000);
       return () => clearTimeout(timer);
     }
   }, [isConnected, splashDone]);
