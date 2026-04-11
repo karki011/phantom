@@ -5,12 +5,12 @@
  */
 import { ScrollArea, Text, Textarea } from '@mantine/core';
 import { useAtomValue } from 'jotai';
-import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw, Plus, Minus, Check, ArrowUp, ArrowDown } from 'lucide-react';
+import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw, Plus, Minus, Check, ArrowUp, ArrowDown, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
 import { activeWorktreeAtom } from '../../atoms/worktrees';
 import type { GitFileChange, GitStatusResult } from '../../lib/api';
-import { fetchApi, getGitStatus, gitStage, gitUnstage, gitStageAll, gitCommit, gitPush, gitPull } from '../../lib/api';
+import { fetchApi, getGitStatus, gitStage, gitUnstage, gitStageAll, gitCommit, gitPush, gitPull, gitDiscard, gitClean } from '../../lib/api';
 
 const STATUS_CONFIG = {
   modified: { label: 'Modified', icon: FilePen, color: 'var(--phantom-accent-gold, #f59e0b)' },
@@ -20,10 +20,11 @@ const STATUS_CONFIG = {
   untracked: { label: 'Untracked', icon: FileQuestion, color: 'var(--phantom-text-muted, #888)' },
 } as const;
 
-function FileRow({ file, worktreeId, onStage }: {
+function FileRow({ file, worktreeId, onStage, onDiscard }: {
   file: GitFileChange;
   worktreeId: string;
   onStage?: () => void;
+  onDiscard?: () => void;
 }) {
   const store = usePaneStore();
   const config = STATUS_CONFIG[file.status];
@@ -68,6 +69,15 @@ function FileRow({ file, worktreeId, onStage }: {
         <Text fz="0.6rem" c="var(--phantom-text-muted)" truncate style={{ maxWidth: 80 }}>
           {dirPath}
         </Text>
+      )}
+      {onDiscard && (
+        <div
+          onClick={(e) => { e.stopPropagation(); onDiscard(); }}
+          style={{ cursor: 'pointer', padding: 2, borderRadius: 3, display: 'flex', alignItems: 'center' }}
+          title="Discard changes"
+        >
+          <Undo2 size={12} style={{ color: 'var(--phantom-status-error, #ef4444)' }} />
+        </div>
       )}
       {onStage && (
         <div
@@ -124,6 +134,16 @@ export function ChangesView() {
     refresh();
   }, [worktree?.id, refresh]);
 
+  const handleDiscard = useCallback(async (path: string, isUntracked: boolean) => {
+    if (!worktree) return;
+    if (isUntracked) {
+      await gitClean(worktree.id, [path]);
+    } else {
+      await gitDiscard(worktree.id, [path]);
+    }
+    refresh();
+  }, [worktree?.id, refresh]);
+
   const handleStageAll = useCallback(async () => {
     if (!worktree) return;
     await gitStageAll(worktree.id);
@@ -177,18 +197,30 @@ export function ChangesView() {
         <Text fz="0.65rem" c="var(--phantom-text-muted)">
           {totalChanges} change{totalChanges !== 1 ? 's' : ''}
         </Text>
-        <ArrowDown
-          size={11}
-          style={{ color: pulling ? 'var(--phantom-accent-cyan)' : 'var(--phantom-text-muted)', cursor: pulling ? 'default' : 'pointer' }}
+        <div
           onClick={handlePull}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 2, cursor: pulling ? 'default' : 'pointer',
+            color: pulling ? 'var(--phantom-accent-cyan)' : 'var(--phantom-text-muted)',
+            padding: '1px 4px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 600,
+          }}
           title="Pull"
-        />
-        <ArrowUp
-          size={11}
-          style={{ color: pushing ? 'var(--phantom-accent-cyan)' : 'var(--phantom-text-muted)', cursor: pushing ? 'default' : 'pointer' }}
+        >
+          <ArrowDown size={10} />
+          {pulling ? 'Pulling...' : 'Pull'}
+        </div>
+        <div
           onClick={handlePush}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 2, cursor: pushing ? 'default' : 'pointer',
+            color: pushing ? 'var(--phantom-accent-cyan)' : 'var(--phantom-text-muted)',
+            padding: '1px 4px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 600,
+          }}
           title="Push"
-        />
+        >
+          <ArrowUp size={10} />
+          {pushing ? 'Pushing...' : 'Push'}
+        </div>
         <RefreshCw
           size={11}
           style={{ color: 'var(--phantom-text-muted)', cursor: 'pointer', animation: loading ? 'spin 1s linear infinite' : 'none' }}
@@ -238,7 +270,13 @@ export function ChangesView() {
                     </div>
                   </div>
                   {unstagedFiles.map((file) => (
-                    <FileRow key={`unstaged-${file.path}`} file={file} worktreeId={worktree.id} onStage={() => handleStage(file.path)} />
+                    <FileRow
+                      key={`unstaged-${file.path}`}
+                      file={file}
+                      worktreeId={worktree.id}
+                      onStage={() => handleStage(file.path)}
+                      onDiscard={() => handleDiscard(file.path, file.status === 'untracked')}
+                    />
                   ))}
                 </div>
               )}

@@ -537,6 +537,18 @@ export const gitPull = (worktreeId: string): Promise<{ ok: boolean }> =>
     body: JSON.stringify({ action: 'pull' }),
   });
 
+export const gitDiscard = (worktreeId: string, paths: string[]): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'discard', paths }),
+  });
+
+export const gitClean = (worktreeId: string, paths: string[]): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'clean', paths }),
+  });
+
 // ---------------------------------------------------------------------------
 // User Preferences
 // ---------------------------------------------------------------------------

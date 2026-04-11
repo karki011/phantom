@@ -337,7 +337,7 @@ worktreeRoutes.post('/worktrees/:id/git', async (c) => {
   }>();
   const { action } = body;
 
-  const allowed = ['fetch', 'pull', 'push', 'stage', 'unstage', 'stage-all', 'commit'];
+  const allowed = ['fetch', 'pull', 'push', 'stage', 'unstage', 'stage-all', 'commit', 'discard', 'clean'];
   if (!allowed.includes(action)) {
     return c.json({ error: `Invalid action: ${action}. Allowed: ${allowed.join(', ')}` }, 400);
   }
@@ -367,6 +367,18 @@ worktreeRoutes.post('/worktrees/:id/git', async (c) => {
         if (!body.message?.trim()) return c.json({ error: 'message required for commit' }, 400);
         const safeMsg = body.message.replace(/"/g, '\\"');
         cmd = `git commit -m "${safeMsg}"`;
+        break;
+      }
+      case 'discard': {
+        if (!body.paths?.length) return c.json({ error: 'paths required for discard' }, 400);
+        const safePaths = body.paths.map((p) => `"${p.replace(/"/g, '\\"')}"`).join(' ');
+        cmd = `git checkout -- ${safePaths}`;
+        break;
+      }
+      case 'clean': {
+        if (!body.paths?.length) return c.json({ error: 'paths required for clean' }, 400);
+        const safePaths = body.paths.map((p) => `"${p.replace(/"/g, '\\"')}"`).join(' ');
+        cmd = `git clean -f -- ${safePaths}`;
         break;
       }
       default:
