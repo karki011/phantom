@@ -337,7 +337,7 @@ worktreeRoutes.post('/worktrees/:id/git', async (c) => {
   }>();
   const { action } = body;
 
-  const allowed = ['fetch', 'pull', 'push', 'stage', 'unstage', 'stage-all', 'commit', 'discard', 'clean'];
+  const allowed = ['fetch', 'pull', 'push', 'stage', 'unstage', 'stage-all', 'commit', 'discard', 'clean', 'undo-commit', 'stash', 'stash-pop'];
   if (!allowed.includes(action)) {
     return c.json({ error: `Invalid action: ${action}. Allowed: ${allowed.join(', ')}` }, 400);
   }
@@ -381,6 +381,15 @@ worktreeRoutes.post('/worktrees/:id/git', async (c) => {
         cmd = `git clean -f -- ${safePaths}`;
         break;
       }
+      case 'undo-commit':
+        cmd = 'git reset --soft HEAD~1';
+        break;
+      case 'stash':
+        cmd = 'git stash';
+        break;
+      case 'stash-pop':
+        cmd = 'git stash pop';
+        break;
       default:
         cmd = `git ${action}`;
     }

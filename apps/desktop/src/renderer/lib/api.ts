@@ -551,6 +551,30 @@ export const gitClean = (worktreeId: string, paths: string[]): Promise<{ ok: boo
     body: JSON.stringify({ action: 'clean', paths }),
   });
 
+export const gitUndoCommit = (worktreeId: string): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'undo-commit' }),
+  });
+
+export const gitStash = (worktreeId: string): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'stash' }),
+  });
+
+export const gitStashPop = (worktreeId: string): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'stash-pop' }),
+  });
+
+export const gitFetch = (worktreeId: string): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'fetch' }),
+  });
+
 // ---------------------------------------------------------------------------
 // User Preferences
 // ---------------------------------------------------------------------------

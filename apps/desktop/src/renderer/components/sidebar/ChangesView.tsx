@@ -3,14 +3,14 @@
  * Shows staged and unstaged files with stage/unstage actions and commit input.
  * @author Subash Karki
  */
-import { ScrollArea, Text, Textarea, Tooltip } from '@mantine/core';
+import { Menu, ScrollArea, Text, Textarea, Tooltip } from '@mantine/core';
 import { useAtomValue } from 'jotai';
-import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw, Plus, Minus, Check, ArrowUp, ArrowDown, Undo2 } from 'lucide-react';
+import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw, Plus, Minus, Check, ArrowUp, ArrowDown, Undo2, MoreVertical, RotateCcw, Archive, ArchiveRestore, Download } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
 import { activeWorktreeAtom } from '../../atoms/worktrees';
 import type { GitFileChange, GitStatusResult } from '../../lib/api';
-import { fetchApi, getGitStatus, gitStage, gitUnstage, gitStageAll, gitCommit, gitPush, gitPull, gitDiscard, gitClean } from '../../lib/api';
+import { fetchApi, getGitStatus, gitStage, gitUnstage, gitStageAll, gitCommit, gitPush, gitPull, gitDiscard, gitClean, gitUndoCommit, gitStash, gitStashPop, gitFetch } from '../../lib/api';
 
 const STATUS_CONFIG = {
   modified: { label: 'Modified', icon: FilePen, color: 'var(--phantom-accent-gold, #f59e0b)' },
@@ -181,6 +181,30 @@ export function ChangesView() {
     finally { setPulling(false); }
   }, [worktree?.id, pulling, refresh]);
 
+  const handleUndoCommit = useCallback(async () => {
+    if (!worktree) return;
+    await gitUndoCommit(worktree.id);
+    refresh();
+  }, [worktree?.id, refresh]);
+
+  const handleStash = useCallback(async () => {
+    if (!worktree) return;
+    await gitStash(worktree.id);
+    refresh();
+  }, [worktree?.id, refresh]);
+
+  const handleStashPop = useCallback(async () => {
+    if (!worktree) return;
+    await gitStashPop(worktree.id);
+    refresh();
+  }, [worktree?.id, refresh]);
+
+  const handleFetch = useCallback(async () => {
+    if (!worktree) return;
+    await gitFetch(worktree.id);
+    refresh();
+  }, [worktree?.id, refresh]);
+
   if (!worktree) {
     return (
       <Text fz="0.75rem" c="var(--phantom-text-muted)" ta="center" py="xl" px="sm">
@@ -232,6 +256,45 @@ export function ChangesView() {
             onClick={refresh}
           />
         </Tooltip>
+        <Menu position="bottom-end" withArrow shadow="md" width={180}>
+          <Menu.Target>
+            <div style={{ cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }}>
+              <MoreVertical size={11} style={{ color: 'var(--phantom-text-muted)' }} />
+            </div>
+          </Menu.Target>
+          <Menu.Dropdown styles={{ dropdown: { backgroundColor: 'var(--phantom-surface-elevated, #2a2a2a)', border: '1px solid var(--phantom-border-subtle)' } }}>
+            <Menu.Item
+              leftSection={<RotateCcw size={13} />}
+              onClick={handleUndoCommit}
+              styles={{ item: { fontSize: '0.73rem', color: 'var(--phantom-text-primary)' } }}
+            >
+              Undo last commit
+            </Menu.Item>
+            <Menu.Divider />
+            <Menu.Item
+              leftSection={<Archive size={13} />}
+              onClick={handleStash}
+              styles={{ item: { fontSize: '0.73rem', color: 'var(--phantom-text-primary)' } }}
+            >
+              Stash changes
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<ArchiveRestore size={13} />}
+              onClick={handleStashPop}
+              styles={{ item: { fontSize: '0.73rem', color: 'var(--phantom-text-primary)' } }}
+            >
+              Pop stash
+            </Menu.Item>
+            <Menu.Divider />
+            <Menu.Item
+              leftSection={<Download size={13} />}
+              onClick={handleFetch}
+              styles={{ item: { fontSize: '0.73rem', color: 'var(--phantom-text-primary)' } }}
+            >
+              Fetch remote
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
       </div>
 
       {/* File list */}
