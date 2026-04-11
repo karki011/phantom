@@ -4,7 +4,7 @@
  *
  * @author Subash Karki
  */
-import { Paper, Stack, Text, ThemeIcon } from '@mantine/core';
+import { Group, Paper, Text, ThemeIcon } from '@mantine/core';
 import type { KeyboardEvent, ReactNode } from 'react';
 
 export interface CockpitStatCardProps {
@@ -35,7 +35,7 @@ export const CockpitStatCard = ({
 
   return (
     <Paper
-      p="xl"
+      p="sm"
       bg="var(--phantom-surface-card)"
       role="button"
       tabIndex={0}
@@ -46,7 +46,7 @@ export const CockpitStatCard = ({
         border: '0.0625rem solid var(--phantom-border-subtle)',
         cursor: 'pointer',
         transition: 'transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease',
-        minHeight: '8rem',
+        minHeight: '3.5rem',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-0.25rem)';
@@ -60,31 +60,30 @@ export const CockpitStatCard = ({
       }}
       data-testid="cockpit-stat-card"
     >
-      <Stack gap="md" align="center" justify="center" h="100%">
-        <ThemeIcon size={48} variant="light" color={color} radius="xl">
+      <Group gap="sm" align="center" wrap="nowrap">
+        <ThemeIcon size={32} variant="light" color={color} radius="xl">
           {icon}
         </ThemeIcon>
-        <Stack gap={4} align="center">
+        <div>
           <Text
             ff="Orbitron, sans-serif"
-            fz="2rem"
+            fz="1.15rem"
             fw={900}
             c="var(--phantom-text-primary)"
             lh={1}
-            ta="center"
           >
             {displayValue}
           </Text>
-          <Text fz="0.8125rem" fw={500} c="var(--phantom-text-secondary)" tt="uppercase" ta="center">
+          <Text fz="0.7rem" fw={500} c="var(--phantom-text-secondary)" tt="uppercase">
             {label}
           </Text>
           {sublabel && (
-            <Text fz="0.75rem" c="var(--phantom-text-muted)" ta="center">
+            <Text fz="0.65rem" c="var(--phantom-text-muted)">
               {sublabel}
             </Text>
           )}
-        </Stack>
-      </Stack>
+        </div>
+      </Group>
     </Paper>
   );
 };

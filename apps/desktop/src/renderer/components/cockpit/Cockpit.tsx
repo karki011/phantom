@@ -1,30 +1,24 @@
 /**
  * Cockpit Component
- * Main dashboard view with stat cards grid and live activity feed
+ * Main dashboard view with two-column layout: Live Feed + Projects & context
  *
  * @author Subash Karki
  */
-import { SimpleGrid, Stack } from '@mantine/core';
+import { Paper, Stack, Text, Group } from '@mantine/core';
 import { useAtomValue } from 'jotai';
 import {
   Activity,
-  CheckSquare,
-  Coins,
-  Flame,
-  Scroll,
+  FolderGit2,
+  GitBranch,
   Shield,
-  Target,
-  Trophy,
 } from 'lucide-react';
 
-import { achievementsAtom } from '../../atoms/achievements';
+import { projectsAtom } from '../../atoms/worktrees';
 import { useHunter } from '../../hooks/useHunter';
 import { usePreferences } from '../../hooks/usePreferences';
-import { useQuests } from '../../hooks/useQuests';
 import { useRouter } from '../../hooks/useRouter';
 import { useSessions } from '../../hooks/useSessions';
 import { LiveFeed } from './LiveFeed';
-import { CockpitStatCard } from './StatCard';
 
 const formatTokens = (count: number): string => {
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
@@ -40,9 +34,8 @@ const formatCost = (micros: number): string => {
 export const Cockpit = () => {
   const { navigate } = useRouter();
   const { profile } = useHunter();
-  const { active } = useSessions();
-  const { quests } = useQuests();
-  const achievements = useAtomValue(achievementsAtom);
+  const { active, recent } = useSessions();
+  const projects = useAtomValue(projectsAtom);
   const { isEnabled } = usePreferences();
   const showGamification = isEnabled('gamification');
 
@@ -52,87 +45,131 @@ export const Cockpit = () => {
   );
   const totalCostMicros = active.reduce((sum, s) => sum + s.estimatedCostMicros, 0);
   const totalTasks = profile?.totalTasks ?? 0;
-  const unlockedCount = achievements.filter((a) => a.unlockedAt !== null).length;
-  const completedQuests = quests.filter((q) => q.completed > 0).length;
+  const totalSessions = (profile?.totalSessions ?? 0);
+  const avgTokensPerSession = active.length > 0
+    ? formatTokens(Math.round(totalTokens / active.length))
+    : '0';
 
   return (
-    <Stack gap="lg" data-testid="cockpit-view">
-      <SimpleGrid
-        cols={{ base: 2, sm: 2, md: 4, lg: 4 }}
-        spacing="md"
-        role="region"
-        aria-label="Cockpit statistics"
+    <Stack gap="md" data-testid="cockpit-view">
+      {/* Two-column: Live Feed | Projects + Snapshot */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 3fr) minmax(260px, 2fr)',
+          gap: 'var(--mantine-spacing-md)',
+          alignItems: 'start',
+        }}
       >
-        <CockpitStatCard
-          icon={<Activity size={26} aria-hidden="true" />}
-          value={active.length}
-          label="sessions"
-          color="orange"
-          onClick={() => navigate('sessions')}
-        />
-        <CockpitStatCard
-          icon={<Scroll size={26} aria-hidden="true" />}
-          value={profile?.totalSessions ?? 0}
-          label="total"
-          color="blue"
-          onClick={() => navigate('history')}
-        />
-        <CockpitStatCard
-          icon={<Coins size={26} aria-hidden="true" />}
-          value={formatTokens(totalTokens)}
-          label="tokens"
-          sublabel={formatCost(totalCostMicros)}
-          color="cyan"
-          onClick={() => navigate('tokens')}
-        />
-        {showGamification && (
-          <CockpitStatCard
-            icon={<Shield size={26} aria-hidden="true" />}
-            value={profile?.rank ?? 'E'}
-            label="rank"
-            sublabel={`Lv.${profile?.level ?? 1}`}
-            color="yellow"
-            onClick={() => navigate('profile')}
-          />
-        )}
-        {showGamification && (
-          <CockpitStatCard
-            icon={<Flame size={26} aria-hidden="true" />}
-            value={profile?.streakCurrent ?? 0}
-            label="streak"
-            sublabel={`best: ${profile?.streakBest ?? 0}`}
-            color="red"
-            onClick={() => navigate('streak')}
-          />
-        )}
-        <CockpitStatCard
-          icon={<CheckSquare size={26} aria-hidden="true" />}
-          value={totalTasks}
-          label="complete"
-          color="green"
-          onClick={() => navigate('tasks')}
-        />
-        {showGamification && (
-          <CockpitStatCard
-            icon={<Trophy size={26} aria-hidden="true" />}
-            value={`${unlockedCount}/${achievements.length}`}
-            label="achievements"
-            color="yellow"
-            onClick={() => navigate('achievements')}
-          />
-        )}
-        {showGamification && (
-          <CockpitStatCard
-            icon={<Target size={26} aria-hidden="true" />}
-            value={`${completedQuests}/${quests.length}`}
-            label="daily quests"
-            color="grape"
-            onClick={() => navigate('quests')}
-          />
-        )}
-      </SimpleGrid>
+        {/* Left: Live Feed */}
+        <LiveFeed />
 
-      <LiveFeed />
+        {/* Right: Projects + Quick Snapshot */}
+        <Stack gap="md">
+          {/* Projects */}
+          <Paper
+            p="sm"
+            bg="var(--phantom-surface-card)"
+            style={{ border: '1px solid var(--phantom-border-subtle)' }}
+          >
+            <Group gap="xs" mb="xs">
+              <FolderGit2 size={14} style={{ color: 'var(--phantom-accent-glow)' }} />
+              <Text fz="0.75rem" fw={600} c="var(--phantom-text-primary)">Projects</Text>
+              <Text fz="0.65rem" c="var(--phantom-text-muted)" ml="auto">{projects.length}</Text>
+            </Group>
+            {projects.length === 0 ? (
+              <Text fz="xs" c="var(--phantom-text-muted)" fs="italic" ta="center" py="sm">
+                No projects yet. Open a repo to get started.
+              </Text>
+            ) : (
+              <Stack gap={4}>
+                {projects.map((p) => (
+                  <div
+                    key={p.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px',
+                      borderRadius: 4, cursor: 'pointer', transition: 'background-color 100ms ease',
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated, #2a2a2a)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    onClick={() => navigate('cockpit')}
+                  >
+                    <FolderGit2 size={13} style={{ color: 'var(--phantom-accent-cyan)', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Text fz="0.75rem" fw={500} c="var(--phantom-text-primary)" truncate>{p.name}</Text>
+                      <Group gap={4}>
+                        <GitBranch size={10} style={{ color: 'var(--phantom-text-muted)' }} />
+                        <Text fz="0.6rem" c="var(--phantom-text-muted)">{p.defaultBranch ?? 'main'}</Text>
+                      </Group>
+                    </div>
+                  </div>
+                ))}
+              </Stack>
+            )}
+          </Paper>
+
+          {/* Quick Snapshot */}
+          <Paper
+            p="sm"
+            bg="var(--phantom-surface-card)"
+            style={{ border: '1px solid var(--phantom-border-subtle)' }}
+          >
+            <Group gap="xs" mb="xs">
+              <Activity size={14} style={{ color: 'var(--phantom-accent-glow)' }} />
+              <Text fz="0.75rem" fw={600} c="var(--phantom-text-primary)">Quick Snapshot</Text>
+              <Text fz="0.6rem" c="var(--phantom-text-muted)" ml="auto">today</Text>
+            </Group>
+            <Stack gap={6}>
+              {[
+                { label: 'Active sessions', value: String(active.length) },
+                { label: 'Recent sessions', value: String(recent.length) },
+                { label: 'Tasks completed', value: String(totalTasks) },
+                { label: 'Token spend', value: formatCost(totalCostMicros) },
+                ...(active.length > 0 ? [{ label: 'Avg tokens/session', value: avgTokensPerSession }] : []),
+              ].map((row) => (
+                <Group key={row.label} justify="space-between">
+                  <Text fz="0.73rem" c="var(--phantom-text-secondary)">{row.label}</Text>
+                  <Text fz="0.73rem" fw={600} c="var(--phantom-text-primary)" ff="'JetBrains Mono', monospace">{row.value}</Text>
+                </Group>
+              ))}
+            </Stack>
+          </Paper>
+
+          {/* Level Progress (gamification) */}
+          {showGamification && profile && (
+            <Paper
+              p="sm"
+              bg="var(--phantom-surface-card)"
+              style={{ border: '1px solid var(--phantom-border-subtle)' }}
+            >
+              <Group gap="xs" mb="xs">
+                <Shield size={14} style={{ color: 'var(--phantom-accent-gold, #f59e0b)' }} />
+                <Text fz="0.75rem" fw={600} c="var(--phantom-text-primary)">Level Progress</Text>
+              </Group>
+              <Text fz="xs" c="var(--phantom-text-secondary)" mb={6}>
+                {profile.rank} Rank — Level {profile.level}. {profile.xpToNext > 0 ? `${profile.xpToNext} XP to next level.` : 'Max level reached!'}
+              </Text>
+              <div style={{
+                height: 6, borderRadius: 3, backgroundColor: 'var(--phantom-surface-elevated)',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  height: '100%', borderRadius: 3,
+                  width: `${Math.min(100, ((profile.xp ?? 0) / ((profile.xp ?? 0) + (profile.xpToNext ?? 1))) * 100)}%`,
+                  background: 'linear-gradient(90deg, var(--phantom-accent-glow), var(--phantom-accent-cyan))',
+                  transition: 'width 500ms ease',
+                }} />
+              </div>
+              <Group justify="space-between" mt={4}>
+                <Text fz="0.6rem" c="var(--phantom-text-muted)">XP</Text>
+                <Text fz="0.6rem" c="var(--phantom-text-muted)" ff="'JetBrains Mono', monospace">
+                  {profile.xp ?? 0} / {(profile.xp ?? 0) + (profile.xpToNext ?? 0)}
+                </Text>
+              </Group>
+            </Paper>
+          )}
+        </Stack>
+      </div>
     </Stack>
   );
 };

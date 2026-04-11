@@ -1,7 +1,6 @@
 /**
- * LiveFeed Component — Enhanced
- * Real-time activity timeline with smart grouping, category filters,
- * activity summary strip, and visual hierarchy per event type.
+ * LiveFeed Component
+ * Real-time activity timeline with smart grouping and visual hierarchy per event type.
  *
  * @author Subash Karki
  */
@@ -15,7 +14,6 @@ import {
   Download,
   FileText,
   FilePlus,
-  Flame,
   FolderSearch,
   GitBranch,
   GitCommitHorizontal,
@@ -38,7 +36,7 @@ import {
 import { useSetAtom } from 'jotai';
 import { type ReactNode, useState, useCallback, useRef, useEffect } from 'react';
 
-import type { FeedFilter, GroupedFeedEvent } from '../../atoms/liveFeed';
+import type { GroupedFeedEvent } from '../../atoms/liveFeed';
 import { viewingSessionIdAtom } from '../../atoms/sessionViewer';
 import { useLiveFeed } from '../../hooks/useLiveFeed';
 import { useRouter } from '../../hooks/useRouter';
@@ -112,96 +110,6 @@ const getRelativeTime = (timestamp: number): string => {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
-};
-
-// ---------------------------------------------------------------------------
-// Filter Tabs
-// ---------------------------------------------------------------------------
-
-const FILTER_OPTIONS: { value: FeedFilter; label: string; icon: ReactNode }[] = [
-  { value: 'all', label: 'All', icon: <Radio size={12} /> },
-  { value: 'code', label: 'Code', icon: <Pencil size={12} /> },
-  { value: 'terminal', label: 'Terminal', icon: <TerminalSquare size={12} /> },
-  { value: 'search', label: 'Search', icon: <Search size={12} /> },
-  { value: 'tasks', label: 'Tasks', icon: <CheckSquare size={12} /> },
-  { value: 'git', label: 'Git', icon: <GitCommitHorizontal size={12} /> },
-  { value: 'sessions', label: 'Sessions', icon: <Play size={12} /> },
-];
-
-const FilterTabs = ({ active, onChange }: { active: FeedFilter; onChange: (f: FeedFilter) => void }) => (
-  <Group gap={4} wrap="nowrap" style={{ overflowX: 'auto', scrollbarWidth: 'none' }}>
-    {FILTER_OPTIONS.map((opt) => (
-      <Box
-        key={opt.value}
-        component="button"
-        onClick={() => onChange(opt.value)}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 4,
-          padding: '0.1875rem 0.5rem',
-          borderRadius: 12,
-          border: 'none',
-          background: active === opt.value ? 'var(--phantom-surface-elevated)' : 'transparent',
-          color: active === opt.value ? 'var(--phantom-accent-glow)' : 'var(--phantom-text-muted)',
-          fontSize: '0.6875rem',
-          fontWeight: active === opt.value ? 700 : 500,
-          cursor: 'pointer',
-          transition: 'all 150ms ease',
-          whiteSpace: 'nowrap',
-          flexShrink: 0,
-          fontFamily: 'inherit',
-        }}
-      >
-        {opt.icon}
-        {opt.label}
-      </Box>
-    ))}
-  </Group>
-);
-
-// ---------------------------------------------------------------------------
-// Activity Summary Strip
-// ---------------------------------------------------------------------------
-
-const ActivitySummary = ({ summary }: { summary: { edits: number; reads: number; commands: number; searches: number; tasks: number; commits: number; agents: number } }) => {
-  const items = [
-    { count: summary.edits, label: 'edits', color: 'var(--phantom-accent-glow)' },
-    { count: summary.reads, label: 'reads', color: 'teal' },
-    { count: summary.commands, label: 'cmds', color: 'var(--phantom-status-warning)' },
-    { count: summary.searches, label: 'searches', color: 'teal' },
-    { count: summary.tasks, label: 'tasks', color: 'var(--phantom-status-active)' },
-    { count: summary.commits, label: 'commits', color: 'var(--phantom-status-active)' },
-    { count: summary.agents, label: 'agents', color: 'var(--phantom-accent-gold)' },
-  ].filter((i) => i.count > 0);
-
-  if (items.length === 0) return null;
-
-  return (
-    <Group gap={8} py={4} wrap="wrap">
-      <Text fz="0.625rem" c="var(--phantom-text-muted)" fw={600} tt="uppercase" style={{ letterSpacing: '0.05em' }}>
-        Last 5m:
-      </Text>
-      {items.map((item) => (
-        <Badge
-          key={item.label}
-          size="xs"
-          variant="light"
-          styles={{
-            root: {
-              background: 'var(--phantom-surface-elevated)',
-              border: 'none',
-              fontWeight: 600,
-              fontFamily: 'JetBrains Mono, monospace',
-            },
-            label: { color: item.color },
-          }}
-        >
-          {item.count} {item.label}
-        </Badge>
-      ))}
-    </Group>
-  );
 };
 
 // ---------------------------------------------------------------------------
@@ -440,7 +348,7 @@ const EmptyState = () => (
 // ---------------------------------------------------------------------------
 
 export const LiveFeed = () => {
-  const { grouped, summary, filter, setFilter } = useLiveFeed();
+  const { grouped } = useLiveFeed();
   const { active, recent } = useSessions();
   const { navigate } = useRouter();
   const setViewingSession = useSetAtom(viewingSessionIdAtom);
@@ -488,12 +396,9 @@ export const LiveFeed = () => {
             }}
           />
           <Text
-            ff="Orbitron, sans-serif"
-            fz="0.75rem"
-            fw={700}
+            fz="0.8125rem"
+            fw={500}
             c="var(--phantom-text-primary)"
-            tt="uppercase"
-            style={{ letterSpacing: '0.1em' }}
           >
             Live Feed
           </Text>
@@ -517,14 +422,8 @@ export const LiveFeed = () => {
         </Tooltip>
       </Group>
 
-      {/* Filter tabs */}
-      <FilterTabs active={filter} onChange={setFilter} />
-
-      {/* Activity summary */}
-      <ActivitySummary summary={summary} />
-
       {/* Active sessions */}
-      {filter === 'all' && active.length > 0 && (
+      {active.length > 0 && (
         <Stack gap={4} mt="xs" mb="xs">
           {active
             .sort((a, b) => b.startedAt - a.startedAt)
@@ -542,22 +441,18 @@ export const LiveFeed = () => {
       )}
 
       {/* Grouped feed events */}
-      {!hasActivity && filter === 'all' ? (
+      {!hasActivity ? (
         <EmptyState />
-      ) : displayGroups.length === 0 && filter !== 'all' ? (
-        <Text fz="0.8125rem" c="var(--phantom-text-muted)" ta="center" py="lg" fs="italic">
-          No {filter} activity yet
-        </Text>
       ) : (
-        <Stack gap={2} mt={active.length > 0 || summary.edits > 0 ? 'xs' : 0}>
+        <Stack gap={2} mt={active.length > 0 ? 'xs' : 0}>
           {displayGroups.slice(0, 30).map((group) => (
             <GroupedFeedItem key={group.id} group={group} />
           ))}
         </Stack>
       )}
 
-      {/* Recent history backfill (when no live events and filter is 'all') */}
-      {filter === 'all' && displayGroups.length === 0 && active.length === 0 && recent.length > 0 && (
+      {/* Recent history backfill (when no live events) */}
+      {displayGroups.length === 0 && active.length === 0 && recent.length > 0 && (
         <Stack gap={2} mt="xs">
           <Text fz="0.625rem" c="var(--phantom-text-muted)" fw={600} tt="uppercase" style={{ letterSpacing: '0.05em' }}>
             Recent History
