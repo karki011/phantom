@@ -105,21 +105,30 @@ plansRoutes.get('/plans', async (c) => {
     ? db.select().from(projects).where(eq(projects.id, worktree.projectId)).get()
     : null;
 
-  // Build search terms from worktree + project fields
-  const searchTerms: string[] = [];
-  if (worktree.worktreePath) searchTerms.push(worktree.worktreePath.toLowerCase());
-  if (worktree.branch) searchTerms.push(worktree.branch.toLowerCase());
-  if (worktree.name) searchTerms.push(worktree.name.toLowerCase());
-  // Project name is key — plans often reference the project by name
-  if (project?.name) searchTerms.push(project.name.toLowerCase());
-  if (project?.repoPath) searchTerms.push(project.repoPath.toLowerCase());
+  // Build branch-specific and project-level search terms
+  const branchTerms: string[] = [];
+  if (worktree.worktreePath) branchTerms.push(worktree.worktreePath.toLowerCase());
+  if (worktree.branch) branchTerms.push(worktree.branch.toLowerCase());
 
-  // Filter plans whose content mentions any search term
-  // Require terms to be at least 6 chars to avoid false positives
-  const matched = allPlans.filter((plan) => {
+  const projectTerms: string[] = [];
+  if (project?.name) projectTerms.push(project.name.toLowerCase());
+  if (project?.repoPath) projectTerms.push(project.repoPath.toLowerCase());
+
+  const matchesTerm = (content: string, terms: string[]) =>
+    terms.some((term) => term.length >= 6 && content.includes(term));
+
+  // Categorize each plan as branch-specific or project-level
+  const branchPlans: PlanFile[] = [];
+  const projectPlans: PlanFile[] = [];
+
+  for (const plan of allPlans) {
     const content = plan._content.toLowerCase();
-    return searchTerms.some((term) => term.length >= 6 && content.includes(term));
-  });
+    if (matchesTerm(content, branchTerms)) {
+      branchPlans.push(toClientPlan(plan));
+    } else if (matchesTerm(content, projectTerms)) {
+      projectPlans.push(toClientPlan(plan));
+    }
+  }
 
-  return c.json(matched.map(toClientPlan));
+  return c.json({ branch: branchPlans, project: projectPlans });
 });
