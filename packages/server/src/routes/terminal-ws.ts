@@ -19,10 +19,9 @@ import {
 import { registerProcess, unregisterProcess } from '../process-registry.js';
 import { historyWriter } from '../terminal-history.js';
 import { logger } from '../logger.js';
+import { writeMcpConfig, cleanupMcpConfig, resolveProjectId, resolveProjectIdFromCwd } from '../services/mcp-config.js';
 
-export const setupTerminalWs = (
-  server: HttpServer | HttpsServer,
-): void => {
+export function setupTerminalWs(server: HttpServer | HttpsServer): void {
   const wss = new WebSocketServer({ noServer: true });
 
   server.on('upgrade', (req, socket, head) => {
@@ -34,10 +33,11 @@ export const setupTerminalWs = (
       handleConnection(ws, match[1]);
     });
   });
-};
+}
 
-const handleConnection = (ws: WebSocket, termId: string): void => {
+function handleConnection(ws: WebSocket, termId: string): void {
   let session = getPtySession(termId);
+  let mcpCwd: string | null = null; // Track cwd for MCP config cleanup
 
   // Output relay — created once, passed as initialListener to createPty
   // so it's attached BEFORE the daemon starts sending output.
@@ -55,6 +55,11 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
       if (session.listeners.size === 0) {
         unregisterProcess(termId);
       }
+    }
+    // Clean up MCP config if this was a Claude session
+    if (mcpCwd) {
+      cleanupMcpConfig(mcpCwd);
+      mcpCwd = null;
     }
     session = undefined;
   });
@@ -98,6 +103,18 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
                   cols: msg.cols ?? 80,
                   rows: msg.rows ?? 24,
                 });
+
+                // Write MCP config if this is a Claude CLI session
+                // Match "claude ..." or "npx claude ..." at the start of the command
+                if (msg.initialCommand && /^(?:npx\s+)?claude(?:\s|$)/.test(msg.initialCommand.trim()) && msg.cwd) {
+                  const projectId = msg.worktreeId
+                    ? resolveProjectId(msg.worktreeId)
+                    : resolveProjectIdFromCwd(msg.cwd);
+                  if (projectId) {
+                    writeMcpConfig(msg.cwd, projectId);
+                    mcpCwd = msg.cwd;
+                  }
+                }
 
                 // Auto-run initial command after shell is ready
                 // Wait for shell prompt by watching for output, then send command
@@ -169,6 +186,11 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
               unregisterProcess(termId);
               session = undefined; // Clear before ws.close so close handler doesn't re-detach
             }
+            // Clean up MCP config before closing
+            if (mcpCwd) {
+              cleanupMcpConfig(mcpCwd);
+              mcpCwd = null;
+            }
             ws.close(1000, 'Terminal killed');
             break;
         }
@@ -177,4 +199,4 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
       }
     });
   });
-};
+}

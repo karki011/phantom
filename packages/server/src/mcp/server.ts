@@ -69,80 +69,98 @@ const PathInput = z.object({
  * to work around this — runtime validation is still enforced by the SDK via the
  * inputSchema zod objects. This is a known SDK issue.
  */
-function registerTools(server: McpServer, engine: GraphEngineAdapter): void {
-  /**
-   * Helper to register a tool while avoiding TS2589 (infinite type depth)
-   * caused by the MCP SDK's registerTool generics + zod v3 schema inference.
-   * Runtime validation is still enforced by the SDK via the zod inputSchema.
-   */
+function registerTools(server: McpServer, engine: GraphEngineAdapter, scopedProjectId?: string): void {
+  // Cast to `any` to work around TS2589 (infinite type depth) from the MCP SDK's
+  // registerTool generics + zod v3. Runtime validation is still enforced by the SDK.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const reg = server.registerTool.bind(server) as any;
+
+  // When scoped to a project, auto-inject projectId; otherwise require it as input
+  const pid = (args: { projectId?: string }) => scopedProjectId ?? args.projectId ?? '';
+
+  /**
+   * When scoped, strip projectId from input schemas so Claude doesn't need to provide it.
+   * Returns the scoped schema if projectId is set, otherwise the full schema.
+   */
+  function schema<T extends z.ZodRawShape>(fullSchema: z.ZodObject<T>, scopedFields?: z.ZodRawShape): z.ZodObject<any> {
+    if (!scopedProjectId) return fullSchema;
+    return z.object(scopedFields ?? {});
+  }
 
   reg(
     'phantom_graph_context',
     {
-      description: 'Get relevant code context for a file — returns related files, edges, and modules from the dependency graph.',
-      inputSchema: ContextInput,
+      description: 'Get files related to a specific file with relevance scores and dependency edges. Use BEFORE modifying code to understand what depends on or is depended on by a file.',
+      inputSchema: schema(ContextInput, {
+        file: z.string().describe('File path relative to project root'),
+        depth: z.number().optional().describe('BFS traversal depth (default 2)'),
+      }),
     },
     async (args: z.infer<typeof ContextInput>) =>
-      handleGraphContext(engine, { projectId: args.projectId, file: args.file, depth: args.depth ?? 2 }),
+      handleGraphContext(engine, { projectId: pid(args), file: args.file, depth: args.depth ?? 2 }),
   );
 
   reg(
     'phantom_graph_blast_radius',
     {
-      description: 'Analyze the impact of changing a file — shows directly and transitively affected files.',
-      inputSchema: BlastRadiusInput,
+      description: 'Predict which files will break if a given file is changed. Use BEFORE refactoring to assess risk and scope of changes.',
+      inputSchema: schema(BlastRadiusInput, {
+        file: z.string().describe('File path to analyze'),
+      }),
     },
     async (args: z.infer<typeof BlastRadiusInput>) =>
-      handleBlastRadius(engine, { projectId: args.projectId, file: args.file }),
+      handleBlastRadius(engine, { projectId: pid(args), file: args.file }),
   );
 
   reg(
     'phantom_graph_related',
     {
-      description: 'Find files related to a set of files in the dependency graph.',
-      inputSchema: RelatedInput,
+      description: 'Find files related to a set of files. Use when exploring unfamiliar code areas or identifying all files involved in a feature.',
+      inputSchema: schema(RelatedInput, {
+        files: z.array(z.string()).describe('Array of file paths'),
+        depth: z.number().optional().describe('Neighbor traversal depth (default 1)'),
+      }),
     },
     async (args: z.infer<typeof RelatedInput>) =>
-      handleRelated(engine, { projectId: args.projectId, files: args.files, depth: args.depth ?? 1 }),
+      handleRelated(engine, { projectId: pid(args), files: args.files, depth: args.depth ?? 1 }),
   );
 
   reg(
     'phantom_graph_stats',
     {
-      description: 'Get graph statistics for a project — file count, edge count, module count, and more.',
-      inputSchema: ProjectIdInput,
+      description: 'Get graph statistics -- file count, edge count, module count, coverage. Use to understand project size and graph health.',
+      inputSchema: schema(ProjectIdInput),
     },
     async (args: z.infer<typeof ProjectIdInput>) =>
-      handleStats(engine, { projectId: args.projectId }),
+      handleStats(engine, { projectId: pid(args) }),
   );
 
   reg(
     'phantom_graph_path',
     {
-      description: 'Find the shortest path between two files in the dependency graph.',
-      inputSchema: PathInput,
+      description: 'Find the shortest dependency path between two files. Use to understand how distant parts of the codebase connect.',
+      inputSchema: schema(PathInput, {
+        from: z.string().describe('Source file path'),
+        to: z.string().describe('Target file path'),
+      }),
     },
     async (args: z.infer<typeof PathInput>) =>
-      handlePath(engine, { projectId: args.projectId, from: args.from, to: args.to }),
+      handlePath(engine, { projectId: pid(args), from: args.from, to: args.to }),
   );
 
   reg(
     'phantom_graph_build',
     {
-      description: 'Trigger a graph rebuild for a project. Returns immediately while build runs in background.',
-      inputSchema: ProjectIdInput,
+      description: 'Trigger a graph rebuild after major changes (new packages, large refactors). Returns immediately while build runs in background.',
+      inputSchema: schema(ProjectIdInput),
     },
     async (args: z.infer<typeof ProjectIdInput>) =>
-      handleBuild(engine, { projectId: args.projectId }),
+      handleBuild(engine, { projectId: pid(args) }),
   );
 
   reg(
     'phantom_list_projects',
-    {
-      description: 'List all known projects with their IDs and repo paths.',
-    },
+    { description: 'List all known projects with their IDs and repo paths.' },
     async () => handleListProjects(),
   );
 }
@@ -187,14 +205,15 @@ export async function stopMcpServer(): Promise<void> {
 
 /**
  * Create a standalone MCP server instance with custom engine adapter.
- * Used by the standalone stdio entry point and tests.
+ * When scopedProjectId is provided, tools auto-inject that projectId
+ * and don't require it as input — simplifies Claude's tool calls.
  */
-export function createMcpServer(engine: GraphEngineAdapter): McpServer {
+export function createMcpServer(engine: GraphEngineAdapter, scopedProjectId?: string): McpServer {
   const server = new McpServer({
     name: 'phantom-os',
     version: '1.0.0',
   });
 
-  registerTools(server, engine);
+  registerTools(server, engine, scopedProjectId);
   return server;
 }

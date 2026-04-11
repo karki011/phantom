@@ -10,7 +10,7 @@ export interface SessionMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
-  toolUse?: { name: string }[];
+  toolUse?: { name: string; summary?: string }[];
 }
 
 interface UseSessionMessagesReturn {

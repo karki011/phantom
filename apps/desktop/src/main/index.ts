@@ -10,6 +10,9 @@ import { createWindow } from './window';
 import { registerLifecycle } from './lifecycle';
 import { registerIpcHandlers } from './ipc-handlers';
 
+// Set app name immediately — before anything else so macOS dock shows "PhantomOS"
+app.setName('PhantomOS');
+
 // Register IPC handlers for renderer communication
 registerIpcHandlers();
 

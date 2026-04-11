@@ -11,8 +11,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { desc, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { db, chatMessages, chatConversations } from '@phantom-os/db';
+import { db, chatMessages, chatConversations, userPreferences } from '@phantom-os/db';
 import { logger } from '../logger.js';
+import { graphEngine } from '../services/graph-engine.js';
+import { resolveProjectIdFromCwd } from '../services/mcp-config.js';
 
 export const chatRoutes = new Hono();
 
@@ -26,31 +28,46 @@ interface ChatRequest {
   model?: string;
   context?: ChatMessage[];
   cwd?: string;
+  projectId?: string;       // PhantomOS project ID — used for graph context injection
   projectContext?: string;  // e.g. "Project: feature-web-apps, Branch: test, Path: /Users/.../repo"
+}
+
+/** Concise mode system instruction — inspired by caveman-speak token reduction */
+const CAVEMAN_INSTRUCTION = `IMPORTANT STYLE RULE: Be extremely concise. No filler, no pleasantries, no restating the question. Lead with the answer or fix. Use sentence fragments, shorthand, and inline code. Skip "Sure!", "I'd be happy to", "Let me explain". If the answer is one line, give one line. Same technical accuracy, 75% fewer words.`;
+
+/** Check if caveman/concise mode is enabled in user preferences */
+function isCavemanEnabled(): boolean {
+  const row = db.select().from(userPreferences).where(eq(userPreferences.key, 'caveman')).get();
+  return row?.value === 'true';
 }
 
 /**
  * Build the prompt for multi-turn by including previous context
  * and optional project context.
  */
-const buildPrompt = (message: string, context?: ChatMessage[], projectContext?: string): string => {
-  let prompt = '';
+function buildPrompt(message: string, context?: ChatMessage[], projectContext?: string): string {
+  const parts: string[] = [];
+
+  // Inject concise mode instruction if enabled
+  if (isCavemanEnabled()) {
+    parts.push(CAVEMAN_INSTRUCTION);
+  }
 
   if (projectContext) {
-    prompt += `Context: You are helping with a project. ${projectContext}\n\n`;
+    parts.push(`Context: You are helping with a project. ${projectContext}`);
   }
 
   if (context && context.length > 0) {
     const transcript = context
       .map((msg) => `${msg.role === 'user' ? 'Human' : 'Assistant'}: ${msg.content}`)
       .join('\n\n');
-    prompt += `${transcript}\n\nHuman: ${message}`;
+    parts.push(`${transcript}\n\nHuman: ${message}`);
   } else {
-    prompt += message;
+    parts.push(message);
   }
 
-  return prompt;
-};
+  return parts.join('\n\n');
+}
 
 // ---------------------------------------------------------------------------
 // Conversation CRUD
@@ -221,6 +238,70 @@ chatRoutes.post('/chat/upload', async (c) => {
 // POST /chat — Send a message to Claude, stream NDJSON response
 // ---------------------------------------------------------------------------
 
+/**
+ * Extract file paths mentioned in a message.
+ * Matches common patterns like src/foo.ts, ./bar/baz.tsx, etc.
+ */
+function extractFilePaths(message: string): string[] {
+  const matches = message.match(/(?:^|\s|['"`(])([.\w/-]+\.\w{1,10})(?=['"`)\s,]|$)/g);
+  if (!matches) return [];
+  return [...new Set(matches.map((m) => m.trim().replace(/^['"`(]+|['"`),]+$/g, '')))];
+}
+
+/**
+ * Build graph context string from the AI engine for a project.
+ * Extracts file paths from the user's message and queries the graph.
+ */
+/** Max characters for injected graph context — prevents prompt bloat */
+const MAX_GRAPH_CONTEXT_CHARS = 2000;
+
+function buildGraphContext(projectId: string, message: string): string | null {
+  const query = graphEngine.getQuery(projectId);
+  if (!query) return null;
+
+  const filePaths = extractFilePaths(message);
+  if (filePaths.length === 0) return null;
+
+  const sections: string[] = [];
+  let totalChars = 0;
+
+  for (const file of filePaths.slice(0, 3)) { // Limit files to avoid prompt bloat
+    if (totalChars >= MAX_GRAPH_CONTEXT_CHARS) break;
+
+    try {
+      const ctx = query.getContext(file, 2);
+      if (ctx.files.length > 0) {
+        const related = ctx.files
+          .map((f) => ({ path: f.path, relevance: ctx.scores.get(f.id) ?? 0 }))
+          .filter((f) => f.relevance > 0)
+          .sort((a, b) => b.relevance - a.relevance)
+          .slice(0, 8);
+
+        if (related.length > 0) {
+          const section = `Files related to ${file}:\n${related.map((f) => `  - ${f.path} (relevance: ${(f.relevance * 100).toFixed(0)}%)`).join('\n')}`;
+          sections.push(section);
+          totalChars += section.length;
+        }
+      }
+
+      if (totalChars < MAX_GRAPH_CONTEXT_CHARS) {
+        const blast = query.getBlastRadius(file);
+        if (blast.direct.length > 0) {
+          const section = `Blast radius for ${file}: ${blast.direct.map((f) => f.path).slice(0, 5).join(', ')}${blast.direct.length > 5 ? ` (+${blast.direct.length - 5} more)` : ''}`;
+          sections.push(section);
+          totalChars += section.length;
+        }
+      }
+    } catch {
+      // Skip files not in the graph
+    }
+  }
+
+  if (sections.length === 0) return null;
+  const result = `## Codebase Context (PhantomOS AI Engine)\n${sections.join('\n\n')}`;
+  return result.slice(0, MAX_GRAPH_CONTEXT_CHARS);
+}
+
 chatRoutes.post('/chat', async (c) => {
   const body = await c.req.json<ChatRequest>();
   const { message, model, context, cwd, projectContext } = body;
@@ -229,7 +310,20 @@ chatRoutes.post('/chat', async (c) => {
     return c.json({ error: 'message is required' }, 400);
   }
 
-  const prompt = buildPrompt(message, context, projectContext);
+  // Resolve projectId and inject graph context if available
+  const projectId = body.projectId ?? (cwd ? resolveProjectIdFromCwd(cwd) : null);
+  let enrichedContext = projectContext ?? '';
+
+  if (projectId) {
+    const graphCtx = buildGraphContext(projectId, message);
+    if (graphCtx) {
+      enrichedContext = enrichedContext
+        ? `${enrichedContext}\n\n${graphCtx}`
+        : graphCtx;
+    }
+  }
+
+  const prompt = buildPrompt(message, context, enrichedContext || undefined);
   const modelFlag = model ?? 'sonnet';
 
   // Use stream-json output for real-time streaming

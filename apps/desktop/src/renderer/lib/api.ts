@@ -503,6 +503,24 @@ export interface GitStatusResult {
 export const getGitStatus = (worktreeId: string): Promise<GitStatusResult> =>
   fetchApi<GitStatusResult>(`/api/worktrees/${worktreeId}/git-status`);
 
+// ---------------------------------------------------------------------------
+// Tasks
+// ---------------------------------------------------------------------------
+
+export interface TaskData {
+  id: string;
+  sessionId: string | null;
+  taskNum: number | null;
+  subject: string | null;
+  status: string | null;
+  activeForm: string | null;
+  createdAt: number | null;
+  updatedAt: number | null;
+}
+
+export const getTasksByCwd = (cwd: string): Promise<TaskData[]> =>
+  fetchApi<TaskData[]>(`/api/tasks/by-cwd?cwd=${encodeURIComponent(cwd)}`);
+
 export const gitStage = (worktreeId: string, paths: string[]): Promise<{ ok: boolean }> =>
   fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
     method: 'POST',

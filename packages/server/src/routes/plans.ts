@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { db, worktrees } from '@phantom-os/db';
+import { db, projects, worktrees } from '@phantom-os/db';
 
 const PLANS_DIR = join(homedir(), '.claude', 'plans');
 const CACHE_TTL = 10_000; // 10s cache
@@ -100,19 +100,35 @@ plansRoutes.get('/plans', async (c) => {
 
   const allPlans = await scanPlans();
 
-  // Build search terms from worktree fields — use full path for precision
-  const searchTerms: string[] = [];
-  // Full worktree path is the most precise match
-  if (worktree.worktreePath) searchTerms.push(worktree.worktreePath.toLowerCase());
-  // Branch name is useful for plans that reference the branch
-  if (worktree.branch) searchTerms.push(worktree.branch.toLowerCase());
+  // Look up the parent project for its name
+  const project = worktree.projectId
+    ? db.select().from(projects).where(eq(projects.id, worktree.projectId)).get()
+    : null;
 
-  // Filter plans whose content mentions any search term
-  // Require terms to be at least 6 chars to avoid false positives
-  const matched = allPlans.filter((plan) => {
+  // Build branch-specific and project-level search terms
+  const branchTerms: string[] = [];
+  if (worktree.worktreePath) branchTerms.push(worktree.worktreePath.toLowerCase());
+  if (worktree.branch) branchTerms.push(worktree.branch.toLowerCase());
+
+  const projectTerms: string[] = [];
+  if (project?.name) projectTerms.push(project.name.toLowerCase());
+  if (project?.repoPath) projectTerms.push(project.repoPath.toLowerCase());
+
+  const matchesTerm = (content: string, terms: string[]) =>
+    terms.some((term) => term.length >= 6 && content.includes(term));
+
+  // Categorize each plan as branch-specific or project-level
+  const branchPlans: PlanFile[] = [];
+  const projectPlans: PlanFile[] = [];
+
+  for (const plan of allPlans) {
     const content = plan._content.toLowerCase();
-    return searchTerms.some((term) => term.length >= 6 && content.includes(term));
-  });
+    if (matchesTerm(content, branchTerms)) {
+      branchPlans.push(toClientPlan(plan));
+    } else if (matchesTerm(content, projectTerms)) {
+      projectPlans.push(toClientPlan(plan));
+    }
+  }
 
-  return c.json(matched.map(toClientPlan));
+  return c.json({ branch: branchPlans, project: projectPlans });
 });

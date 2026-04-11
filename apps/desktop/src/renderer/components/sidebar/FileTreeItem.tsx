@@ -28,6 +28,8 @@ interface FileTreeItemProps {
   isLoading: boolean;
   onToggle: () => void;
   onClick: () => void;
+  /** Absolute path to the worktree root — used to construct absolute file paths */
+  basePath?: string;
 }
 
 /** Pick icon based on file extension */
@@ -64,6 +66,7 @@ export function FileTreeItem({
   isLoading,
   onToggle,
   onClick,
+  basePath,
 }: FileTreeItemProps) {
   const [menuOpened, setMenuOpened] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
@@ -95,110 +98,114 @@ export function FileTreeItem({
     [],
   );
 
-  return (
-    <>
-      <UnstyledButton
-        onClick={handleClick}
-        onContextMenu={handleContextMenu}
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData('text/plain', entry.relativePath);
-          e.dataTransfer.setData('application/x-phantom-file', entry.relativePath);
-          e.dataTransfer.effectAllowed = 'copy';
-        }}
-        style={{
-          display: 'block',
-          width: '100%',
-          paddingTop: 2,
-          paddingBottom: 2,
-          paddingRight: 4,
-          paddingLeft: depth * 20 + 4,
-          borderRadius: 4,
-          backgroundColor: isSelected
-            ? 'var(--phantom-surface-hover)'
-            : 'transparent',
-          transition: 'background-color 100ms ease',
-        }}
-        onMouseEnter={(e) => {
-          if (!isSelected)
-            (e.currentTarget as HTMLElement).style.backgroundColor =
-              'var(--phantom-surface-card)';
-        }}
-        onMouseLeave={(e) => {
-          if (!isSelected)
-            (e.currentTarget as HTMLElement).style.backgroundColor =
-              'transparent';
-        }}
-      >
-        <Group gap={4} wrap="nowrap">
-          {entry.isDirectory && (
-            <ChevronRight
-              size={12}
-              style={{
-                color: 'var(--phantom-text-muted)',
-                transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                transition: 'transform 120ms ease',
-                flexShrink: 0,
-                opacity: isLoading ? 0.4 : 1,
-              }}
-            />
-          )}
-          {!entry.isDirectory && <div style={{ width: 12 }} />}
-          <Icon
-            size={14}
-            style={{ color: iconColor, flexShrink: 0 }}
-          />
-          <Text
-            fz="0.78rem"
-            c="var(--phantom-text-secondary)"
-            truncate
-            style={{ flex: 1 }}
-          >
-            {entry.name}
-          </Text>
-        </Group>
-      </UnstyledButton>
+  const absolutePath = basePath
+    ? `${basePath.replace(/\/$/, '')}/${entry.relativePath.replace(/^\//, '')}`
+    : entry.relativePath;
 
-      {/* Context menu — positioned at click location */}
-      <Menu
-        opened={menuOpened}
-        onChange={(val) => { if (!val) setMenuOpened(false); }}
-        position="right-start"
-        withArrow
-        styles={{
-          dropdown: {
-            backgroundColor: 'var(--phantom-surface-card)',
-            position: 'fixed',
-            left: menuPosition.x,
-            top: menuPosition.y,
-          },
-        }}
-      >
-        <Menu.Target>
-          <div style={{ position: 'absolute', width: 0, height: 0 }} />
-        </Menu.Target>
-        <Menu.Dropdown>
-          {entry.isDirectory && (
-            <>
-              <Menu.Item fz="0.8rem">New File</Menu.Item>
-              <Menu.Item fz="0.8rem">New Folder</Menu.Item>
-              <Menu.Divider />
-            </>
-          )}
-          <Menu.Item
-            fz="0.8rem"
-            leftSection={<ClipboardCopy size={14} />}
-            onClick={() => navigator.clipboard.writeText(entry.relativePath)}
-          >
-            Copy Path
-          </Menu.Item>
-          <Menu.Divider />
-          <Menu.Item fz="0.8rem">Rename</Menu.Item>
-          <Menu.Item fz="0.8rem" color="red">
-            Delete
-          </Menu.Item>
-        </Menu.Dropdown>
-      </Menu>
-    </>
+  return (
+    <Menu
+      opened={menuOpened}
+      onChange={(val) => { if (!val) setMenuOpened(false); }}
+      position="bottom-start"
+      withinPortal
+      styles={{
+        dropdown: {
+          backgroundColor: 'var(--phantom-surface-card)',
+          borderColor: 'var(--phantom-border-subtle)',
+        },
+      }}
+    >
+      <Menu.Target>
+        <UnstyledButton
+          onClick={handleClick}
+          onContextMenu={handleContextMenu}
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData('text/plain', absolutePath);
+            e.dataTransfer.setData('application/x-phantom-file', absolutePath);
+            e.dataTransfer.effectAllowed = 'copy';
+          }}
+          style={{
+            display: 'block',
+            width: '100%',
+            paddingTop: 2,
+            paddingBottom: 2,
+            paddingRight: 4,
+            paddingLeft: depth * 20 + 4,
+            borderRadius: 4,
+            backgroundColor: isSelected
+              ? 'var(--phantom-surface-hover)'
+              : 'transparent',
+            transition: 'background-color 100ms ease',
+          }}
+          onMouseEnter={(e) => {
+            if (!isSelected)
+              (e.currentTarget as HTMLElement).style.backgroundColor =
+                'var(--phantom-surface-card)';
+          }}
+          onMouseLeave={(e) => {
+            if (!isSelected)
+              (e.currentTarget as HTMLElement).style.backgroundColor =
+                'transparent';
+          }}
+        >
+          <Group gap={4} wrap="nowrap">
+            {entry.isDirectory && (
+              <ChevronRight
+                size={12}
+                style={{
+                  color: 'var(--phantom-text-muted)',
+                  transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                  transition: 'transform 120ms ease',
+                  flexShrink: 0,
+                  opacity: isLoading ? 0.4 : 1,
+                }}
+              />
+            )}
+            {!entry.isDirectory && <div style={{ width: 12 }} />}
+            <Icon
+              size={14}
+              style={{ color: iconColor, flexShrink: 0 }}
+            />
+            <Text
+              fz="0.78rem"
+              c="var(--phantom-text-secondary)"
+              truncate
+              style={{ flex: 1 }}
+            >
+              {entry.name}
+            </Text>
+          </Group>
+        </UnstyledButton>
+      </Menu.Target>
+      <Menu.Dropdown>
+        {entry.isDirectory && (
+          <>
+            <Menu.Item fz="0.8rem">New File</Menu.Item>
+            <Menu.Item fz="0.8rem">New Folder</Menu.Item>
+            <Menu.Divider />
+          </>
+        )}
+        <Menu.Item
+          fz="0.8rem"
+          leftSection={<ClipboardCopy size={14} />}
+          onClick={() => navigator.clipboard.writeText(absolutePath)}
+        >
+          Copy Absolute Path
+        </Menu.Item>
+        <Menu.Item
+          fz="0.8rem"
+          leftSection={<ClipboardCopy size={14} />}
+          onClick={() => navigator.clipboard.writeText(entry.relativePath)}
+        >
+          Copy Relative Path
+        </Menu.Item>
+        <Menu.Divider />
+        <Menu.Item fz="0.8rem">Rename</Menu.Item>
+        <Menu.Item fz="0.8rem" color="red">
+          Delete
+        </Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
   );
 }

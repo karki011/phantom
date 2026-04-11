@@ -134,10 +134,38 @@ function getTopProcesses(limit = 8): TopProcess[] {
   }
 }
 
+/** Get available memory (free + reclaimable) — more accurate than os.freemem() on macOS.
+ *  macOS aggressively caches files in RAM, so freemem() reports almost zero even
+ *  when gigabytes are reclaimable. vm_stat exposes purgeable and inactive pages
+ *  that the kernel will release on demand. On Linux, /proc/meminfo MemAvailable
+ *  already accounts for this. Falls back to os.freemem() if parsing fails. */
+function getAvailableMemory(): number {
+  try {
+    if (osPlatform() === 'darwin') {
+      const output = execSync('vm_stat', { encoding: 'utf-8', timeout: 2000, stdio: ['pipe', 'pipe', 'pipe'] });
+      const pageSizeMatch = output.match(/page size of (\d+) bytes/);
+      const pageSize = pageSizeMatch ? parseInt(pageSizeMatch[1], 10) : 16384;
+      const parse = (label: string): number => {
+        const m = output.match(new RegExp(`${label}:\\s+(\\d+)`));
+        return m ? parseInt(m[1], 10) : 0;
+      };
+      return (parse('Pages free') + parse('Pages inactive') + parse('Pages purgeable')) * pageSize;
+    }
+    if (osPlatform() === 'linux') {
+      const output = execSync('grep MemAvailable /proc/meminfo', { encoding: 'utf-8', timeout: 2000, stdio: ['pipe', 'pipe', 'pipe'] });
+      const match = output.match(/MemAvailable:\s+(\d+)/);
+      if (match) return parseInt(match[1], 10) * 1024;
+    }
+  } catch {
+    // fall through to Node fallback
+  }
+  return freemem();
+}
+
 systemMetricsRoutes.get('/system-metrics', (c) => {
   const total = totalmem();
-  const free = freemem();
-  const used = total - free;
+  const available = getAvailableMemory();
+  const used = total - available;
 
   return c.json({
     cpu: { usage: getCpuUsage(), cores: cpus().length },

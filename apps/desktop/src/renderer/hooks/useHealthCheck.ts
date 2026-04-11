@@ -11,7 +11,7 @@ const HEALTH_URL = '/health';
 const POLL_INTERVAL_MS = 10_000;
 
 export const useHealthCheck = () => {
-  const [isConnected, setIsConnected] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     const check = () =>

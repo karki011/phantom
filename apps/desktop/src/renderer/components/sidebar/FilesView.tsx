@@ -179,6 +179,7 @@ export function FilesView() {
                   isLoading={false}
                   onToggle={() => {}}
                   onClick={() => handleFileClick(entry)}
+                  basePath={activeWorktree.worktreePath}
                 />
               ))
             ) : searchError ? (
@@ -202,6 +203,7 @@ export function FilesView() {
               isDirLoading={isDirLoading}
               onToggleFolder={handleToggleFolder}
               onFileClick={handleFileClick}
+              basePath={activeWorktree.worktreePath}
             />
           )}
         </div>
@@ -224,6 +226,7 @@ interface FileTreeRecursiveProps {
   isDirLoading: (path: string) => boolean;
   onToggleFolder: (path: string) => void;
   onFileClick: (entry: FileEntry) => void;
+  basePath: string;
 }
 
 function FileTreeRecursive({
@@ -236,6 +239,7 @@ function FileTreeRecursive({
   isDirLoading,
   onToggleFolder,
   onFileClick,
+  basePath,
 }: FileTreeRecursiveProps) {
   // Sort: directories first, then alphabetical
   const sorted = [...entries].sort((a, b) => {
@@ -261,6 +265,7 @@ function FileTreeRecursive({
               isLoading={loading}
               onToggle={() => onToggleFolder(entry.relativePath)}
               onClick={() => onFileClick(entry)}
+              basePath={basePath}
             />
             {entry.isDirectory && isExpanded && childEntries && (
               <div style={{ position: 'relative' }}>
@@ -286,6 +291,7 @@ function FileTreeRecursive({
                   isDirLoading={isDirLoading}
                   onToggleFolder={onToggleFolder}
                   onFileClick={onFileClick}
+                  basePath={basePath}
                 />
               </div>
             )}

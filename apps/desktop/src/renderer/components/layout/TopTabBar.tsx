@@ -17,7 +17,7 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
-  { id: 'cockpit', label: 'Cockpit', icon: Home },
+  { id: 'cockpit', label: 'System', icon: Home },
   { id: 'worktree', label: 'Worktree', icon: Code2 },
 ];
 

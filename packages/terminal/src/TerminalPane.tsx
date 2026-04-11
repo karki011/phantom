@@ -3,9 +3,10 @@
  * Includes restore banner for cold restore sessions.
  * @author Subash Karki
  */
-import { useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import '@xterm/xterm/css/xterm.css';
 import { useTerminal } from './useTerminal.js';
+import { getSession } from './state.js';
 
 interface TerminalPaneProps {
   paneId: string;
@@ -33,6 +34,7 @@ export const TerminalPane = ({
   coldRestore,
 }: TerminalPaneProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [dragOver, setDragOver] = useState(false);
   const { connected, showRestoreBanner, dismissBanner } = useTerminal(
     containerRef,
     paneId,
@@ -48,8 +50,90 @@ export const TerminalPane = ({
     },
   );
 
+  /** Send a string as terminal input (types it into the PTY) */
+  const typeIntoTerminal = useCallback((text: string) => {
+    const session = getSession(paneId);
+    if (session?.ws && session.ws.readyState === WebSocket.OPEN) {
+      session.ws.send(JSON.stringify({ type: 'input', data: text }));
+    }
+  }, [paneId]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+
+    // File path dragged from the PhantomOS file tree
+    const phantomPath = e.dataTransfer?.getData('application/x-phantom-file');
+    if (phantomPath) {
+      // Quote the path in case it has spaces
+      const quoted = phantomPath.includes(' ') ? `"${phantomPath}"` : phantomPath;
+      typeIntoTerminal(quoted);
+      return;
+    }
+
+    // Files dropped from the OS (Finder, etc.)
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      const paths: string[] = [];
+      for (const file of files) {
+        // Electron File objects have a .path property with the absolute path
+        const filePath = (file as File & { path?: string }).path || file.name;
+        paths.push(filePath.includes(' ') ? `"${filePath}"` : filePath);
+      }
+      typeIntoTerminal(paths.join(' '));
+      return;
+    }
+
+    // Plain text (e.g. path copied from somewhere)
+    const text = e.dataTransfer?.getData('text/plain');
+    if (text) {
+      typeIntoTerminal(text);
+    }
+  }, [typeIntoTerminal]);
+
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+    <div
+      style={{ position: 'relative', width: '100%', height: '100%' }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag-drop overlay */}
+      {dragOver && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 20,
+          backgroundColor: 'rgba(69, 153, 172, 0.1)',
+          border: '2px dashed var(--phantom-accent-glow, #00c8ff)',
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          pointerEvents: 'none',
+        }}>
+          <span style={{
+            color: 'var(--phantom-accent-glow, #00c8ff)',
+            fontWeight: 600,
+            fontSize: '14px',
+            fontFamily: 'JetBrains Mono, monospace',
+          }}>
+            Drop file to paste path
+          </span>
+        </div>
+      )}
+
       {/* Restore banner */}
       {showRestoreBanner && (
         <div

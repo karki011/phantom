@@ -153,8 +153,23 @@ sessionRoutes.get('/sessions/:id/messages', async (c) => {
     role: string;
     content: string;
     timestamp: string;
-    toolUse?: { name: string }[];
+    toolUse?: { name: string; summary?: string }[];
   }> = [];
+
+  /** Extract a short summary from tool_use input args */
+  const toolSummary = (name: string, input: Record<string, unknown> | undefined): string | undefined => {
+    if (!input) return undefined;
+    switch (name) {
+      case 'Read': return input.file_path ? String(input.file_path).split('/').pop() : undefined;
+      case 'Edit': return input.file_path ? String(input.file_path).split('/').pop() : undefined;
+      case 'Write': return input.file_path ? String(input.file_path).split('/').pop() : undefined;
+      case 'Bash': return input.command ? String(input.command).slice(0, 60) : undefined;
+      case 'Grep': return input.pattern ? `/${String(input.pattern).slice(0, 40)}/` : undefined;
+      case 'Glob': return input.pattern ? String(input.pattern).slice(0, 40) : undefined;
+      case 'Agent': return input.description ? String(input.description).slice(0, 50) : undefined;
+      default: return undefined;
+    }
+  };
 
   for (const line of content.split('\n')) {
     if (!line.trim()) continue;
@@ -166,14 +181,17 @@ sessionRoutes.get('/sessions/:id/messages', async (c) => {
       if (!msg) continue;
 
       let textContent = '';
-      const toolUses: { name: string }[] = [];
+      const toolUses: { name: string; summary?: string }[] = [];
 
       if (typeof msg.content === 'string') {
         textContent = msg.content;
       } else if (Array.isArray(msg.content)) {
         for (const block of msg.content) {
           if (block.type === 'text') textContent += block.text + '\n';
-          if (block.type === 'tool_use') toolUses.push({ name: block.name });
+          if (block.type === 'tool_use') {
+            const summary = toolSummary(block.name, block.input as Record<string, unknown> | undefined);
+            toolUses.push({ name: block.name, ...(summary ? { summary } : {}) });
+          }
         }
       }
 

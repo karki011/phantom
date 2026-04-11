@@ -18,6 +18,7 @@ export const preferencesRoutes = new Hono();
 /** Default preferences — seeded on first GET if table is empty */
 const DEFAULTS: Record<string, string> = {
   gamification: 'false',
+  caveman: 'false',
 };
 
 /** Seed defaults for any missing keys */

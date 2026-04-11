@@ -15,7 +15,7 @@
 import { AppShell, Group, Stack, Text } from '@mantine/core';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { Flame, Trophy } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { WorkspaceProvider, Workspace, switchWorkspaceAtom } from '@phantom-os/panes';
 import { paneDefinitions, paneMenu } from './panes/registry';
@@ -44,6 +44,7 @@ import { type Route, useRouter } from './hooks/useRouter';
 import { useSessions } from './hooks/useSessions';
 import { useHealthCheck } from './hooks/useHealthCheck';
 import { useSystemEvents } from './hooks/useSystemEvents';
+import { SplashScreen } from './components/brand/SplashScreen';
 
 /** Render cockpit sub-route content (sessions, tokens, profile, etc.) */
 const ViewContent = ({ route }: { route: Route }) => {
@@ -82,6 +83,44 @@ export const App = () => {
   // Periodic backend health polling
   const { isConnected } = useHealthCheck();
 
+  // Splash screen state — minimum 5s display regardless of connection speed
+  const [splashDone, setSplashDone] = useState(false);
+  const [splashStatus, setSplashStatus] = useState('Initializing The System...');
+  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
+
+  // Minimum display time: 5 seconds no matter what
+  useEffect(() => {
+    const timer = setTimeout(() => setMinTimeElapsed(true), 5000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Only dismiss splash when BOTH connected AND minimum time elapsed
+  useEffect(() => {
+    if (isConnected && minTimeElapsed && !splashDone) {
+      setSplashStatus('Ready');
+      const timer = setTimeout(() => setSplashDone(true), 800);
+      return () => clearTimeout(timer);
+    }
+    if (isConnected && !minTimeElapsed) {
+      setSplashStatus('Ready');
+    }
+  }, [isConnected, minTimeElapsed, splashDone]);
+
+  // Progressive status messages while loading
+  useEffect(() => {
+    if (splashDone) return;
+    const t1 = setTimeout(() => {
+      if (!isConnected) setSplashStatus('Starting server...');
+    }, 2000);
+    const t2 = setTimeout(() => {
+      if (!isConnected) setSplashStatus('Almost ready...');
+    }, 4000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [isConnected, splashDone]);
+
   const { route, isCockpitSubRoute } = useRouter();
   const { profile } = useHunter();
   const { active } = useSessions();
@@ -115,6 +154,9 @@ export const App = () => {
 
   return (
     <WorkspaceProvider definitions={paneDefinitions}>
+    {!splashDone && (
+      <SplashScreen visible={!(isConnected && minTimeElapsed)} status={splashStatus} />
+    )}
     <AppShell
       header={{ height: '3.5rem' }}
       footer={{ height: '2.5rem' }}
