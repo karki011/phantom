@@ -4,7 +4,7 @@
  *
  * @author Subash Karki
  */
-import { Badge, Group, Paper, Progress, SegmentedControl, Stack, Switch, Text, Textarea } from '@mantine/core';
+import { Badge, Divider, Group, Paper, Progress, SegmentedControl, Stack, Switch, Text, Textarea } from '@mantine/core';
 import { useMemo, useState } from 'react';
 import { Brain, Crown, Sliders } from 'lucide-react';
 
@@ -115,7 +115,7 @@ export const SystemStrategySelector = () => {
           <Text fz="0.75rem" fw={600} c="var(--phantom-text-primary)">Parameters</Text>
         </Group>
 
-        <Stack gap="sm">
+        <Stack gap="md">
           <div>
             <Text fz="0.7rem" c="var(--phantom-text-secondary)" mb={4}>Complexity</Text>
             <SegmentedControl
@@ -128,6 +128,8 @@ export const SystemStrategySelector = () => {
             />
           </div>
 
+          <Divider color="var(--phantom-border-subtle)" />
+
           <div>
             <Text fz="0.7rem" c="var(--phantom-text-secondary)" mb={4}>Risk</Text>
             <SegmentedControl
@@ -139,6 +141,8 @@ export const SystemStrategySelector = () => {
               styles={segmentStyles}
             />
           </div>
+
+          <Divider color="var(--phantom-border-subtle)" />
 
           <Group justify="space-between">
             <div>
