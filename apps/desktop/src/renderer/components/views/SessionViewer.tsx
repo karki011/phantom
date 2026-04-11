@@ -184,15 +184,17 @@ const ChatBubble = ({ message }: { message: SessionMessage }) => {
             padding: '8px 12px',
             borderRadius: isUser ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
             backgroundColor: isUser
-              ? 'var(--phantom-accent-glow)'
+              ? 'rgba(0, 255, 200, 0.12)'
               : 'var(--phantom-surface-card)',
-            border: isUser ? 'none' : '1px solid var(--phantom-border-subtle)',
+            border: isUser
+              ? '1px solid rgba(0, 255, 200, 0.2)'
+              : '1px solid var(--phantom-border-subtle)',
             maxWidth: '100%',
           }}
         >
           <Text
             fz="0.82rem"
-            c={isUser ? '#000' : 'var(--phantom-text-primary)'}
+            c={isUser ? 'var(--phantom-text-primary)' : 'var(--phantom-text-primary)'}
             style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.55 }}
           >
             {message.content}

@@ -249,11 +249,11 @@ export function ChangesView() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderBottom: '1px solid var(--phantom-border-subtle)', flexShrink: 0 }}>
-        <Text fz="0.7rem" fw={600} c="var(--phantom-text-secondary)" style={{ flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderBottom: '1px solid var(--phantom-border-subtle)', flexShrink: 0, minWidth: 0 }}>
+        <Text fz="0.7rem" fw={600} c="var(--phantom-text-secondary)" truncate style={{ flex: 1, minWidth: 0 }}>
           {worktree.name}
         </Text>
-        <Text fz="0.65rem" c="var(--phantom-text-muted)">
+        <Text fz="0.65rem" c="var(--phantom-text-muted)" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
           {totalChanges} change{totalChanges !== 1 ? 's' : ''}
         </Text>
         <Tooltip label={pullFeedback === 'success' ? 'Pulled!' : pullFeedback === 'error' ? 'Pull failed' : status?.behind ? `Pull ${status.behind} commit${status.behind !== 1 ? 's' : ''} from remote` : 'Pull from remote'} position="bottom" withArrow fz="xs">
@@ -263,7 +263,7 @@ export function ChangesView() {
               display: 'flex', alignItems: 'center', gap: 2, cursor: pulling ? 'default' : 'pointer',
               color: pullFeedback === 'success' ? 'var(--phantom-status-success, #22c55e)' : pullFeedback === 'error' ? 'var(--phantom-status-error, #ef4444)' : pulling ? 'var(--phantom-accent-cyan)' : status?.behind ? 'var(--phantom-accent-gold, #f59e0b)' : 'var(--phantom-text-muted)',
               padding: '1px 4px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 600,
-              transition: 'color 300ms ease',
+              transition: 'color 300ms ease', flexShrink: 0, whiteSpace: 'nowrap',
             }}
           >
             <ArrowDown size={10} />
@@ -277,7 +277,7 @@ export function ChangesView() {
               display: 'flex', alignItems: 'center', gap: 2, cursor: pushing ? 'default' : 'pointer',
               color: pushFeedback === 'success' ? 'var(--phantom-status-success, #22c55e)' : pushFeedback === 'error' ? 'var(--phantom-status-error, #ef4444)' : pushing ? 'var(--phantom-accent-cyan)' : status?.ahead ? 'var(--phantom-status-success, #22c55e)' : 'var(--phantom-text-muted)',
               padding: '1px 4px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 600,
-              transition: 'color 300ms ease',
+              transition: 'color 300ms ease', flexShrink: 0, whiteSpace: 'nowrap',
             }}
           >
             <ArrowUp size={10} />
