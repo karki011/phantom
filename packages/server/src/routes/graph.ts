@@ -119,6 +119,13 @@ graphRoutes.get('/graph/:projectId/path', (c) => {
   }
 });
 
+/** GET /graph/:projectId/files — List all file paths in the graph */
+graphRoutes.get('/graph/:projectId/files', (c) => {
+  const projectId = c.req.param('projectId');
+  const files = graphEngine.getFileList(projectId);
+  return c.json(files);
+});
+
 /** POST /graph/:projectId/build — Trigger a rebuild */
 graphRoutes.post('/graph/:projectId/build', async (c) => {
   const projectId = c.req.param('projectId');

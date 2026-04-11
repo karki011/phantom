@@ -129,6 +129,16 @@ class GraphEngineService {
     return ctx.query.getStats(projectId);
   }
 
+  /** Get all file paths in the graph for a project */
+  getFileList(projectId: string): Array<{ path: string }> {
+    const ctx = this.resolve(projectId);
+    if (!ctx) return [];
+    return ctx.graph
+      .getNodesByProject(projectId)
+      .filter((n) => n.type === 'file')
+      .map((n) => ({ path: (n as { path: string }).path }));
+  }
+
   removeProject(projectId: string): void {
     const ctx = this.instances.get(projectId);
     if (ctx) {

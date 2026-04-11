@@ -4,8 +4,8 @@
  *
  * @author Subash Karki
  */
-import { Badge, Button, Group, Paper, Progress, Stack, Text, TextInput, Tooltip } from '@mantine/core';
-import { useState } from 'react';
+import { Autocomplete, Badge, Button, Group, Paper, Progress, Stack, Text, Tooltip } from '@mantine/core';
+import { useEffect, useState } from 'react';
 import { FileSearch, Loader2, Search } from 'lucide-react';
 
 interface ContextFile {
@@ -30,6 +30,21 @@ export const SystemContextExplorer = ({ projectId }: Props) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ContextResult | null>(null);
+  const [fileList, setFileList] = useState<string[]>([]);
+
+  // Fetch all file paths from graph for autocomplete
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    fetch(`/api/graph/${encodeURIComponent(projectId)}/files`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        if (cancelled || !Array.isArray(data)) return;
+        setFileList(data.map((f: { path?: string }) => f.path ?? '').filter(Boolean).sort());
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [projectId]);
 
   const handleAnalyze = async () => {
     if (!filePath.trim()) return;
@@ -68,18 +83,21 @@ export const SystemContextExplorer = ({ projectId }: Props) => {
   return (
     <Stack gap="md">
       <Text fz="0.8rem" c="var(--phantom-text-secondary)">
-        Pick a file, see what The System thinks is related. Enter a file path from your project
-        and discover its dependency graph, related modules, and relevance scores.
+        Pick a file, see what The System thinks is related. Search or select from your project
+        files to discover its dependency graph, related modules, and relevance scores.
       </Text>
 
       <Group gap="sm" align="flex-end">
-        <TextInput
+        <Autocomplete
           flex={1}
-          placeholder="src/components/App.tsx"
+          placeholder={fileList.length > 0 ? `Search ${fileList.length.toLocaleString()} files...` : 'Loading files...'}
           label="File path"
           value={filePath}
-          onChange={(e) => setFilePath(e.currentTarget.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
+          onChange={setFilePath}
+          onOptionSubmit={(val) => { setFilePath(val); }}
+          onKeyDown={(e) => e.key === 'Enter' && filePath.trim() && handleAnalyze()}
+          data={fileList}
+          limit={20}
           styles={{
             input: {
               backgroundColor: 'var(--phantom-surface-bg)',
@@ -92,6 +110,15 @@ export const SystemContextExplorer = ({ projectId }: Props) => {
               color: 'var(--phantom-text-secondary)',
               fontSize: '0.7rem',
               marginBottom: 4,
+            },
+            dropdown: {
+              backgroundColor: 'var(--phantom-surface-card)',
+              borderColor: 'var(--phantom-border-subtle)',
+            },
+            option: {
+              color: 'var(--phantom-text-primary)',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '0.75rem',
             },
           }}
         />
