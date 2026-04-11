@@ -104,6 +104,8 @@ export function ChangesView() {
   const [committing, setCommitting] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [pulling, setPulling] = useState(false);
+  const [pushFeedback, setPushFeedback] = useState<'success' | 'error' | null>(null);
+  const [pullFeedback, setPullFeedback] = useState<'success' | 'error' | null>(null);
 
   const refresh = useCallback(() => {
     if (!worktree) return;
@@ -166,19 +168,33 @@ export function ChangesView() {
   const handlePush = useCallback(async () => {
     if (!worktree || pushing) return;
     setPushing(true);
-    try { await gitPush(worktree.id); }
-    catch { /* error handled by server response */ }
-    finally { setPushing(false); }
-  }, [worktree?.id, pushing]);
+    setPushFeedback(null);
+    try {
+      await gitPush(worktree.id);
+      setPushFeedback('success');
+      refresh();
+    } catch {
+      setPushFeedback('error');
+    } finally {
+      setPushing(false);
+      setTimeout(() => setPushFeedback(null), 2500);
+    }
+  }, [worktree?.id, pushing, refresh]);
 
   const handlePull = useCallback(async () => {
     if (!worktree || pulling) return;
     setPulling(true);
+    setPullFeedback(null);
     try {
       await gitPull(worktree.id);
+      setPullFeedback('success');
       refresh();
-    } catch { /* error handled by server response */ }
-    finally { setPulling(false); }
+    } catch {
+      setPullFeedback('error');
+    } finally {
+      setPulling(false);
+      setTimeout(() => setPullFeedback(null), 2500);
+    }
   }, [worktree?.id, pulling, refresh]);
 
   const handleUndoCommit = useCallback(async () => {
@@ -223,30 +239,32 @@ export function ChangesView() {
         <Text fz="0.65rem" c="var(--phantom-text-muted)">
           {totalChanges} change{totalChanges !== 1 ? 's' : ''}
         </Text>
-        <Tooltip label={status?.behind ? `Pull ${status.behind} commit${status.behind !== 1 ? 's' : ''} from remote` : 'Pull from remote'} position="bottom" withArrow fz="xs">
+        <Tooltip label={pullFeedback === 'success' ? 'Pulled!' : pullFeedback === 'error' ? 'Pull failed' : status?.behind ? `Pull ${status.behind} commit${status.behind !== 1 ? 's' : ''} from remote` : 'Pull from remote'} position="bottom" withArrow fz="xs">
           <div
             onClick={handlePull}
             style={{
               display: 'flex', alignItems: 'center', gap: 2, cursor: pulling ? 'default' : 'pointer',
-              color: pulling ? 'var(--phantom-accent-cyan)' : status?.behind ? 'var(--phantom-accent-gold, #f59e0b)' : 'var(--phantom-text-muted)',
+              color: pullFeedback === 'success' ? 'var(--phantom-status-success, #22c55e)' : pullFeedback === 'error' ? 'var(--phantom-status-error, #ef4444)' : pulling ? 'var(--phantom-accent-cyan)' : status?.behind ? 'var(--phantom-accent-gold, #f59e0b)' : 'var(--phantom-text-muted)',
               padding: '1px 4px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 600,
+              transition: 'color 300ms ease',
             }}
           >
             <ArrowDown size={10} />
-            {pulling ? 'Pulling...' : status?.behind ? `Pull ${status.behind}` : 'Pull'}
+            {pulling ? 'Pulling...' : pullFeedback === 'success' ? 'Pulled!' : pullFeedback === 'error' ? 'Failed' : status?.behind ? `Pull ${status.behind}` : 'Pull'}
           </div>
         </Tooltip>
-        <Tooltip label={status?.ahead ? `Push ${status.ahead} commit${status.ahead !== 1 ? 's' : ''} to remote` : 'Push to remote'} position="bottom" withArrow fz="xs">
+        <Tooltip label={pushFeedback === 'success' ? 'Pushed!' : pushFeedback === 'error' ? 'Push failed' : status?.ahead ? `Push ${status.ahead} commit${status.ahead !== 1 ? 's' : ''} to remote` : 'Push to remote'} position="bottom" withArrow fz="xs">
           <div
             onClick={handlePush}
             style={{
               display: 'flex', alignItems: 'center', gap: 2, cursor: pushing ? 'default' : 'pointer',
-              color: pushing ? 'var(--phantom-accent-cyan)' : status?.ahead ? 'var(--phantom-status-success, #22c55e)' : 'var(--phantom-text-muted)',
+              color: pushFeedback === 'success' ? 'var(--phantom-status-success, #22c55e)' : pushFeedback === 'error' ? 'var(--phantom-status-error, #ef4444)' : pushing ? 'var(--phantom-accent-cyan)' : status?.ahead ? 'var(--phantom-status-success, #22c55e)' : 'var(--phantom-text-muted)',
               padding: '1px 4px', borderRadius: 3, fontSize: '0.6rem', fontWeight: 600,
+              transition: 'color 300ms ease',
             }}
           >
             <ArrowUp size={10} />
-            {pushing ? 'Pushing...' : status?.ahead ? `Push ${status.ahead}` : 'Push'}
+            {pushing ? 'Pushing...' : pushFeedback === 'success' ? 'Pushed!' : pushFeedback === 'error' ? 'Failed' : status?.ahead ? `Push ${status.ahead}` : 'Push'}
           </div>
         </Tooltip>
         <Tooltip label="Refresh status" position="bottom" withArrow fz="xs">
