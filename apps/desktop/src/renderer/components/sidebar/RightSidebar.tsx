@@ -16,7 +16,11 @@ import {
   rightSidebarCollapsedAtom,
   rightSidebarWidthAtom,
 } from '../../atoms/worktrees';
-import { rightSidebarTabAtom } from '../../atoms/fileExplorer';
+import {
+  rightSidebarTabAtom,
+  gitChangesCountAtom,
+  rootFileCountAtom,
+} from '../../atoms/fileExplorer';
 import { ResizeHandle } from './ResizeHandle';
 import { FilesView } from './FilesView';
 import { ChangesView } from './ChangesView';
@@ -30,6 +34,8 @@ export function RightSidebar() {
   const [collapsed, setCollapsed] = useAtom(rightSidebarCollapsedAtom);
   const [width, setWidth] = useAtom(rightSidebarWidthAtom);
   const [activeTab, setActiveTab] = useAtom(rightSidebarTabAtom);
+  const changesCount = useAtomValue(gitChangesCountAtom);
+  const fileCount = useAtomValue(rootFileCountAtom);
 
   if (collapsed) {
     return (
@@ -113,8 +119,31 @@ export function RightSidebar() {
                   ? 'var(--phantom-text-primary)'
                   : 'var(--phantom-text-muted)'
               }
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
             >
               {tab.label}
+              {((tab.id === 'files' && fileCount > 0) ||
+                (tab.id === 'changes' && changesCount > 0)) && (
+                <span
+                  style={{
+                    fontSize: '0.6rem',
+                    fontWeight: 600,
+                    lineHeight: 1,
+                    padding: '1px 5px',
+                    borderRadius: 8,
+                    backgroundColor:
+                      tab.id === 'changes'
+                        ? 'var(--phantom-accent-gold, #f59e0b)'
+                        : 'var(--phantom-surface-elevated, #2a2a2a)',
+                    color:
+                      tab.id === 'changes'
+                        ? '#000'
+                        : 'var(--phantom-text-muted)',
+                  }}
+                >
+                  {tab.id === 'files' ? fileCount : changesCount}
+                </span>
+              )}
             </Text>
           </UnstyledButton>
         ))}

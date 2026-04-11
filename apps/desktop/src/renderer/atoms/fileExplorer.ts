@@ -115,3 +115,22 @@ export const rightSidebarTabAtom = atomWithStorage<'files' | 'changes'>(
   'phantom-right-sidebar-tab',
   'files',
 );
+
+// ---------------------------------------------------------------------------
+// Git changes count (written by ChangesView, read by RightSidebar tabs)
+// ---------------------------------------------------------------------------
+
+export const gitChangesCountAtom = atom(0);
+
+// ---------------------------------------------------------------------------
+// Root file count (derived from file tree root entries)
+// ---------------------------------------------------------------------------
+
+export const rootFileCountAtom = atom((get) => {
+  const tree = get(fileTreeDataAtom);
+  let count = 0;
+  for (const entries of tree.values()) {
+    count += entries.filter((e) => !e.isDirectory).length;
+  }
+  return count;
+});

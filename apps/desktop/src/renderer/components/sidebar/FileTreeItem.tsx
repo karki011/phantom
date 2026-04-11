@@ -162,7 +162,7 @@ export function FileTreeItem({
       {/* Context menu — positioned at click location */}
       <Menu
         opened={menuOpened}
-        onChange={setMenuOpened}
+        onChange={(val) => { if (!val) setMenuOpened(false); }}
         position="right-start"
         withArrow
         styles={{

@@ -4,11 +4,12 @@
  * @author Subash Karki
  */
 import { Menu, ScrollArea, Text, Textarea, Tooltip } from '@mantine/core';
-import { useAtomValue } from 'jotai';
-import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw, Plus, Minus, Check, ArrowUp, ArrowDown, Undo2, MoreVertical, RotateCcw, Archive, ArchiveRestore, Download } from 'lucide-react';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw, Plus, Minus, Check, ArrowUp, ArrowDown, Undo2, MoreVertical, RotateCcw, Archive, ArchiveRestore, Download, ClipboardCopy, ExternalLink } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
 import { activeWorktreeAtom } from '../../atoms/worktrees';
+import { gitChangesCountAtom } from '../../atoms/fileExplorer';
 import type { GitFileChange, GitStatusResult } from '../../lib/api';
 import { fetchApi, getGitStatus, gitStage, gitUnstage, gitStageAll, gitCommit, gitPush, gitPull, gitDiscard, gitClean, gitUndoCommit, gitStash, gitStashPop, gitFetch } from '../../lib/api';
 
@@ -31,6 +32,8 @@ function FileRow({ file, worktreeId, onStage, onDiscard }: {
   const Icon = config.icon;
   const fileName = file.path.split('/').pop() ?? file.path;
   const dirPath = file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : '';
+  const [menuOpened, setMenuOpened] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
 
   const handleClick = useCallback(async () => {
     if (file.status === 'deleted') return;
@@ -51,53 +54,124 @@ function FileRow({ file, worktreeId, onStage, onDiscard }: {
     }
   }, [file, worktreeId, fileName, store]);
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setMenuPosition({ x: e.clientX, y: e.clientY });
+    setMenuOpened(true);
+  }, []);
+
   return (
-    <div
-      style={{
-        display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px',
-        cursor: file.status === 'deleted' ? 'default' : 'pointer',
-        borderRadius: 3, transition: 'background-color 100ms ease',
-      }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated, #2a2a2a)'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-    >
-      <Icon size={12} style={{ color: config.color, flexShrink: 0 }} />
-      <Text fz="0.73rem" c="var(--phantom-text-primary)" truncate style={{ flex: 1 }} onClick={handleClick}>
-        {fileName}
-      </Text>
-      {dirPath && (
-        <Text fz="0.6rem" c="var(--phantom-text-muted)" truncate style={{ maxWidth: 80 }}>
-          {dirPath}
+    <>
+      <div
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px',
+          cursor: file.status === 'deleted' ? 'default' : 'pointer',
+          borderRadius: 3, transition: 'background-color 100ms ease',
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated, #2a2a2a)'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+        onContextMenu={handleContextMenu}
+      >
+        <Icon size={12} style={{ color: config.color, flexShrink: 0 }} />
+        <Text fz="0.73rem" c="var(--phantom-text-primary)" truncate style={{ flex: 1 }} onClick={handleClick}>
+          {fileName}
         </Text>
-      )}
-      {onDiscard && (
-        <Tooltip label={file.status === 'untracked' ? 'Delete file' : 'Discard changes'} position="top" withArrow fz="xs">
-          <div
-            onClick={(e) => { e.stopPropagation(); onDiscard(); }}
-            style={{ cursor: 'pointer', padding: 2, borderRadius: 3, display: 'flex', alignItems: 'center' }}
+        {dirPath && (
+          <Text fz="0.6rem" c="var(--phantom-text-muted)" truncate style={{ maxWidth: 80 }}>
+            {dirPath}
+          </Text>
+        )}
+        {onDiscard && (
+          <Tooltip label={file.status === 'untracked' ? 'Delete file' : 'Discard changes'} position="top" withArrow fz="xs">
+            <div
+              onClick={(e) => { e.stopPropagation(); onDiscard(); }}
+              style={{ cursor: 'pointer', padding: 2, borderRadius: 3, display: 'flex', alignItems: 'center' }}
+            >
+              <Undo2 size={12} style={{ color: 'var(--phantom-status-error, #ef4444)' }} />
+            </div>
+          </Tooltip>
+        )}
+        {onStage && (
+          <Tooltip label={file.staged ? 'Unstage file' : 'Stage file'} position="top" withArrow fz="xs">
+            <div
+              onClick={(e) => { e.stopPropagation(); onStage(); }}
+              style={{ cursor: 'pointer', padding: 2, borderRadius: 3, display: 'flex', alignItems: 'center' }}
+            >
+              {file.staged
+                ? <Minus size={12} style={{ color: 'var(--phantom-status-error, #ef4444)' }} />
+                : <Plus size={12} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />}
+            </div>
+          </Tooltip>
+        )}
+      </div>
+
+      {/* Right-click context menu */}
+      <Menu
+        opened={menuOpened}
+        onChange={(val) => { if (!val) setMenuOpened(false); }}
+        position="right-start"
+        withArrow
+        styles={{
+          dropdown: {
+            backgroundColor: 'var(--phantom-surface-card)',
+            border: '1px solid var(--phantom-border-subtle)',
+            position: 'fixed',
+            left: menuPosition.x,
+            top: menuPosition.y,
+          },
+        }}
+      >
+        <Menu.Target>
+          <div style={{ position: 'absolute', width: 0, height: 0 }} />
+        </Menu.Target>
+        <Menu.Dropdown>
+          {file.status !== 'deleted' && (
+            <Menu.Item
+              fz="0.8rem"
+              leftSection={<ExternalLink size={13} />}
+              onClick={handleClick}
+            >
+              Open Diff
+            </Menu.Item>
+          )}
+          <Menu.Item
+            fz="0.8rem"
+            leftSection={<ClipboardCopy size={13} />}
+            onClick={() => navigator.clipboard.writeText(file.path)}
           >
-            <Undo2 size={12} style={{ color: 'var(--phantom-status-error, #ef4444)' }} />
-          </div>
-        </Tooltip>
-      )}
-      {onStage && (
-        <Tooltip label={file.staged ? 'Unstage file' : 'Stage file'} position="top" withArrow fz="xs">
-          <div
-            onClick={(e) => { e.stopPropagation(); onStage(); }}
-            style={{ cursor: 'pointer', padding: 2, borderRadius: 3, display: 'flex', alignItems: 'center' }}
-          >
-            {file.staged
-              ? <Minus size={12} style={{ color: 'var(--phantom-status-error, #ef4444)' }} />
-              : <Plus size={12} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />}
-          </div>
-        </Tooltip>
-      )}
-    </div>
+            Copy Path
+          </Menu.Item>
+          <Menu.Divider />
+          {onStage && (
+            <Menu.Item
+              fz="0.8rem"
+              leftSection={file.staged
+                ? <Minus size={13} style={{ color: 'var(--phantom-status-error)' }} />
+                : <Plus size={13} style={{ color: 'var(--phantom-status-success)' }} />}
+              onClick={onStage}
+            >
+              {file.staged ? 'Unstage File' : 'Stage File'}
+            </Menu.Item>
+          )}
+          {onDiscard && (
+            <Menu.Item
+              fz="0.8rem"
+              leftSection={<Undo2 size={13} />}
+              color="red"
+              onClick={onDiscard}
+            >
+              {file.status === 'untracked' ? 'Delete File' : 'Discard Changes'}
+            </Menu.Item>
+          )}
+        </Menu.Dropdown>
+      </Menu>
+    </>
   );
 }
 
 export function ChangesView() {
   const worktree = useAtomValue(activeWorktreeAtom);
+  const setChangesCount = useSetAtom(gitChangesCountAtom);
   const [status, setStatus] = useState<GitStatusResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [commitMsg, setCommitMsg] = useState('');
@@ -142,6 +216,11 @@ export function ChangesView() {
   const stagedFiles = status?.files.filter((f) => f.staged) ?? [];
   const unstagedFiles = status?.files.filter((f) => !f.staged) ?? [];
   const totalChanges = status?.files.length ?? 0;
+
+  // Sync count to shared atom so tab badge can read it
+  useEffect(() => {
+    setChangesCount(totalChanges);
+  }, [totalChanges, setChangesCount]);
 
   const handleStage = useCallback(async (path: string) => {
     if (!worktree) return;
