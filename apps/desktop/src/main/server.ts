@@ -44,27 +44,49 @@ const isServerRunning = async (port: number): Promise<boolean> => {
   }
 };
 
+/**
+ * Wait for an external server (e.g. turbo dev) to become reachable.
+ * Returns true if the server appeared within the deadline, false otherwise.
+ */
+const waitForExternalServer = (
+  port: number,
+  maxWaitMs = 5000,
+  intervalMs = 400,
+): Promise<boolean> =>
+  new Promise((resolve) => {
+    const start = Date.now();
+    const poll = () => {
+      isServerRunning(port).then((up) => {
+        if (up) return resolve(true);
+        if (Date.now() - start > maxWaitMs) return resolve(false);
+        setTimeout(poll, intervalMs);
+      });
+    };
+    poll();
+  });
+
 /** Start the API server and wait for it to be ready */
 export const startServer = async (): Promise<void> => {
-  // Skip spawning if a server is already running (e.g. turbo dev started it)
-  if (await isServerRunning(3849)) {
-    console.log('[PhantomOS Desktop] API server already running on :3849, reusing');
+  if (!app.isPackaged) {
+    // DEV MODE: turbo always starts the server — just wait for it.
+    // Never spawn our own to avoid dual-process races and duplicate
+    // GraphEngine instances writing to the same SQLite.
+    console.log('[PhantomOS Desktop] Dev mode — waiting for turbo server on :3849');
+    const ready = await waitForExternalServer(3849, 30_000, 500);
+    if (ready) {
+      console.log('[PhantomOS Desktop] API server is ready (turbo)');
+    } else {
+      console.error('[PhantomOS Desktop] Turbo server did not start within 30s');
+    }
     return;
   }
 
-  const entry = app.isPackaged
-    ? join(process.resourcesPath, 'server', 'index.js')
-    : join(monoRoot, 'packages', 'server', 'src', 'index.ts');
+  // PRODUCTION: Electron owns the server — spawn it as a child process.
+  const entry = join(process.resourcesPath, 'server', 'index.js');
 
-  // Use tsx (Node + TypeScript) for the server because better-sqlite3 doesn't
-  // support the Bun runtime yet. Bun is used for package management only.
-  const tsxBin = join(monoRoot, 'node_modules', '.bin', 'tsx');
-  const cmd = app.isPackaged ? 'node' : tsxBin;
-  const args = app.isPackaged ? [entry] : [entry];
+  console.log(`[PhantomOS Desktop] Starting API server: node ${entry}`);
 
-  console.log(`[PhantomOS Desktop] Starting API server: ${cmd} ${args.join(' ')}`);
-
-  serverProcess = spawn(cmd, args, {
+  serverProcess = spawn('node', [entry], {
     cwd: monoRoot,
     env: { ...process.env },
     stdio: ['ignore', 'inherit', 'inherit'],
@@ -79,7 +101,6 @@ export const startServer = async (): Promise<void> => {
     serverProcess = null;
   });
 
-  // Wait for the server to be ready before returning
   try {
     await waitForServer(3849);
     console.log('[PhantomOS Desktop] API server is ready');
