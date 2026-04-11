@@ -21,7 +21,7 @@ const SOURCE_EXTENSIONS = new Set([
 
 /** Directories to skip during walk */
 const SKIP_DIRS = new Set([
-  'node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.turbo', '.cache',
+  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.next', '.turbo', '.cache',
   '__pycache__', '.venv', 'venv', 'env', 'target', '.gradle', 'bin', 'obj',
 ]);
 

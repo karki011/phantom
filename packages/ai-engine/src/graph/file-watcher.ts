@@ -22,9 +22,9 @@ const SOURCE_EXTENSIONS = new Set([
 
 /** Directory names to ignore during watching */
 const IGNORED_DIR_NAMES = new Set([
-  'node_modules', '.git', 'dist', 'build', 'coverage',
+  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage',
   '.next', '.turbo', '.cache', '__pycache__',
-  '.venv', 'venv', 'target', '.gradle',
+  '.venv', 'venv', 'target', '.gradle', 'bin', 'obj',
 ]);
 
 /**
