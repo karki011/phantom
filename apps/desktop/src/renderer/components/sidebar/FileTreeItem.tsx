@@ -105,7 +105,7 @@ export function FileTreeItem({
   return (
     <Menu
       opened={menuOpened}
-      onChange={setMenuOpened}
+      onChange={(val) => { if (!val) setMenuOpened(false); }}
       position="bottom-start"
       withinPortal
       styles={{
