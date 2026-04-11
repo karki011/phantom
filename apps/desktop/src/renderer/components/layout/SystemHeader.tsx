@@ -16,12 +16,13 @@ import {
   useMantineColorScheme,
 } from '@mantine/core';
 import { useAtom } from 'jotai';
-import { ArrowLeft, Circle, HelpCircle, Moon, Palette, Sun, Swords, Type } from 'lucide-react';
+import { ArrowLeft, Circle, Cpu, HelpCircle, MemoryStick, Moon, Palette, Sun, Swords, Type } from 'lucide-react';
 import { themeRegistry } from '@phantom-os/theme';
 
 import { type FontScale, fontScaleAtom, themeNameAtom } from '../../atoms/system';
 import { usePreferences } from '../../hooks/usePreferences';
 import { useRouter } from '../../hooks/useRouter';
+import { useSystemMetrics } from '../../hooks/useSystemMetrics';
 
 interface SystemHeaderProps {
   activeSessions: number;
@@ -36,12 +37,19 @@ const FONT_SCALE_OPTIONS: { label: string; value: FontScale }[] = [
   { label: '150%', value: 1.5 },
 ];
 
+/** Format bytes to human-readable GB/MB */
+const formatBytes = (bytes: number): string => {
+  const gb = bytes / 1024 ** 3;
+  return gb >= 1 ? `${gb.toFixed(1)}` : `${(bytes / 1024 ** 2).toFixed(0)} MB`;
+};
+
 export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }: SystemHeaderProps) => {
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const [fontScale, setFontScale] = useAtom(fontScaleAtom);
   const [themeName, setThemeName] = useAtom(themeNameAtom);
   const { isHome, navigate } = useRouter();
   const { isEnabled, setPref } = usePreferences();
+  const metrics = useSystemMetrics();
   const gamificationOn = isEnabled('gamification');
 
   const isDark = colorScheme === 'dark';
@@ -87,21 +95,47 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
         </Text>
       </Group>
 
-      {/* Center: Connection status */}
+      {/* Center: Connection status + System metrics */}
       <Group
-        gap="0.375rem"
-        style={{ cursor: activeSessions > 0 ? 'pointer' : 'default', WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        onClick={() => { if (activeSessions > 0) navigate('sessions'); }}
+        gap="md"
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        <Circle
-          size={10}
-          fill={isConnected ? 'var(--phantom-status-active)' : 'var(--phantom-status-danger)'}
-          stroke="none"
-          aria-hidden="true"
-        />
-        <Text fz="0.8125rem" c="var(--phantom-text-secondary)">
-          {!isConnected ? 'Disconnected' : activeSessions > 0 ? `${activeSessions} Active` : 'Idle'}
-        </Text>
+        {/* Active sessions indicator */}
+        <Group
+          gap="0.375rem"
+          style={{ cursor: activeSessions > 0 ? 'pointer' : 'default' }}
+          onClick={() => { if (activeSessions > 0) navigate('sessions'); }}
+        >
+          <Circle
+            size={10}
+            fill={isConnected ? 'var(--phantom-status-active)' : 'var(--phantom-status-danger)'}
+            stroke="none"
+            aria-hidden="true"
+          />
+          <Text fz="0.8125rem" c="var(--phantom-text-secondary)">
+            {!isConnected ? 'Disconnected' : activeSessions > 0 ? `${activeSessions} Active` : 'Idle'}
+          </Text>
+        </Group>
+
+        {/* System metrics — only shown when data is available */}
+        {metrics && (
+          <>
+            <Text fz="0.75rem" c="var(--phantom-text-muted)">|</Text>
+            <Group gap="0.375rem">
+              <Cpu size={12} aria-hidden="true" style={{ color: 'var(--phantom-accent-cyan)' }} />
+              <Text fz="0.75rem" c="var(--phantom-text-secondary)">
+                {metrics.cpu.usage}%
+              </Text>
+            </Group>
+            <Text fz="0.75rem" c="var(--phantom-text-muted)">|</Text>
+            <Group gap="0.375rem">
+              <MemoryStick size={12} aria-hidden="true" style={{ color: 'var(--phantom-accent-gold, var(--phantom-status-warning))' }} />
+              <Text fz="0.75rem" c="var(--phantom-text-secondary)">
+                {formatBytes(metrics.memory.used)}/{formatBytes(metrics.memory.total)} GB
+              </Text>
+            </Group>
+          </>
+        )}
       </Group>
 
       {/* Right: Gamification toggle + Font scale + Theme toggle */}
