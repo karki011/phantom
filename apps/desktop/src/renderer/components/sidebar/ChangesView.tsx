@@ -122,6 +122,17 @@ export function ChangesView() {
     return () => clearInterval(interval);
   }, [refresh]);
 
+  // Background fetch every 60s so ahead/behind counts stay fresh
+  useEffect(() => {
+    if (!worktree) return;
+    // Fetch once on mount, then every 60s
+    gitFetch(worktree.id).catch(() => {});
+    const fetchInterval = setInterval(() => {
+      gitFetch(worktree.id).catch(() => {});
+    }, 60_000);
+    return () => clearInterval(fetchInterval);
+  }, [worktree?.id]);
+
   const stagedFiles = status?.files.filter((f) => f.staged) ?? [];
   const unstagedFiles = status?.files.filter((f) => !f.staged) ?? [];
   const totalChanges = status?.files.length ?? 0;
