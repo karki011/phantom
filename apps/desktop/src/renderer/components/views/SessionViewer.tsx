@@ -350,7 +350,7 @@ export const SessionViewer = () => {
           flexDirection: 'column',
           borderRadius: 12,
           border: '1px solid var(--phantom-border-subtle)',
-          overflow: 'hidden',
+          overflow: 'auto',
           backgroundColor: 'var(--phantom-surface-base, #111)',
           boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
         }}
