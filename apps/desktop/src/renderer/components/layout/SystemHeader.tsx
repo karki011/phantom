@@ -130,40 +130,71 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
               </Group>
             </Tooltip>
             <Text fz="0.75rem" c="var(--phantom-text-muted)">|</Text>
-            <Tooltip
-              label={
-                <div>
-                  <div style={{ marginBottom: 4, fontWeight: 600 }}>Memory: {formatBytes(metrics.memory.used)} / {formatBytes(metrics.memory.total)} GB ({metrics.memory.usedPercent}%)</div>
-                  {metrics.swap && metrics.swap.total > 0 && (
-                    <div style={{ marginBottom: 4, fontSize: '0.7rem', opacity: 0.85 }}>
-                      Swap: {metrics.swap.used > 0 ? `${formatBytes(metrics.swap.used)} used of ${formatBytes(metrics.swap.total)}` : 'not in use'} {metrics.swap.used > 0 ? <span style={{ color: '#ef4444' }}>(memory pressure)</span> : <span style={{ color: '#22c55e' }}>(healthy)</span>}
-                    </div>
-                  )}
-                  {metrics.topProcesses?.length > 0 && (
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: 4 }}>
-                      <div style={{ fontSize: '0.65rem', opacity: 0.7, marginBottom: 2 }}>Top Processes</div>
-                      {metrics.topProcesses.map((p) => (
-                        <div key={p.pid} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: '0.7rem' }}>
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>{p.name}</span>
-                          <span style={{ flexShrink: 0, opacity: 0.8 }}>{p.memMB >= 1024 ? `${(p.memMB / 1024).toFixed(1)} GB` : `${p.memMB} MB`}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              }
-              position="bottom"
-              withArrow
-              multiline
-              w={240}
-            >
-              <Group gap="0.375rem" style={{ cursor: 'default' }}>
-                <MemoryStick size={12} aria-hidden="true" style={{ color: 'var(--phantom-accent-gold, var(--phantom-status-warning))' }} />
-                <Text fz="0.75rem" c="var(--phantom-text-secondary)">
-                  {formatBytes(metrics.memory.used)}/{formatBytes(metrics.memory.total)} GB
+            <Popover width={260} position="bottom" shadow="md" withArrow>
+              <Popover.Target>
+                <Group gap="0.375rem" style={{ cursor: 'pointer' }}>
+                  <MemoryStick size={12} aria-hidden="true" style={{ color: 'var(--phantom-accent-gold, var(--phantom-status-warning))' }} />
+                  <Text fz="0.75rem" c="var(--phantom-text-secondary)">
+                    {formatBytes(metrics.memory.used)}/{formatBytes(metrics.memory.total)} GB
+                  </Text>
+                </Group>
+              </Popover.Target>
+              <Popover.Dropdown
+                style={{
+                  backgroundColor: 'var(--phantom-surface-card)',
+                  borderColor: 'var(--phantom-border-subtle)',
+                  padding: 10,
+                }}
+              >
+                <Text fw={600} fz="xs" c="var(--phantom-text-primary)" mb={4}>
+                  Memory: {formatBytes(metrics.memory.used)} / {formatBytes(metrics.memory.total)} GB ({metrics.memory.usedPercent}%)
                 </Text>
-              </Group>
-            </Tooltip>
+                {metrics.swap && metrics.swap.total > 0 && (
+                  <Text fz="xs" c="var(--phantom-text-secondary)" mb={4}>
+                    Swap: {metrics.swap.used > 0 ? `${formatBytes(metrics.swap.used)} used of ${formatBytes(metrics.swap.total)}` : 'not in use'}{' '}
+                    {metrics.swap.used > 0
+                      ? <span style={{ color: 'var(--phantom-status-error, #ef4444)' }}>(memory pressure)</span>
+                      : <span style={{ color: 'var(--phantom-status-success, #22c55e)' }}>(healthy)</span>}
+                  </Text>
+                )}
+                {metrics.topProcesses?.length > 0 && (() => {
+                  const phantom = metrics.topProcesses.filter((p) => p.name.startsWith('Phantom OS'));
+                  const others = metrics.topProcesses.filter((p) => !p.name.startsWith('Phantom OS'));
+                  return (
+                    <div style={{ borderTop: '1px solid var(--phantom-border-subtle)', paddingTop: 6 }}>
+                      {phantom.length > 0 && (() => {
+                        const totalMB = phantom.reduce((sum, p) => sum + p.memMB, 0);
+                        return (
+                          <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
+                              <Text fz="0.65rem" fw={700} c="var(--phantom-accent-glow)" tt="uppercase" style={{ letterSpacing: '0.05em' }}>Phantom OS Total</Text>
+                              <Text fz="xs" fw={700} c="var(--phantom-accent-glow)">{totalMB >= 1024 ? `${(totalMB / 1024).toFixed(1)} GB` : `${totalMB} MB`}</Text>
+                            </div>
+                            {phantom.map((p) => (
+                              <div key={p.pid} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 1, paddingLeft: 8 }}>
+                                <Text fz="0.7rem" c="var(--phantom-text-secondary)" truncate style={{ maxWidth: 140 }}>{p.name.replace('Phantom OS ', '')}</Text>
+                                <Text fz="0.7rem" c="var(--phantom-text-muted)" style={{ flexShrink: 0 }}>{p.memMB >= 1024 ? `${(p.memMB / 1024).toFixed(1)} GB` : `${p.memMB} MB`}</Text>
+                              </div>
+                            ))}
+                          </>
+                        );
+                      })()}
+                      {others.length > 0 && (
+                        <>
+                          <Text fz="0.65rem" fw={600} c="var(--phantom-text-muted)" tt="uppercase" mb={2} mt={phantom.length > 0 ? 6 : 0} style={{ letterSpacing: '0.05em' }}>Other Processes</Text>
+                          {others.map((p) => (
+                            <div key={p.pid} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 1 }}>
+                              <Text fz="xs" c="var(--phantom-text-secondary)" truncate style={{ maxWidth: 150 }}>{p.name}</Text>
+                              <Text fz="xs" c="var(--phantom-text-muted)" style={{ flexShrink: 0 }}>{p.memMB >= 1024 ? `${(p.memMB / 1024).toFixed(1)} GB` : `${p.memMB} MB`}</Text>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+              </Popover.Dropdown>
+            </Popover>
           </>
         )}
       </Group>

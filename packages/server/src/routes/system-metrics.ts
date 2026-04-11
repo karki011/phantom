@@ -68,14 +68,23 @@ function getSwapUsage(): { used: number; total: number } {
 /** Map raw process command to a friendly app name */
 function friendlyName(cmd: string): string {
   const lower = cmd.toLowerCase();
-  if (lower.includes('phantom-os') || lower.includes('phantom_os')) return 'Phantom OS';
-  if (lower.includes('electron') && lower.includes('helper')) {
-    if (lower.includes('gpu')) return 'Phantom OS (GPU)';
-    if (lower.includes('renderer')) return 'Phantom OS (Renderer)';
-    return 'Phantom OS (Helper)';
+
+  // Phantom OS — identify specific sub-processes by their role
+  if (lower.includes('phantom-os') || lower.includes('phantom_os')) {
+    if (lower.includes('electron helper (renderer)')) return 'Phantom OS (UI)';
+    if (lower.includes('electron helper') && lower.includes('gpu')) return 'Phantom OS (GPU)';
+    if (lower.includes('electron helper') && lower.includes('network')) return 'Phantom OS (Network)';
+    if (lower.includes('electron helper')) return 'Phantom OS (Helper)';
+    if (lower.includes('electron.app') || lower.includes('electron .')) return 'Phantom OS (Main)';
+    if (lower.includes('server/src/index')) return 'Phantom OS (Server)';
+    if (lower.includes('electron-vite')) return 'Phantom OS (Vite)';
+    if (lower.includes('turbo')) return 'Phantom OS (Turbo)';
+    if (lower.includes('esbuild')) return 'Phantom OS (esbuild)';
+    if (lower.includes('tsx')) return 'Phantom OS (Server)';
+    return 'Phantom OS';
   }
   if (lower.includes('claude')) return 'Claude Code';
-  if (lower.includes('arc') || lower.includes('browser helper')) return 'Arc Browser';
+  if (lower.includes('arc') || (lower.includes('browser helper') && !lower.includes('phantom'))) return 'Arc Browser';
   if (lower.includes('chrome')) return 'Google Chrome';
   if (lower.includes('safari')) return 'Safari';
   if (lower.includes('firefox')) return 'Firefox';
@@ -95,20 +104,31 @@ function friendlyName(cmd: string): string {
   return (cmd.split('/').pop() ?? 'unknown').slice(0, 25);
 }
 
+const isPhantomProcess = (name: string): boolean =>
+  name.startsWith('Phantom OS');
+
 function getTopProcesses(limit = 8): TopProcess[] {
   try {
+    // Fetch more than needed so we can find our app processes even if they're not in the top N
+    const fetchLimit = 30;
     const cmd = osPlatform() === 'darwin'
-      ? `ps -Ao pid,rss,command -r | head -${limit + 1}`
-      : `ps -Ao pid,rss,command --sort=-rss | head -${limit + 1}`;
+      ? `ps -Ao pid,rss,command -r | head -${fetchLimit + 1}`
+      : `ps -Ao pid,rss,command --sort=-rss | head -${fetchLimit + 1}`;
     const output = execSync(cmd, { encoding: 'utf-8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] });
-    const lines = output.trim().split('\n').slice(1); // skip header
-    return lines.map((line) => {
+    const lines = output.trim().split('\n').slice(1);
+    const all = lines.map((line) => {
       const parts = line.trim().split(/\s+/);
       const pid = parseInt(parts[0], 10);
       const rssKb = parseInt(parts[1], 10);
       const fullCmd = parts.slice(2).join(' ');
       return { name: friendlyName(fullCmd), memMB: Math.round(rssKb / 1024), pid };
     }).filter((p) => p.memMB > 0);
+
+    // Pin Phantom OS processes at top, then fill with others
+    const phantom = all.filter((p) => isPhantomProcess(p.name));
+    const others = all.filter((p) => !isPhantomProcess(p.name));
+    const remaining = limit - phantom.length;
+    return [...phantom, ...others.slice(0, Math.max(remaining, 0))];
   } catch {
     return [];
   }
