@@ -18,6 +18,7 @@ import {
 } from '../terminal-manager.js';
 import { registerProcess, unregisterProcess } from '../process-registry.js';
 import { historyWriter } from '../terminal-history.js';
+import { logger } from '../logger.js';
 
 export const setupTerminalWs = (
   server: HttpServer | HttpsServer,
@@ -47,7 +48,7 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
   };
 
   ws.on('close', (code, reason) => {
-    console.log(`[TerminalWS] ws.close termId=${termId.slice(0,8)} code=${code} reason=${reason?.toString() ?? ''}`);
+    logger.debug('TerminalWS', `ws.close termId=${termId.slice(0,8)} code=${code} reason=${reason?.toString() ?? ''}`);
     if (session) {
       detachPty(termId, onData);
       // Only unregister process if no other listeners remain
@@ -71,7 +72,7 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
       try {
         const msg = JSON.parse(raw.toString());
         if (msg.type !== 'input' && msg.type !== 'resize') {
-          console.log(`[TerminalWS] msg type=${msg.type} termId=${termId.slice(0,8)}`);
+          logger.debug('TerminalWS', `msg type=${msg.type} termId=${termId.slice(0,8)}`);
         }
         switch (msg.type) {
           case 'init': {
@@ -79,7 +80,11 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
               try {
                 const ALLOWED_ENV_KEYS = new Set(['PORT', 'NODE_ENV', 'CLAUDE_API_KEY']);
                 const safeEnv = msg.env
-                  ? Object.fromEntries(Object.entries(msg.env).filter(([k]: [string, unknown]) => ALLOWED_ENV_KEYS.has(k)))
+                  ? Object.fromEntries(
+                      Object.entries(msg.env)
+                        .filter(([k]: [string, unknown]) => ALLOWED_ENV_KEYS.has(k))
+                        .map(([k, v]) => [k, String(v)]),
+                    ) as Record<string, string>
                   : undefined;
                 // Pass onData as initialListener — it's attached to the session
                 // BEFORE the daemon subscription, preventing lost output.
@@ -157,7 +162,7 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
             resizePty(termId, msg.cols, msg.rows);
             break;
           case 'kill':
-            console.log(`[TerminalWS] KILL received termId=${termId.slice(0,8)} hasSession=${!!session}`);
+            logger.debug('TerminalWS', `KILL received termId=${termId.slice(0,8)} hasSession=${!!session}`);
             if (session) {
               historyWriter.markExited(termId);
               destroyPty(termId);

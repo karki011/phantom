@@ -94,7 +94,7 @@ const processTaskFile = (
     // Skip task if no matching session exists — avoids phantom sessions with incomplete data
     const sessionExists = db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
     if (!sessionExists) {
-      console.warn(`[TaskWatcher] Skipping orphan task ${rawId} — no session ${sessionId} found`);
+      logger.warn('TaskWatcher', `Skipping orphan task ${rawId} — no session ${sessionId} found`);
       return;
     } else if (!sessionExists.name && cleanSubject) {
       // Backfill name from first meaningful task if session has no name yet

@@ -6,8 +6,9 @@ import { exec, execSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, basename } from 'node:path';
+import { logger } from './logger.js';
 
-export interface WorktreeInfo {
+interface WorktreeInfo {
   path: string;
   branch: string;
   commit: string;
@@ -77,7 +78,7 @@ export const removeWorktree = async (worktreePath: string): Promise<void> => {
     });
   } catch {
     // Fallback: prune if remove fails
-    console.warn(`[WorktreeManager] Failed to remove worktree at ${worktreePath}`);
+    logger.warn('WorktreeManager', `Failed to remove worktree at ${worktreePath}`);
   }
 };
 

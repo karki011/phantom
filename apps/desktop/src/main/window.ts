@@ -20,7 +20,7 @@ export const createWindow = (): void => {
 
   // Set dock icon on macOS
   if (process.platform === 'darwin' && !appIcon.isEmpty()) {
-    app.dock.setIcon(appIcon);
+    app.dock?.setIcon(appIcon);
   }
 
   mainWindow = new BrowserWindow({

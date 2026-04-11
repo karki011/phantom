@@ -2,7 +2,7 @@
  * Tests for PhantomOS Process Registry
  * @author Subash Karki
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, type Mock, beforeEach } from 'vitest';
 import {
   initProcessRegistry,
   registerProcess,
@@ -34,7 +34,7 @@ const createMockProcess = (overrides: Partial<RunningProcess> = {}): RunningProc
 // ---------------------------------------------------------------------------
 
 describe('ProcessRegistry', () => {
-  let broadcastSpy: ReturnType<typeof vi.fn>;
+  let broadcastSpy: Mock;
 
   beforeEach(() => {
     // Clear the registry between tests by unregistering everything

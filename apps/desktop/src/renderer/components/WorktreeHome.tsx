@@ -13,7 +13,6 @@ import {
   Kbd,
   Loader,
   Paper,
-  Progress,
   SimpleGrid,
   Stack,
   Text,
@@ -23,18 +22,16 @@ import {
 import { usePaneStore } from '@phantom-os/panes';
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
-  AlertTriangle, BarChart3, Beaker, Braces, FileCode, GitBranch,
-  Hammer, MessageSquare, Package, Pencil, Play, Plus, Rocket, Settings2, Sparkles,
-  Star, Target, Terminal as TerminalIcon, Trash2,
+  AlertTriangle, FileCode, GitBranch,
+  MessageSquare, Pencil, Play, Plus, Sparkles,
+  Star, Terminal as TerminalIcon, Trash2,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { activeWorktreeAtom, deleteWorktreeAtom, projectsAtom } from '../atoms/worktrees';
 import type { CustomRecipe } from '../atoms/recipes';
-import { useHunter } from '../hooks/useHunter';
 import { useProjectProfile } from '../hooks/useProjectProfile';
 import { useRecipes, type EnrichedRecipe } from '../hooks/useRecipes';
-import { useQuests } from '../hooks/useQuests';
 import { useRouter } from '../hooks/useRouter';
 import { PlansCard } from './PlansCard';
 import { RecipeFormModal } from './RecipeFormModal';
@@ -52,16 +49,6 @@ const formatRelativeTime = (ts: number): string => {
   const hr = Math.floor(min / 60);
   if (hr < 24) return `${hr}h`;
   return `${Math.floor(hr / 24)}d`;
-};
-
-const RECIPE_ICONS: Record<string, React.ReactNode> = {
-  test: <Beaker size={20} />,
-  lint: <Braces size={20} />,
-  build: <Hammer size={20} />,
-  serve: <Play size={20} />,
-  deploy: <Rocket size={20} />,
-  setup: <Package size={20} />,
-  custom: <Settings2 size={20} />,
 };
 
 const QUOTES = [
@@ -88,42 +75,6 @@ interface GitStatus {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function RankHeader({ profile }: {
-  profile: { rank: string; title: string; level: number; xp: number; xpToNext: number } | null;
-}) {
-  if (!profile) return null;
-  const xpPercent = profile.xpToNext > 0 ? (profile.xp / profile.xpToNext) * 100 : 0;
-
-  return (
-    <Stack align="center" gap={4}>
-      <Title
-        order={1}
-        ff="'Orbitron', sans-serif"
-        fw={900}
-        fz="2.5rem"
-        c="var(--phantom-accent-glow)"
-        style={{ textShadow: '0 0 20px var(--phantom-accent-glow), 0 0 40px var(--phantom-accent-glow)' }}
-      >
-        {profile.rank}-RANK
-      </Title>
-      <Text fz="sm" c="var(--phantom-text-secondary)">
-        {profile.title} &middot; Lv.{profile.level}
-      </Text>
-      <Progress
-        value={xpPercent}
-        color="var(--phantom-accent-glow)"
-        size="xs"
-        w={200}
-        bg="var(--phantom-surface-elevated)"
-        radius="xl"
-      />
-      <Text fz="xs" c="var(--phantom-text-muted)">
-        {profile.xp} / {profile.xpToNext} XP
-      </Text>
-    </Stack>
-  );
-}
 
 function QuickActionCard({
   icon,
@@ -217,44 +168,11 @@ function GitStatusCard({ state }: { state: GitStatusState }) {
   );
 }
 
-function DailyQuestsCard({ quests }: { quests: { total: number; completed: number; availableXp: number } }) {
-  const percent = quests.total > 0 ? (quests.completed / quests.total) * 100 : 0;
-
-  return (
-    <Paper p="md" bg="var(--phantom-surface-card)" radius="md" style={{ border: '1px solid var(--phantom-border-subtle)' }}>
-      <Group gap="xs" mb="xs">
-        <Target size={14} style={{ color: 'var(--phantom-accent-gold)' }} />
-        <Text fz="xs" fw={600} c="var(--phantom-text-secondary)">Daily Quests</Text>
-      </Group>
-      <Group gap="xs">
-        <Text fz="sm" fw={600} c="var(--phantom-text-primary)">
-          {quests.completed}/{quests.total} complete
-        </Text>
-      </Group>
-      <Progress
-        value={percent}
-        color="var(--phantom-accent-gold)"
-        size="xs"
-        bg="var(--phantom-surface-elevated)"
-        radius="xl"
-        mt={6}
-      />
-      {quests.availableXp > 0 && (
-        <Text fz="xs" c="var(--phantom-accent-gold)" mt={4}>
-          +{quests.availableXp} XP available
-        </Text>
-      )}
-    </Paper>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
 export function WorktreeHome() {
-  const { profile } = useHunter();
-  const { quests } = useQuests();
   const { navigate } = useRouter();
   const store = usePaneStore();
   const worktree = useAtomValue(activeWorktreeAtom);
@@ -385,16 +303,6 @@ export function WorktreeHome() {
 
   // Random quote (stable per mount)
   const quote = useMemo(() => QUOTES[Math.floor(Math.random() * QUOTES.length)], []);
-
-  // Quest summary
-  const questSummary = useMemo(() => {
-    const total = quests.length;
-    const completed = quests.filter((q) => q.completed).length;
-    const availableXp = quests
-      .filter((q) => !q.completed)
-      .reduce((sum, q) => sum + q.xpReward, 0);
-    return { total, completed, availableXp };
-  }, [quests]);
 
   const openTerminal = useCallback(() => store.addPaneAsTab('terminal', { cwd: worktree?.worktreePath } as Record<string, unknown>, 'Terminal'), [store, worktree]);
   const openEditor = useCallback(() => store.addPaneAsTab('editor', {} as Record<string, unknown>, 'Editor'), [store]);
