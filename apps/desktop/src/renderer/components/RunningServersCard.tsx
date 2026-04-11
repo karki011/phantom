@@ -4,7 +4,7 @@
  */
 import { ActionIcon, Badge, Group, Paper, Stack, Text, Tooltip } from '@mantine/core';
 import { ExternalLink, Radio, Square, Wifi } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import type { RunningServer } from '../lib/api';
 import { getRunningServers, stopServer } from '../lib/api';
 
@@ -22,7 +22,7 @@ interface RunningServersCardProps {
   worktreeId: string;
 }
 
-export function RunningServersCard({ worktreeId }: RunningServersCardProps) {
+export const RunningServersCard = memo(function RunningServersCard({ worktreeId }: RunningServersCardProps) {
   const [servers, setServers] = useState<RunningServer[]>([]);
 
   const refresh = useCallback(() => {
@@ -136,4 +136,4 @@ export function RunningServersCard({ worktreeId }: RunningServersCardProps) {
       </Stack>
     </Paper>
   );
-}
+});

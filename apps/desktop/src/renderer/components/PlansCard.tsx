@@ -6,7 +6,7 @@
 import { Group, Paper, Stack, Text } from '@mantine/core';
 import { usePaneStore } from '@phantom-os/panes';
 import { FileText } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 
 interface PlanFile {
   filename: string;
@@ -26,7 +26,7 @@ const formatRelativeTime = (ts: number): string => {
   return `${Math.floor(hr / 24)}d ago`;
 };
 
-export function PlansCard({ worktreeId }: { worktreeId: string }) {
+export const PlansCard = memo(function PlansCard({ worktreeId }: { worktreeId: string }) {
   const [plans, setPlans] = useState<PlanFile[]>([]);
   const store = usePaneStore();
 
@@ -96,4 +96,4 @@ export function PlansCard({ worktreeId }: { worktreeId: string }) {
       </Stack>
     </Paper>
   );
-}
+});

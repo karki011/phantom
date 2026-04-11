@@ -114,9 +114,13 @@ export function ChangesView() {
       .then(setStatus)
       .catch(() => setStatus(null))
       .finally(() => setLoading(false));
-    // Sync GitStatusCard on WorktreeHome
-    window.dispatchEvent(new Event('phantom:git-refresh'));
   }, [worktree?.id]);
+
+  // Refresh + sync GitStatusCard on WorktreeHome (only for user actions, not polling)
+  const refreshAndSync = useCallback(() => {
+    refresh();
+    window.dispatchEvent(new Event('phantom:git-refresh'));
+  }, [refresh]);
 
   useEffect(() => {
     refresh();
@@ -142,14 +146,14 @@ export function ChangesView() {
   const handleStage = useCallback(async (path: string) => {
     if (!worktree) return;
     await gitStage(worktree.id, [path]);
-    refresh();
-  }, [worktree?.id, refresh]);
+    refreshAndSync();
+  }, [worktree?.id, refreshAndSync]);
 
   const handleUnstage = useCallback(async (path: string) => {
     if (!worktree) return;
     await gitUnstage(worktree.id, [path]);
-    refresh();
-  }, [worktree?.id, refresh]);
+    refreshAndSync();
+  }, [worktree?.id, refreshAndSync]);
 
   const handleDiscard = useCallback(async (path: string, isUntracked: boolean) => {
     if (!worktree) return;
@@ -158,14 +162,14 @@ export function ChangesView() {
     } else {
       await gitDiscard(worktree.id, [path]);
     }
-    refresh();
-  }, [worktree?.id, refresh]);
+    refreshAndSync();
+  }, [worktree?.id, refreshAndSync]);
 
   const handleStageAll = useCallback(async () => {
     if (!worktree) return;
     await gitStageAll(worktree.id);
-    refresh();
-  }, [worktree?.id, refresh]);
+    refreshAndSync();
+  }, [worktree?.id, refreshAndSync]);
 
   const handleCommit = useCallback(async () => {
     if (!worktree || !commitMsg.trim() || stagedFiles.length === 0) return;
@@ -173,10 +177,10 @@ export function ChangesView() {
     try {
       await gitCommit(worktree.id, commitMsg.trim());
       setCommitMsg('');
-      refresh();
+      refreshAndSync();
     } catch { /* refresh shows current state */ }
     finally { setCommitting(false); }
-  }, [worktree?.id, commitMsg, stagedFiles.length, refresh]);
+  }, [worktree?.id, commitMsg, stagedFiles.length, refreshAndSync]);
 
   const handlePush = useCallback(async () => {
     if (!worktree || pushing) return;
@@ -185,14 +189,14 @@ export function ChangesView() {
     try {
       await gitPush(worktree.id);
       setPushFeedback('success');
-      refresh();
+      refreshAndSync();
     } catch {
       setPushFeedback('error');
     } finally {
       setPushing(false);
       setTimeout(() => setPushFeedback(null), 2500);
     }
-  }, [worktree?.id, pushing, refresh]);
+  }, [worktree?.id, pushing, refreshAndSync]);
 
   const handlePull = useCallback(async () => {
     if (!worktree || pulling) return;
@@ -201,38 +205,38 @@ export function ChangesView() {
     try {
       await gitPull(worktree.id);
       setPullFeedback('success');
-      refresh();
+      refreshAndSync();
     } catch {
       setPullFeedback('error');
     } finally {
       setPulling(false);
       setTimeout(() => setPullFeedback(null), 2500);
     }
-  }, [worktree?.id, pulling, refresh]);
+  }, [worktree?.id, pulling, refreshAndSync]);
 
   const handleUndoCommit = useCallback(async () => {
     if (!worktree) return;
     await gitUndoCommit(worktree.id);
-    refresh();
-  }, [worktree?.id, refresh]);
+    refreshAndSync();
+  }, [worktree?.id, refreshAndSync]);
 
   const handleStash = useCallback(async () => {
     if (!worktree) return;
     await gitStash(worktree.id);
-    refresh();
-  }, [worktree?.id, refresh]);
+    refreshAndSync();
+  }, [worktree?.id, refreshAndSync]);
 
   const handleStashPop = useCallback(async () => {
     if (!worktree) return;
     await gitStashPop(worktree.id);
-    refresh();
-  }, [worktree?.id, refresh]);
+    refreshAndSync();
+  }, [worktree?.id, refreshAndSync]);
 
   const handleFetch = useCallback(async () => {
     if (!worktree) return;
     await gitFetch(worktree.id);
-    refresh();
-  }, [worktree?.id, refresh]);
+    refreshAndSync();
+  }, [worktree?.id, refreshAndSync]);
 
   if (!worktree) {
     return (
@@ -346,7 +350,7 @@ export function ChangesView() {
                     </Text>
                     <Tooltip label="Unstage all" position="top" withArrow fz="xs">
                       <div
-                        onClick={() => { if (worktree) { gitUnstage(worktree.id, stagedFiles.map((f) => f.path)); refresh(); } }}
+                        onClick={() => { if (worktree) { gitUnstage(worktree.id, stagedFiles.map((f) => f.path)); refreshAndSync(); } }}
                         style={{ cursor: 'pointer', padding: 2 }}
                       >
                         <Minus size={11} style={{ color: 'var(--phantom-text-muted)' }} />

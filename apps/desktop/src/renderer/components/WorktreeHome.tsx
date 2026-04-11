@@ -352,7 +352,8 @@ export function WorktreeHome() {
     }
 
     const fetchStatus = () => {
-      setGitStatusState('loading');
+      // Only show loading on initial fetch — prevents flash on subsequent polls
+      setGitStatusState((prev) => (prev && prev !== 'unavailable' && prev !== 'error') ? prev : 'loading');
       window.phantomOS.invoke('phantom:git-status', gitPath)
         .then((result) => {
           setGitStatusState(result ? (result as GitStatus) : 'unavailable');
