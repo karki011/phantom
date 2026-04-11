@@ -97,7 +97,6 @@ class GraphEngineService {
       }
 
       // Clear old persisted data before saving fresh build
-      // (prevents stale nodes from previous builds lingering in SQLite)
       this.persistence.deleteProject(projectId);
       this.persistGraph(projectId, ctx);
 
@@ -265,6 +264,7 @@ class GraphEngineService {
         return;
       }
 
+      this.persistence.deleteProject(projectId);
       this.persistGraph(projectId, ctx);
 
       const stats = ctx.query.getStats(projectId);
