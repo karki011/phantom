@@ -135,10 +135,24 @@ export const reorderTabAtom = atom(
 export const addPaneAsTabAtom = atom(
   null,
   (
-    _get,
+    get,
     set,
     { kind, data, title }: { kind: string; data?: any; title?: string },
   ) => {
+    // Dedup: if a tab already has a pane with the same kind + filePath, focus it
+    const state = get(paneStateAtom);
+    const filePath = data?.filePath as string | undefined;
+    if (filePath) {
+      for (const tab of state.tabs) {
+        for (const pane of Object.values(tab.panes)) {
+          if (pane.kind === kind && (pane.data as any)?.filePath === filePath) {
+            set(paneStateAtom, (s) => ({ ...s, activeTabId: tab.id }));
+            return tab.id;
+          }
+        }
+      }
+    }
+
     const pane = makePane(kind, data ?? {}, title ?? kind);
     const tab: Tab = {
       id: uid(),
