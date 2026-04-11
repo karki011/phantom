@@ -23,8 +23,6 @@ import { type FontScale, fontScaleAtom, themeNameAtom } from '../../atoms/system
 import { usePreferences } from '../../hooks/usePreferences';
 import { useRouter } from '../../hooks/useRouter';
 import { useSystemMetrics } from '../../hooks/useSystemMetrics';
-import { useGraphStatus } from '../../hooks/useGraphStatus';
-import { GraphStatus } from './GraphStatus';
 
 interface SystemHeaderProps {
   activeSessions: number;
@@ -52,7 +50,6 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
   const { isHome, navigate } = useRouter();
   const { isEnabled, setPref } = usePreferences();
   const metrics = useSystemMetrics();
-  const graphStatus = useGraphStatus();
   const gamificationOn = isEnabled('gamification');
 
   const isDark = colorScheme === 'dark';
@@ -201,13 +198,6 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
           </>
         )}
 
-        {/* Graph status — after memory metrics */}
-        {graphStatus.phase !== 'idle' && (
-          <>
-            <Text fz="0.75rem" c="var(--phantom-text-muted)">|</Text>
-            <GraphStatus />
-          </>
-        )}
       </Group>
 
       {/* Right: Gamification toggle + Font scale + Theme toggle */}

@@ -10,11 +10,13 @@ import {
   Activity,
   FolderGit2,
   GitBranch,
+  GitGraph,
   Shield,
 } from 'lucide-react';
 
 import { projectsAtom } from '../../atoms/worktrees';
 import { useHunter } from '../../hooks/useHunter';
+import { useGraphStatus } from '../../hooks/useGraphStatus';
 import { usePreferences } from '../../hooks/usePreferences';
 import { useRouter } from '../../hooks/useRouter';
 import { useSessions } from '../../hooks/useSessions';
@@ -37,6 +39,7 @@ export const Cockpit = () => {
   const { active, recent } = useSessions();
   const projects = useAtomValue(projectsAtom);
   const { isEnabled } = usePreferences();
+  const graphStatus = useGraphStatus();
   const showGamification = isEnabled('gamification');
 
   const totalTokens = active.reduce(
@@ -134,6 +137,64 @@ export const Cockpit = () => {
               ))}
             </Stack>
           </Paper>
+
+          {/* Code Graph */}
+          {graphStatus.phase !== 'idle' && (
+            <Paper
+              p="sm"
+              bg="var(--phantom-surface-card)"
+              style={{ border: '1px solid var(--phantom-border-subtle)' }}
+            >
+              <Group gap="xs" mb="xs">
+                <GitGraph size={14} style={{ color: 'var(--phantom-accent-cyan)' }} />
+                <Text fz="0.75rem" fw={600} c="var(--phantom-text-primary)">Code Graph</Text>
+                <Text fz="0.6rem" c="var(--phantom-text-muted)" ml="auto">
+                  {graphStatus.phase === 'building' ? 'building...' :
+                   graphStatus.phase === 'enriching' ? 'enriching...' :
+                   graphStatus.phase === 'updating' ? 'updating...' :
+                   graphStatus.phase === 'stale' ? 'stale' :
+                   graphStatus.phase === 'error' ? 'error' : 'ready'}
+                </Text>
+              </Group>
+              {graphStatus.phase === 'building' && graphStatus.progress && (
+                <>
+                  <Text fz="xs" c="var(--phantom-text-secondary)" mb={4}>
+                    Mapping {graphStatus.progress.current.toLocaleString()}/{graphStatus.progress.total.toLocaleString()} files
+                  </Text>
+                  <div style={{
+                    height: 4, borderRadius: 2, backgroundColor: 'var(--phantom-surface-elevated)',
+                    overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      height: '100%', borderRadius: 2,
+                      width: `${graphStatus.progress.total > 0 ? Math.round((graphStatus.progress.current / graphStatus.progress.total) * 100) : 0}%`,
+                      background: 'var(--phantom-accent-cyan)',
+                      transition: 'width 200ms ease',
+                    }} />
+                  </div>
+                </>
+              )}
+              {graphStatus.stats && graphStatus.phase !== 'building' && (
+                <Stack gap={6}>
+                  {[
+                    { label: 'Files', value: graphStatus.stats.files.toLocaleString() },
+                    { label: 'Connections', value: graphStatus.stats.edges.toLocaleString() },
+                    { label: 'Coverage', value: `${Math.round(graphStatus.stats.coverage)}%` },
+                  ].map((row) => (
+                    <Group key={row.label} justify="space-between">
+                      <Text fz="0.73rem" c="var(--phantom-text-secondary)">{row.label}</Text>
+                      <Text fz="0.73rem" fw={600} c="var(--phantom-text-primary)" ff="'JetBrains Mono', monospace">{row.value}</Text>
+                    </Group>
+                  ))}
+                </Stack>
+              )}
+              {graphStatus.phase === 'error' && (
+                <Text fz="xs" c="var(--phantom-status-danger, #ef4444)">
+                  {graphStatus.error ?? 'Build failed'}
+                </Text>
+              )}
+            </Paper>
+          )}
 
           {/* Level Progress (gamification) */}
           {showGamification && profile && (
