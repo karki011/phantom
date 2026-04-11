@@ -16,6 +16,7 @@ import {
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   ChevronsLeft,
+  Download,
   FolderOpen,
   Plus,
 } from 'lucide-react';
@@ -37,6 +38,7 @@ import { showSystemNotification } from '../notifications/SystemToast';
 import { ResizeHandle } from './ResizeHandle';
 import { ProjectSection } from './ProjectSection';
 import { EmptyState } from './EmptyState';
+import { CloneRepoModal } from './CloneRepoModal';
 
 /** Call Electron's native folder picker via IPC */
 const pickFolder = async (): Promise<string | null> => {
@@ -71,6 +73,7 @@ export function WorktreeSidebar() {
   const openRepo = useSetAtom(openRepositoryAtom);
 
   const [isDragOver, setIsDragOver] = useState(false);
+  const [cloneOpen, setCloneOpen] = useState(false);
 
   // Track which project should show inline worktree input from header "+"
   const [inlineInputProjectId, setInlineInputProjectId] = useState<string | null>(null);
@@ -326,27 +329,51 @@ export function WorktreeSidebar() {
           flexShrink: 0,
         }}
       >
-        <Button
-          variant="subtle"
-          size="xs"
-          fullWidth
-          leftSection={
-            <FolderOpen
-              size={14}
-              style={{ color: 'var(--phantom-text-muted)' }}
-            />
-          }
-          onClick={handleOpenRepository}
-          styles={{
-            label: {
-              color: 'var(--phantom-text-secondary)',
-              fontSize: '0.75rem',
-            },
-          }}
-        >
-          Open Repository
-        </Button>
+        <div style={{ display: 'flex', gap: '4px' }}>
+          <Button
+            variant="subtle"
+            size="xs"
+            style={{ flex: 1 }}
+            leftSection={
+              <FolderOpen
+                size={14}
+                style={{ color: 'var(--phantom-text-muted)' }}
+              />
+            }
+            onClick={handleOpenRepository}
+            styles={{
+              label: {
+                color: 'var(--phantom-text-secondary)',
+                fontSize: '0.75rem',
+              },
+            }}
+          >
+            Open
+          </Button>
+          <Button
+            variant="subtle"
+            size="xs"
+            style={{ flex: 1 }}
+            leftSection={
+              <Download
+                size={14}
+                style={{ color: 'var(--phantom-text-muted)' }}
+              />
+            }
+            onClick={() => setCloneOpen(true)}
+            styles={{
+              label: {
+                color: 'var(--phantom-text-secondary)',
+                fontSize: '0.75rem',
+              },
+            }}
+          >
+            Clone
+          </Button>
+        </div>
       </div>
+
+      <CloneRepoModal opened={cloneOpen} onClose={() => setCloneOpen(false)} />
 
       {/* Resize handle on right edge */}
       <ResizeHandle

@@ -99,11 +99,12 @@ export const AchievementsView = () => {
 
   // Fetch on mount if empty
   useEffect(() => {
-    if (achievements.length === 0) {
-      setLoading(true);
-      refresh().finally(() => setLoading(false));
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (achievements.length > 0) return;
+    let active = true;
+    setLoading(true);
+    refresh().finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [achievements.length, refresh]);
 
   const filtered = useMemo(() => {
     if (categoryFilter === 'All') return achievements;

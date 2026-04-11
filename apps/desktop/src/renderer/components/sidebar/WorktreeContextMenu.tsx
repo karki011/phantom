@@ -86,6 +86,10 @@ export function WorktreeContextMenu({
             fontSize: '0.8rem',
             color: 'var(--phantom-text-secondary)',
             padding: '8px 12px',
+            cursor: 'pointer',
+            '&[data-hovered]': {
+              backgroundColor: 'var(--phantom-surface-hover)',
+            },
           },
           separator: {
             borderColor: 'var(--phantom-border-subtle)',

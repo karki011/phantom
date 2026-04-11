@@ -125,7 +125,9 @@ export const fetchApi = async <T>(
   });
 
   if (!response.ok) {
-    throw new Error(`API error ${response.status}: ${response.statusText}`);
+    const body = await response.json().catch(() => null);
+    const detail = body?.error || response.statusText;
+    throw new Error(detail);
   }
 
   return response.json() as Promise<T>;
@@ -304,6 +306,41 @@ export interface BranchesData {
 
 export const getProjectBranches = (projectId: string): Promise<BranchesData> =>
   fetchApi<BranchesData>(`/api/projects/${projectId}/branches`);
+
+export interface CloneResult {
+  project: ProjectData;
+  worktree: WorktreeData;
+  clonePath: string;
+  alreadyExists?: boolean;
+}
+
+export const cloneRepository = (
+  url: string,
+  targetDir?: string,
+): Promise<CloneResult> =>
+  fetchApi<CloneResult>('/api/projects/clone', {
+    method: 'POST',
+    body: JSON.stringify({ url, targetDir }),
+  });
+
+export const checkoutBranch = (
+  worktreeId: string,
+  branch: string,
+): Promise<WorktreeData> =>
+  fetchApi<WorktreeData>(`/api/worktrees/${worktreeId}/checkout`, {
+    method: 'POST',
+    body: JSON.stringify({ branch }),
+  });
+
+export const createBranch = (
+  worktreeId: string,
+  branch: string,
+  baseBranch?: string,
+): Promise<WorktreeData> =>
+  fetchApi<WorktreeData>(`/api/worktrees/${worktreeId}/create-branch`, {
+    method: 'POST',
+    body: JSON.stringify({ branch, baseBranch }),
+  });
 
 export const getDirectoryListing = (
   worktreeId: string,

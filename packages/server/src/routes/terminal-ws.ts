@@ -46,7 +46,8 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
     }
   };
 
-  ws.on('close', () => {
+  ws.on('close', (code, reason) => {
+    console.log(`[TerminalWS] ws.close termId=${termId.slice(0,8)} code=${code} reason=${reason?.toString() ?? ''}`);
     if (session) {
       detachPty(termId, onData);
       // Only unregister process if no other listeners remain
@@ -69,6 +70,9 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
     processing = processing.then(async () => {
       try {
         const msg = JSON.parse(raw.toString());
+        if (msg.type !== 'input' && msg.type !== 'resize') {
+          console.log(`[TerminalWS] msg type=${msg.type} termId=${termId.slice(0,8)}`);
+        }
         switch (msg.type) {
           case 'init': {
             if (!session) {
@@ -153,10 +157,12 @@ const handleConnection = (ws: WebSocket, termId: string): void => {
             resizePty(termId, msg.cols, msg.rows);
             break;
           case 'kill':
+            console.log(`[TerminalWS] KILL received termId=${termId.slice(0,8)} hasSession=${!!session}`);
             if (session) {
               historyWriter.markExited(termId);
               destroyPty(termId);
               unregisterProcess(termId);
+              session = undefined; // Clear before ws.close so close handler doesn't re-detach
             }
             ws.close(1000, 'Terminal killed');
             break;

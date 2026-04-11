@@ -7,13 +7,13 @@
 import {
   Button,
   Group,
-  Modal,
   Select,
   Skeleton,
   Stack,
   Text,
   TextInput,
 } from '@mantine/core';
+import { PhantomModal } from '../PhantomModal';
 import { useSetAtom } from 'jotai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
@@ -124,23 +124,10 @@ export function InlineWorktreeInput({
   }, [name, newBranch, baseBranch, projectId, createWorktree, onDone, submitting]);
 
   return (
-    <Modal
+    <PhantomModal
       opened
       onClose={onDone}
       title={projectName ? `New Worktree — ${projectName}` : 'New Worktree'}
-      size="lg"
-      centered
-      padding="xl"
-      radius="md"
-      styles={{
-        header: {
-          backgroundColor: 'var(--phantom-surface-card)',
-          borderBottom: '1px solid var(--phantom-border-subtle)',
-          padding: '16px 24px',
-        },
-        body: { backgroundColor: 'var(--phantom-surface-bg)', padding: '24px' },
-        content: { backgroundColor: 'var(--phantom-surface-bg)' },
-      }}
     >
       {loading ? (
         <Stack gap="md">
@@ -209,6 +196,6 @@ export function InlineWorktreeInput({
           </Stack>
         </form>
       )}
-    </Modal>
+    </PhantomModal>
   );
 }

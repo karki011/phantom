@@ -23,6 +23,7 @@ import { WorktreeItem } from './WorktreeItem';
 import { InlineWorktreeInput } from './InlineWorktreeInput';
 import { ProjectContextMenu } from './ProjectContextMenu';
 import { RemoveProjectDialog } from './RemoveProjectDialog';
+import { BranchSwitcher } from './BranchSwitcher';
 
 interface ProjectSectionProps {
   project: ProjectData;
@@ -253,15 +254,89 @@ export function ProjectSection({
 
       <Collapse expanded={isExpanded}>
         <div style={{ paddingLeft: 24, position: 'relative' }}>
-          {worktrees.map((ws, index) => (
-            <WorktreeItem
-              key={ws.id}
-              worktree={ws}
-              isActive={ws.id === activeWorktreeId}
-              onSelect={onSelectWorktree}
-              isLast={index === worktrees.length - 1}
-            />
-          ))}
+          {/* Branch-type worktrees first — show with BranchSwitcher */}
+          {worktrees
+            .filter((ws) => ws.type === 'branch')
+            .map((ws) => (
+              <BranchSwitcher
+                key={ws.id}
+                worktreeId={ws.id}
+                projectId={project.id}
+                currentBranch={ws.branch}
+                worktreePath={ws.worktreePath ?? undefined}
+                onSwitch={() => {
+                  refreshWorktrees();
+                }}
+              >
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSelectWorktree(ws.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') onSelectWorktree(ws.id);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '5px 8px',
+                    borderRadius: 4,
+                    marginBottom: 2,
+                    cursor: 'pointer',
+                    backgroundColor:
+                      ws.id === activeWorktreeId
+                        ? 'var(--phantom-surface-hover)'
+                        : 'transparent',
+                    transition: 'background-color 120ms ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (ws.id !== activeWorktreeId)
+                      (e.currentTarget as HTMLElement).style.backgroundColor =
+                        'var(--phantom-surface-card)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (ws.id !== activeWorktreeId)
+                      (e.currentTarget as HTMLElement).style.backgroundColor =
+                        'transparent';
+                  }}
+                >
+                  <GitBranch
+                    size={12}
+                    style={{
+                      color: 'var(--phantom-accent-cyan)',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <Text
+                    fz="0.75rem"
+                    fw={ws.id === activeWorktreeId ? 500 : 400}
+                    c="var(--phantom-text-primary)"
+                    truncate
+                    style={{
+                      flex: 1,
+                      fontFamily: 'JetBrains Mono, monospace',
+                    }}
+                  >
+                    {ws.branch}
+                  </Text>
+                  <Text fz="0.65rem" c="var(--phantom-text-muted)">
+                    {ws.name}
+                  </Text>
+                </div>
+              </BranchSwitcher>
+            ))}
+          {/* Regular worktrees */}
+          {worktrees
+            .filter((ws) => ws.type !== 'branch')
+            .map((ws, index, filtered) => (
+              <WorktreeItem
+                key={ws.id}
+                worktree={ws}
+                isActive={ws.id === activeWorktreeId}
+                onSelect={onSelectWorktree}
+                isLast={index === filtered.length - 1}
+              />
+            ))}
           {discovered.length > 0 && (
             <div
               style={{

@@ -5,7 +5,7 @@
  * @author Subash Karki
  */
 import { Button, Text, TextInput, Tooltip, UnstyledButton } from '@mantine/core';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, GitFork } from 'lucide-react';
 import { useSetAtom } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GitStatusResult, WorktreeData } from '../../lib/api';
@@ -203,8 +203,8 @@ export function WorktreeItem({
       <UnstyledButton
         onClick={() => onSelect(worktree.id)}
         onDoubleClick={handleStartRename}
-        py={4}
-        px="sm"
+        py={5}
+        px={8}
         style={{
           display: 'block',
           width: '100%',
@@ -226,17 +226,11 @@ export function WorktreeItem({
               'transparent';
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'nowrap' }}>
-          <svg width="12" height="100%" viewBox="0 0 12 40" preserveAspectRatio="xMinYMin meet" style={{ flexShrink: 0, overflow: 'visible', marginTop: 2 }}>
-            <line x1="0.5" y1="0" x2="0.5" y2={isLast ? 14 : 40} stroke="var(--phantom-border-subtle)" strokeWidth="1" />
-            <line x1="0.5" y1="14" x2="12" y2="14" stroke="var(--phantom-border-subtle)" strokeWidth="1" />
-          </svg>
-          <div
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
+          <GitFork
+            size={12}
             style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              backgroundColor: worktree.color || 'var(--phantom-accent-cyan)',
+              color: worktree.color || 'var(--phantom-accent-purple)',
               flexShrink: 0,
             }}
           />

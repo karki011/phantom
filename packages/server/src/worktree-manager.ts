@@ -2,7 +2,7 @@
  * PhantomOS Worktree Manager — Git worktree operations
  * @author Subash Karki
  */
-import { execSync } from 'node:child_process';
+import { exec, execSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, basename } from 'node:path';
@@ -162,4 +162,61 @@ export const isGitRepo = (path: string): boolean => {
 /** Get the repo name from path */
 export const getRepoName = (repoPath: string): string => {
   return basename(repoPath);
+};
+
+/** Clone a git repository to targetDir (async — doesn't block server) */
+export const cloneRepo = (url: string, targetDir: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    exec(`git clone ${url} ${targetDir}`, {
+      timeout: 300_000,
+      env: {
+        ...process.env,
+        // Fail fast if credentials are needed instead of hanging for input
+        GIT_TERMINAL_PROMPT: '0',
+      },
+    }, (err, _stdout, stderr) => {
+      if (err) {
+        const msg = stderr?.trim() || err.message;
+        // Provide a helpful hint for auth failures
+        if (msg.includes('Authentication failed') || msg.includes('terminal prompts disabled')) {
+          reject(new Error('Authentication required. Use an SSH URL (git@github.com:...) or configure git credentials.'));
+        } else {
+          reject(new Error(msg));
+        }
+      } else {
+        resolve();
+      }
+    });
+  });
+};
+
+/** Checkout a branch in a directory */
+export const checkoutBranch = (repoPath: string, branch: string): void => {
+  execSync(`git checkout ${branch}`, {
+    cwd: repoPath,
+    encoding: 'utf-8',
+    timeout: 30_000,
+    stdio: 'pipe',
+  });
+};
+
+/** Create and checkout a new branch */
+export const createAndCheckoutBranch = (repoPath: string, branch: string, baseBranch?: string): void => {
+  const base = baseBranch ? ` ${baseBranch}` : '';
+  execSync(`git checkout -b ${branch}${base}`, {
+    cwd: repoPath,
+    encoding: 'utf-8',
+    timeout: 30_000,
+    stdio: 'pipe',
+  });
+};
+
+/** Check for uncommitted changes */
+export const hasUncommittedChanges = (repoPath: string): { dirty: boolean; changes: string } => {
+  const output = execSync('git status --porcelain', {
+    cwd: repoPath,
+    encoding: 'utf-8',
+    stdio: 'pipe',
+  }).trim();
+  return { dirty: output.length > 0, changes: output };
 };

@@ -38,11 +38,25 @@ import {
 import { useSetAtom } from 'jotai';
 import { type ReactNode, useState, useCallback, useRef, useEffect } from 'react';
 
-import type { FeedEvent, FeedFilter, GroupedFeedEvent } from '../../atoms/liveFeed';
+import type { FeedFilter, GroupedFeedEvent } from '../../atoms/liveFeed';
 import { viewingSessionIdAtom } from '../../atoms/sessionViewer';
 import { useLiveFeed } from '../../hooks/useLiveFeed';
 import { useRouter } from '../../hooks/useRouter';
 import { useSessions } from '../../hooks/useSessions';
+
+// ---------------------------------------------------------------------------
+// Inject keyframes once at module level (avoids duplication on every render)
+// ---------------------------------------------------------------------------
+
+if (typeof document !== 'undefined') {
+  const id = 'livefeed-pulse-keyframes';
+  if (!document.getElementById(id)) {
+    const style = document.createElement('style');
+    style.id = id;
+    style.textContent = `@keyframes livefeed-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }`;
+    document.head.appendChild(style);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Icon + color mapping
@@ -568,13 +582,6 @@ export const LiveFeed = () => {
         </Stack>
       )}
 
-      {/* Keyframes */}
-      <style>{`
-        @keyframes livefeed-pulse {
-          0%, 100% { opacity: 0.4; }
-          50% { opacity: 1; }
-        }
-      `}</style>
     </Paper>
   );
 };

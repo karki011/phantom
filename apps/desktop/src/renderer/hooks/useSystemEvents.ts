@@ -36,8 +36,10 @@ export const useSystemEvents = (): void => {
     let source: EventSource | null = null;
     let retryCount = 0;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let unmounted = false;
 
     const connect = () => {
+      if (unmounted) return;
       source = new EventSource(SSE_URL);
       setSseConnection('connecting');
 
@@ -196,6 +198,7 @@ export const useSystemEvents = (): void => {
     connect();
 
     return () => {
+      unmounted = true;
       if (retryTimer) clearTimeout(retryTimer);
       source?.close();
     };

@@ -415,8 +415,8 @@ export const SessionViewer = () => {
           )}
 
           {/* Timeline — latest first, empty messages filtered */}
-          {[...messages].reverse().filter(isNonEmpty).map((msg, i) => (
-            <TimelineItem key={`${msg.timestamp}-${i}`} message={msg} />
+          {[...messages].reverse().filter(isNonEmpty).map((msg) => (
+            <TimelineItem key={`${msg.timestamp}-${msg.type || msg.role}`} message={msg} />
           ))}
         </Stack>
       </ScrollArea>

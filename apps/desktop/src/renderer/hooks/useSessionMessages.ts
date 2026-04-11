@@ -28,7 +28,7 @@ export const useSessionMessages = (
   const [error, setError] = useState(false);
   const lastTimestamp = useRef<string>('');
 
-  const fetchMessages = useCallback(async () => {
+  const fetchMessages = useCallback(async (signal?: AbortSignal) => {
     if (!sessionId) return;
 
     try {
@@ -37,7 +37,7 @@ export const useSessionMessages = (
         ? `/api/sessions/${sessionId}/messages?after=${encodeURIComponent(after)}`
         : `/api/sessions/${sessionId}/messages?limit=200`;
 
-      const data = await fetchApi<{ messages: SessionMessage[] }>(url);
+      const data = await fetchApi<{ messages: SessionMessage[] }>(url, { signal });
 
       if (data.messages.length > 0) {
         if (after) {
@@ -62,10 +62,12 @@ export const useSessionMessages = (
 
   // Initial fetch
   useEffect(() => {
+    const controller = new AbortController();
     setMessages([]);
     setLoading(true);
     lastTimestamp.current = '';
-    fetchMessages();
+    fetchMessages(controller.signal);
+    return () => controller.abort();
   }, [sessionId, fetchMessages]);
 
   // Poll every 3s while session is active

@@ -73,26 +73,14 @@ export const useRouter = (): UseRouterReturn => {
 
   useEffect(() => {
     const handleHashChange = () => {
-      setRoute(parseHash());
-    };
-
-    window.addEventListener('hashchange', handleHashChange);
-    return () => {
-      window.removeEventListener('hashchange', handleHashChange);
-    };
-  }, []);
-
-  // Auto-switch to cockpit tab only when user navigates to a sub-route
-  // (not on initial render — that would prevent workspace tab from sticking)
-  useEffect(() => {
-    const handleHash = () => {
       const r = parseHash();
+      setRoute(r);
       if (COCKPIT_SUB_ROUTES.has(r)) {
         setActiveTab('cockpit');
       }
     };
-    window.addEventListener('hashchange', handleHash);
-    return () => window.removeEventListener('hashchange', handleHash);
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, [setActiveTab]);
 
   const navigate = useCallback((target: Route) => {

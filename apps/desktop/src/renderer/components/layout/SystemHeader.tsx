@@ -41,7 +41,7 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
   const { isHome, navigate } = useRouter();
 
   const isDark = colorScheme === 'dark';
-  const isConnected = isBackendConnected ?? activeSessions >= 0;
+  const isConnected = isBackendConnected ?? false;
 
   return (
     <Group

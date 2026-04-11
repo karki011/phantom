@@ -19,6 +19,7 @@ import {
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
   BookOpen,
+  Download,
   FolderOpen,
   Gamepad2,
   GitBranch,
@@ -37,6 +38,7 @@ import {
 } from '../atoms/worktrees';
 import { type BranchesData, getProjectBranches } from '../lib/api';
 import { showSystemNotification } from './notifications/SystemToast';
+import { CloneRepoModal } from './sidebar/CloneRepoModal';
 
 /** Call Electron's native folder picker via IPC */
 const pickFolder = async (): Promise<string | null> => {
@@ -230,6 +232,8 @@ export function WelcomePage() {
   const refreshProjects = useSetAtom(refreshProjectsAtom);
   const openRepo = useSetAtom(openRepositoryAtom);
 
+  const [cloneOpen, setCloneOpen] = useState(false);
+
   useEffect(() => { refreshProjects(); }, [refreshProjects]);
 
   const handleOpenProject = useCallback(async () => {
@@ -277,7 +281,13 @@ export function WelcomePage() {
             styles={{ root: { backgroundColor: 'var(--phantom-surface-card)', color: 'var(--phantom-text-primary)', border: '1px solid var(--phantom-border-subtle)' } }}>
             Open Project
           </Button>
+          <Button variant="light" size="md" leftSection={<Download size={18} />} onClick={() => setCloneOpen(true)}
+            styles={{ root: { backgroundColor: 'var(--phantom-surface-card)', color: 'var(--phantom-text-primary)', border: '1px solid var(--phantom-border-subtle)' } }}>
+            Clone Repository
+          </Button>
         </Group>
+
+        <CloneRepoModal opened={cloneOpen} onClose={() => setCloneOpen(false)} />
 
         {/* Two-column layout */}
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xl">

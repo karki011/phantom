@@ -3,7 +3,7 @@
  *
  * @author Subash Karki
  */
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 interface ResizeHandleProps {
   position: 'left' | 'right';
@@ -13,6 +13,14 @@ interface ResizeHandleProps {
 export function ResizeHandle({ position, onResize }: ResizeHandleProps) {
   const dragging = useRef(false);
   const lastX = useRef(0);
+
+  // Reset body styles if component unmounts during a drag
+  useEffect(() => {
+    return () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, []);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {

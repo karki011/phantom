@@ -17,6 +17,9 @@ import {
   updateWorktree as apiUpdateWorktree,
   deleteProject as apiDeleteProject,
   openRepository,
+  cloneRepository,
+  checkoutBranch,
+  createBranch,
 } from '../lib/api';
 
 // ---------------------------------------------------------------------------
@@ -184,6 +187,66 @@ export const openRepositoryAtom = atom(
       prev.includes(project.id) ? prev : [...prev, project.id],
     );
     return { project, worktree };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Clone repository
+// ---------------------------------------------------------------------------
+
+export const cloneRepositoryAtom = atom(
+  null,
+  async (_get, set, { url, targetDir }: { url: string; targetDir?: string }) => {
+    const { project, worktree, clonePath, alreadyExists } = await cloneRepository(url, targetDir);
+    set(projectsDataAtom, (prev) => {
+      if (prev.some((p) => p.id === project.id)) return prev;
+      return [...prev, project];
+    });
+    if (worktree) {
+      set(worktreesDataAtom, (prev) => {
+        if (prev.some((w) => w.id === worktree.id)) return prev;
+        return [...prev, worktree];
+      });
+      set(activeWorktreeIdAtom, worktree.id);
+    }
+    set(expandedProjectsAtom, (prev) =>
+      prev.includes(project.id) ? prev : [...prev, project.id],
+    );
+    return { project, worktree, clonePath, alreadyExists };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Checkout branch (switch branch for a branch-type worktree)
+// ---------------------------------------------------------------------------
+
+export const checkoutBranchAtom = atom(
+  null,
+  async (_get, set, { worktreeId, branch }: { worktreeId: string; branch: string }) => {
+    const updated = await checkoutBranch(worktreeId, branch);
+    set(worktreesDataAtom, (prev) =>
+      prev.map((w) => (w.id === worktreeId ? { ...w, ...updated } : w)),
+    );
+    return updated;
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Create branch (create + checkout new branch for a worktree)
+// ---------------------------------------------------------------------------
+
+export const createBranchAtom = atom(
+  null,
+  async (
+    _get,
+    set,
+    { worktreeId, branch, baseBranch }: { worktreeId: string; branch: string; baseBranch?: string },
+  ) => {
+    const updated = await createBranch(worktreeId, branch, baseBranch);
+    set(worktreesDataAtom, (prev) =>
+      prev.map((w) => (w.id === worktreeId ? { ...w, ...updated } : w)),
+    );
+    return updated;
   },
 );
 
