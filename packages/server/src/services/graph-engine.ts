@@ -54,8 +54,19 @@ class GraphEngineService {
       this.broadcast('graph', event);
     });
 
-    // Don't hydrate all projects on boot — hydrate on demand (LRU)
-    logger.info('GraphEngine', 'Initialized (LRU mode, max 3 in memory)');
+    // Check all projects — build graphs for any that don't have persisted data
+    const allProjects = db.select().from(projects).all();
+    let built = 0;
+    for (const project of allProjects) {
+      const meta = this.persistence.loadMeta(project.id);
+      if (!meta || meta.fileCount === 0) {
+        // No graph data yet — trigger background build
+        void this.buildProject(project.id, project.repoPath);
+        built++;
+      }
+    }
+
+    logger.info('GraphEngine', `Initialized (LRU mode, max ${MAX_IN_MEMORY} in memory). Queued ${built} builds for projects missing graph data.`);
   }
 
   // ---------------------------------------------------------------------------
