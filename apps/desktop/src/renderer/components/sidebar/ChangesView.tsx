@@ -114,6 +114,8 @@ export function ChangesView() {
       .then(setStatus)
       .catch(() => setStatus(null))
       .finally(() => setLoading(false));
+    // Sync GitStatusCard on WorktreeHome
+    window.dispatchEvent(new Event('phantom:git-refresh'));
   }, [worktree?.id]);
 
   useEffect(() => {
