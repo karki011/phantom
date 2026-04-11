@@ -36,6 +36,7 @@ import { useRouter } from '../hooks/useRouter';
 import { PlansCard } from './PlansCard';
 import { RecipeFormModal } from './RecipeFormModal';
 import { RunningServersCard } from './RunningServersCard';
+import { TasksCard } from './TasksCard';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -705,6 +706,9 @@ export function WorktreeHome() {
 
             {/* Running Servers */}
             {worktree?.id && <RunningServersCard worktreeId={worktree.id} />}
+
+            {/* Live Tasks */}
+            {worktree?.worktreePath && <TasksCard cwd={worktree.worktreePath} />}
 
             {/* Plans */}
             {worktree?.id && <PlansCard worktreeId={worktree.id} />}
