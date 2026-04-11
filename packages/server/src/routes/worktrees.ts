@@ -319,7 +319,7 @@ worktreeRoutes.post('/worktrees/:id/create-branch', async (c) => {
   return c.json(updated);
 });
 
-/** POST /worktrees/:id/git — Run a git action (fetch, pull, push) */
+/** POST /worktrees/:id/git — Run a git action */
 worktreeRoutes.post('/worktrees/:id/git', async (c) => {
   const id = c.req.param('id');
   const worktree = db.select().from(worktrees).where(eq(worktrees.id, id)).get();
@@ -330,16 +330,49 @@ worktreeRoutes.post('/worktrees/:id/git', async (c) => {
     return c.json({ error: 'Worktree path does not exist' }, 400);
   }
 
-  const body = await c.req.json<{ action: string }>();
+  const body = await c.req.json<{
+    action: string;
+    paths?: string[];
+    message?: string;
+  }>();
   const { action } = body;
 
-  const allowed = ['fetch', 'pull', 'push'];
+  const allowed = ['fetch', 'pull', 'push', 'stage', 'unstage', 'stage-all', 'commit'];
   if (!allowed.includes(action)) {
     return c.json({ error: `Invalid action: ${action}. Allowed: ${allowed.join(', ')}` }, 400);
   }
 
   try {
-    const cmd = action === 'fetch' ? 'git fetch origin' : `git ${action}`;
+    let cmd: string;
+    switch (action) {
+      case 'fetch':
+        cmd = 'git fetch origin';
+        break;
+      case 'stage': {
+        if (!body.paths?.length) return c.json({ error: 'paths required for stage' }, 400);
+        const safePaths = body.paths.map((p) => `"${p.replace(/"/g, '\\"')}"`).join(' ');
+        cmd = `git add -- ${safePaths}`;
+        break;
+      }
+      case 'unstage': {
+        if (!body.paths?.length) return c.json({ error: 'paths required for unstage' }, 400);
+        const safePaths = body.paths.map((p) => `"${p.replace(/"/g, '\\"')}"`).join(' ');
+        cmd = `git reset HEAD -- ${safePaths}`;
+        break;
+      }
+      case 'stage-all':
+        cmd = 'git add -A';
+        break;
+      case 'commit': {
+        if (!body.message?.trim()) return c.json({ error: 'message required for commit' }, 400);
+        const safeMsg = body.message.replace(/"/g, '\\"');
+        cmd = `git commit -m "${safeMsg}"`;
+        break;
+      }
+      default:
+        cmd = `git ${action}`;
+    }
+
     execSync(cmd, { cwd: repoPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe' });
     return c.json({ ok: true, action });
   } catch (err: any) {

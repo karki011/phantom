@@ -19,6 +19,7 @@ import {
 
 import { achievementsAtom } from '../../atoms/achievements';
 import { useHunter } from '../../hooks/useHunter';
+import { usePreferences } from '../../hooks/usePreferences';
 import { useQuests } from '../../hooks/useQuests';
 import { useRouter } from '../../hooks/useRouter';
 import { useSessions } from '../../hooks/useSessions';
@@ -42,6 +43,8 @@ export const Cockpit = () => {
   const { active } = useSessions();
   const { quests } = useQuests();
   const achievements = useAtomValue(achievementsAtom);
+  const { isEnabled } = usePreferences();
+  const showGamification = isEnabled('gamification');
 
   const totalTokens = active.reduce(
     (sum, s) => sum + s.inputTokens + s.outputTokens + s.cacheReadTokens + s.cacheWriteTokens,
@@ -82,22 +85,26 @@ export const Cockpit = () => {
           color="cyan"
           onClick={() => navigate('tokens')}
         />
-        <CockpitStatCard
-          icon={<Shield size={26} aria-hidden="true" />}
-          value={profile?.rank ?? 'E'}
-          label="rank"
-          sublabel={`Lv.${profile?.level ?? 1}`}
-          color="yellow"
-          onClick={() => navigate('profile')}
-        />
-        <CockpitStatCard
-          icon={<Flame size={26} aria-hidden="true" />}
-          value={profile?.streakCurrent ?? 0}
-          label="streak"
-          sublabel={`best: ${profile?.streakBest ?? 0}`}
-          color="red"
-          onClick={() => navigate('streak')}
-        />
+        {showGamification && (
+          <CockpitStatCard
+            icon={<Shield size={26} aria-hidden="true" />}
+            value={profile?.rank ?? 'E'}
+            label="rank"
+            sublabel={`Lv.${profile?.level ?? 1}`}
+            color="yellow"
+            onClick={() => navigate('profile')}
+          />
+        )}
+        {showGamification && (
+          <CockpitStatCard
+            icon={<Flame size={26} aria-hidden="true" />}
+            value={profile?.streakCurrent ?? 0}
+            label="streak"
+            sublabel={`best: ${profile?.streakBest ?? 0}`}
+            color="red"
+            onClick={() => navigate('streak')}
+          />
+        )}
         <CockpitStatCard
           icon={<CheckSquare size={26} aria-hidden="true" />}
           value={totalTasks}
@@ -105,20 +112,24 @@ export const Cockpit = () => {
           color="green"
           onClick={() => navigate('tasks')}
         />
-        <CockpitStatCard
-          icon={<Trophy size={26} aria-hidden="true" />}
-          value={`${unlockedCount}/${achievements.length}`}
-          label="achievements"
-          color="yellow"
-          onClick={() => navigate('achievements')}
-        />
-        <CockpitStatCard
-          icon={<Target size={26} aria-hidden="true" />}
-          value={`${completedQuests}/${quests.length}`}
-          label="daily quests"
-          color="grape"
-          onClick={() => navigate('quests')}
-        />
+        {showGamification && (
+          <CockpitStatCard
+            icon={<Trophy size={26} aria-hidden="true" />}
+            value={`${unlockedCount}/${achievements.length}`}
+            label="achievements"
+            color="yellow"
+            onClick={() => navigate('achievements')}
+          />
+        )}
+        {showGamification && (
+          <CockpitStatCard
+            icon={<Target size={26} aria-hidden="true" />}
+            value={`${completedQuests}/${quests.length}`}
+            label="daily quests"
+            color="grape"
+            onClick={() => navigate('quests')}
+          />
+        )}
       </SimpleGrid>
 
       <LiveFeed />

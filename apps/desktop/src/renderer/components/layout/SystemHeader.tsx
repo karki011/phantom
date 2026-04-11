@@ -12,13 +12,15 @@ import {
   Popover,
   Stack,
   Text,
+  Tooltip,
   useMantineColorScheme,
 } from '@mantine/core';
 import { useAtom } from 'jotai';
-import { ArrowLeft, Circle, HelpCircle, Moon, Palette, Sun, Type } from 'lucide-react';
+import { ArrowLeft, Circle, HelpCircle, Moon, Palette, Sun, Swords, Type } from 'lucide-react';
 import { themeRegistry } from '@phantom-os/theme';
 
 import { type FontScale, fontScaleAtom, themeNameAtom } from '../../atoms/system';
+import { usePreferences } from '../../hooks/usePreferences';
 import { useRouter } from '../../hooks/useRouter';
 
 interface SystemHeaderProps {
@@ -39,6 +41,8 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
   const [fontScale, setFontScale] = useAtom(fontScaleAtom);
   const [themeName, setThemeName] = useAtom(themeNameAtom);
   const { isHome, navigate } = useRouter();
+  const { isEnabled, setPref } = usePreferences();
+  const gamificationOn = isEnabled('gamification');
 
   const isDark = colorScheme === 'dark';
   const isConnected = isBackendConnected ?? false;
@@ -100,8 +104,28 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
         </Text>
       </Group>
 
-      {/* Right: Font scale + Theme toggle */}
+      {/* Right: Gamification toggle + Font scale + Theme toggle */}
       <Group gap="xs" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        {/* Gamification Toggle */}
+        <Tooltip label={gamificationOn ? 'Disable gamification' : 'Enable gamification'}>
+          <ActionIcon
+            variant="subtle"
+            size="lg"
+            onClick={() => setPref('gamification', gamificationOn ? 'false' : 'true')}
+            aria-label={gamificationOn ? 'Disable gamification' : 'Enable gamification'}
+          >
+            <Swords
+              size={18}
+              aria-hidden="true"
+              style={{
+                color: gamificationOn
+                  ? 'var(--phantom-accent-cyan)'
+                  : 'var(--phantom-text-muted)',
+              }}
+            />
+          </ActionIcon>
+        </Tooltip>
+
         {/* Font Scale Menu */}
         <Menu shadow="md" width={120} position="bottom-end">
           <Menu.Target>

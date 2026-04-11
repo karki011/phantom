@@ -487,6 +487,7 @@ export interface GitFileChange {
   status: 'added' | 'modified' | 'deleted' | 'renamed' | 'untracked';
   path: string;
   code: string;
+  staged: boolean;
 }
 
 export interface GitStatusResult {
@@ -499,3 +500,40 @@ export interface GitStatusResult {
 
 export const getGitStatus = (worktreeId: string): Promise<GitStatusResult> =>
   fetchApi<GitStatusResult>(`/api/worktrees/${worktreeId}/git-status`);
+
+export const gitStage = (worktreeId: string, paths: string[]): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'stage', paths }),
+  });
+
+export const gitUnstage = (worktreeId: string, paths: string[]): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'unstage', paths }),
+  });
+
+export const gitStageAll = (worktreeId: string): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'stage-all' }),
+  });
+
+export const gitCommit = (worktreeId: string, message: string): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'commit', message }),
+  });
+
+// ---------------------------------------------------------------------------
+// User Preferences
+// ---------------------------------------------------------------------------
+
+export const getPreferences = (): Promise<Record<string, string>> =>
+  fetchApi<Record<string, string>>('/api/preferences');
+
+export const setPreference = (key: string, value: string): Promise<Record<string, string>> =>
+  fetchApi<Record<string, string>>(`/api/preferences/${key}`, {
+    method: 'PUT',
+    body: JSON.stringify({ value }),
+  });

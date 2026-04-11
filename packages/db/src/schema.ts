@@ -196,3 +196,13 @@ export const terminalSessions = sqliteTable('terminal_sessions', {
   lastActiveAt: integer('last_active_at'),
   endedAt: integer('ended_at'),
 });
+
+// ---------------------------------------------------------------------------
+// User Preferences
+// ---------------------------------------------------------------------------
+
+export const userPreferences = sqliteTable('user_preferences', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});

@@ -33,6 +33,7 @@ import { hunterStatsRoutes } from './routes/hunter-stats.js';
 import { chatRoutes } from './routes/chat.js';
 import { paneStateRoutes } from './routes/pane-states.js';
 import { plansRoutes } from './routes/plans.js';
+import { preferencesRoutes } from './routes/preferences.js';
 import { API_PORT } from '@phantom-os/shared';
 import type { Server } from 'node:http';
 import { setupTerminalWs } from './routes/terminal-ws.js';
@@ -102,6 +103,7 @@ app.route('/api', chatRoutes);
 app.route('/api', serverRoutes);
 app.route('/api', paneStateRoutes);
 app.route('/api', plansRoutes);
+app.route('/api', preferencesRoutes);
 app.route('/api', terminalRestoreRoutes);
 
 // SSE endpoint

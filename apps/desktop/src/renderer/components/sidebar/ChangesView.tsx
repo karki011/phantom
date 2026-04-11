@@ -1,16 +1,16 @@
 /**
- * ChangesView — git status file list for the active worktree
- * Shows modified, added, deleted, and untracked files grouped by status.
+ * ChangesView — git staging + commit UI for the active worktree
+ * Shows staged and unstaged files with stage/unstage actions and commit input.
  * @author Subash Karki
  */
-import { ScrollArea, Text } from '@mantine/core';
+import { ScrollArea, Text, Textarea } from '@mantine/core';
 import { useAtomValue } from 'jotai';
-import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw } from 'lucide-react';
+import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw, Plus, Minus, Check } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
 import { activeWorktreeAtom } from '../../atoms/worktrees';
 import type { GitFileChange, GitStatusResult } from '../../lib/api';
-import { fetchApi, getGitStatus } from '../../lib/api';
+import { fetchApi, getGitStatus, gitStage, gitUnstage, gitStageAll, gitCommit } from '../../lib/api';
 
 const STATUS_CONFIG = {
   modified: { label: 'Modified', icon: FilePen, color: 'var(--phantom-accent-gold, #f59e0b)' },
@@ -20,7 +20,11 @@ const STATUS_CONFIG = {
   untracked: { label: 'Untracked', icon: FileQuestion, color: 'var(--phantom-text-muted, #888)' },
 } as const;
 
-function FileRow({ file, worktreeId }: { file: GitFileChange; worktreeId: string }) {
+function FileRow({ file, worktreeId, onStage }: {
+  file: GitFileChange;
+  worktreeId: string;
+  onStage?: () => void;
+}) {
   const store = usePaneStore();
   const config = STATUS_CONFIG[file.status];
   const Icon = config.icon;
@@ -29,8 +33,6 @@ function FileRow({ file, worktreeId }: { file: GitFileChange; worktreeId: string
 
   const handleClick = useCallback(async () => {
     if (file.status === 'deleted') return;
-
-    // Detect language from extension
     const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
     const langMap: Record<string, string> = {
       ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
@@ -38,81 +40,46 @@ function FileRow({ file, worktreeId }: { file: GitFileChange; worktreeId: string
       py: 'python', css: 'css', html: 'html', sh: 'shell', sql: 'sql',
     };
     const language = langMap[ext] ?? 'plaintext';
-
     try {
       const { original, modified } = await fetchApi<{ original: string; modified: string }>(
         `/api/worktrees/${worktreeId}/git-diff?path=${encodeURIComponent(file.path)}`,
       );
-      store.addPaneAsTab(
-        'diff',
-        { original, modified, language, filePath: file.path, worktreeId } as Record<string, unknown>,
-        `${fileName} (diff)`,
-      );
+      store.addPaneAsTab('diff', { original, modified, language, filePath: file.path, worktreeId } as Record<string, unknown>, `${fileName} (diff)`);
     } catch {
-      // Fallback to regular editor if diff fetch fails
-      store.addPaneAsTab(
-        'editor',
-        { filePath: file.path, worktreeId } as Record<string, unknown>,
-        fileName,
-      );
+      store.addPaneAsTab('editor', { filePath: file.path, worktreeId } as Record<string, unknown>, fileName);
     }
   }, [file, worktreeId, fileName, store]);
 
   return (
     <div
-      onClick={handleClick}
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '3px 8px',
+        display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px',
         cursor: file.status === 'deleted' ? 'default' : 'pointer',
-        borderRadius: 3,
-        transition: 'background-color 100ms ease',
+        borderRadius: 3, transition: 'background-color 100ms ease',
       }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated, #2a2a2a)';
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated, #2a2a2a)'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
     >
       <Icon size={12} style={{ color: config.color, flexShrink: 0 }} />
-      <Text fz="0.73rem" c="var(--phantom-text-primary)" truncate style={{ flex: 1 }}>
+      <Text fz="0.73rem" c="var(--phantom-text-primary)" truncate style={{ flex: 1 }} onClick={handleClick}>
         {fileName}
       </Text>
       {dirPath && (
-        <Text fz="0.6rem" c="var(--phantom-text-muted)" truncate style={{ maxWidth: 100 }}>
+        <Text fz="0.6rem" c="var(--phantom-text-muted)" truncate style={{ maxWidth: 80 }}>
           {dirPath}
         </Text>
       )}
-      <Text fz="0.6rem" fw={600} c={config.color} style={{ flexShrink: 0 }}>
-        {file.code}
-      </Text>
-    </div>
-  );
-}
-
-function StatusGroup({ label, files, color, worktreeId }: {
-  label: string;
-  files: GitFileChange[];
-  color: string;
-  worktreeId: string;
-}) {
-  if (files.length === 0) return null;
-  return (
-    <div style={{ marginBottom: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px' }}>
-        <Text fz="0.65rem" fw={700} tt="uppercase" c={color} style={{ letterSpacing: '0.05em' }}>
-          {label}
-        </Text>
-        <Text fz="0.6rem" c="var(--phantom-text-muted)">
-          {files.length}
-        </Text>
-      </div>
-      {files.map((file) => (
-        <FileRow key={file.path} file={file} worktreeId={worktreeId} />
-      ))}
+      {onStage && (
+        <div
+          onClick={(e) => { e.stopPropagation(); onStage(); }}
+          style={{ cursor: 'pointer', padding: 2, borderRadius: 3, display: 'flex', alignItems: 'center' }}
+          title={file.staged ? 'Unstage' : 'Stage'}
+        >
+          {file.staged
+            ? <Minus size={12} style={{ color: 'var(--phantom-status-error, #ef4444)' }} />
+            : <Plus size={12} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />}
+        </div>
+      )}
     </div>
   );
 }
@@ -121,6 +88,8 @@ export function ChangesView() {
   const worktree = useAtomValue(activeWorktreeAtom);
   const [status, setStatus] = useState<GitStatusResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [commitMsg, setCommitMsg] = useState('');
+  const [committing, setCommitting] = useState(false);
 
   const refresh = useCallback(() => {
     if (!worktree) return;
@@ -131,12 +100,44 @@ export function ChangesView() {
       .finally(() => setLoading(false));
   }, [worktree?.id]);
 
-  // Fetch on mount + poll every 10s
   useEffect(() => {
     refresh();
     const interval = setInterval(refresh, 10_000);
     return () => clearInterval(interval);
   }, [refresh]);
+
+  const stagedFiles = status?.files.filter((f) => f.staged) ?? [];
+  const unstagedFiles = status?.files.filter((f) => !f.staged) ?? [];
+  const totalChanges = status?.files.length ?? 0;
+
+  const handleStage = useCallback(async (path: string) => {
+    if (!worktree) return;
+    await gitStage(worktree.id, [path]);
+    refresh();
+  }, [worktree?.id, refresh]);
+
+  const handleUnstage = useCallback(async (path: string) => {
+    if (!worktree) return;
+    await gitUnstage(worktree.id, [path]);
+    refresh();
+  }, [worktree?.id, refresh]);
+
+  const handleStageAll = useCallback(async () => {
+    if (!worktree) return;
+    await gitStageAll(worktree.id);
+    refresh();
+  }, [worktree?.id, refresh]);
+
+  const handleCommit = useCallback(async () => {
+    if (!worktree || !commitMsg.trim() || stagedFiles.length === 0) return;
+    setCommitting(true);
+    try {
+      await gitCommit(worktree.id, commitMsg.trim());
+      setCommitMsg('');
+      refresh();
+    } catch { /* refresh shows current state */ }
+    finally { setCommitting(false); }
+  }, [worktree?.id, commitMsg, stagedFiles.length, refresh]);
 
   if (!worktree) {
     return (
@@ -146,23 +147,10 @@ export function ChangesView() {
     );
   }
 
-  const totalChanges = status
-    ? status.added + status.modified + status.deleted + status.untracked
-    : 0;
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '6px 8px',
-          borderBottom: '1px solid var(--phantom-border-subtle)',
-          flexShrink: 0,
-        }}
-      >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderBottom: '1px solid var(--phantom-border-subtle)', flexShrink: 0 }}>
         <Text fz="0.7rem" fw={600} c="var(--phantom-text-secondary)" style={{ flex: 1 }}>
           {worktree.name}
         </Text>
@@ -171,11 +159,7 @@ export function ChangesView() {
         </Text>
         <RefreshCw
           size={11}
-          style={{
-            color: 'var(--phantom-text-muted)',
-            cursor: 'pointer',
-            animation: loading ? 'spin 1s linear infinite' : 'none',
-          }}
+          style={{ color: 'var(--phantom-text-muted)', cursor: 'pointer', animation: loading ? 'spin 1s linear infinite' : 'none' }}
           onClick={refresh}
         />
       </div>
@@ -183,47 +167,105 @@ export function ChangesView() {
       {/* File list */}
       <ScrollArea style={{ flex: 1 }} scrollbarSize={6}>
         <div style={{ padding: '4px 0' }}>
-          {status && totalChanges > 0 ? (
-            <>
-              <StatusGroup
-                label="Modified"
-                files={status.files.filter((f) => f.status === 'modified' || f.status === 'renamed')}
-                color={STATUS_CONFIG.modified.color}
-                worktreeId={worktree.id}
-              />
-              <StatusGroup
-                label="Added"
-                files={status.files.filter((f) => f.status === 'added')}
-                color={STATUS_CONFIG.added.color}
-                worktreeId={worktree.id}
-              />
-              <StatusGroup
-                label="Untracked"
-                files={status.files.filter((f) => f.status === 'untracked')}
-                color={STATUS_CONFIG.untracked.color}
-                worktreeId={worktree.id}
-              />
-              <StatusGroup
-                label="Deleted"
-                files={status.files.filter((f) => f.status === 'deleted')}
-                color={STATUS_CONFIG.deleted.color}
-                worktreeId={worktree.id}
-              />
-            </>
-          ) : status && totalChanges === 0 ? (
+          {totalChanges === 0 && status ? (
             <Text fz="0.75rem" c="var(--phantom-text-muted)" ta="center" py="xl" px="sm">
               Working tree clean
             </Text>
-          ) : null}
+          ) : (
+            <>
+              {/* Staged Changes */}
+              {stagedFiles.length > 0 && (
+                <div style={{ marginBottom: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px' }}>
+                    <Text fz="0.65rem" fw={700} tt="uppercase" c="var(--phantom-status-success, #22c55e)" style={{ letterSpacing: '0.05em', flex: 1 }}>
+                      Staged ({stagedFiles.length})
+                    </Text>
+                    <div
+                      onClick={() => { if (worktree) { gitUnstage(worktree.id, stagedFiles.map((f) => f.path)); refresh(); } }}
+                      style={{ cursor: 'pointer', padding: 2 }}
+                      title="Unstage All"
+                    >
+                      <Minus size={11} style={{ color: 'var(--phantom-text-muted)' }} />
+                    </div>
+                  </div>
+                  {stagedFiles.map((file) => (
+                    <FileRow key={`staged-${file.path}`} file={file} worktreeId={worktree.id} onStage={() => handleUnstage(file.path)} />
+                  ))}
+                </div>
+              )}
+
+              {/* Unstaged Changes */}
+              {unstagedFiles.length > 0 && (
+                <div style={{ marginBottom: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px' }}>
+                    <Text fz="0.65rem" fw={700} tt="uppercase" c="var(--phantom-accent-gold, #f59e0b)" style={{ letterSpacing: '0.05em', flex: 1 }}>
+                      Changes ({unstagedFiles.length})
+                    </Text>
+                    <div onClick={handleStageAll} style={{ cursor: 'pointer', padding: 2 }} title="Stage All">
+                      <Plus size={11} style={{ color: 'var(--phantom-text-muted)' }} />
+                    </div>
+                  </div>
+                  {unstagedFiles.map((file) => (
+                    <FileRow key={`unstaged-${file.path}`} file={file} worktreeId={worktree.id} onStage={() => handleStage(file.path)} />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </ScrollArea>
 
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+      {/* Commit area */}
+      {stagedFiles.length > 0 && (
+        <div style={{ borderTop: '1px solid var(--phantom-border-subtle)', padding: 8, flexShrink: 0 }}>
+          <Textarea
+            placeholder="Commit message..."
+            value={commitMsg}
+            onChange={(e) => setCommitMsg(e.currentTarget.value)}
+            minRows={2}
+            maxRows={4}
+            autosize
+            styles={{
+              input: {
+                fontSize: '0.75rem',
+                backgroundColor: 'var(--phantom-surface-base, #1a1a1a)',
+                border: '1px solid var(--phantom-border-subtle)',
+                color: 'var(--phantom-text-primary)',
+              },
+            }}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                handleCommit();
+              }
+            }}
+          />
+          <div
+            onClick={handleCommit}
+            style={{
+              marginTop: 6,
+              padding: '5px 0',
+              textAlign: 'center',
+              borderRadius: 4,
+              cursor: commitMsg.trim() && !committing ? 'pointer' : 'default',
+              backgroundColor: commitMsg.trim() && !committing ? 'var(--phantom-status-success, #22c55e)' : 'var(--phantom-surface-elevated, #2a2a2a)',
+              color: commitMsg.trim() && !committing ? '#000' : 'var(--phantom-text-muted)',
+              fontSize: '0.73rem',
+              fontWeight: 600,
+              transition: 'all 150ms ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+            }}
+          >
+            <Check size={12} />
+            {committing ? 'Committing...' : `Commit (${stagedFiles.length} file${stagedFiles.length !== 1 ? 's' : ''})`}
+          </div>
+        </div>
+      )}
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

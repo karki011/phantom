@@ -298,6 +298,7 @@ interface GitFileChange {
   path: string;
   /** Short status code from git (e.g. 'M', 'A', 'D', '??') */
   code: string;
+  staged: boolean;
 }
 
 interface GitStatusResult {
@@ -308,31 +309,49 @@ interface GitStatusResult {
   files: GitFileChange[];
 }
 
-/** Parse git status --porcelain=v1 output */
+/** Parse git status --porcelain=v1 output (XY format: X=index/staged, Y=worktree/unstaged) */
 function parseGitStatus(output: string): GitStatusResult {
   const files: GitFileChange[] = [];
   let added = 0, modified = 0, deleted = 0, untracked = 0;
 
+  const mapCode = (ch: string): GitFileChange['status'] | null => {
+    switch (ch) {
+      case 'M': return 'modified';
+      case 'A': return 'added';
+      case 'D': return 'deleted';
+      case 'R': return 'renamed';
+      default: return null;
+    }
+  };
+
   for (const line of output.split('\n')) {
     if (!line.trim()) continue;
-    const code = line.slice(0, 2);
+    const x = line[0]; // index (staged)
+    const y = line[1]; // worktree (unstaged)
     const path = line.slice(3);
 
-    if (code === '??') {
-      files.push({ status: 'untracked', path, code: '??' });
+    if (x === '?' && y === '?') {
+      files.push({ status: 'untracked', path, code: '??', staged: false });
       untracked++;
-    } else if (code.includes('A')) {
-      files.push({ status: 'added', path, code: code.trim() });
-      added++;
-    } else if (code.includes('D')) {
-      files.push({ status: 'deleted', path, code: code.trim() });
-      deleted++;
-    } else if (code.includes('R')) {
-      files.push({ status: 'renamed', path, code: code.trim() });
-      modified++;
-    } else if (code.includes('M') || code.includes('U')) {
-      files.push({ status: 'modified', path, code: code.trim() });
-      modified++;
+      continue;
+    }
+
+    // Staged change (index column)
+    const stagedStatus = mapCode(x);
+    if (stagedStatus) {
+      files.push({ status: stagedStatus, path, code: x, staged: true });
+      if (stagedStatus === 'added') added++;
+      else if (stagedStatus === 'deleted') deleted++;
+      else modified++;
+    }
+
+    // Unstaged change (worktree column)
+    const unstagedStatus = mapCode(y);
+    if (unstagedStatus) {
+      files.push({ status: unstagedStatus, path, code: y, staged: false });
+      if (unstagedStatus === 'added') added++;
+      else if (unstagedStatus === 'deleted') deleted++;
+      else modified++;
     }
   }
 
