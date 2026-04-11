@@ -338,7 +338,7 @@ export const SessionViewer = () => {
   const visibleMessages = [...messages].reverse().filter(isNonEmpty);
 
   return (
-    <div style={{ height: '100%', maxHeight: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 'var(--mantine-spacing-md) var(--mantine-spacing-lg)' }}>
+    <div style={{ height: '100%', maxHeight: 'calc(100vh - 90px)', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 'var(--mantine-spacing-md) var(--mantine-spacing-lg)' }}>
       {/* Laptop frame */}
       <div
         style={{
