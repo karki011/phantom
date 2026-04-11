@@ -139,7 +139,9 @@ export const Cockpit = () => {
           </Paper>
 
           {/* Code Graph */}
-          {graphStatus.phase !== 'idle' && (
+          {graphStatus.phase !== 'idle' && (() => {
+            const graphProject = projects.find((p) => p.id === graphStatus.projectId);
+            return (
             <Paper
               p="sm"
               bg="var(--phantom-surface-card)"
@@ -156,6 +158,11 @@ export const Cockpit = () => {
                    graphStatus.phase === 'error' ? 'error' : 'ready'}
                 </Text>
               </Group>
+              {graphProject && (
+                <Text fz="0.7rem" fw={500} c="var(--phantom-accent-cyan)" mb={6} truncate>
+                  {graphProject.name}
+                </Text>
+              )}
               {graphStatus.phase === 'building' && graphStatus.progress && (
                 <>
                   <Text fz="xs" c="var(--phantom-text-secondary)" mb={4}>
@@ -194,7 +201,8 @@ export const Cockpit = () => {
                 </Text>
               )}
             </Paper>
-          )}
+            );
+          })()}
 
           {/* Level Progress (gamification) */}
           {showGamification && profile && (
