@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@phantom-os/db": "workspace:*",
-    "@phantom-os/shared": "workspace:*"
+    "@phantom-os/shared": "workspace:*",
+    "typescript": "~6.0.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

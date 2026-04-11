@@ -86,27 +86,71 @@ export const Cockpit = () => {
               </Text>
             ) : (
               <Stack gap={4}>
-                {projects.map((p) => (
-                  <div
-                    key={p.id}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px',
-                      borderRadius: 4, cursor: 'pointer', transition: 'background-color 100ms ease',
-                    }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated, #2a2a2a)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                    onClick={() => navigate('cockpit')}
-                  >
-                    <FolderGit2 size={13} style={{ color: 'var(--phantom-accent-cyan)', flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <Text fz="0.75rem" fw={500} c="var(--phantom-text-primary)" truncate>{p.name}</Text>
-                      <Group gap={4}>
-                        <GitBranch size={10} style={{ color: 'var(--phantom-text-muted)' }} />
-                        <Text fz="0.6rem" c="var(--phantom-text-muted)">{p.defaultBranch ?? 'main'}</Text>
-                      </Group>
+                {projects.map((p) => {
+                  const isGraphProject = graphStatus.projectId === p.id && graphStatus.phase !== 'idle';
+                  return (
+                    <div
+                      key={p.id}
+                      style={{
+                        padding: '6px 8px',
+                        borderRadius: 4, cursor: 'pointer', transition: 'background-color 100ms ease',
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated, #2a2a2a)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      onClick={() => navigate('cockpit')}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <FolderGit2 size={13} style={{ color: 'var(--phantom-accent-cyan)', flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <Text fz="0.75rem" fw={500} c="var(--phantom-text-primary)" truncate>{p.name}</Text>
+                          <Group gap={4}>
+                            <GitBranch size={10} style={{ color: 'var(--phantom-text-muted)' }} />
+                            <Text fz="0.6rem" c="var(--phantom-text-muted)">{p.defaultBranch ?? 'main'}</Text>
+                          </Group>
+                        </div>
+                      </div>
+                      {/* Inline graph stats for this project */}
+                      {isGraphProject && (
+                        <div style={{ marginTop: 4, paddingLeft: 21 }}>
+                          {graphStatus.phase === 'building' && graphStatus.progress ? (
+                            <>
+                              <Group gap={4} mb={2}>
+                                <GitGraph size={9} style={{ color: 'var(--phantom-accent-cyan)', animation: 'pulse-graph 1.2s ease-in-out infinite' }} />
+                                <Text fz="0.6rem" c="var(--phantom-text-muted)">
+                                  Mapping {graphStatus.progress.current.toLocaleString()}/{graphStatus.progress.total.toLocaleString()}
+                                </Text>
+                              </Group>
+                              <div style={{ height: 3, borderRadius: 2, backgroundColor: 'var(--phantom-surface-elevated)', overflow: 'hidden' }}>
+                                <div style={{
+                                  height: '100%', borderRadius: 2,
+                                  width: `${graphStatus.progress.total > 0 ? Math.round((graphStatus.progress.current / graphStatus.progress.total) * 100) : 0}%`,
+                                  background: 'var(--phantom-accent-cyan)', transition: 'width 200ms ease',
+                                }} />
+                              </div>
+                            </>
+                          ) : graphStatus.stats ? (
+                            <Group gap={8}>
+                              <Group gap={3}>
+                                <GitGraph size={9} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />
+                                <Text fz="0.6rem" c="var(--phantom-text-muted)">
+                                  {graphStatus.stats.files.toLocaleString()} files
+                                </Text>
+                              </Group>
+                              <Text fz="0.6rem" c="var(--phantom-text-muted)">
+                                {graphStatus.stats.edges.toLocaleString()} edges
+                              </Text>
+                            </Group>
+                          ) : graphStatus.phase === 'error' ? (
+                            <Group gap={3}>
+                              <GitGraph size={9} style={{ color: 'var(--phantom-status-danger, #ef4444)' }} />
+                              <Text fz="0.6rem" c="var(--phantom-status-danger, #ef4444)">Graph error</Text>
+                            </Group>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </Stack>
             )}
           </Paper>
@@ -137,72 +181,6 @@ export const Cockpit = () => {
               ))}
             </Stack>
           </Paper>
-
-          {/* Code Graph */}
-          {graphStatus.phase !== 'idle' && (() => {
-            const graphProject = projects.find((p) => p.id === graphStatus.projectId);
-            return (
-            <Paper
-              p="sm"
-              bg="var(--phantom-surface-card)"
-              style={{ border: '1px solid var(--phantom-border-subtle)' }}
-            >
-              <Group gap="xs" mb="xs">
-                <GitGraph size={14} style={{ color: 'var(--phantom-accent-cyan)' }} />
-                <Text fz="0.75rem" fw={600} c="var(--phantom-text-primary)">Code Graph</Text>
-                <Text fz="0.6rem" c="var(--phantom-text-muted)" ml="auto">
-                  {graphStatus.phase === 'building' ? 'building...' :
-                   graphStatus.phase === 'enriching' ? 'enriching...' :
-                   graphStatus.phase === 'updating' ? 'updating...' :
-                   graphStatus.phase === 'stale' ? 'stale' :
-                   graphStatus.phase === 'error' ? 'error' : 'ready'}
-                </Text>
-              </Group>
-              {graphProject && (
-                <Text fz="0.7rem" fw={500} c="var(--phantom-accent-cyan)" mb={6} truncate>
-                  {graphProject.name}
-                </Text>
-              )}
-              {graphStatus.phase === 'building' && graphStatus.progress && (
-                <>
-                  <Text fz="xs" c="var(--phantom-text-secondary)" mb={4}>
-                    Mapping {graphStatus.progress.current.toLocaleString()}/{graphStatus.progress.total.toLocaleString()} files
-                  </Text>
-                  <div style={{
-                    height: 4, borderRadius: 2, backgroundColor: 'var(--phantom-surface-elevated)',
-                    overflow: 'hidden',
-                  }}>
-                    <div style={{
-                      height: '100%', borderRadius: 2,
-                      width: `${graphStatus.progress.total > 0 ? Math.round((graphStatus.progress.current / graphStatus.progress.total) * 100) : 0}%`,
-                      background: 'var(--phantom-accent-cyan)',
-                      transition: 'width 200ms ease',
-                    }} />
-                  </div>
-                </>
-              )}
-              {graphStatus.stats && graphStatus.phase !== 'building' && (
-                <Stack gap={6}>
-                  {[
-                    { label: 'Files', value: graphStatus.stats.files.toLocaleString() },
-                    { label: 'Connections', value: graphStatus.stats.edges.toLocaleString() },
-                    { label: 'Coverage', value: `${Math.round(graphStatus.stats.coverage)}%` },
-                  ].map((row) => (
-                    <Group key={row.label} justify="space-between">
-                      <Text fz="0.73rem" c="var(--phantom-text-secondary)">{row.label}</Text>
-                      <Text fz="0.73rem" fw={600} c="var(--phantom-text-primary)" ff="'JetBrains Mono', monospace">{row.value}</Text>
-                    </Group>
-                  ))}
-                </Stack>
-              )}
-              {graphStatus.phase === 'error' && (
-                <Text fz="xs" c="var(--phantom-status-danger, #ef4444)">
-                  {graphStatus.error ?? 'Build failed'}
-                </Text>
-              )}
-            </Paper>
-            );
-          })()}
 
           {/* Level Progress (gamification) */}
           {showGamification && profile && (

@@ -11,6 +11,7 @@ import {
   GraphQuery,
   GraphPersistence,
   IncrementalUpdater,
+  ASTEnricher,
 } from '@phantom-os/ai-engine';
 import type { GraphStats } from '@phantom-os/ai-engine';
 import { logger } from '../logger.js';
@@ -97,6 +98,9 @@ class GraphEngineService {
         'GraphEngine',
         `Graph built for ${projectId}: ${stats.fileCount} files, ${stats.totalEdges} edges in ${durationMs}ms`,
       );
+
+      // Trigger Layer 2 enrichment in background (non-blocking)
+      void this.enrichProject(projectId, repoPath, ctx);
     } catch (err) {
       logger.error('GraphEngine', `Graph build failed for project ${projectId}:`, err);
     }
@@ -160,6 +164,39 @@ class GraphEngineService {
   // ---------------------------------------------------------------------------
   // Internal
   // ---------------------------------------------------------------------------
+
+  /**
+   * Layer 2 AST enrichment — runs in background after Layer 1 completes.
+   * Persists enriched nodes/edges and updates graph meta.
+   */
+  private async enrichProject(
+    projectId: string,
+    repoPath: string,
+    ctx: ProjectGraphContext,
+  ): Promise<void> {
+    try {
+      const enricher = new ASTEnricher(ctx.graph, this.eventBus);
+      await enricher.enrichProject(projectId, repoPath);
+
+      // Persist enriched nodes/edges to SQLite
+      const allNodes = ctx.graph.getAllNodes();
+      const allEdges = ctx.graph.getAllEdges();
+      this.persistence.saveNodes(allNodes);
+      this.persistence.saveEdges(allEdges);
+
+      // Update layer2Count in graph meta
+      const stats = ctx.query.getStats(projectId);
+      stats.lastUpdatedAt = Date.now();
+      this.persistence.saveMeta(stats);
+
+      logger.info(
+        'GraphEngine',
+        `Layer 2 enrichment complete for ${projectId}: ${stats.layer2Count} AST nodes`,
+      );
+    } catch (err) {
+      logger.error('GraphEngine', `Layer 2 enrichment failed for project ${projectId}:`, err);
+    }
+  }
 
   /**
    * Create a fresh graph context for a project.
