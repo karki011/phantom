@@ -1,9 +1,31 @@
 node_modules
 dist
+out
+
+# Database
 *.db
 *.db-journal
 *.db-shm
 *.db-wal
+
+# Build artifacts
 .vite
 .turbo
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
 .claude/worktrees/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
