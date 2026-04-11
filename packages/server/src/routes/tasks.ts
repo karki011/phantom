@@ -22,28 +22,37 @@ taskRoutes.get('/sessions/:sessionId/tasks', (c) => {
   return c.json(rows);
 });
 
-/** GET /tasks/by-cwd?cwd=<path> — Tasks from sessions matching a working directory (active + recent) */
+/** GET /tasks/by-cwd?cwd=<path> — Tasks from active sessions + most recent completed session */
 taskRoutes.get('/tasks/by-cwd', (c) => {
   const cwd = c.req.query('cwd');
   if (!cwd) return c.json([]);
 
   // Find sessions whose cwd exactly matches the worktree path
   const matchingSessions = db
-    .select({ id: sessions.id, status: sessions.status })
+    .select({ id: sessions.id, status: sessions.status, startedAt: sessions.startedAt })
     .from(sessions)
     .where(eq(sessions.cwd, cwd))
+    .orderBy(desc(sessions.startedAt))
     .all();
 
   if (matchingSessions.length === 0) return c.json([]);
 
-  // Get all tasks for those sessions
-  const sessionIds = new Set(matchingSessions.map((s) => s.id));
+  // Include: all active sessions + the most recent completed session
+  const activeSessions = matchingSessions.filter((s) => s.status === 'active');
+  const latestCompleted = matchingSessions.find((s) => s.status !== 'active');
+  const relevantIds = new Set([
+    ...activeSessions.map((s) => s.id),
+    ...(latestCompleted ? [latestCompleted.id] : []),
+  ]);
+
+  if (relevantIds.size === 0) return c.json([]);
+
   const allTasks = db
     .select()
     .from(tasks)
     .orderBy(desc(tasks.updatedAt))
     .all()
-    .filter((t) => t.sessionId && sessionIds.has(t.sessionId));
+    .filter((t) => t.sessionId && relevantIds.has(t.sessionId));
 
-  return c.json(allTasks.slice(0, 30));
+  return c.json(allTasks.slice(0, 20));
 });
