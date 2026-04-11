@@ -5,12 +5,12 @@
  */
 import { ScrollArea, Text, Textarea } from '@mantine/core';
 import { useAtomValue } from 'jotai';
-import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw, Plus, Minus, Check } from 'lucide-react';
+import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw, Plus, Minus, Check, ArrowUp, ArrowDown } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
 import { activeWorktreeAtom } from '../../atoms/worktrees';
 import type { GitFileChange, GitStatusResult } from '../../lib/api';
-import { fetchApi, getGitStatus, gitStage, gitUnstage, gitStageAll, gitCommit } from '../../lib/api';
+import { fetchApi, getGitStatus, gitStage, gitUnstage, gitStageAll, gitCommit, gitPush, gitPull } from '../../lib/api';
 
 const STATUS_CONFIG = {
   modified: { label: 'Modified', icon: FilePen, color: 'var(--phantom-accent-gold, #f59e0b)' },
@@ -90,6 +90,8 @@ export function ChangesView() {
   const [loading, setLoading] = useState(false);
   const [commitMsg, setCommitMsg] = useState('');
   const [committing, setCommitting] = useState(false);
+  const [pushing, setPushing] = useState(false);
+  const [pulling, setPulling] = useState(false);
 
   const refresh = useCallback(() => {
     if (!worktree) return;
@@ -139,6 +141,24 @@ export function ChangesView() {
     finally { setCommitting(false); }
   }, [worktree?.id, commitMsg, stagedFiles.length, refresh]);
 
+  const handlePush = useCallback(async () => {
+    if (!worktree || pushing) return;
+    setPushing(true);
+    try { await gitPush(worktree.id); }
+    catch { /* error handled by server response */ }
+    finally { setPushing(false); }
+  }, [worktree?.id, pushing]);
+
+  const handlePull = useCallback(async () => {
+    if (!worktree || pulling) return;
+    setPulling(true);
+    try {
+      await gitPull(worktree.id);
+      refresh();
+    } catch { /* error handled by server response */ }
+    finally { setPulling(false); }
+  }, [worktree?.id, pulling, refresh]);
+
   if (!worktree) {
     return (
       <Text fz="0.75rem" c="var(--phantom-text-muted)" ta="center" py="xl" px="sm">
@@ -157,6 +177,18 @@ export function ChangesView() {
         <Text fz="0.65rem" c="var(--phantom-text-muted)">
           {totalChanges} change{totalChanges !== 1 ? 's' : ''}
         </Text>
+        <ArrowDown
+          size={11}
+          style={{ color: pulling ? 'var(--phantom-accent-cyan)' : 'var(--phantom-text-muted)', cursor: pulling ? 'default' : 'pointer' }}
+          onClick={handlePull}
+          title="Pull"
+        />
+        <ArrowUp
+          size={11}
+          style={{ color: pushing ? 'var(--phantom-accent-cyan)' : 'var(--phantom-text-muted)', cursor: pushing ? 'default' : 'pointer' }}
+          onClick={handlePush}
+          title="Push"
+        />
         <RefreshCw
           size={11}
           style={{ color: 'var(--phantom-text-muted)', cursor: 'pointer', animation: loading ? 'spin 1s linear infinite' : 'none' }}

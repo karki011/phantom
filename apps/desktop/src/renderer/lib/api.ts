@@ -525,6 +525,18 @@ export const gitCommit = (worktreeId: string, message: string): Promise<{ ok: bo
     body: JSON.stringify({ action: 'commit', message }),
   });
 
+export const gitPush = (worktreeId: string): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'push' }),
+  });
+
+export const gitPull = (worktreeId: string): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'pull' }),
+  });
+
 // ---------------------------------------------------------------------------
 // User Preferences
 // ---------------------------------------------------------------------------
