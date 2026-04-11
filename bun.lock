@@ -51,6 +51,19 @@
         "typescript": "~6.0.2",
       },
     },
+    "packages/ai-engine": {
+      "name": "@phantom-os/ai-engine",
+      "version": "1.0.0",
+      "dependencies": {
+        "@phantom-os/db": "workspace:*",
+        "@phantom-os/shared": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/better-sqlite3": "^7.6.13",
+        "@types/node": "^25.5.2",
+        "vitest": "^4.1.4",
+      },
+    },
     "packages/db": {
       "name": "@phantom-os/db",
       "version": "1.0.0",
@@ -296,6 +309,8 @@
     "@monaco-editor/loader": ["@monaco-editor/loader@1.7.0", "", { "dependencies": { "state-local": "^1.0.6" } }, "sha512-gIwR1HrJrrx+vfyOhYmCZ0/JcWqG5kbfG7+d3f/C1LXk2EvzAbHSg3MQ5lO2sMlo9izoAZ04shohfKLVT6crVA=="],
 
     "@monaco-editor/react": ["@monaco-editor/react@4.7.0", "", { "dependencies": { "@monaco-editor/loader": "^1.5.0" }, "peerDependencies": { "monaco-editor": ">= 0.25.0 < 1", "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0", "react-dom": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-cyzXQCtO47ydzxpQtCGSQGOC8Gk3ZUeBXFAxD+CWXYFo5OqZyZUonFl0DwUlTyAfRHntBfw2p3w4s9R6oe1eCA=="],
+
+    "@phantom-os/ai-engine": ["@phantom-os/ai-engine@workspace:packages/ai-engine"],
 
     "@phantom-os/db": ["@phantom-os/db@workspace:packages/db"],
 
