@@ -100,7 +100,8 @@ export const SystemBlastRadius = ({ projectId }: Props) => {
           onOptionSubmit={(val) => { setFilePath(val); }}
           onKeyDown={(e) => e.key === 'Enter' && filePath.trim() && handleAnalyze()}
           data={fileList}
-          limit={20}
+          limit={50}
+          maxDropdownHeight={300}
           styles={{
             input: {
               backgroundColor: 'var(--phantom-surface-bg)',
