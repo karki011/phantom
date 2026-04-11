@@ -61,12 +61,17 @@ export const SystemBlastRadius = ({ projectId }: Props) => {
       }
       const data = await res.json();
 
-      // Normalize the response shape
-      const files: BlastFile[] = Array.isArray(data.files) ? data.files : [];
-      const directCount = data.directCount ?? files.filter((f: BlastFile) => f.type === 'direct').length;
-      const transitiveCount = data.transitiveCount ?? files.filter((f: BlastFile) => f.type === 'transitive').length;
-      const totalAffected = data.totalAffected ?? files.length;
-      const impactScore = data.impactScore ?? Math.min(100, totalAffected * 2);
+      // API returns { direct: FileNode[], transitive: FileNode[], impactScore: number }
+      const directFiles = (Array.isArray(data.direct) ? data.direct : []) as Array<{ path: string }>;
+      const transitiveFiles = (Array.isArray(data.transitive) ? data.transitive : []) as Array<{ path: string }>;
+      const files: BlastFile[] = [
+        ...directFiles.map((f) => ({ path: f.path, type: 'direct' as const })),
+        ...transitiveFiles.map((f) => ({ path: f.path, type: 'transitive' as const })),
+      ];
+      const directCount = directFiles.length;
+      const transitiveCount = transitiveFiles.length;
+      const totalAffected = directCount + transitiveCount;
+      const impactScore = (data.impactScore ?? 0) * 100; // API returns 0-1, UI shows 0-100
 
       setResult({ files, directCount, transitiveCount, impactScore, totalAffected });
     } catch (err) {
