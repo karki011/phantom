@@ -9,16 +9,20 @@ import { useEffect, useState } from 'react';
 import { FileSearch, Loader2, Search } from 'lucide-react';
 
 interface ContextFile {
+  id: string;
   path: string;
   relevance: number;
-  module?: string;
-  edges?: string[];
+}
+
+interface ContextModule {
+  name: string;
 }
 
 interface ContextResult {
   files: ContextFile[];
-  modules?: string[];
-  totalEdges?: number;
+  modules: ContextModule[];
+  edges: Array<{ id: string; sourceId: string; targetId: string; type: string }>;
+  scores: Record<string, number>;
 }
 
 interface Props {
@@ -60,7 +64,13 @@ export const SystemContextExplorer = ({ projectId }: Props) => {
         throw new Error(`API returned ${res.status}: ${res.statusText}`);
       }
       const data = await res.json();
-      setResult(data as ContextResult);
+      // Map scores (keyed by node ID) onto file objects as relevance
+      const scores = (data.scores ?? {}) as Record<string, number>;
+      const files = ((data.files ?? []) as Array<{ id: string; path: string }>).map((f) => ({
+        ...f,
+        relevance: scores[f.id] ?? 0,
+      }));
+      setResult({ ...data, files } as ContextResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -193,9 +203,11 @@ export const SystemContextExplorer = ({ projectId }: Props) => {
                 Modules / Dependencies
               </Text>
               <Group gap={6}>
-                {result.modules.map((mod) => (
+                {result.modules.map((mod: unknown) => {
+                  const name = typeof mod === 'string' ? mod : (mod as { name?: string })?.name ?? String(mod);
+                  return (
                   <Badge
-                    key={mod}
+                    key={name}
                     size="xs"
                     variant="outline"
                     style={{
@@ -203,9 +215,10 @@ export const SystemContextExplorer = ({ projectId }: Props) => {
                       color: 'var(--phantom-accent-cyan)',
                     }}
                   >
-                    {mod}
+                    {name}
                   </Badge>
-                ))}
+                  );
+                })}
               </Group>
             </Paper>
           )}
