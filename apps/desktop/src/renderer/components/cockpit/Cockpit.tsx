@@ -4,13 +4,14 @@
  *
  * @author Subash Karki
  */
-import { Paper, Stack, Text, Group, Tooltip } from '@mantine/core';
+import { Paper, Popover, Stack, Text, Group } from '@mantine/core';
 import { useAtomValue } from 'jotai';
 import {
   Activity,
   FolderGit2,
   GitBranch,
   GitGraph,
+  Info,
   Shield,
 } from 'lucide-react';
 
@@ -129,20 +130,48 @@ export const Cockpit = () => {
                               </div>
                             </>
                           ) : graphStatus.stats ? (
-                            <Group gap={8}>
-                              <Tooltip label="Source files analyzed in this project" position="bottom" withArrow fz="xs">
-                                <Group gap={3} style={{ cursor: 'default' }}>
-                                  <GitGraph size={9} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />
-                                  <Text fz="0.6rem" c="var(--phantom-text-muted)">
-                                    {graphStatus.stats.files.toLocaleString()} files
-                                  </Text>
-                                </Group>
-                              </Tooltip>
-                              <Tooltip label="Import connections between files — how your code is linked" position="bottom" withArrow fz="xs">
-                                <Text fz="0.6rem" c="var(--phantom-text-muted)" style={{ cursor: 'default' }}>
-                                  {graphStatus.stats.edges.toLocaleString()} edges
+                            <Group gap={6}>
+                              <Group gap={3}>
+                                <GitGraph size={9} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />
+                                <Text fz="0.6rem" c="var(--phantom-text-muted)">
+                                  {graphStatus.stats.files.toLocaleString()} files
                                 </Text>
-                              </Tooltip>
+                              </Group>
+                              <Text fz="0.6rem" c="var(--phantom-border-subtle)">|</Text>
+                              <Text fz="0.6rem" c="var(--phantom-text-muted)">
+                                {graphStatus.stats.edges.toLocaleString()} connections
+                              </Text>
+                              <Popover width={260} position="bottom" shadow="md" withArrow>
+                                <Popover.Target>
+                                  <Info size={10} style={{ color: 'var(--phantom-text-muted)', cursor: 'pointer', flexShrink: 0 }} />
+                                </Popover.Target>
+                                <Popover.Dropdown
+                                  style={{
+                                    backgroundColor: 'var(--phantom-surface-card)',
+                                    borderColor: 'var(--phantom-border-subtle)',
+                                    padding: 10,
+                                  }}
+                                >
+                                  <Stack gap={6}>
+                                    <Text fw={600} fz="xs" c="var(--phantom-text-primary)">What is the Code Graph?</Text>
+                                    <Text fz="xs" c="var(--phantom-text-secondary)" lh={1.4}>
+                                      Phantom OS maps your project's code to understand how files relate to each other.
+                                    </Text>
+                                    <div>
+                                      <Text fz="xs" fw={600} c="var(--phantom-accent-cyan)">Files</Text>
+                                      <Text fz="xs" c="var(--phantom-text-secondary)" lh={1.4}>
+                                        Every source file (TypeScript, JavaScript, etc.) in your project that was analyzed.
+                                      </Text>
+                                    </div>
+                                    <div>
+                                      <Text fz="xs" fw={600} c="var(--phantom-accent-cyan)">Connections</Text>
+                                      <Text fz="xs" c="var(--phantom-text-secondary)" lh={1.4}>
+                                        How files are linked — imports, dependencies, function calls, and component relationships. More connections means your AI assistant can better understand what code is related when making changes.
+                                      </Text>
+                                    </div>
+                                  </Stack>
+                                </Popover.Dropdown>
+                              </Popover>
                             </Group>
                           ) : graphStatus.phase === 'error' ? (
                             <Group gap={3}>
