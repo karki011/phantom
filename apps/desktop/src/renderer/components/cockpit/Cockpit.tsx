@@ -4,7 +4,7 @@
  *
  * @author Subash Karki
  */
-import { Paper, Stack, Text, Group } from '@mantine/core';
+import { Paper, Stack, Text, Group, Tooltip } from '@mantine/core';
 import { useAtomValue } from 'jotai';
 import {
   Activity,
@@ -130,15 +130,19 @@ export const Cockpit = () => {
                             </>
                           ) : graphStatus.stats ? (
                             <Group gap={8}>
-                              <Group gap={3}>
-                                <GitGraph size={9} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />
-                                <Text fz="0.6rem" c="var(--phantom-text-muted)">
-                                  {graphStatus.stats.files.toLocaleString()} files
+                              <Tooltip label="Source files analyzed in this project" position="bottom" withArrow fz="xs">
+                                <Group gap={3} style={{ cursor: 'default' }}>
+                                  <GitGraph size={9} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />
+                                  <Text fz="0.6rem" c="var(--phantom-text-muted)">
+                                    {graphStatus.stats.files.toLocaleString()} files
+                                  </Text>
+                                </Group>
+                              </Tooltip>
+                              <Tooltip label="Import connections between files — how your code is linked" position="bottom" withArrow fz="xs">
+                                <Text fz="0.6rem" c="var(--phantom-text-muted)" style={{ cursor: 'default' }}>
+                                  {graphStatus.stats.edges.toLocaleString()} edges
                                 </Text>
-                              </Group>
-                              <Text fz="0.6rem" c="var(--phantom-text-muted)">
-                                {graphStatus.stats.edges.toLocaleString()} edges
-                              </Text>
+                              </Tooltip>
                             </Group>
                           ) : graphStatus.phase === 'error' ? (
                             <Group gap={3}>
