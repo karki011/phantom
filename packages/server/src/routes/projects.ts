@@ -5,10 +5,12 @@
 import { randomUUID } from 'node:crypto';
 import { exec, execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { desc, eq } from 'drizzle-orm';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { desc, eq, and } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db, projects, worktrees, worktreeSections } from '@phantom-os/db';
-import { isGitRepo, getDefaultBranch, getRepoName, getWorktreeDir, listWorktrees } from '../worktree-manager.js';
+import { isGitRepo, getDefaultBranch, getRepoName, getWorktreeDir, listWorktrees, cloneRepo } from '../worktree-manager.js';
 import { removeWorktree } from '../worktree-manager.js';
 import { detectProject } from '../project-detector.js';
 import { logger } from '../logger.js';
@@ -108,6 +110,34 @@ projectRoutes.post('/projects/open', async (c) => {
     // Fetch latest from remote in background so branch list stays current
     backgroundFetch(repoPath);
 
+    // Ensure a branch-type worktree entry exists for the existing project
+    const existingBranch = db
+      .select()
+      .from(worktrees)
+      .where(and(eq(worktrees.projectId, existing.id), eq(worktrees.type, 'branch')))
+      .get();
+
+    if (!existingBranch) {
+      const currentBranch = existing.defaultBranch ?? 'main';
+      const branchEntry = {
+        id: randomUUID(),
+        projectId: existing.id,
+        type: 'branch' as const,
+        name: 'Local',
+        branch: currentBranch,
+        worktreePath: repoPath,
+        portBase: null,
+        sectionId: null,
+        baseBranch: null,
+        tabOrder: 0,
+        isActive: 1,
+        createdAt: Date.now(),
+      };
+      db.insert(worktrees).values(branchEntry).run();
+
+      return c.json({ project: existing, worktree: branchEntry });
+    }
+
     const firstWorktree = db
       .select()
       .from(worktrees)
@@ -140,7 +170,113 @@ projectRoutes.post('/projects/open', async (c) => {
   const profile = detectProject(repoPath);
   db.update(projects).set({ profile: JSON.stringify(profile) }).where(eq(projects.id, project.id)).run();
 
-  return c.json({ project, worktree: null }, 201);
+  // Create a branch-type worktree entry for the repo's current branch
+  const branchEntry = {
+    id: randomUUID(),
+    projectId: project.id,
+    type: 'branch' as const,
+    name: 'Local',
+    branch: defaultBranch,
+    worktreePath: repoPath,
+    portBase: null,
+    sectionId: null,
+    baseBranch: null,
+    tabOrder: 0,
+    isActive: 1,
+    createdAt: Date.now(),
+  };
+  db.insert(worktrees).values(branchEntry).run();
+
+  return c.json({ project, worktree: branchEntry }, 201);
+});
+
+/** POST /projects/clone — Clone a repo and create project + branch worktree */
+projectRoutes.post('/projects/clone', async (c) => {
+  const body = await c.req.json<{ url: string; targetDir?: string }>();
+  const { url } = body;
+
+  if (!url?.trim()) {
+    return c.json({ error: 'url is required' }, 400);
+  }
+
+  // Only support HTTPS and SSH URLs
+  const cloneUrl = url.trim();
+  if (!cloneUrl.startsWith('https://') && !cloneUrl.startsWith('git@')) {
+    return c.json({ error: 'Only HTTPS (https://...) and SSH (git@...) URLs are supported' }, 400);
+  }
+
+  // Derive repo name from URL: strip .git suffix, take last path segment
+  const repoName = cloneUrl.replace(/\.git$/, '').split('/').pop() ?? 'repo';
+
+  // If user provides a directory, append repo name as subdirectory.
+  // git clone creates the subdirectory — we just need the final path for validation.
+  const baseDir = body.targetDir || `${homedir()}/Projects`;
+  const targetDir = join(baseDir, repoName);
+
+  // If target already exists, try to open it as a project instead of failing
+  if (existsSync(targetDir)) {
+    if (isGitRepo(targetDir)) {
+      // Already cloned — open as project and tell the client it wasn't re-cloned
+      const existing = db.select().from(projects).where(eq(projects.repoPath, targetDir)).get();
+      if (existing) {
+        const firstWorktree = db.select().from(worktrees).where(eq(worktrees.projectId, existing.id)).get();
+        return c.json({ project: existing, worktree: firstWorktree ?? null, clonePath: targetDir, alreadyExists: true });
+      }
+      // Exists on disk but not in DB — fall through to project creation below
+    } else {
+      return c.json({ error: `Folder already exists at ${targetDir} and is not a git repository` }, 400);
+    }
+  } else {
+    // Clone the repository
+    try {
+      await cloneRepo(cloneUrl, targetDir);
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      return c.json({ error: `Failed to clone: ${msg}` }, 500);
+    }
+  }
+
+  // Reuse same project creation logic as POST /projects/open
+  const name = getRepoName(targetDir);
+  const defaultBranch = await getDefaultBranch(targetDir);
+
+  const project = {
+    id: randomUUID(),
+    name,
+    repoPath: targetDir,
+    defaultBranch,
+    worktreeBaseDir: getWorktreeDir(name, ''),
+    color: null,
+    createdAt: Date.now(),
+  };
+
+  db.insert(projects).values(project).run();
+
+  // Auto-detect project profile
+  const profile = detectProject(targetDir);
+  db.update(projects).set({ profile: JSON.stringify(profile) }).where(eq(projects.id, project.id)).run();
+
+  // Create a branch-type worktree entry for the repo's current branch
+  const branchEntry = {
+    id: randomUUID(),
+    projectId: project.id,
+    type: 'branch' as const,
+    name: 'Local',
+    branch: defaultBranch,
+    worktreePath: targetDir,
+    portBase: null,
+    sectionId: null,
+    baseBranch: null,
+    tabOrder: 0,
+    isActive: 1,
+    createdAt: Date.now(),
+  };
+  db.insert(worktrees).values(branchEntry).run();
+
+  // Fetch remote refs in background
+  backgroundFetch(targetDir);
+
+  return c.json({ project, worktree: branchEntry, clonePath: targetDir }, 201);
 });
 
 /** POST /projects/:id/detect — Re-detect project profile */
@@ -349,17 +485,6 @@ projectRoutes.post('/projects/:id/worktrees/import', async (c) => {
 
   const name = body.name || branch;
 
-  // Port allocation: pick from Auth0-allowed pool
-  const PORT_POOL = [8080, 8081, 8082];
-  const usedPorts = new Set(
-    db.select({ portBase: worktrees.portBase })
-      .from(worktrees)
-      .all()
-      .map((r) => r.portBase)
-      .filter((p): p is number => p !== null),
-  );
-  const portBase = PORT_POOL.find((p) => !usedPorts.has(p)) ?? null;
-
   const worktree = {
     id: randomUUID(),
     projectId: id,
@@ -368,7 +493,7 @@ projectRoutes.post('/projects/:id/worktrees/import', async (c) => {
     branch,
     baseBranch,
     worktreePath: body.path,
-    portBase,
+    portBase: null,
     sectionId: null,
     tabOrder: 0,
     isActive: 1,

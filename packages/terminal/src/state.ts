@@ -167,7 +167,6 @@ export const attachSession = async (
       ...(md?.recipeLabel && { recipeLabel: md.recipeLabel }),
       ...(md?.recipeCategory && { recipeCategory: md.recipeCategory }),
       ...(md?.port != null && { port: md.port }),
-      ...(md?.port != null && { env: { PORT: String(md.port) } }),
     }));
   };
 

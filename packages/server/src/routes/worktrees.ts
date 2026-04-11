@@ -2,7 +2,7 @@
  * PhantomOS Worktree Routes
  * @author Subash Karki
  */
-import { exec } from 'node:child_process';
+import { exec, execSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { desc, eq } from 'drizzle-orm';
@@ -12,6 +12,9 @@ import {
   createWorktree,
   removeWorktree,
   getWorktreeDir,
+  checkoutBranch,
+  createAndCheckoutBranch,
+  hasUncommittedChanges,
 } from '../worktree-manager.js';
 import { logger } from '../logger.js';
 
@@ -140,17 +143,6 @@ worktreeRoutes.post('/worktrees', async (c) => {
     return c.json({ error: `Failed to create worktree: ${msg}` }, 500);
   }
 
-  // Port allocation: pick next available from Auth0-allowed pool
-  const PORT_POOL = [8080, 8081, 8082];
-  const usedPorts = new Set(
-    db.select({ portBase: worktrees.portBase })
-      .from(worktrees)
-      .all()
-      .map((r) => r.portBase)
-      .filter((p): p is number => p !== null),
-  );
-  const portBase = PORT_POOL.find((p) => !usedPorts.has(p)) ?? null;
-
   const worktree = {
     id: randomUUID(),
     projectId,
@@ -159,7 +151,7 @@ worktreeRoutes.post('/worktrees', async (c) => {
     branch,
     baseBranch: body.baseBranch ?? project.defaultBranch ?? null,
     worktreePath,
-    portBase,
+    portBase: null,
     sectionId: null,
     tabOrder: 0,
     isActive: 1,
@@ -245,22 +237,114 @@ worktreeRoutes.patch('/worktrees/:id', async (c) => {
   return c.json(updated);
 });
 
-/** POST /worktrees/:id/assign-port — Backfill portBase for existing worktrees */
-worktreeRoutes.post('/worktrees/:id/assign-port', (c) => {
+/** POST /worktrees/:id/checkout — Switch branch on a branch-type worktree */
+worktreeRoutes.post('/worktrees/:id/checkout', async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json<{ branch: string }>();
+
+  const worktree = db.select().from(worktrees).where(eq(worktrees.id, id)).get();
+  if (!worktree) return c.json({ error: 'Worktree not found' }, 404);
+
+  if (worktree.type !== 'branch') {
+    return c.json({ error: 'Checkout is only supported for branch-type worktrees' }, 400);
+  }
+
+  if (!body.branch?.trim()) {
+    return c.json({ error: 'branch is required' }, 400);
+  }
+
+  const repoPath = worktree.worktreePath;
+  if (!repoPath || !existsSync(repoPath)) {
+    return c.json({ error: 'Worktree path does not exist' }, 400);
+  }
+
+  // Check for uncommitted changes
+  const status = hasUncommittedChanges(repoPath);
+  if (status.dirty) {
+    return c.json({ error: 'Uncommitted changes', dirty: true, changes: status.changes }, 409);
+  }
+
+  // Attempt checkout
+  try {
+    checkoutBranch(repoPath, body.branch);
+  } catch {
+    // Branch may not exist locally but may exist on remote — try tracking checkout
+    try {
+      createAndCheckoutBranch(repoPath, body.branch, `origin/${body.branch}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      return c.json({ error: `Failed to checkout branch: ${msg}` }, 500);
+    }
+  }
+
+  // Update DB record
+  db.update(worktrees).set({ branch: body.branch }).where(eq(worktrees.id, id)).run();
+
+  const updated = db.select().from(worktrees).where(eq(worktrees.id, id)).get();
+  return c.json(updated);
+});
+
+/** POST /worktrees/:id/create-branch — Create and switch to a new branch */
+worktreeRoutes.post('/worktrees/:id/create-branch', async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json<{ branch: string; baseBranch?: string }>();
+
+  const worktree = db.select().from(worktrees).where(eq(worktrees.id, id)).get();
+  if (!worktree) return c.json({ error: 'Worktree not found' }, 404);
+
+  if (worktree.type !== 'branch') {
+    return c.json({ error: 'Create-branch is only supported for branch-type worktrees' }, 400);
+  }
+
+  if (!body.branch?.trim()) {
+    return c.json({ error: 'branch is required' }, 400);
+  }
+
+  const repoPath = worktree.worktreePath;
+  if (!repoPath || !existsSync(repoPath)) {
+    return c.json({ error: 'Worktree path does not exist' }, 400);
+  }
+
+  try {
+    createAndCheckoutBranch(repoPath, body.branch, body.baseBranch);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ error: `Failed to create branch: ${msg}` }, 500);
+  }
+
+  // Update DB record
+  db.update(worktrees).set({ branch: body.branch }).where(eq(worktrees.id, id)).run();
+
+  const updated = db.select().from(worktrees).where(eq(worktrees.id, id)).get();
+  return c.json(updated);
+});
+
+/** POST /worktrees/:id/git — Run a git action (fetch, pull, push) */
+worktreeRoutes.post('/worktrees/:id/git', async (c) => {
   const id = c.req.param('id');
   const worktree = db.select().from(worktrees).where(eq(worktrees.id, id)).get();
   if (!worktree) return c.json({ error: 'Worktree not found' }, 404);
-  if (worktree.portBase !== null) return c.json({ portBase: worktree.portBase });
 
-  const PORT_POOL = [8080, 8081, 8082];
-  const usedPorts = new Set(
-    db.select({ portBase: worktrees.portBase })
-      .from(worktrees)
-      .all()
-      .map((r) => r.portBase)
-      .filter((p): p is number => p !== null),
-  );
-  const portBase = PORT_POOL.find((p) => !usedPorts.has(p)) ?? null;
-  db.update(worktrees).set({ portBase }).where(eq(worktrees.id, id)).run();
-  return c.json({ portBase });
+  const repoPath = worktree.worktreePath;
+  if (!repoPath || !existsSync(repoPath)) {
+    return c.json({ error: 'Worktree path does not exist' }, 400);
+  }
+
+  const body = await c.req.json<{ action: string }>();
+  const { action } = body;
+
+  const allowed = ['fetch', 'pull', 'push'];
+  if (!allowed.includes(action)) {
+    return c.json({ error: `Invalid action: ${action}. Allowed: ${allowed.join(', ')}` }, 400);
+  }
+
+  try {
+    const cmd = action === 'fetch' ? 'git fetch origin' : `git ${action}`;
+    execSync(cmd, { cwd: repoPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe' });
+    return c.json({ ok: true, action });
+  } catch (err: any) {
+    const stderr = err?.stderr?.toString?.()?.trim() || '';
+    const msg = stderr || (err instanceof Error ? err.message : 'Unknown error');
+    return c.json({ error: `git ${action} failed: ${msg}` }, 500);
+  }
 });

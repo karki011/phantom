@@ -351,13 +351,36 @@ export function WorktreeHome() {
       return;
     }
 
-    setGitStatusState('loading');
-    window.phantomOS.invoke('phantom:git-status', gitPath)
-      .then((result) => {
-        setGitStatusState(result ? (result as GitStatus) : 'unavailable');
-      })
-      .catch(() => setGitStatusState('error'));
-  }, [gitPath]);
+    const fetchStatus = () => {
+      setGitStatusState('loading');
+      window.phantomOS.invoke('phantom:git-status', gitPath)
+        .then((result) => {
+          setGitStatusState(result ? (result as GitStatus) : 'unavailable');
+        })
+        .catch(() => setGitStatusState('error'));
+    };
+
+    fetchStatus();
+
+    // Poll every 60s — quiet background fetch + status refresh
+    const poll = setInterval(() => {
+      fetch(`/api/worktrees/${worktree?.id}/git`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'fetch' }),
+      }).catch(() => {});
+      // Refresh status after a short delay for fetch to complete
+      setTimeout(fetchStatus, 3000);
+    }, 60_000);
+
+    // Re-fetch when git actions happen (branch switch, pull, fetch, push)
+    const handler = () => fetchStatus();
+    window.addEventListener('phantom:git-refresh', handler);
+    return () => {
+      clearInterval(poll);
+      window.removeEventListener('phantom:git-refresh', handler);
+    };
+  }, [gitPath, worktree?.id]);
 
   // Random quote (stable per mount)
   const quote = useMemo(() => QUOTES[Math.floor(Math.random() * QUOTES.length)], []);
@@ -442,9 +465,6 @@ export function WorktreeHome() {
   return (
     <div style={{ height: '100%', overflow: 'auto', padding: '24px' }}>
       <Stack align="center" gap="lg" maw={1400} w="100%" mx="auto">
-        {/* Rank Header */}
-        <RankHeader profile={profile} />
-
         {/* Two-column layout: Recipes | Tools + Info */}
         <div
           style={{
@@ -570,7 +590,6 @@ export function WorktreeHome() {
                             radius="xl"
                             style={{ flexShrink: 0 }}
                             onClick={() => {
-                              const port = recipe.category === 'serve' ? worktree?.portBase : null;
                               store.addPaneAsTab('terminal', {
                                 cwd: worktree?.worktreePath ?? project?.repoPath,
                                 initialCommand: recipe.command,
@@ -579,7 +598,6 @@ export function WorktreeHome() {
                                 recipeCommand: recipe.command,
                                 recipeLabel: recipe.label,
                                 recipeCategory: recipe.category,
-                                port,
                               } as Record<string, unknown>, recipe.label);
                             }}
                           >
@@ -650,7 +668,6 @@ export function WorktreeHome() {
                               radius="xl"
                               style={{ flexShrink: 0 }}
                               onClick={() => {
-                                const port = recipe.category === 'serve' ? worktree?.portBase : null;
                                 store.addPaneAsTab('terminal', {
                                   cwd: worktree?.worktreePath ?? project?.repoPath,
                                   initialCommand: recipe.command,
@@ -659,7 +676,6 @@ export function WorktreeHome() {
                                   recipeCommand: recipe.command,
                                   recipeLabel: recipe.label,
                                   recipeCategory: recipe.category,
-                                  port,
                                 } as Record<string, unknown>, recipe.label);
                               }}
                             >
@@ -770,12 +786,6 @@ export function WorktreeHome() {
                   onClick={openClaude}
                 />
                 <QuickActionCard
-                  icon={<BarChart3 size={20} style={{ color: 'var(--phantom-accent-glow)' }} />}
-                  label="Hunter Stats"
-                  shortcut="Ctrl+H"
-                  onClick={() => navigate('hunter-stats')}
-                />
-                <QuickActionCard
                   icon={<MessageSquare size={20} style={{ color: 'var(--phantom-accent-glow)' }} />}
                   label="Chat"
                   shortcut="Ctrl+K"
@@ -792,7 +802,6 @@ export function WorktreeHome() {
 
             {/* Git Status + Daily Quests */}
             <GitStatusCard state={gitStatusState} />
-            <DailyQuestsCard quests={questSummary} />
           </Stack>
         </div>
 
