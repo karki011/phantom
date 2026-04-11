@@ -81,16 +81,17 @@ export class InMemoryGraph {
     if (!node) return;
 
     // Remove all connected edges (outgoing + incoming)
+    // Snapshot into arrays to avoid iterator invalidation — removeEdgeInternal mutates the sets
     const outEdgeIds = this.adjacency.get(id);
     if (outEdgeIds) {
-      for (const edgeId of outEdgeIds) {
+      for (const edgeId of [...outEdgeIds]) {
         this.removeEdgeInternal(edgeId);
       }
     }
 
     const inEdgeIds = this.reverseAdjacency.get(id);
     if (inEdgeIds) {
-      for (const edgeId of inEdgeIds) {
+      for (const edgeId of [...inEdgeIds]) {
         this.removeEdgeInternal(edgeId);
       }
     }

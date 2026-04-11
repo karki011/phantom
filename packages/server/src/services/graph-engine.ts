@@ -40,6 +40,8 @@ class GraphEngineService {
   private persistence = new GraphPersistence(sqlite);
   private broadcast: BroadcastFn = () => {};
   private unsubscribe: (() => void) | null = null;
+  private building = new Set<string>();
+  private enriching = new Set<string>();
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -61,6 +63,12 @@ class GraphEngineService {
   // ---------------------------------------------------------------------------
 
   async buildProject(projectId: string, repoPath: string): Promise<void> {
+    if (this.building.has(projectId)) {
+      logger.info('GraphEngine', `Build already in progress for ${projectId} — skipping`);
+      return;
+    }
+    this.building.add(projectId);
+
     const startTime = Date.now();
     logger.info('GraphEngine', `Building graph for project ${projectId} at ${repoPath}`);
 
@@ -94,6 +102,8 @@ class GraphEngineService {
       void this.enrichProject(projectId, repoPath, ctx);
     } catch (err) {
       logger.error('GraphEngine', `Graph build failed for project ${projectId}:`, err);
+    } finally {
+      this.building.delete(projectId);
     }
   }
 
@@ -213,6 +223,12 @@ class GraphEngineService {
     repoPath: string,
     ctx: ProjectGraphContext,
   ): Promise<void> {
+    if (this.enriching.has(projectId)) {
+      logger.info('GraphEngine', `Enrichment already in progress for ${projectId} — skipping`);
+      return;
+    }
+    this.enriching.add(projectId);
+
     try {
       const enricher = new ASTEnricher(ctx.graph, this.eventBus);
       await enricher.enrichProject(projectId, repoPath);
@@ -234,6 +250,8 @@ class GraphEngineService {
       );
     } catch (err) {
       logger.error('GraphEngine', `Layer 2 enrichment failed for project ${projectId}:`, err);
+    } finally {
+      this.enriching.delete(projectId);
     }
   }
 

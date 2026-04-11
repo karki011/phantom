@@ -6,7 +6,7 @@
  */
 import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
-import { relative } from 'node:path';
+import { join, relative } from 'node:path';
 
 import type { EventBus } from '../events/event-bus.js';
 import type { FileNode } from '../types/graph.js';
@@ -119,7 +119,7 @@ export class IncrementalUpdater {
     if (!existing) return true;
 
     try {
-      const fullPath = `${this.rootDir}/${relPath}`;
+      const fullPath = join(this.rootDir, relPath);
       const content = await readFile(fullPath, 'utf-8');
       const hash = createHash('md5').update(content).digest('hex');
       return hash !== existing.contentHash;
@@ -150,7 +150,7 @@ export class IncrementalUpdater {
    */
   async handleBranchSwitch(changedFiles: string[]): Promise<void> {
     for (const file of changedFiles) {
-      this.queueChange({ path: `${this.rootDir}/${file}`, type: 'change' });
+      this.queueChange({ path: join(this.rootDir, file), type: 'change' });
     }
     // Flush immediately on branch switch
     await this.flush();
@@ -169,7 +169,7 @@ export class IncrementalUpdater {
       const fileNode = node as FileNode;
 
       try {
-        const fullPath = `${this.rootDir}/${fileNode.path}`;
+        const fullPath = join(this.rootDir, fileNode.path);
         const fileStat = await stat(fullPath);
         if (fileStat.mtimeMs > fileNode.updatedAt) {
           const changed = await this.hasFileChanged(fileNode.path);

@@ -8,8 +8,9 @@
  *
  * @author Subash Karki
  */
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { relative, extname } from 'node:path';
+import { relative, extname, resolve } from 'node:path';
 import ts from 'typescript';
 import type {
   FunctionNode,
@@ -122,12 +123,21 @@ export class ASTEnricher {
 
     let processedCount = 0;
 
+    // Build name lookups once before the file loop (avoids O(n²) per-file rebuild)
+    const projectFunctions = this.buildNameLookup(projectId, 'function');
+    const projectComponents = this.buildNameLookup(projectId, 'component');
+    const projectTypes = this.buildNameLookup(projectId, 'type');
+
     for (const fileNode of fileNodes) {
       try {
         const absPath = this.resolveAbsPath(rootDir, fileNode.path);
         const content = await readFile(absPath, 'utf-8');
         const scriptKind = this.getScriptKind(fileNode.path);
-        this.enrichFileContent(projectId, fileNode.id, fileNode.path, content, scriptKind);
+        this.enrichFileContent(projectId, fileNode.id, fileNode.path, content, scriptKind, {
+          functions: projectFunctions,
+          components: projectComponents,
+          types: projectTypes,
+        });
       } catch (err) {
         this.eventBus.emit({
           type: 'graph:build:error',
@@ -177,7 +187,6 @@ export class ASTEnricher {
     if (!fileNode) return;
 
     try {
-      const { readFileSync } = require('node:fs') as typeof import('node:fs');
       const content = readFileSync(filePath, 'utf-8');
       const scriptKind = this.getScriptKind(relPath);
       this.enrichFileContent(projectId, fileNode.id, relPath, content, scriptKind);
@@ -196,6 +205,11 @@ export class ASTEnricher {
     relativePath: string,
     content: string,
     scriptKind: ts.ScriptKind = ts.ScriptKind.TS,
+    prebuiltLookups?: {
+      functions: Map<string, string>;
+      components: Map<string, string>;
+      types: Map<string, string>;
+    },
   ): void {
     let sourceFile: ts.SourceFile;
     try {
@@ -344,12 +358,12 @@ export class ASTEnricher {
     }
 
     // Build a combined lookup for all named entities in this project
-    // (includes nodes from other files already in the graph)
-    const allProjectFunctions = this.buildNameLookup(projectId, 'function');
-    const allProjectComponents = this.buildNameLookup(projectId, 'component');
-    const allProjectTypes = this.buildNameLookup(projectId, 'type');
+    // (uses prebuilt lookups when available to avoid O(n²) per-file rebuild)
+    const allProjectFunctions = prebuiltLookups?.functions ?? this.buildNameLookup(projectId, 'function');
+    const allProjectComponents = prebuiltLookups?.components ?? this.buildNameLookup(projectId, 'component');
+    const allProjectTypes = prebuiltLookups?.types ?? this.buildNameLookup(projectId, 'type');
 
-    // Merge just-added nodes into the lookups
+    // Merge just-added nodes into the lookups (so subsequent files see them)
     for (const [name, id] of functionIds) allProjectFunctions.set(name, id);
     for (const [name, id] of componentIds) allProjectComponents.set(name, id);
     for (const [name, id] of typeIds) allProjectTypes.set(name, id);
@@ -997,7 +1011,6 @@ export class ASTEnricher {
   }
 
   private resolveAbsPath(rootDir: string, relPath: string): string {
-    const { resolve } = require('node:path') as typeof import('node:path');
     return resolve(rootDir, relPath);
   }
 }

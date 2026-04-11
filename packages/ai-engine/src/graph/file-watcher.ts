@@ -32,7 +32,7 @@ const IGNORED_DIR_NAMES = new Set([
  * Works with both absolute and relative paths on any platform.
  */
 function isIgnoredPath(filePath: string): boolean {
-  const segments = filePath.split('/');
+  const segments = filePath.split(/[/\\]/);
   return segments.some((seg) => IGNORED_DIR_NAMES.has(seg));
 }
 

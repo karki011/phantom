@@ -43,7 +43,7 @@ export class GraphPersistence {
           'path' in node ? (node as { path: string }).path : null,
           'name' in node ? (node as { name: string }).name : null,
           'contentHash' in node ? (node as { contentHash: string }).contentHash : null,
-          JSON.stringify(node.metadata),
+          JSON.stringify(node),  // Store the FULL node so Layer 2 fields survive round-trip
           node.createdAt,
           node.updatedAt,
         );
@@ -70,11 +70,21 @@ export class GraphPersistence {
       }>;
 
     return rows.map((row) => {
+      // Metadata column now stores the full serialized node (including Layer 2 fields)
+      if (row.metadata) {
+        try {
+          return JSON.parse(row.metadata) as GraphNode;
+        } catch {
+          // Fall through to partial reconstruction
+        }
+      }
+
+      // Fallback for legacy rows that don't have the full node in metadata
       const base = {
         id: row.id,
         projectId: row.project_id,
         type: row.type,
-        metadata: row.metadata ? JSON.parse(row.metadata) : {},
+        metadata: {},
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       };
