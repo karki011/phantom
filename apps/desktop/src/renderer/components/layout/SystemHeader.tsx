@@ -206,7 +206,7 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
         </ActionIcon>
 
         {/* Help */}
-        <Popover width={320} position="bottom-end" shadow="md" withArrow>
+        <Popover width={360} position="bottom-end" shadow="md" withArrow>
           <Popover.Target>
             <ActionIcon variant="subtle" size="lg" aria-label="Help">
               <HelpCircle size={18} aria-hidden="true" />
@@ -216,11 +216,18 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
             style={{
               backgroundColor: 'var(--phantom-surface-card)',
               borderColor: 'var(--phantom-border-subtle)',
+              maxHeight: 480,
+              overflowY: 'auto',
             }}
           >
-            <Stack gap="sm">
+            <Stack gap="xs">
               <Text fw={700} fz="sm" c="var(--phantom-text-primary)">
-                PhantomOS Concepts
+                PhantomOS Features
+              </Text>
+
+              {/* Core Concepts */}
+              <Text fw={700} fz="0.65rem" tt="uppercase" c="var(--phantom-text-muted)" style={{ letterSpacing: '0.05em', marginTop: 4 }}>
+                Core Concepts
               </Text>
               <div>
                 <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Project</Text>
@@ -231,20 +238,114 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
               <div>
                 <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Worktree</Text>
                 <Text fz="xs" c="var(--phantom-text-secondary)">
-                  An isolated working copy of a project. Your first worktree uses the main branch directly. Each additional worktree creates a <strong>git worktree</strong> — a separate directory with its own branch and files, so you can work on multiple features without stashing or switching branches.
+                  An isolated working copy of a project. Your first worktree uses the main branch directly. Additional worktrees create <strong>git worktrees</strong> — separate directories with their own branch, so you can work on multiple features simultaneously.
                 </Text>
               </div>
               <div>
                 <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Panes</Text>
                 <Text fz="xs" c="var(--phantom-text-secondary)">
-                  Split your worktree into terminals, editors, session dashboards, and more. Drag panes to rearrange, split horizontally or vertically.
+                  Split your workspace into terminals, editors, diffs, and dashboards. Drag to rearrange, split horizontally or vertically.
+                </Text>
+              </div>
+
+              {/* Git Workflow */}
+              <Text fw={700} fz="0.65rem" tt="uppercase" c="var(--phantom-text-muted)" style={{ letterSpacing: '0.05em', marginTop: 4 }}>
+                Git Workflow
+              </Text>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Changes View</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Right sidebar → Changes tab. Shows staged and unstaged files. Click <strong>+</strong> to stage, <strong>−</strong> to unstage, <strong>↩</strong> to discard. Click a file name to view its diff.
                 </Text>
               </div>
               <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Commit</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Stage files, type a commit message, then click Commit or press <strong>⌘+Enter</strong>. The commit area appears when files are staged.
+                </Text>
+              </div>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Push / Pull</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Push and Pull buttons in the Changes header. <strong>Push</strong> lights up green when you have commits to push. <strong>Pull</strong> lights up gold when the remote is ahead.
+                </Text>
+              </div>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">More Git Actions (⋮ menu)</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  <strong>Undo last commit</strong> — moves changes back to staged. <strong>Stash / Pop stash</strong> — shelve and restore changes. <strong>Fetch remote</strong> — update remote refs.
+                </Text>
+              </div>
+
+              {/* Branch & Repo */}
+              <Text fw={700} fz="0.65rem" tt="uppercase" c="var(--phantom-text-muted)" style={{ letterSpacing: '0.05em', marginTop: 4 }}>
+                Branch & Repo
+              </Text>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Branch Switcher</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Right-click a worktree in the sidebar to switch branches, create new branches, or run fetch/pull/push.
+                </Text>
+              </div>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Clone Repository</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Click "Clone" on the welcome page to clone a repo via HTTPS or SSH URL and auto-create a project.
+                </Text>
+              </div>
+
+              {/* Workspace Features */}
+              <Text fw={700} fz="0.65rem" tt="uppercase" c="var(--phantom-text-muted)" style={{ letterSpacing: '0.05em', marginTop: 4 }}>
+                Workspace
+              </Text>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Recipes</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Auto-detected build/serve/test commands for your project. Click ▶ to run in a terminal pane. Star favorites for quick access.
+                </Text>
+              </div>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Running Servers</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Shows active dev servers with uptime. Click to open in browser or stop the process.
+                </Text>
+              </div>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Plans</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Claude Code plan files detected for your worktree. Click to open in an editor pane.
+                </Text>
+              </div>
+
+              {/* Gamification */}
+              <Text fw={700} fz="0.65rem" tt="uppercase" c="var(--phantom-text-muted)" style={{ letterSpacing: '0.05em', marginTop: 4 }}>
+                Gamification
+              </Text>
+              <div>
                 <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Hunter Rank</Text>
                 <Text fz="xs" c="var(--phantom-text-secondary)">
-                  Your gamification level. Earn XP by completing tasks, starting sessions, and maintaining streaks. Ranks go from E through SSS to National Level.
+                  Earn XP by completing tasks, starting sessions, and maintaining streaks. Ranks go from E through SSS to National Level. Toggle with the ⚔ button.
                 </Text>
+              </div>
+
+              {/* Keyboard Shortcuts */}
+              <Text fw={700} fz="0.65rem" tt="uppercase" c="var(--phantom-text-muted)" style={{ letterSpacing: '0.05em', marginTop: 4 }}>
+                Keyboard Shortcuts
+              </Text>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px' }}>
+                {[
+                  ['⌘ + Enter', 'Commit staged changes'],
+                  ['⌘ + J', 'New Claude session'],
+                  ['⌘ + K', 'Open chat'],
+                  ['⌘ + T', 'New terminal'],
+                  ['⌘ + W', 'Close pane'],
+                  ['⌘ + \\', 'Split pane'],
+                ].map(([key, desc]) => (
+                  <div key={key} style={{ display: 'contents' }}>
+                    <Text fz="xs" ff="'JetBrains Mono', monospace" c="var(--phantom-accent-cyan)" fw={600}>{key}</Text>
+                    <Text fz="xs" c="var(--phantom-text-secondary)">{desc}</Text>
+                  </div>
+                ))}
               </div>
             </Stack>
           </Popover.Dropdown>
