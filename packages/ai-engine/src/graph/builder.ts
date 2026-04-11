@@ -7,42 +7,57 @@
  */
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { resolve, relative, dirname, extname, join, posix } from 'node:path';
+import { resolve, relative, dirname, extname, join } from 'node:path';
 import type { FileNode, ModuleNode, GraphEdge } from '../types/graph.js';
 import type { EventBus } from '../events/event-bus.js';
 import type { InMemoryGraph } from './in-memory-graph.js';
+import { ParserRegistry } from './parsers/registry.js';
 
 /** Source file extensions we process */
 const SOURCE_EXTENSIONS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json',
+  '.py', '.go', '.rs', '.java',
 ]);
 
 /** Directories to skip during walk */
 const SKIP_DIRS = new Set([
   'node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.turbo', '.cache',
+  '__pycache__', '.venv', 'venv', 'env', 'target', '.gradle', 'bin', 'obj',
 ]);
 
-// ---------------------------------------------------------------------------
-// Regex patterns for import/export detection (Layer 1 — fast, no AST)
-// ---------------------------------------------------------------------------
-
-/** import ... from '...' / import '...' */
-const IMPORT_FROM_RE = /import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]/g;
-
-/** export ... from '...' */
-const EXPORT_FROM_RE = /export\s+(?:[\s\S]*?\s+from\s+)['"]([^'"]+)['"]/g;
-
-/** require('...') */
-const REQUIRE_RE = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
-
-/** Detect exported declarations */
-const EXPORT_DECL_RE = /export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var|interface|type|enum)\s+(\w+)/g;
+/** Extension resolution strategies per language */
+const RESOLUTION_STRATEGIES: Record<string, { exts: string[]; indexFiles: string[] }> = {
+  javascript: {
+    exts: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
+    indexFiles: ['/index.ts', '/index.tsx', '/index.js', '/index.jsx'],
+  },
+  python: {
+    exts: ['.py'],
+    indexFiles: ['/__init__.py'],
+  },
+  go: {
+    exts: ['.go'],
+    indexFiles: [],
+  },
+  rust: {
+    exts: ['.rs'],
+    indexFiles: ['/mod.rs'],
+  },
+  java: {
+    exts: ['.java'],
+    indexFiles: [],
+  },
+};
 
 export class GraphBuilder {
+  private parserRegistry: ParserRegistry;
+
   constructor(
     private graph: InMemoryGraph,
     private eventBus: EventBus,
-  ) {}
+  ) {
+    this.parserRegistry = new ParserRegistry();
+  }
 
   // ---------------------------------------------------------------------------
   // Public API
@@ -183,11 +198,14 @@ export class GraphBuilder {
       updatedAt: Date.now(),
     };
 
-    // Parse exports and store as metadata (skip for JSON files)
+    // Parse exports using language-aware parser (skip for JSON files)
     if (ext !== '.json') {
-      const exports = this.parseExports(content);
-      if (exports.length > 0) {
-        fileNode.metadata.exports = exports;
+      const parser = this.parserRegistry.getParser(ext.replace(/^\./, ''));
+      if (parser) {
+        const result = parser.parse(content, relPath);
+        if (result.exports.length > 0) {
+          fileNode.metadata.exports = result.exports.map((e) => e.name);
+        }
       }
     }
 
@@ -211,49 +229,18 @@ export class GraphBuilder {
     // Skip edge creation for JSON files
     if (ext === '.json') return;
 
-    const specifiers = this.parseImports(content);
+    const parser = this.parserRegistry.getParser(ext.replace(/^\./, ''));
+    if (!parser) return;
 
-    for (const specifier of specifiers) {
-      if (this.isRelativeSpecifier(specifier)) {
-        this.addRelativeImportEdge(projectId, absRoot, absPath, relPath, specifier);
+    const result = parser.parse(content, relPath);
+
+    for (const imp of result.imports) {
+      if (imp.isRelative) {
+        this.addRelativeImportEdge(projectId, absRoot, absPath, relPath, imp.specifier, parser.id);
       } else {
-        this.addBareSpecifierEdge(projectId, relPath, specifier);
+        this.addBareSpecifierEdge(projectId, relPath, imp.specifier, parser.id);
       }
     }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Import / Export Parsing
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Extract all import specifiers from file content.
-   */
-  private parseImports(content: string): string[] {
-    const specifiers = new Set<string>();
-
-    for (const re of [IMPORT_FROM_RE, EXPORT_FROM_RE, REQUIRE_RE]) {
-      re.lastIndex = 0;
-      let match: RegExpExecArray | null;
-      while ((match = re.exec(content)) !== null) {
-        specifiers.add(match[1]!);
-      }
-    }
-
-    return [...specifiers];
-  }
-
-  /**
-   * Extract exported identifiers from file content.
-   */
-  private parseExports(content: string): string[] {
-    const names: string[] = [];
-    EXPORT_DECL_RE.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = EXPORT_DECL_RE.exec(content)) !== null) {
-      names.push(match[1]!);
-    }
-    return names;
   }
 
   // ---------------------------------------------------------------------------
@@ -269,9 +256,10 @@ export class GraphBuilder {
     sourceAbsPath: string,
     sourceRelPath: string,
     specifier: string,
+    languageId: string = 'javascript',
   ): void {
     const sourceDir = dirname(sourceAbsPath);
-    const resolved = this.resolveRelativeImport(absRoot, sourceDir, specifier);
+    const resolved = this.resolveRelativeImport(absRoot, sourceDir, specifier, languageId);
     if (!resolved) return;
 
     const targetRelPath = resolved;
@@ -304,8 +292,9 @@ export class GraphBuilder {
     projectId: string,
     sourceRelPath: string,
     specifier: string,
+    languageId: string = 'javascript',
   ): void {
-    const packageName = this.extractPackageName(specifier);
+    const packageName = this.extractPackageName(specifier, languageId);
     const moduleId = this.moduleId(projectId, packageName);
     const sourceId = this.fileId(projectId, sourceRelPath);
 
@@ -351,32 +340,45 @@ export class GraphBuilder {
 
   /**
    * Resolve a relative specifier to a project-relative path.
-   * Tries common extension and index file patterns.
+   * Tries language-aware extension and index file patterns.
    * Returns the relative path (from absRoot) if found in the graph, else undefined.
    */
   private resolveRelativeImport(
     absRoot: string,
     sourceDir: string,
     specifier: string,
+    languageId: string = 'javascript',
   ): string | undefined {
-    // Normalise the specifier by stripping .js extension (ESM convention)
-    const cleanSpec = specifier.replace(/\.js$/, '');
+    const strategy = RESOLUTION_STRATEGIES[languageId] ?? RESOLUTION_STRATEGIES['javascript']!;
+
+    // Language-specific specifier normalisation
+    let cleanSpec = specifier;
+    if (languageId === 'javascript') {
+      // Strip .js extension (ESM convention)
+      cleanSpec = specifier.replace(/\.js$/, '');
+    } else if (languageId === 'java') {
+      // Convert Java package path (com.foo.Bar) to file path (com/foo/Bar)
+      cleanSpec = specifier.replace(/\./g, '/');
+    } else if (languageId === 'rust') {
+      // Convert Rust path separators (crate::foo::bar → foo/bar, self::foo → foo, super::parent → ../parent)
+      cleanSpec = specifier
+        .replace(/^crate::/, '')
+        .replace(/^self::/, './')
+        .replace(/^super::/, '../')
+        .replace(/::/g, '/');
+    }
 
     const base = resolve(sourceDir, cleanSpec);
     const relBase = relative(absRoot, base);
 
-    // Extensions to try (direct file match)
-    const tryExts = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
-
     // 1. Try exact extensions
-    for (const ext of tryExts) {
+    for (const ext of strategy.exts) {
       const candidate = relBase + ext;
       if (this.graph.getFileByPath(candidate)) return candidate;
     }
 
-    // 2. Try index files (directory import)
-    const indexExts = ['/index.ts', '/index.tsx', '/index.js', '/index.jsx'];
-    for (const idx of indexExts) {
+    // 2. Try index/module files (directory import)
+    for (const idx of strategy.indexFiles) {
       const candidate = relBase + idx;
       if (this.graph.getFileByPath(candidate)) return candidate;
     }
@@ -436,17 +438,23 @@ export class GraphBuilder {
   // Utility
   // ---------------------------------------------------------------------------
 
-  private isRelativeSpecifier(specifier: string): boolean {
-    return specifier.startsWith('.');
-  }
-
   /**
    * Extract package name from a bare specifier.
-   * `@scope/pkg/deep` → `@scope/pkg`
-   * `react/jsx-runtime` → `react`
-   * `node:fs` → `node:fs`
+   * Language-aware: JS uses npm conventions, others use full specifier.
+   *
+   * JS/TS: `@scope/pkg/deep` → `@scope/pkg`, `react/jsx-runtime` → `react`
+   * Go: `github.com/pkg/errors` → `github.com/pkg/errors` (full path)
+   * Rust: `std::io` → `std::io` (full path)
+   * Python: `os.path` → `os.path` (full dotted path)
+   * Java: `java.util.List` → `java.util.List` (full package)
    */
-  private extractPackageName(specifier: string): string {
+  private extractPackageName(specifier: string, languageId: string = 'javascript'): string {
+    // Non-JS languages: use the full specifier as the package name
+    if (languageId !== 'javascript') {
+      return specifier;
+    }
+
+    // JS/TS npm conventions
     if (specifier.startsWith('node:')) return specifier;
 
     if (specifier.startsWith('@')) {

@@ -16,3 +16,5 @@ export { StrategyRegistry } from './strategies/registry.js';
 export { DirectStrategy } from './strategies/direct.js';
 export { AdvisorStrategy } from './strategies/advisor.js';
 export { SelfRefineStrategy } from './strategies/self-refine.js';
+export { ParserRegistry } from './graph/parsers/index.js';
+export type { LanguageParser, ParseResult } from './graph/parsers/types.js';
