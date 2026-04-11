@@ -87,11 +87,12 @@ export const App = () => {
   const [splashDone, setSplashDone] = useState(false);
   const [splashStatus, setSplashStatus] = useState('Initializing The System...');
 
-  // Once connected, show "Ready" then fade out and unmount
+  // Once connected, show "Ready" then hold for a moment, fade out, and unmount
   useEffect(() => {
     if (isConnected && !splashDone) {
       setSplashStatus('Ready');
-      const timer = setTimeout(() => setSplashDone(true), 800);
+      // Hold splash for 5s minimum so users see the branding
+      const timer = setTimeout(() => setSplashDone(true), 5000);
       return () => clearTimeout(timer);
     }
   }, [isConnected, splashDone]);
