@@ -308,7 +308,11 @@ projectRoutes.get('/projects/:id/profile', (c) => {
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
   if (project.profile) {
-    return c.json(JSON.parse(project.profile));
+    try {
+      return c.json(JSON.parse(project.profile));
+    } catch {
+      // Malformed profile — fall through to auto-detect
+    }
   }
 
   // Auto-detect if no profile cached

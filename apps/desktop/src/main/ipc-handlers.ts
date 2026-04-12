@@ -20,8 +20,9 @@ export const registerIpcHandlers = (): void => {
 
   /** Open native folder picker, returns selected path or null */
   ipcMain.handle('phantom:pick-folder', async () => {
-    const win = BrowserWindow.getFocusedWindow();
-    const result = await dialog.showOpenDialog(win!, {
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (!win) return null;
+    const result = await dialog.showOpenDialog(win, {
       properties: ['openDirectory'],
       title: 'Select Repository Folder',
     });

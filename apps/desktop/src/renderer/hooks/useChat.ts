@@ -128,7 +128,9 @@ export const useChat = (cwd?: string, worktreeId?: string | null, projectContext
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ worktreeId, model }),
     });
+    if (!resp.ok) throw new Error(`Failed to create conversation: ${resp.status}`);
     const conv = await resp.json() as ChatConversation;
+    if (!conv?.id) throw new Error('Invalid conversation response');
     setConversations((prev) => [conv, ...prev]);
     skipNextLoadRef.current = true; // Don't load from DB — no messages yet
     setActiveConversationId(conv.id);

@@ -233,8 +233,8 @@ export function WorktreeHome() {
   useEffect(() => {
     if (!worktree?.id) return;
     fetch(`/api/chat/conversations?worktreeId=${worktree.id}&limit=5`)
-      .then((r) => r.json())
-      .then((convs) => setRecentChats(convs))
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((convs) => { if (Array.isArray(convs)) setRecentChats(convs); })
       .catch(() => {});
   }, [worktree?.id]);
 
