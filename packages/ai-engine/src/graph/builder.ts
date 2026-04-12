@@ -15,7 +15,7 @@ import { ParserRegistry } from './parsers/registry.js';
 
 /** Source file extensions we process */
 const SOURCE_EXTENSIONS = new Set([
-  '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json',
+  '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
   '.py', '.go', '.rs', '.java',
 ]);
 

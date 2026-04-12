@@ -5,7 +5,8 @@
  * @author Subash Karki
  */
 import { Paper, Popover, Stack, Text, Group } from '@mantine/core';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Activity,
   FolderGit2,
@@ -15,7 +16,8 @@ import {
   Shield,
 } from 'lucide-react';
 
-import { projectsAtom } from '../../atoms/worktrees';
+import { projectsAtom, worktreesByProjectAtom, activeWorktreeIdAtom } from '../../atoms/worktrees';
+import { activeTopTabAtom } from '../../atoms/system';
 import { useHunter } from '../../hooks/useHunter';
 import { useGraphStatus } from '../../hooks/useGraphStatus';
 import { usePreferences } from '../../hooks/usePreferences';
@@ -39,9 +41,35 @@ export const Cockpit = () => {
   const { profile } = useHunter();
   const { active, recent } = useSessions();
   const projects = useAtomValue(projectsAtom);
+  const worktreesByProject = useAtomValue(worktreesByProjectAtom);
+  const setActiveWorktreeId = useSetAtom(activeWorktreeIdAtom);
+  const setActiveTopTab = useSetAtom(activeTopTabAtom);
   const { isEnabled } = usePreferences();
   const graphStatus = useGraphStatus();
   const showGamification = isEnabled('gamification');
+
+  // Fetch persisted graph stats for all projects (not just the active one)
+  const [projectGraphStats, setProjectGraphStats] = useState<Record<string, { fileCount: number; totalEdges: number } | null>>({});
+  const fetchAllGraphStats = useCallback(async () => {
+    const stats: Record<string, { fileCount: number; totalEdges: number } | null> = {};
+    await Promise.all(projects.map(async (p) => {
+      try {
+        const res = await fetch(`/api/graph/${encodeURIComponent(p.id)}/stats`);
+        if (res.ok) {
+          stats[p.id] = await res.json();
+        } else {
+          stats[p.id] = null;
+        }
+      } catch {
+        stats[p.id] = null;
+      }
+    }));
+    setProjectGraphStats(stats);
+  }, [projects]);
+
+  useEffect(() => {
+    if (projects.length > 0) fetchAllGraphStats();
+  }, [projects, fetchAllGraphStats]);
 
   const totalTokens = active.reduce(
     (sum, s) => sum + s.inputTokens + s.outputTokens + s.cacheReadTokens + s.cacheWriteTokens,
@@ -98,7 +126,14 @@ export const Cockpit = () => {
                       }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated, #2a2a2a)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                      onClick={() => navigate('cockpit')}
+                      onClick={() => {
+                        const wts = worktreesByProject.get(p.id);
+                        const firstWt = wts?.[0];
+                        if (firstWt) {
+                          setActiveWorktreeId(firstWt.id);
+                          setActiveTopTab('worktree');
+                        }
+                      }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <FolderGit2 size={13} style={{ color: 'var(--phantom-accent-cyan)', flexShrink: 0 }} />
@@ -111,100 +146,106 @@ export const Cockpit = () => {
                         </div>
                       </div>
                       {/* Inline graph stats for this project */}
-                      {isGraphProject && (
-                        <div style={{ marginTop: 4, paddingLeft: 21 }}>
-                          {graphStatus.phase === 'building' && graphStatus.progress ? (
-                            <>
-                              <Group gap={4} mb={2}>
-                                <GitGraph size={9} style={{ color: 'var(--phantom-accent-cyan)', animation: 'pulse-graph 1.2s ease-in-out infinite' }} />
-                                <Text fz="0.7rem" c="var(--phantom-text-muted)">
-                                  Mapping {graphStatus.progress.current.toLocaleString()}/{graphStatus.progress.total.toLocaleString()}
-                                </Text>
-                              </Group>
-                              <div style={{ height: 3, borderRadius: 2, backgroundColor: 'var(--phantom-surface-elevated)', overflow: 'hidden' }}>
-                                <div style={{
-                                  height: '100%', borderRadius: 2,
-                                  width: `${graphStatus.progress.total > 0 ? Math.round((graphStatus.progress.current / graphStatus.progress.total) * 100) : 0}%`,
-                                  background: 'var(--phantom-accent-cyan)', transition: 'width 200ms ease',
-                                }} />
-                              </div>
-                            </>
-                          ) : graphStatus.stats ? (
-                            <Group gap={6}>
-                              <Group gap={4}>
-                                <GitGraph size={11} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />
-                                <Text fz="0.7rem" c="var(--phantom-text-secondary)">
-                                  {graphStatus.stats.files.toLocaleString()} files
-                                </Text>
-                              </Group>
-                              <Text fz="0.7rem" c="var(--phantom-border-subtle)">|</Text>
-                              <Text fz="0.7rem" c="var(--phantom-text-secondary)">
-                                {graphStatus.stats.edges.toLocaleString()} connections
+                      {(() => {
+                        const persistedStats = projectGraphStats[p.id];
+                        const hasGraph = isGraphProject ? !!graphStatus.stats : !!persistedStats;
+                        const fileCount = isGraphProject && graphStatus.stats ? graphStatus.stats.files : persistedStats?.fileCount ?? 0;
+                        const edgeCount = isGraphProject && graphStatus.stats ? graphStatus.stats.edges : persistedStats?.totalEdges ?? 0;
+                        return (
+                      <div style={{ marginTop: 4, paddingLeft: 21 }}>
+                        {isGraphProject && graphStatus.phase === 'building' && graphStatus.progress ? (
+                          <>
+                            <Group gap={4} mb={2}>
+                              <GitGraph size={9} style={{ color: 'var(--phantom-accent-cyan)', animation: 'pulse-graph 1.2s ease-in-out infinite' }} />
+                              <Text fz="0.7rem" c="var(--phantom-text-muted)">
+                                Mapping {graphStatus.progress.current.toLocaleString()}/{graphStatus.progress.total.toLocaleString()}
                               </Text>
-                              <Popover width={260} position="bottom" shadow="md" withArrow>
-                                <Popover.Target>
-                                  <Info size={11} style={{ color: 'var(--phantom-text-muted)', cursor: 'pointer', flexShrink: 0 }} />
-                                </Popover.Target>
-                                <Popover.Dropdown
-                                  style={{
-                                    backgroundColor: 'var(--phantom-surface-card)',
-                                    borderColor: 'var(--phantom-border-subtle)',
-                                    padding: 10,
-                                  }}
-                                >
-                                  <Stack gap={6}>
-                                    <Text fw={600} fz="xs" c="var(--phantom-text-primary)">What is the Code Graph?</Text>
-                                    <Text fz="xs" c="var(--phantom-text-secondary)" lh={1.4}>
-                                      Phantom OS maps your project's code to understand how files relate to each other.
-                                    </Text>
-                                    <div>
-                                      <Text fz="xs" fw={600} c="var(--phantom-accent-cyan)">Files</Text>
-                                      <Text fz="xs" c="var(--phantom-text-secondary)" lh={1.4}>
-                                        Every source file (TypeScript, JavaScript, etc.) in your project that was analyzed.
-                                      </Text>
-                                    </div>
-                                    <div>
-                                      <Text fz="xs" fw={600} c="var(--phantom-accent-cyan)">Connections</Text>
-                                      <Text fz="xs" c="var(--phantom-text-secondary)" lh={1.4}>
-                                        How files are linked — imports, dependencies, function calls, and component relationships. More connections means your AI assistant can better understand what code is related when making changes.
-                                      </Text>
-                                    </div>
-                                  </Stack>
-                                </Popover.Dropdown>
-                              </Popover>
                             </Group>
-                          ) : graphStatus.phase === 'error' ? (
+                            <div style={{ height: 3, borderRadius: 2, backgroundColor: 'var(--phantom-surface-elevated)', overflow: 'hidden' }}>
+                              <div style={{
+                                height: '100%', borderRadius: 2,
+                                width: `${graphStatus.progress.total > 0 ? Math.round((graphStatus.progress.current / graphStatus.progress.total) * 100) : 0}%`,
+                                background: 'var(--phantom-accent-cyan)', transition: 'width 200ms ease',
+                              }} />
+                            </div>
+                          </>
+                        ) : hasGraph ? (
+                          <Group gap={6}>
                             <Group gap={4}>
-                              <GitGraph size={11} style={{ color: 'var(--phantom-status-danger, #ef4444)' }} />
-                              <Text fz="0.7rem" c="var(--phantom-status-danger, #ef4444)">Graph error</Text>
-                            </Group>
-                          ) : null}
-                          {/* Graph actions — always show Rebuild, Playground only when graph has data */}
-                          <Group gap={10} mt={3}>
-                            {isGraphProject && graphStatus.stats && (
-                              <Text
-                                fz="0.7rem"
-                                c="var(--phantom-accent-cyan)"
-                                style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                                onClick={(e) => { e.stopPropagation(); navigate('system'); }}
-                              >
-                                Playground
+                              <GitGraph size={11} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />
+                              <Text fz="0.7rem" c="var(--phantom-text-secondary)">
+                                {fileCount.toLocaleString()} files
                               </Text>
-                            )}
+                            </Group>
+                            <Text fz="0.7rem" c="var(--phantom-border-subtle)">|</Text>
+                            <Text fz="0.7rem" c="var(--phantom-text-secondary)">
+                              {edgeCount.toLocaleString()} connections
+                            </Text>
+                            <Popover width={260} position="bottom" shadow="md" withArrow>
+                              <Popover.Target>
+                                <Info size={11} style={{ color: 'var(--phantom-text-muted)', cursor: 'pointer', flexShrink: 0 }} />
+                              </Popover.Target>
+                              <Popover.Dropdown
+                                style={{
+                                  backgroundColor: 'var(--phantom-surface-card)',
+                                  borderColor: 'var(--phantom-border-subtle)',
+                                  padding: 10,
+                                }}
+                              >
+                                <Stack gap={6}>
+                                  <Text fw={600} fz="xs" c="var(--phantom-text-primary)">What is the Code Graph?</Text>
+                                  <Text fz="xs" c="var(--phantom-text-secondary)" lh={1.4}>
+                                    Phantom OS maps your project's code to understand how files relate to each other.
+                                  </Text>
+                                  <div>
+                                    <Text fz="xs" fw={600} c="var(--phantom-accent-cyan)">Files</Text>
+                                    <Text fz="xs" c="var(--phantom-text-secondary)" lh={1.4}>
+                                      Every source file (TypeScript, JavaScript, etc.) in your project that was analyzed.
+                                    </Text>
+                                  </div>
+                                  <div>
+                                    <Text fz="xs" fw={600} c="var(--phantom-accent-cyan)">Connections</Text>
+                                    <Text fz="xs" c="var(--phantom-text-secondary)" lh={1.4}>
+                                      How files are linked — imports, dependencies, function calls, and component relationships. More connections means your AI assistant can better understand what code is related when making changes.
+                                    </Text>
+                                  </div>
+                                </Stack>
+                              </Popover.Dropdown>
+                            </Popover>
+                          </Group>
+                        ) : isGraphProject && graphStatus.phase === 'error' ? (
+                          <Group gap={4}>
+                            <GitGraph size={11} style={{ color: 'var(--phantom-status-danger, #ef4444)' }} />
+                            <Text fz="0.7rem" c="var(--phantom-status-danger, #ef4444)">Graph error</Text>
+                          </Group>
+                        ) : null}
+                        {/* Graph actions — always visible for every project */}
+                        <Group gap={10} mt={3}>
+                          {hasGraph && (
                             <Text
                               fz="0.7rem"
-                              c="var(--phantom-text-muted)"
+                              c="var(--phantom-accent-cyan)"
                               style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                fetch(`/api/graph/${encodeURIComponent(p.id)}/build`, { method: 'POST' }).catch(() => {});
-                              }}
+                              onClick={(e) => { e.stopPropagation(); navigate('system'); }}
                             >
-                              {isGraphProject ? 'Rebuild' : 'Build Graph'}
+                              Playground
                             </Text>
-                          </Group>
-                        </div>
-                      )}
+                          )}
+                          <Text
+                            fz="0.7rem"
+                            c="var(--phantom-text-muted)"
+                            style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              fetch(`/api/graph/${encodeURIComponent(p.id)}/build`, { method: 'POST' }).catch(() => {});
+                            }}
+                          >
+                            {hasGraph ? 'Rebuild' : 'Build Graph'}
+                          </Text>
+                        </Group>
+                      </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}
