@@ -89,10 +89,24 @@ export const addTabAtom = atom(null, (_get, set, label: string = 'New Tab') => {
   return tab.id;
 });
 
-export const removeTabAtom = atom(null, (_get, set, tabId: string) => {
+export const removeTabAtom = atom(null, (get, set, tabId: string) => {
+  const state = get(paneStateAtom);
+  const removedTab = state.tabs.find((t) => t.id === tabId);
+
+  // Allow panes in this tab to veto the close (e.g. unsaved editor changes)
+  if (removedTab && typeof window !== 'undefined') {
+    for (const pane of Object.values(removedTab.panes)) {
+      const closeEvent = new CustomEvent('phantom:pane-close', {
+        detail: { paneId: pane.id },
+        cancelable: true,
+      });
+      const allowed = window.dispatchEvent(closeEvent);
+      if (!allowed) return; // A pane vetoed — abort tab close
+    }
+  }
+
   set(paneStateAtom, (s) => {
     // Dispatch kill events for any terminal panes in the removed tab
-    const removedTab = s.tabs.find((t) => t.id === tabId);
     if (removedTab && typeof window !== 'undefined') {
       for (const pane of Object.values(removedTab.panes)) {
         if (pane.kind === 'terminal') {

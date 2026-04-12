@@ -161,20 +161,45 @@ export const EditorPane = ({
     setCtxMenu(null);
   }, [filePath, repoPath]);
 
-  // Warn before closing pane with unsaved changes
+  // Unsaved changes confirmation modal
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const pendingCloseRef = useRef<CustomEvent | null>(null);
+
   useEffect(() => {
     if (!dirty) return;
     const handler = (e: CustomEvent) => {
       if (e.detail?.paneId === paneId) {
-        if (!window.confirm('This file has unsaved changes. Close anyway?')) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-        }
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        pendingCloseRef.current = e;
+        setShowCloseModal(true);
       }
     };
     window.addEventListener('phantom:pane-close' as any, handler);
     return () => window.removeEventListener('phantom:pane-close' as any, handler);
   }, [dirty, paneId]);
+
+  const forceClose = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('phantom:pane-force-close', { detail: { paneId } }));
+  }, [paneId]);
+
+  const handleCloseDiscard = useCallback(() => {
+    setShowCloseModal(false);
+    setDirty(false);
+    forceClose();
+  }, [forceClose]);
+
+  const handleCloseSave = useCallback(async () => {
+    await saveFile();
+    setShowCloseModal(false);
+    setDirty(false);
+    forceClose();
+  }, [saveFile, forceClose]);
+
+  const handleCloseCancel = useCallback(() => {
+    setShowCloseModal(false);
+    pendingCloseRef.current = null;
+  }, []);
 
   const ctxMenuStyle: CSSProperties = {
     position: 'fixed',
@@ -277,6 +302,70 @@ export const EditorPane = ({
           readOnly: !worktreeId && !onChange,
         }}
       />
+      {/* Unsaved changes modal */}
+      {showCloseModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        }}>
+          <div style={{
+            background: 'var(--phantom-surface-card, #1a1a2e)',
+            border: '1px solid var(--phantom-border-subtle, rgba(255,255,255,0.12))',
+            borderRadius: 12,
+            padding: '24px 28px',
+            maxWidth: 380,
+            width: '90%',
+            boxShadow: '0 16px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)',
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--phantom-text-primary, #fff)', marginBottom: 8 }}>
+              Unsaved Changes
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--phantom-text-secondary, #aaa)', lineHeight: 1.5, marginBottom: 20 }}>
+              <span style={{ color: 'var(--phantom-accent-gold, #f59e0b)', fontFamily: 'JetBrains Mono, monospace' }}>
+                {getFileName(filePath)}
+              </span>
+              {' '}has been modified. Save your changes before closing?
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={handleCloseCancel}
+                style={{
+                  padding: '6px 14px', fontSize: 12, borderRadius: 6, cursor: 'pointer',
+                  background: 'transparent', border: '1px solid var(--phantom-border-subtle, rgba(255,255,255,0.15))',
+                  color: 'var(--phantom-text-secondary, #aaa)',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCloseDiscard}
+                style={{
+                  padding: '6px 14px', fontSize: 12, borderRadius: 6, cursor: 'pointer',
+                  background: 'transparent', border: '1px solid var(--phantom-status-error, #ef4444)',
+                  color: 'var(--phantom-status-error, #ef4444)',
+                }}
+              >
+                Discard
+              </button>
+              <button
+                type="button"
+                onClick={handleCloseSave}
+                style={{
+                  padding: '6px 14px', fontSize: 12, borderRadius: 6, cursor: 'pointer',
+                  background: 'var(--phantom-accent-glow, #06b6d4)', border: 'none',
+                  color: 'var(--phantom-surface-bg, #0a0a1a)', fontWeight: 600,
+                }}
+              >
+                Save & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Context menu */}
       {ctxMenu && (
         <div ref={ctxRef} style={ctxMenuStyle}>

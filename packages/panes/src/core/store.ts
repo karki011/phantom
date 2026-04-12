@@ -31,6 +31,7 @@ import {
   getTabAtom,
   setupPaneAutoSave,
 } from './atoms.js';
+import { removePaneFromLayout } from './layout-utils.js';
 import type { Pane, PaneActions, Tab, WorkspaceState } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -142,6 +143,60 @@ export const paneStore = {
  */
 export function createPaneStore() {
   return paneStore;
+}
+
+// Listen for force-close events (dispatched after user confirms unsaved changes modal)
+// Bypasses the phantom:pane-close veto — directly removes the pane from state
+if (typeof window !== 'undefined') {
+  window.addEventListener('phantom:pane-force-close', ((e: CustomEvent) => {
+    const paneId = e.detail?.paneId as string | undefined;
+    console.log('[PaneStore] force-close received, paneId:', paneId);
+    if (!paneId) return;
+
+    // Dispatch terminal kill if needed
+    jotaiStore.set(paneStateAtom, (s) => {
+      for (const tab of s.tabs) {
+        const pane = tab.panes[paneId];
+        if (pane?.kind === 'terminal') {
+          window.dispatchEvent(
+            new CustomEvent('phantom:terminal-kill', { detail: { paneId } }),
+          );
+          break;
+        }
+      }
+
+      // Find which tab contains this pane
+      const tabWithPane = s.tabs.find((t) => paneId in t.panes);
+      if (!tabWithPane) {
+        console.log('[PaneStore] pane not found in any tab');
+        return s;
+      }
+
+      const paneCount = Object.keys(tabWithPane.panes).length;
+      console.log('[PaneStore] pane found in tab', tabWithPane.id, 'paneCount:', paneCount);
+
+      // If it's the only pane in the tab, remove the entire tab instead
+      if (paneCount <= 1) {
+        const tabs = s.tabs.filter((t) => t.id !== tabWithPane.id);
+        if (tabs.length === 0) return s; // Never remove last tab
+        const activeTabId = s.activeTabId === tabWithPane.id ? tabs[0].id : s.activeTabId;
+        return { ...s, tabs, activeTabId };
+      }
+
+      return {
+        ...s,
+        tabs: s.tabs.map((t) => {
+          if (t.id !== tabWithPane.id) return t;
+          const layout = removePaneFromLayout(t.layout, paneId);
+          if (!layout) return t;
+          const { [paneId]: _, ...panes } = t.panes;
+          const activePaneId =
+            t.activePaneId === paneId ? Object.keys(panes)[0] ?? null : t.activePaneId;
+          return { ...t, layout, panes, activePaneId };
+        }),
+      };
+    });
+  }) as EventListener);
 }
 
 // ---------------------------------------------------------------------------
