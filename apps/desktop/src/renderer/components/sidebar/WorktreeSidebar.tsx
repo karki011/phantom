@@ -190,198 +190,186 @@ export function WorktreeSidebar() {
     [openRepo],
   );
 
-  if (collapsed) {
-    return (
-      <div
-        style={{
-          width: 40,
-          minWidth: 40,
-          height: '100%',
-          backgroundColor: 'var(--phantom-surface-card)',
-          borderRight: '1px solid var(--phantom-border-subtle)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          paddingTop: 8,
-        }}
-      >
-        <Tooltip label="Expand sidebar" position="right">
-          <ActionIcon
-            variant="subtle"
-            size="sm"
-            onClick={() => setCollapsed(false)}
-            aria-label="Expand sidebar"
-          >
-            <ChevronsLeft
-              size={16}
-              style={{
-                transform: 'rotate(180deg)',
-                color: 'var(--phantom-text-muted)',
-              }}
-            />
-          </ActionIcon>
-        </Tooltip>
-      </div>
-    );
-  }
-
   return (
     <div
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      onDragOver={collapsed ? undefined : handleDragOver}
+      onDragLeave={collapsed ? undefined : handleDragLeave}
+      onDrop={collapsed ? undefined : handleDrop}
       style={{
-        width,
-        minWidth: 160,
-        maxWidth: 400,
+        width: collapsed ? 40 : width,
+        minWidth: collapsed ? 40 : 160,
+        maxWidth: collapsed ? 40 : 400,
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
         backgroundColor: 'var(--phantom-surface-card)',
         borderRight: '1px solid var(--phantom-border-subtle)',
         position: 'relative',
-        // Drop indicator
+        overflow: 'hidden',
         outline: isDragOver
           ? '2px solid var(--phantom-accent-purple)'
           : 'none',
         outlineOffset: -2,
-        transition: 'outline 150ms ease',
+        transition: 'width 200ms ease, min-width 200ms ease, max-width 200ms ease, outline 150ms ease',
       }}
     >
-      {/* Header */}
-      <Group
-        justify="space-between"
-        px="sm"
-        py={8}
-        style={{
-          borderBottom: '1px solid var(--phantom-border-subtle)',
-          flexShrink: 0,
-        }}
-      >
-        <Text fz="0.8rem" fw={700} c="var(--phantom-text-primary)">
-          Worktrees
-        </Text>
-        <Group gap={4}>
-          <Tooltip label="New worktree">
+      {collapsed ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 8 }}>
+          <Tooltip label="Expand sidebar" position="right">
             <ActionIcon
               variant="subtle"
-              size="xs"
-              onClick={handleHeaderPlusClick}
-              aria-label="New worktree"
-            >
-              <Plus size={14} style={{ color: 'var(--phantom-text-muted)' }} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="Collapse sidebar">
-            <ActionIcon
-              variant="subtle"
-              size="xs"
-              onClick={() => setCollapsed(true)}
-              aria-label="Collapse sidebar"
+              size="sm"
+              onClick={() => setCollapsed(false)}
+              aria-label="Expand sidebar"
             >
               <ChevronsLeft
-                size={14}
-                style={{ color: 'var(--phantom-text-muted)' }}
+                size={16}
+                style={{
+                  transform: 'rotate(180deg)',
+                  color: 'var(--phantom-text-muted)',
+                }}
               />
             </ActionIcon>
           </Tooltip>
-        </Group>
-      </Group>
-
-      {/* Body */}
-      {loading && projects.length === 0 ? (
-        <div style={{ flex: 1, padding: '8px 12px' }}>
-          <Skeleton height={20} mb={8} />
-          <Skeleton height={16} mb={6} />
-          <Skeleton height={16} mb={6} />
-          <Skeleton height={20} mb={8} mt={12} />
-          <Skeleton height={16} mb={6} />
         </div>
-      ) : projects.length === 0 ? (
-        <EmptyState onOpenRepository={handleOpenRepository} />
       ) : (
-      <ScrollArea style={{ flex: 1 }} scrollbarSize={6}>
-        <div style={{ padding: '4px 0' }}>
-          {projects.map((project, idx) => (
-            <div key={project.id}>
-              {idx > 0 && (
-                <div style={{ height: 1, backgroundColor: 'var(--phantom-border-subtle)', margin: '6px 12px', opacity: 0.5 }} />
-              )}
-              <ProjectSection
-                project={project}
-                worktrees={worktreesByProject.get(project.id) ?? []}
-                isExpanded={expandedProjects.includes(project.id)}
-                activeWorktreeId={activeWorktreeId}
-                onToggle={() => toggleProject(project.id)}
-                onSelectWorktree={setActiveWorktreeId}
-              />
+        <>
+          {/* Header */}
+          <Group
+            justify="space-between"
+            px="sm"
+            py={8}
+            style={{
+              borderBottom: '1px solid var(--phantom-border-subtle)',
+              flexShrink: 0,
+            }}
+          >
+            <Text fz="0.8rem" fw={700} c="var(--phantom-text-primary)" style={{ whiteSpace: 'nowrap' }}>
+              Worktrees
+            </Text>
+            <Group gap={4}>
+              <Tooltip label="New worktree">
+                <ActionIcon
+                  variant="subtle"
+                  size="xs"
+                  onClick={handleHeaderPlusClick}
+                  aria-label="New worktree"
+                >
+                  <Plus size={14} style={{ color: 'var(--phantom-text-muted)' }} />
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label="Collapse sidebar">
+                <ActionIcon
+                  variant="subtle"
+                  size="xs"
+                  onClick={() => setCollapsed(true)}
+                  aria-label="Collapse sidebar"
+                >
+                  <ChevronsLeft
+                    size={14}
+                    style={{ color: 'var(--phantom-text-muted)' }}
+                  />
+                </ActionIcon>
+              </Tooltip>
+            </Group>
+          </Group>
+
+          {/* Body */}
+          {loading && projects.length === 0 ? (
+            <div style={{ flex: 1, padding: '8px 12px' }}>
+              <Skeleton height={20} mb={8} />
+              <Skeleton height={16} mb={6} />
+              <Skeleton height={16} mb={6} />
+              <Skeleton height={20} mb={8} mt={12} />
+              <Skeleton height={16} mb={6} />
             </div>
-          ))}
-        </div>
-      </ScrollArea>
+          ) : projects.length === 0 ? (
+            <EmptyState onOpenRepository={handleOpenRepository} />
+          ) : (
+          <ScrollArea style={{ flex: 1 }} scrollbarSize={6}>
+            <div style={{ padding: '4px 0' }}>
+              {projects.map((project, idx) => (
+                <div key={project.id}>
+                  {idx > 0 && (
+                    <div style={{ height: 1, backgroundColor: 'var(--phantom-border-subtle)', margin: '6px 12px', opacity: 0.5 }} />
+                  )}
+                  <ProjectSection
+                    project={project}
+                    worktrees={worktreesByProject.get(project.id) ?? []}
+                    isExpanded={expandedProjects.includes(project.id)}
+                    activeWorktreeId={activeWorktreeId}
+                    onToggle={() => toggleProject(project.id)}
+                    onSelectWorktree={setActiveWorktreeId}
+                  />
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+          )}
+
+          {/* Footer */}
+          <div
+            style={{
+              borderTop: '1px solid var(--phantom-border-subtle)',
+              padding: '6px 8px',
+              flexShrink: 0,
+            }}
+          >
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <Button
+                variant="subtle"
+                size="xs"
+                style={{ flex: 1 }}
+                leftSection={
+                  <FolderOpen
+                    size={14}
+                    style={{ color: 'var(--phantom-text-muted)' }}
+                  />
+                }
+                onClick={handleOpenRepository}
+                styles={{
+                  label: {
+                    color: 'var(--phantom-text-secondary)',
+                    fontSize: '0.75rem',
+                  },
+                }}
+              >
+                Open
+              </Button>
+              <Button
+                variant="subtle"
+                size="xs"
+                style={{ flex: 1 }}
+                leftSection={
+                  <Download
+                    size={14}
+                    style={{ color: 'var(--phantom-text-muted)' }}
+                  />
+                }
+                onClick={() => setCloneOpen(true)}
+                styles={{
+                  label: {
+                    color: 'var(--phantom-text-secondary)',
+                    fontSize: '0.75rem',
+                  },
+                }}
+              >
+                Clone
+              </Button>
+            </div>
+          </div>
+
+          <CloneRepoModal opened={cloneOpen} onClose={() => setCloneOpen(false)} />
+
+          {/* Resize handle on right edge */}
+          <ResizeHandle
+            position="right"
+            onResize={(delta) =>
+              setWidth((prev) => Math.max(160, Math.min(400, prev + delta)))
+            }
+          />
+        </>
       )}
-
-      {/* Footer */}
-      <div
-        style={{
-          borderTop: '1px solid var(--phantom-border-subtle)',
-          padding: '6px 8px',
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ display: 'flex', gap: '4px' }}>
-          <Button
-            variant="subtle"
-            size="xs"
-            style={{ flex: 1 }}
-            leftSection={
-              <FolderOpen
-                size={14}
-                style={{ color: 'var(--phantom-text-muted)' }}
-              />
-            }
-            onClick={handleOpenRepository}
-            styles={{
-              label: {
-                color: 'var(--phantom-text-secondary)',
-                fontSize: '0.75rem',
-              },
-            }}
-          >
-            Open
-          </Button>
-          <Button
-            variant="subtle"
-            size="xs"
-            style={{ flex: 1 }}
-            leftSection={
-              <Download
-                size={14}
-                style={{ color: 'var(--phantom-text-muted)' }}
-              />
-            }
-            onClick={() => setCloneOpen(true)}
-            styles={{
-              label: {
-                color: 'var(--phantom-text-secondary)',
-                fontSize: '0.75rem',
-              },
-            }}
-          >
-            Clone
-          </Button>
-        </div>
-      </div>
-
-      <CloneRepoModal opened={cloneOpen} onClose={() => setCloneOpen(false)} />
-
-      {/* Resize handle on right edge */}
-      <ResizeHandle
-        position="right"
-        onResize={(delta) =>
-          setWidth((prev) => Math.max(160, Math.min(400, prev + delta)))
-        }
-      />
     </div>
   );
 }

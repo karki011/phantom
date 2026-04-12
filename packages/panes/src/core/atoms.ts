@@ -255,7 +255,17 @@ export const splitPaneAtom = atom(
   ) => {
     const tab = get(activeTabAtom);
     if (!tab) return '';
-    const newPane = makePane(newKind, newData ?? {}, newTitle);
+
+    // For terminal splits without explicit cwd, inherit from the source pane
+    let resolvedData = newData;
+    if (newKind === 'terminal' && !newData?.cwd) {
+      const sourcePane = tab.panes[paneId];
+      if (sourcePane?.kind === 'terminal' && sourcePane.data?.cwd) {
+        resolvedData = { ...newData, cwd: sourcePane.data.cwd };
+      }
+    }
+
+    const newPane = makePane(newKind, resolvedData ?? {}, newTitle);
     const newLayout = insertPaneAdjacentTo(
       tab.layout,
       paneId,
@@ -449,29 +459,40 @@ export const addPaneAtom = atom(
     const tab = state.tabs.find((t) => t.id === state.activeTabId);
     if (!tab) return '';
 
-    // Reuse existing unpinned pane of same kind
-    const existing = Object.values(tab.panes).find(
-      (p) => p.kind === kind && !p.pinned,
-    );
-    if (existing) {
-      const updated = {
-        ...existing,
-        data: data ?? existing.data,
-        title: title ?? existing.title,
-      };
-      set(paneStateAtom, (s) => ({
-        ...s,
-        tabs: s.tabs.map((t) =>
-          t.id === tab.id
-            ? {
-                ...t,
-                panes: { ...t.panes, [existing.id]: updated },
-                activePaneId: existing.id,
-              }
-            : t,
-        ),
-      }));
-      return existing.id;
+    // Reuse existing unpinned pane of same kind (skip for terminals — allow multiple)
+    if (kind !== 'terminal') {
+      const existing = Object.values(tab.panes).find(
+        (p) => p.kind === kind && !p.pinned,
+      );
+      if (existing) {
+        const updated = {
+          ...existing,
+          data: data ?? existing.data,
+          title: title ?? existing.title,
+        };
+        set(paneStateAtom, (s) => ({
+          ...s,
+          tabs: s.tabs.map((t) =>
+            t.id === tab.id
+              ? {
+                  ...t,
+                  panes: { ...t.panes, [existing.id]: updated },
+                  activePaneId: existing.id,
+                }
+              : t,
+          ),
+        }));
+        return existing.id;
+      }
+    }
+
+    // For terminals without explicit cwd, inherit from an existing terminal in the same tab
+    let resolvedData = data;
+    if (kind === 'terminal' && !data?.cwd) {
+      const siblingTerminal = Object.values(tab.panes).find((p) => p.kind === 'terminal');
+      if (siblingTerminal?.data?.cwd) {
+        resolvedData = { ...data, cwd: siblingTerminal.data.cwd };
+      }
     }
 
     // Split from the active pane (or first pane)
@@ -481,7 +502,7 @@ export const addPaneAtom = atom(
       paneId: targetPaneId,
       direction: 'horizontal',
       newKind: kind,
-      newData: data,
+      newData: resolvedData,
       newTitle: title,
     });
   },

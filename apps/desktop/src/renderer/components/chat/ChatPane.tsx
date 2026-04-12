@@ -15,7 +15,7 @@ import {
   Tooltip,
 } from '@mantine/core';
 import { useAtomValue } from 'jotai';
-import { Bot, MessageSquare, Plus, Send, Trash2, User, X } from 'lucide-react';
+import { Bot, ChevronsLeft, MessageSquare, Plus, Send, Trash2, User, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import { activeWorktreeAtom } from '../../atoms/worktrees';
@@ -348,6 +348,7 @@ export const ChatPane = ({ paneId: _paneId, cwd }: ChatPaneProps) => {
 
   // Find active conversation for title display
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<{ path: string; name: string }[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -417,49 +418,100 @@ export const ChatPane = ({ paneId: _paneId, cwd }: ChatPaneProps) => {
 
   return (
     <div style={{ display: 'flex', height: '100%' }}>
-      {/* ---- Left: Conversation List ---- */}
+      {/* ---- Left: Conversation List (collapsible) ---- */}
       <div
         style={{
-          width: 200,
+          width: sidebarCollapsed ? 36 : 200,
+          minWidth: sidebarCollapsed ? 36 : 200,
           borderRight: '1px solid var(--phantom-border-subtle)',
           display: 'flex',
           flexDirection: 'column',
           backgroundColor: 'var(--phantom-surface-bg)',
           flexShrink: 0,
+          overflow: 'hidden',
+          transition: 'width 200ms ease, min-width 200ms ease',
         }}
       >
-        {/* New Chat button */}
-        <Group px="xs" py="xs" style={{ flexShrink: 0 }}>
-          <ActionIcon
-            variant="light"
-            size="sm"
-            onClick={newChat}
-            style={{ color: 'var(--phantom-accent-glow)' }}
-          >
-            <Plus size={14} />
-          </ActionIcon>
-          <Text fz="0.7rem" fw={600} c="var(--phantom-text-muted)" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Conversations
-          </Text>
-        </Group>
+        {sidebarCollapsed ? (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 8, gap: 8 }}>
+              <Tooltip label="Expand conversations" position="right">
+                <ActionIcon
+                  variant="subtle"
+                  size="sm"
+                  onClick={() => setSidebarCollapsed(false)}
+                >
+                  <ChevronsLeft
+                    size={14}
+                    style={{
+                      transform: 'rotate(180deg)',
+                      color: 'var(--phantom-text-muted)',
+                    }}
+                  />
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label="New chat" position="right">
+                <ActionIcon
+                  variant="subtle"
+                  size="sm"
+                  onClick={newChat}
+                  style={{ color: 'var(--phantom-accent-glow)' }}
+                >
+                  <Plus size={14} />
+                </ActionIcon>
+              </Tooltip>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Header */}
+            <Group px="xs" py="xs" justify="space-between" style={{ flexShrink: 0 }}>
+              <Group gap={4}>
+                <ActionIcon
+                  variant="light"
+                  size="sm"
+                  onClick={newChat}
+                  style={{ color: 'var(--phantom-accent-glow)' }}
+                >
+                  <Plus size={14} />
+                </ActionIcon>
+                <Text fz="0.7rem" fw={600} c="var(--phantom-text-muted)" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                  Conversations
+                </Text>
+              </Group>
+              <Tooltip label="Collapse sidebar">
+                <ActionIcon
+                  variant="subtle"
+                  size="xs"
+                  onClick={() => setSidebarCollapsed(true)}
+                >
+                  <ChevronsLeft
+                    size={14}
+                    style={{ color: 'var(--phantom-text-muted)' }}
+                  />
+                </ActionIcon>
+              </Tooltip>
+            </Group>
 
-        {/* Conversation list */}
-        <ScrollArea style={{ flex: 1, minHeight: 0 }}>
-          {conversations.map((conv) => (
-            <ConversationItem
-              key={conv.id}
-              conv={conv}
-              active={conv.id === activeConversationId}
-              onSelect={() => selectConversation(conv.id)}
-              onDelete={() => deleteConversation(conv.id)}
-            />
-          ))}
-          {conversations.length === 0 && (
-            <Text fz="0.7rem" c="var(--phantom-text-muted)" ta="center" py="lg" px="xs">
-              No conversations yet
-            </Text>
-          )}
-        </ScrollArea>
+            {/* Conversation list */}
+            <ScrollArea style={{ flex: 1, minHeight: 0 }}>
+              {conversations.map((conv) => (
+                <ConversationItem
+                  key={conv.id}
+                  conv={conv}
+                  active={conv.id === activeConversationId}
+                  onSelect={() => selectConversation(conv.id)}
+                  onDelete={() => deleteConversation(conv.id)}
+                />
+              ))}
+              {conversations.length === 0 && (
+                <Text fz="0.7rem" c="var(--phantom-text-muted)" ta="center" py="lg" px="xs" style={{ whiteSpace: 'nowrap' }}>
+                  No conversations yet
+                </Text>
+              )}
+            </ScrollArea>
+          </>
+        )}
       </div>
 
       {/* ---- Right: Chat Area ---- */}

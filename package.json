@@ -10,7 +10,7 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "dev:api": "turbo dev:api --filter=@phantom-os/server",
-    "dev:all": "turbo dev dev:api",
+    "dev:all": "turbo dev",
     "dev:desktop": "turbo dev --filter=@phantom-os/desktop",
     "test": "vitest",
     "test:run": "vitest run",

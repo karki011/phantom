@@ -3,7 +3,7 @@
  * LRU cache: max 3 projects in memory, hydrate from SQLite on demand
  * @author Subash Karki
  */
-import { db, sqlite, projects } from '@phantom-os/db';
+import { db, sqlite, projects, worktrees } from '@phantom-os/db';
 import { eq } from 'drizzle-orm';
 import {
   EventBus,
@@ -198,10 +198,22 @@ class GraphEngineService {
 
     // Try to hydrate from SQLite
     const project = db.select().from(projects).where(eq(projects.id, projectId)).get();
-    if (!project) return null;
+    if (project) {
+      const hydrated = this.hydrateProject(projectId, project.repoPath);
+      return hydrated ? this.instances.get(projectId)! : null;
+    }
 
-    const hydrated = this.hydrateProject(projectId, project.repoPath);
-    return hydrated ? this.instances.get(projectId)! : null;
+    // Not a project — check if it's a worktree and fall back to parent project's graph
+    const wt = db.select({ projectId: worktrees.projectId })
+      .from(worktrees)
+      .where(eq(worktrees.id, projectId))
+      .get();
+    if (wt?.projectId) {
+      logger.debug('GraphEngine', `Worktree ${projectId} → using parent project ${wt.projectId} graph`);
+      return this.resolve(wt.projectId);
+    }
+
+    return null;
   }
 
   /**

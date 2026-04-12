@@ -106,14 +106,21 @@ function handleConnection(ws: WebSocket, termId: string): void {
 
                 // Write MCP config if this is a Claude CLI session
                 // Match "claude ..." or "npx claude ..." at the start of the command
+                logger.info('TerminalWS', `initialCommand="${msg.initialCommand ?? 'none'}" cwd="${msg.cwd ?? 'none'}" worktreeId="${msg.worktreeId ?? 'none'}"`);
                 if (msg.initialCommand && /^(?:npx\s+)?claude(?:\s|$)/.test(msg.initialCommand.trim()) && msg.cwd) {
                   const projectId = msg.worktreeId
                     ? resolveProjectId(msg.worktreeId)
                     : resolveProjectIdFromCwd(msg.cwd);
+                  logger.info('TerminalWS', `MCP injection check — projectId=${projectId ?? 'null'} for cwd="${msg.cwd}"`);
                   if (projectId) {
                     writeMcpConfig(msg.cwd, projectId);
                     mcpCwd = msg.cwd;
+                    logger.info('TerminalWS', `phantom-ai MCP injected for project ${projectId}`);
+                  } else {
+                    logger.warn('TerminalWS', `No projectId found — phantom-ai NOT injected`);
                   }
+                } else {
+                  logger.info('TerminalWS', `Skipped MCP injection — not a Claude command`);
                 }
 
                 // Auto-run initial command after shell is ready
