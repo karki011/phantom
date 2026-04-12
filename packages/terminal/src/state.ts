@@ -25,6 +25,10 @@ export interface TerminalSession {
   coldRestore: boolean;
   /** True if the restore banner should show */
   showRestoreBanner: boolean;
+  /** Saved viewport scroll position — restored on reattach */
+  savedViewportY?: number;
+  /** Whether the user was scrolled to the bottom when detached */
+  wasAtBottom?: boolean;
 }
 
 export interface AttachOptions {
@@ -77,6 +81,20 @@ export const attachSession = async (
 
       // Repaint canvas — renderer skips frames while wrapper is detached
       existing.term.refresh(0, existing.term.rows - 1);
+
+      // Restore scroll position saved during detach
+      const buf = existing.term.buffer.active;
+      if (existing.wasAtBottom) {
+        // User was following live output — scroll to current bottom
+        existing.term.scrollToBottom();
+      } else if (existing.savedViewportY != null) {
+        // User was scrolled up reviewing history — restore exact position
+        // Clamp to current baseY in case buffer was trimmed
+        const target = Math.min(existing.savedViewportY, buf.baseY);
+        existing.term.scrollToLine(target);
+      }
+      existing.savedViewportY = undefined;
+      existing.wasAtBottom = undefined;
 
       // Send resize so server/PTY knows current dimensions
       if (existing.ws && existing.ws.readyState === WebSocket.OPEN) {
@@ -259,6 +277,11 @@ export const detachSession = (paneId: string): void => {
   if (!session) return;
 
   console.log(`[TermReg] DETACH ${paneId.slice(0,8)} — wrapper stays alive, ws stays open`);
+
+  // Save viewport scroll position BEFORE removing from DOM
+  const buf = session.term.buffer.active;
+  session.savedViewportY = buf.viewportY;
+  session.wasAtBottom = buf.viewportY >= buf.baseY;
 
   // Disconnect ResizeObserver
   session.observer?.disconnect();
