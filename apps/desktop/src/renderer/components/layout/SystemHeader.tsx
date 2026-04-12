@@ -354,7 +354,7 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
         </Tooltip>
 
         {/* Help */}
-        <Popover width={360} position="bottom-end" shadow="md" withArrow>
+        <Popover width={640} position="bottom-end" shadow="md" withArrow>
           <Popover.Target>
             <Tooltip label="Help">
               <ActionIcon variant="subtle" size="lg" aria-label="Help">
@@ -475,6 +475,79 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
                 <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Hunter Rank</Text>
                 <Text fz="xs" c="var(--phantom-text-secondary)">
                   Earn XP by completing tasks, starting sessions, and maintaining streaks. Ranks go from E through SSS to National Level. Toggle with the ⚔ button.
+                </Text>
+              </div>
+
+              {/* AI Engine */}
+              <Text fw={700} fz="0.65rem" tt="uppercase" c="var(--phantom-text-muted)" style={{ letterSpacing: '0.05em', marginTop: 4 }}>
+                AI Engine
+              </Text>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">phantom-ai (MCP)</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Auto-injected into Claude sessions opened from worktrees. Provides code graph tools — blast radius, dependency paths, related files — so Claude understands your codebase before making changes.
+                </Text>
+              </div>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Code Graph</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Builds a dependency graph of your project (imports, exports, modules). View stats on the Home pane. Click <strong>Rebuild</strong> after major refactors.
+                </Text>
+              </div>
+
+              {/* Chat */}
+              <Text fw={700} fz="0.65rem" tt="uppercase" c="var(--phantom-text-muted)" style={{ letterSpacing: '0.05em', marginTop: 4 }}>
+                Chat
+              </Text>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Chat with Claude</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Open from the <strong>+</strong> menu. Supports streaming, conversation history, model selection (Sonnet/Opus/Haiku), and file attachments via drag-and-drop or paste.
+                </Text>
+              </div>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Concise Mode (⚡)</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Toggle from the header. Injects a system prompt that cuts Claude's output by ~65-75% while keeping full technical accuracy. Same fix, fewer words, lower cost.
+                </Text>
+              </div>
+
+              {/* Terminal */}
+              <Text fw={700} fz="0.65rem" tt="uppercase" c="var(--phantom-text-muted)" style={{ letterSpacing: '0.05em', marginTop: 4 }}>
+                Terminal
+              </Text>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Persistent Terminals</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Terminals survive worktree switches (hot restore) and app restarts (cold restore with scrollback). Split terminals via the <strong>+</strong> menu or header buttons (⊞ ⊟).
+                </Text>
+              </div>
+
+              {/* Sessions & Cockpit */}
+              <Text fw={700} fz="0.65rem" tt="uppercase" c="var(--phantom-text-muted)" style={{ letterSpacing: '0.05em', marginTop: 4 }}>
+                Sessions & Cockpit
+              </Text>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Session Dashboard</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Switch to the <strong>Cockpit</strong> tab to see all Claude Code sessions — token usage, costs, tool breakdowns, and live activity feed. Click a session to view its full conversation.
+                </Text>
+              </div>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Token Analytics</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Cost breakdown by project, input vs output tokens, and usage trends over time.
+                </Text>
+              </div>
+
+              {/* Editor */}
+              <Text fw={700} fz="0.65rem" tt="uppercase" c="var(--phantom-text-muted)" style={{ letterSpacing: '0.05em', marginTop: 4 }}>
+                Editor
+              </Text>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Monaco Editor</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Open files from the file tree or changes view. <strong>⌘+S</strong> to save. Right-click the toolbar to copy file path. Unsaved changes are warned on close.
                 </Text>
               </div>
 
