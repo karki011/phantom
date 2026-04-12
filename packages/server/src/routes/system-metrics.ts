@@ -122,11 +122,13 @@ function getTopProcesses(limit = 8): TopProcess[] {
     const lines = output.trim().split('\n').slice(1);
     const all = lines.map((line) => {
       const parts = line.trim().split(/\s+/);
+      if (!parts[0] || !parts[1]) return null;
       const pid = parseInt(parts[0], 10);
       const rssKb = parseInt(parts[1], 10);
+      if (isNaN(pid) || isNaN(rssKb)) return null;
       const fullCmd = parts.slice(2).join(' ');
       return { name: friendlyName(fullCmd), memMB: Math.round(rssKb / 1024), pid };
-    }).filter((p) => p.memMB > 0);
+    }).filter((p): p is NonNullable<typeof p> => p != null && p.memMB > 0);
 
     // Pin Phantom OS processes at top, then fill with others
     const phantom = all.filter((p) => isPhantomProcess(p.name));

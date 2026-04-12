@@ -106,6 +106,7 @@ export const useChat = (cwd?: string, worktreeId?: string | null, projectContext
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ worktreeId, model }),
       });
+      if (!resp.ok) throw new Error(`Failed to create conversation: ${resp.status}`);
       const conv = await resp.json() as ChatConversation;
       setConversations((prev) => [conv, ...prev]);
       skipNextLoadRef.current = true;
@@ -232,7 +233,7 @@ export const useChat = (cwd?: string, worktreeId?: string | null, projectContext
               throw new Error(event.message);
             }
           } catch (parseErr) {
-            if ((parseErr as Error).message && !(parseErr as Error).message.includes('JSON')) {
+            if (parseErr instanceof Error && !parseErr.message.includes('JSON')) {
               throw parseErr; // Re-throw non-parse errors
             }
           }

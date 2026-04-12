@@ -205,7 +205,7 @@ const ChatBubble = ({ message }: { message: SessionMessage }) => {
       {/* Tool badges */}
       {hasTools && (
         <Stack gap={3} mt={4}>
-          {message.toolUse!.map((tool, i) => (
+          {message.toolUse?.map((tool, i) => (
             <Group key={`${tool.name}-${i}`} gap={6} wrap="nowrap">
               <Badge
                 size="xs"

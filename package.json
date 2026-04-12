@@ -14,6 +14,14 @@
     "dev:desktop": "turbo dev --filter=@phantom-os/desktop",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:stress": "vitest run --reporter=verbose --pool=forks --poolOptions.forks.singleFork packages/server/src/__stress__/",
+    "test:stress:all": "bun run test:stress:api; bun run test:stress:chat; bun run test:stress:db; bun run test:stress:realtime; bun run test:stress:projects; bun run test:stress:resources",
+    "test:stress:api": "vitest run --reporter=verbose packages/server/src/__stress__/api-routes.stress.test.ts",
+    "test:stress:chat": "vitest run --reporter=verbose packages/server/src/__stress__/chat.stress.test.ts",
+    "test:stress:db": "vitest run --reporter=verbose packages/server/src/__stress__/database.stress.test.ts",
+    "test:stress:realtime": "vitest run --reporter=verbose packages/server/src/__stress__/realtime.stress.test.ts",
+    "test:stress:projects": "vitest run --reporter=verbose packages/server/src/__stress__/projects-worktrees.stress.test.ts",
+    "test:stress:resources": "vitest run --reporter=verbose packages/server/src/__stress__/resource-limits.stress.test.ts",
     "postinstall": "chmod +x node_modules/.bun/node-pty@*/node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true; bash scripts/patch-electron-name.sh"
   },
   "dependencies": {

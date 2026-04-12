@@ -161,8 +161,9 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
                   </Text>
                 )}
                 {metrics.topProcesses?.length > 0 && (() => {
-                  const phantom = metrics.topProcesses.filter((p) => p.name.startsWith('Phantom OS'));
-                  const others = metrics.topProcesses.filter((p) => !p.name.startsWith('Phantom OS'));
+                  const processes = metrics.topProcesses ?? [];
+                  const phantom = processes.filter((p) => p.name.startsWith('Phantom OS'));
+                  const others = processes.filter((p) => !p.name.startsWith('Phantom OS'));
                   return (
                     <div style={{ borderTop: '1px solid var(--phantom-border-subtle)', paddingTop: 6 }}>
                       {phantom.length > 0 && (() => {

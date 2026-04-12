@@ -34,7 +34,7 @@ export const TasksCard = memo(function TasksCard({ cwd }: { cwd: string }) {
     if (showLoading) setLoading(true);
     getTasksByCwd(cwd)
       .then((data) => {
-        const hash = data.map((t) => `${t.id}:${t.status}:${t.updatedAt}`).join(',');
+        const hash = (Array.isArray(data) ? data : []).map((t) => `${t.id}:${t.status}:${t.updatedAt}`).join(',');
         if (hash !== lastHash.current) {
           lastHash.current = hash;
           setTasks(data);

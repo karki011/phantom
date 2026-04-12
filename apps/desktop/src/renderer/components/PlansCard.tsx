@@ -64,12 +64,13 @@ export const PlansCard = memo(function PlansCard({ worktreeId }: { worktreeId: s
     if (showLoading) setLoading(true);
     fetch(`/api/plans?worktreeId=${worktreeId}`)
       .then(r => r.json())
-      .then((data: GroupedPlans) => {
-        const all = [...(data.branch ?? []), ...(data.project ?? [])];
+      .then((data: GroupedPlans | null) => {
+        const safeData = data ?? { branch: [], project: [] };
+        const all = [...(safeData.branch ?? []), ...(safeData.project ?? [])];
         const hash = all.map((p) => `${p.filename}:${p.modifiedAt}`).join(',');
         if (hash !== lastHash.current) {
           lastHash.current = hash;
-          setGrouped(data);
+          setGrouped(safeData);
         }
       })
       .catch(() => {

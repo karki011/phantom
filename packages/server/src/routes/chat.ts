@@ -339,7 +339,7 @@ chatRoutes.post('/chat', async (c) => {
   ];
 
   const proc = spawn('claude', args, {
-    cwd: cwd || process.env.HOME,
+    cwd: cwd || process.env.HOME || process.cwd(),
     env: { ...process.env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

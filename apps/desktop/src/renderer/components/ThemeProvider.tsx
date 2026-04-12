@@ -14,8 +14,10 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const theme = buildPhantomTheme(tokens);
   const cssVarsResolver = buildCssVarsResolver(tokens);
 
-  const defaultColorScheme =
-    (localStorage.getItem('phantom-theme')?.replace(/"/g, '') as 'dark' | 'light') ?? 'dark';
+  let defaultColorScheme: 'dark' | 'light' = 'dark';
+  try {
+    defaultColorScheme = (localStorage.getItem('phantom-theme')?.replace(/"/g, '') as 'dark' | 'light') ?? 'dark';
+  } catch {}
 
   return (
     <MantineProvider

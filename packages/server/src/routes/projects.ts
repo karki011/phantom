@@ -81,7 +81,7 @@ projectRoutes.post('/projects', async (c) => {
   db.insert(projects).values(project).run();
 
   // Build graph in background — don't await
-  void graphEngine.buildProject(project.id, project.repoPath);
+  void graphEngine.buildProject(project.id, project.repoPath).catch(() => {});
 
   return c.json(project, 201);
 });
@@ -192,7 +192,7 @@ projectRoutes.post('/projects/open', async (c) => {
   db.insert(worktrees).values(branchEntry).run();
 
   // Build graph in background — don't await
-  void graphEngine.buildProject(project.id, project.repoPath);
+  void graphEngine.buildProject(project.id, project.repoPath).catch(() => {});
 
   return c.json({ project, worktree: branchEntry }, 201);
 });
@@ -284,7 +284,7 @@ projectRoutes.post('/projects/clone', async (c) => {
   backgroundFetch(targetDir);
 
   // Build graph in background — don't await
-  void graphEngine.buildProject(project.id, targetDir);
+  void graphEngine.buildProject(project.id, targetDir).catch(() => {});
 
   return c.json({ project, worktree: branchEntry, clonePath: targetDir }, 201);
 });

@@ -121,7 +121,7 @@ function CreateFirstWorktree({ projectId, projectName, defaultBranch }: { projec
   const branchOptions = useMemo(() => {
     if (!branches) return [];
     const defaultBr = branches.defaultBranch ?? 'main';
-    const all = [...branches.local, ...branches.remote.filter((r) => !branches.local.includes(r))];
+    const all = [...(branches.local ?? []), ...(branches.remote ?? []).filter((r) => !(branches.local ?? []).includes(r))];
     return all.map((b) => ({
       value: b,
       label: b === defaultBr ? `★ ${b} (default)` : b,

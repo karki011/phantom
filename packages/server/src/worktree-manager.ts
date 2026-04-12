@@ -51,10 +51,14 @@ export const createWorktree = async (
   } catch {
     // Branch doesn't exist — create new branch from baseBranch (or HEAD)
     const startPoint = baseBranch ? ` "${baseBranch}"` : '';
-    execSync(`git worktree add -b "${branch}" "${targetDir}"${startPoint}`, {
-      cwd: repoPath,
-      stdio: 'pipe',
-    });
+    try {
+      execSync(`git worktree add -b "${branch}" "${targetDir}"${startPoint}`, {
+        cwd: repoPath,
+        stdio: 'pipe',
+      });
+    } catch (innerErr) {
+      throw new Error(`Failed to create worktree for branch "${branch}": ${innerErr instanceof Error ? innerErr.message : 'Unknown error'}`);
+    }
   }
 };
 

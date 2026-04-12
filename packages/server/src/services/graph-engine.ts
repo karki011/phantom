@@ -193,14 +193,15 @@ class GraphEngineService {
     // Already in memory — touch LRU
     if (this.instances.has(projectId)) {
       this.touch(projectId);
-      return this.instances.get(projectId)!;
+      const ctx = this.instances.get(projectId);
+      if (ctx) return ctx;
     }
 
     // Try to hydrate from SQLite
     const project = db.select().from(projects).where(eq(projects.id, projectId)).get();
     if (project) {
       const hydrated = this.hydrateProject(projectId, project.repoPath);
-      return hydrated ? this.instances.get(projectId)! : null;
+      return hydrated ? (this.instances.get(projectId) ?? null) : null;
     }
 
     // Not a project — check if it's a worktree and fall back to parent project's graph
@@ -226,7 +227,8 @@ class GraphEngineService {
   private ensureContext(projectId: string, repoPath: string): ProjectGraphContext {
     if (this.instances.has(projectId)) {
       this.touch(projectId);
-      return this.instances.get(projectId)!;
+      const ctx = this.instances.get(projectId);
+      if (ctx) return ctx;
     }
     return this.createContext(projectId, repoPath);
   }
