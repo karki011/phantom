@@ -95,13 +95,18 @@ export async function configureMonacoForWorkspace(repoPath: string): Promise<voi
     }
 
     // Re-enable semantic validation now that types are available
+    // Suppress 2307 (module not found) — Monaco can't resolve workspace packages,
+    // monorepo internal imports, or complex path aliases. These are false positives
+    // in projects that already build. Real import errors are caught by the build toolchain.
     ts.typescriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: false,
       noSyntaxValidation: false,
+      diagnosticCodesToIgnore: [2307],
     });
     ts.javascriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: false,
       noSyntaxValidation: false,
+      diagnosticCodesToIgnore: [2307],
     });
   }
 }

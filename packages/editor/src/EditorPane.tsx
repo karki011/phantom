@@ -289,6 +289,7 @@ export const EditorPane = ({
       <LazyEditor
         height="100%"
         language={language ?? detectLanguage(filePath)}
+        path={filePath}
         value={content}
         onChange={handleChange}
         theme="vs-dark"

@@ -195,7 +195,23 @@ export const registerIpcHandlers = (): void => {
           // Skip @types — already scanned above
           if (depName.startsWith('@types/')) continue;
 
-          const depModuleDir = join(repoPath, 'node_modules', depName);
+          // Resolve module dir — check standard layout and Bun's hoisted layout
+          let depModuleDir = join(repoPath, 'node_modules', depName);
+          if (!existsSync(depModuleDir)) {
+            // Bun hoists to node_modules/.bun/<pkg>@version/node_modules/<pkg>/
+            const bunDir = join(repoPath, 'node_modules', '.bun');
+            if (existsSync(bunDir)) {
+              try {
+                const bunEntry = readdirSync(bunDir).find((d) =>
+                  d.startsWith(`${depName}@`) || d.startsWith(`${depName.replace('/', '+')}@`),
+                );
+                if (bunEntry) {
+                  const candidate = join(bunDir, bunEntry, 'node_modules', depName);
+                  if (existsSync(candidate)) depModuleDir = candidate;
+                }
+              } catch { /* skip */ }
+            }
+          }
 
           // Resolve the types entry point:
           // a) Check dep's package.json for "types" / "typings" field first
