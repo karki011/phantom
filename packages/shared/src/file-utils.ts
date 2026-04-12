@@ -23,19 +23,62 @@ export const safeReadDir = (dir: string): string[] => {
   }
 };
 
+/**
+ * Batch-check multiple PIDs in a single `ps` call.
+ * Returns the set of PIDs that are currently alive.
+ */
+export function getAlivePids(pids: number[]): Set<number> {
+  if (pids.length === 0) return new Set();
+  try {
+    const output = execSync('ps -p ' + pids.join(',') + ' -o pid=', {
+      timeout: 3000,
+      encoding: 'utf-8',
+    });
+    return new Set(
+      output
+        .trim()
+        .split('\n')
+        .map((s: string) => parseInt(s.trim(), 10))
+        .filter((n: number) => !isNaN(n)),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+// Cached alive-PID set, refreshed every 5 seconds
+let _alivePidCache: Set<number> = new Set();
+let _alivePidCacheTs = 0;
+const ALIVE_PID_CACHE_TTL = 5000; // 5 seconds
+
+/** Refresh the alive-PID cache if stale */
+const refreshAlivePidCache = (pid: number): void => {
+  const now = Date.now();
+  if (now - _alivePidCacheTs > ALIVE_PID_CACHE_TTL) {
+    // Collect all PIDs we might care about — at minimum the one being checked
+    _alivePidCache = getAlivePids([pid]);
+    _alivePidCacheTs = now;
+  }
+};
+
 export const isProcessAlive = (pid: number): boolean => {
   try {
     process.kill(pid, 0);
-    // Verify it's actually a Claude/node process, not a recycled PID
-    try {
-      const name = execSync(`ps -p ${pid} -o comm=`, { encoding: 'utf-8' }).trim();
-      return name.includes('claude') || name.includes('node');
-    } catch {
-      return true; // If ps fails, fall back to PID-only check
-    }
+    // Use cached batch check instead of individual ps calls
+    refreshAlivePidCache(pid);
+    return _alivePidCache.has(pid);
   } catch {
     return false;
   }
+};
+
+/**
+ * Pre-warm the alive PID cache with a batch of PIDs.
+ * Call this before iterating sessions to avoid per-PID ps calls.
+ */
+export const prewarmAlivePidCache = (pids: number[]): void => {
+  _alivePidCache = getAlivePids(pids);
+  _alivePidCacheTs = Date.now();
 };
 
 export const extractRepoName = (cwd: string): string => basename(cwd);

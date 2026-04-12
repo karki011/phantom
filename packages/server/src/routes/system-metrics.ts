@@ -9,6 +9,10 @@ import { Hono } from 'hono';
 
 export const systemMetricsRoutes = new Hono();
 
+// Cache layer — prevents rapid polling from blocking the event loop with execSync
+let metricsCache: { data: unknown; timestamp: number } | null = null;
+const CACHE_TTL = 2000; // 2 seconds
+
 // Keep previous CPU tick snapshot for delta-based usage calculation
 let prevIdle = 0;
 let prevTotal = 0;
@@ -144,7 +148,7 @@ function getAvailableMemory(): number {
     if (osPlatform() === 'darwin') {
       const output = execSync('vm_stat', { encoding: 'utf-8', timeout: 2000, stdio: ['pipe', 'pipe', 'pipe'] });
       const pageSizeMatch = output.match(/page size of (\d+) bytes/);
-      const pageSize = pageSizeMatch ? parseInt(pageSizeMatch[1], 10) : 16384;
+      const pageSize = parseInt(pageSizeMatch?.[1] ?? '4096', 10);
       const parse = (label: string): number => {
         const m = output.match(new RegExp(`${label}:\\s+(\\d+)`));
         return m ? parseInt(m[1], 10) : 0;
@@ -163,15 +167,23 @@ function getAvailableMemory(): number {
 }
 
 systemMetricsRoutes.get('/system-metrics', (c) => {
+  // Return cached result if still fresh
+  if (metricsCache && Date.now() - metricsCache.timestamp < CACHE_TTL) {
+    return c.json(metricsCache.data);
+  }
+
   const total = totalmem();
   const available = getAvailableMemory();
   const used = total - available;
 
-  return c.json({
+  const result = {
     cpu: { usage: getCpuUsage(), cores: cpus().length },
     memory: { used, total, usedPercent: Math.round((used / total) * 100) },
     swap: getSwapUsage(),
     loadAvg: loadavg(),
     topProcesses: getTopProcesses(),
-  });
+  };
+
+  metricsCache = { data: result, timestamp: Date.now() };
+  return c.json(result);
 });

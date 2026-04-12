@@ -54,6 +54,9 @@ export const hasSession = (paneId: string): boolean => sessions.has(paneId);
 /** Get a session from the registry */
 export const getSession = (paneId: string): TerminalSession | undefined => sessions.get(paneId);
 
+/** Track in-progress attach calls to prevent concurrent attaches for the same pane */
+const attaching = new Set<string>();
+
 /**
  * Attach a terminal session to a DOM container.
  * If session exists: move wrapper into container, refresh canvas, focus.
@@ -64,6 +67,15 @@ export const attachSession = async (
   container: HTMLDivElement,
   options?: AttachOptions,
 ): Promise<TerminalSession> => {
+  if (attaching.has(paneId)) {
+    // Already attaching — wait for the in-progress attach to finish
+    const existing = sessions.get(paneId);
+    if (existing) return existing;
+    // Shouldn't happen, but fall through to create
+  }
+  attaching.add(paneId);
+
+  try {
   const existing = sessions.get(paneId);
 
   if (existing) {
@@ -255,16 +267,21 @@ export const attachSession = async (
   connectWs(false);
 
   // Wire terminal input — references session.ws so reconnection would work
-  term.onData((data) => {
+  // Store the disposable so it can be cleaned up in disposeSession
+  const onDataDisposable = term.onData((data) => {
     if (session.ws && session.ws.readyState === WebSocket.OPEN) {
       session.ws.send(JSON.stringify({ type: 'input', data }));
     }
   });
+  (session as any)._onDataDisposable = onDataDisposable;
 
   // Set up ResizeObserver
   session.observer = createResizeObserver(paneId, container);
 
   return session;
+  } finally {
+    attaching.delete(paneId);
+  }
 };
 
 /**
@@ -312,6 +329,9 @@ export const disposeSession = (paneId: string): void => {
     session.ws.send(JSON.stringify({ type: 'kill' }));
   }
 
+  // Dispose onData listener
+  (session as any)._onDataDisposable?.dispose();
+
   // Disconnect observer
   session.observer?.disconnect();
 
@@ -342,14 +362,18 @@ if (typeof window !== 'undefined') {
 // ─── Internal helpers ─────────────────────────────────────────────────
 
 function createResizeObserver(paneId: string, container: HTMLDivElement): ResizeObserver {
+  let resizeTimer: ReturnType<typeof setTimeout> | null = null;
   const observer = new ResizeObserver(() => {
-    const session = sessions.get(paneId);
-    if (!session) return;
-    session.fit.fit();
-    const dims = session.fit.proposeDimensions();
-    if (dims && session.ws && session.ws.readyState === WebSocket.OPEN) {
-      session.ws.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
-    }
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const session = sessions.get(paneId);
+      if (!session) return;
+      session.fit.fit();
+      const dims = session.fit.proposeDimensions();
+      if (dims && session.ws && session.ws.readyState === WebSocket.OPEN) {
+        session.ws.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
+      }
+    }, 100);
   });
   observer.observe(container);
   return observer;

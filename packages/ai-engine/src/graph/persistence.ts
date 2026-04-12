@@ -155,17 +155,27 @@ export class GraphPersistence {
         updated_at: number;
       }>;
 
-    return rows.map((row) => ({
-      id: row.id,
-      projectId: row.project_id,
-      sourceId: row.source_id,
-      targetId: row.target_id,
-      type: row.type as GraphEdge['type'],
-      weight: row.weight ?? 1,
-      metadata: row.metadata ? JSON.parse(row.metadata) : {},
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+    return rows.map((row) => {
+      let metadata: Record<string, unknown> = {};
+      if (row.metadata) {
+        try {
+          metadata = JSON.parse(row.metadata);
+        } catch {
+          // Corrupted metadata — default to empty object
+        }
+      }
+      return {
+        id: row.id,
+        projectId: row.project_id,
+        sourceId: row.source_id,
+        targetId: row.target_id,
+        type: row.type as GraphEdge['type'],
+        weight: row.weight ?? 1,
+        metadata,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    });
   }
 
   // ---------------------------------------------------------------------------

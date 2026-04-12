@@ -344,6 +344,11 @@ chatRoutes.post('/chat', async (c) => {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
+  // Kill subprocess after 5 minutes to prevent runaway processes
+  const timeout = setTimeout(() => {
+    proc.kill('SIGTERM');
+  }, 300_000);
+
   const encoder = new TextEncoder();
 
   const readable = new ReadableStream({
@@ -396,6 +401,7 @@ chatRoutes.post('/chat', async (c) => {
       });
 
       proc.on('close', (_code) => {
+        clearTimeout(timeout);
         // Process remaining buffer
         if (buffer.trim()) {
           try {
@@ -418,6 +424,10 @@ chatRoutes.post('/chat', async (c) => {
         sendChunk({ type: 'error', message: err.message });
         controller.close();
       });
+    },
+    cancel() {
+      proc.kill('SIGTERM');
+      clearTimeout(timeout);
     },
   });
 

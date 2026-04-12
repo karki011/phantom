@@ -8,8 +8,8 @@
  *
  * @author Subash Karki
  */
-import { writeFileSync, unlinkSync, existsSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { writeFileSync, unlinkSync, existsSync, readFileSync, mkdirSync } from 'node:fs';
+import { join, resolve, dirname } from 'node:path';
 import { db, worktrees, projects } from '@phantom-os/db';
 import { eq } from 'drizzle-orm';
 import { logger } from '../logger.js';
@@ -101,6 +101,23 @@ function buildMcpConfig(projectId: string): McpConfig {
 export function writeMcpConfig(cwd: string, projectId: string): boolean {
   const configPath = join(cwd, '.mcp.json');
   const count = refCounts.get(cwd) ?? 0;
+
+  if (count > 0) {
+    // Verify file still exists; re-write if deleted externally
+    if (!existsSync(configPath)) {
+      try {
+        const configDir = dirname(configPath);
+        mkdirSync(configDir, { recursive: true });
+        const config = { mcpServers: buildMcpConfig(projectId).mcpServers };
+        writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+        logger.info('McpConfig', `Re-injected .mcp.json to ${cwd} (file was deleted externally)`);
+      } catch (err) {
+        logger.error('McpConfig', `Failed to re-inject .mcp.json to ${cwd}:`, err);
+      }
+    }
+    refCounts.set(cwd, count + 1);
+    return true;
+  }
 
   if (count === 0) {
     // First session for this cwd — write the config

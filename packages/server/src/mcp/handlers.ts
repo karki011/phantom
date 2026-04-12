@@ -52,9 +52,9 @@ export function handleGraphContext(
   if (!query) return errorResult('Project graph not found. Build the graph first.');
 
   const result = query.getContext(params.file, params.depth ?? 2);
-  const files = result.files.map((f) => ({ path: f.path, relevance: result.scores.get(f.id) ?? 0 }));
-  const edges = result.edges.map((e) => ({ source: e.sourceId, target: e.targetId, type: e.type }));
-  const modules = result.modules.map((m) => m.name);
+  const files = (result.files ?? []).map((f) => ({ path: f.path, relevance: result.scores.get(f.id) ?? 0 }));
+  const edges = (result.edges ?? []).map((e) => ({ source: e.sourceId, target: e.targetId, type: e.type }));
+  const modules = (result.modules ?? []).map((m) => m.name);
 
   return textResult({ files, edges, modules });
 }
@@ -68,8 +68,8 @@ export function handleBlastRadius(
 
   const result = query.getBlastRadius(params.file);
   return textResult({
-    directlyAffected: result.direct.map((f) => f.path),
-    transitivelyAffected: result.transitive.map((f) => f.path),
+    directlyAffected: (result.direct ?? []).map((f) => f.path),
+    transitivelyAffected: (result.transitive ?? []).map((f) => f.path),
     impactScore: result.impactScore,
   });
 }

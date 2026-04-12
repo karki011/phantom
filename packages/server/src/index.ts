@@ -52,6 +52,7 @@ import { startHistoryWriter, stopHistoryWriter, markAllExited } from './terminal
 type SSEClient = {
   sendRaw: (data: string) => void;
   close: () => void;
+  abort: () => void;
   lastActive: number;
 };
 
@@ -93,7 +94,7 @@ graphEngine.init(broadcast);
 
 const app = new Hono();
 
-app.use('*', cors());
+app.use('*', cors({ origin: ['http://localhost:3850', 'http://localhost:3849', 'http://127.0.0.1:3850', 'http://127.0.0.1:3849'] }));
 
 // Mount route groups
 app.route('/api', hunterRoutes);
@@ -118,6 +119,7 @@ app.route('/api', graphRoutes);
 // SSE endpoint
 app.get('/events', (c) => {
   return streamSSE(c, async (stream) => {
+    const ac = new AbortController();
     const client: SSEClient = {
       sendRaw: (data) => {
         // Write data-only SSE (no event: field) so onmessage receives it
@@ -126,6 +128,7 @@ app.get('/events', (c) => {
       close: () => {
         sseClients.delete(client);
       },
+      abort: () => ac.abort(),
       lastActive: Date.now(),
     };
     sseClients.add(client);
@@ -149,8 +152,14 @@ app.get('/events', (c) => {
       sseClients.delete(client);
     });
 
-    // Block to keep stream open
-    await new Promise(() => {});
+    // Block to keep stream open — abortable so stale sweep can free resources
+    try {
+      await new Promise((_, reject) => {
+        ac.signal.addEventListener('abort', () => reject(new Error('aborted')));
+      });
+    } catch {
+      // Abort is expected during stale cleanup — exit gracefully
+    }
   });
 });
 
@@ -162,6 +171,7 @@ setInterval(() => {
   const staleThreshold = Date.now() - 60_000; // 60 seconds
   for (const client of sseClients) {
     if (client.lastActive < staleThreshold) {
+      try { client.abort(); } catch {}
       try { client.close(); } catch {}
       sseClients.delete(client);
     }

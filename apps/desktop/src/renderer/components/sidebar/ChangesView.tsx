@@ -9,7 +9,7 @@ import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw, Plus, Minus, Check, 
 import { useCallback, useEffect, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
 import { activeWorktreeAtom } from '../../atoms/worktrees';
-import { gitChangesCountAtom } from '../../atoms/fileExplorer';
+import { gitChangesCountAtom, selectedFileAtom } from '../../atoms/fileExplorer';
 import type { GitFileChange, GitStatusResult } from '../../lib/api';
 import { fetchApi, getGitStatus, gitStage, gitUnstage, gitStageAll, gitCommit, gitPush, gitPull, gitDiscard, gitClean, gitUndoCommit, gitStash, gitStashPop, gitFetch } from '../../lib/api';
 
@@ -28,6 +28,8 @@ function FileRow({ file, worktreeId, onStage, onDiscard }: {
   onDiscard?: () => void;
 }) {
   const store = usePaneStore();
+  const selectedFile = useAtomValue(selectedFileAtom);
+  const isSelected = selectedFile === file.path;
   const config = STATUS_CONFIG[file.status];
   const Icon = config.icon;
   const fileName = file.path.split('/').pop() ?? file.path;
@@ -67,9 +69,11 @@ function FileRow({ file, worktreeId, onStage, onDiscard }: {
           display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px',
           cursor: file.status === 'deleted' ? 'default' : 'pointer',
           borderRadius: 3, transition: 'background-color 100ms ease',
+          backgroundColor: isSelected ? 'var(--phantom-surface-elevated, #2a2a2a)' : undefined,
+          borderLeft: isSelected ? '2px solid var(--phantom-accent-glow)' : '2px solid transparent',
         }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated, #2a2a2a)'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+        onMouseEnter={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated, #2a2a2a)'; }}
+        onMouseLeave={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
         onContextMenu={handleContextMenu}
       >
         <Icon size={12} style={{ color: config.color, flexShrink: 0 }} />

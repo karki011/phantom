@@ -17,10 +17,11 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { Flame, Trophy } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { WorkspaceProvider, Workspace, switchWorkspaceAtom } from '@phantom-os/panes';
+import { WorkspaceProvider, Workspace, switchWorkspaceAtom, activePaneAtom } from '@phantom-os/panes';
 import { paneDefinitions, paneMenu } from './panes/registry';
 import { unlockedCountAtom, refreshAchievementsAtom } from './atoms/achievements';
 import { activeTopTabAtom, fontScaleAtom, sseConnectionAtom } from './atoms/system';
+import { selectedFileAtom } from './atoms/fileExplorer';
 import { activeWorktreeAtom, activeWorktreeIdAtom } from './atoms/worktrees';
 import { Cockpit } from './components/cockpit/Cockpit';
 import { TopTabBar } from './components/layout/TopTabBar';
@@ -83,28 +84,18 @@ export const App = () => {
   // Periodic backend health polling
   const { isConnected } = useHealthCheck();
 
-  // Splash screen state — minimum 5s display regardless of connection speed
+  // Splash screen state — dismiss as soon as server is ready
   const [splashDone, setSplashDone] = useState(false);
   const [splashStatus, setSplashStatus] = useState('Initializing The System...');
-  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
 
-  // Minimum display time: 5 seconds no matter what
+  // Dismiss splash as soon as connected
   useEffect(() => {
-    const timer = setTimeout(() => setMinTimeElapsed(true), 5000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Only dismiss splash when BOTH connected AND minimum time elapsed
-  useEffect(() => {
-    if (isConnected && minTimeElapsed && !splashDone) {
+    if (isConnected && !splashDone) {
       setSplashStatus('Ready');
       const timer = setTimeout(() => setSplashDone(true), 800);
       return () => clearTimeout(timer);
     }
-    if (isConnected && !minTimeElapsed) {
-      setSplashStatus('Ready');
-    }
-  }, [isConnected, minTimeElapsed, splashDone]);
+  }, [isConnected, splashDone]);
 
   // Progressive status messages while loading
   useEffect(() => {
@@ -150,12 +141,22 @@ export const App = () => {
     refreshAchievements();
   }, [refreshAchievements]);
 
+  // Sync active editor pane → file tree highlight (derive filePath to avoid excess re-renders)
+  const activePane = useAtomValue(activePaneAtom);
+  const setSelectedFile = useSetAtom(selectedFileAtom);
+  const activePaneFilePath = (activePane?.kind === 'editor' || activePane?.kind === 'diff')
+    ? ((activePane.data as Record<string, unknown>)?.filePath as string | undefined) ?? null
+    : null;
+  useEffect(() => {
+    setSelectedFile(activePaneFilePath);
+  }, [activePaneFilePath, setSelectedFile]);
+
   const isElectron = navigator.userAgent.includes('Electron');
 
   return (
     <WorkspaceProvider definitions={paneDefinitions}>
     {!splashDone && (
-      <SplashScreen visible={!(isConnected && minTimeElapsed)} status={splashStatus} />
+      <SplashScreen visible={!isConnected} status={splashStatus} />
     )}
     <AppShell
       header={{ height: '3.5rem' }}

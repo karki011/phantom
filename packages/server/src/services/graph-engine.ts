@@ -209,6 +209,10 @@ class GraphEngineService {
       .where(eq(worktrees.id, projectId))
       .get();
     if (wt?.projectId) {
+      if (wt.projectId === projectId) {
+        logger.warn('GraphEngine', `Worktree ${projectId} references itself — skipping`);
+        return null;
+      }
       logger.debug('GraphEngine', `Worktree ${projectId} → using parent project ${wt.projectId} graph`);
       return this.resolve(wt.projectId);
     }
@@ -235,9 +239,21 @@ class GraphEngineService {
 
   /** Evict the least recently used project if over capacity */
   private evictIfNeeded(): void {
+    let safety = this.lru.length;
     while (this.lru.length > MAX_IN_MEMORY) {
+      if (--safety < 0) {
+        logger.warn('GraphEngine', 'All in-memory projects are building/enriching — cannot evict');
+        break;
+      }
+
       const evictId = this.lru.shift();
       if (!evictId) break;
+
+      // Don't evict projects with active builds
+      if (this.building.has(evictId) || this.enriching.has(evictId)) {
+        this.lru.push(evictId); // put it back
+        continue;
+      }
 
       const ctx = this.instances.get(evictId);
       if (ctx) {

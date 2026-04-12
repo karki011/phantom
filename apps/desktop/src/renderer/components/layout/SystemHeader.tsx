@@ -133,12 +133,14 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
             <Text fz="0.75rem" c="var(--phantom-text-muted)">|</Text>
             <Popover width={260} position="bottom" shadow="md" withArrow>
               <Popover.Target>
-                <Group gap="0.375rem" style={{ cursor: 'pointer' }}>
-                  <MemoryStick size={12} aria-hidden="true" style={{ color: 'var(--phantom-accent-gold, var(--phantom-status-warning))' }} />
-                  <Text fz="0.75rem" c="var(--phantom-text-secondary)">
-                    {formatBytes(metrics.memory.used)}/{formatBytes(metrics.memory.total)} GB
-                  </Text>
-                </Group>
+                <Tooltip label="Memory details">
+                  <Group gap="0.375rem" style={{ cursor: 'pointer' }}>
+                    <MemoryStick size={12} aria-hidden="true" style={{ color: 'var(--phantom-accent-gold, var(--phantom-status-warning))' }} />
+                    <Text fz="0.75rem" c="var(--phantom-text-secondary)">
+                      {formatBytes(metrics.memory.used)}/{formatBytes(metrics.memory.total)} GB
+                    </Text>
+                  </Group>
+                </Tooltip>
               </Popover.Target>
               <Popover.Dropdown
                 style={{
@@ -226,22 +228,24 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
         {/* Caveman Mode Toggle with Popover */}
         <Popover width={280} position="bottom-end" withArrow shadow="md">
           <Popover.Target>
-            <ActionIcon
-              variant="subtle"
-              size="lg"
-              onClick={() => setPref('caveman', cavemanOn ? 'false' : 'true')}
-              aria-label={cavemanOn ? 'Disable concise mode' : 'Enable concise mode'}
-            >
-              <Zap
-                size={18}
-                aria-hidden="true"
-                style={{
-                  color: cavemanOn
-                    ? 'var(--phantom-accent-gold)'
-                    : 'var(--phantom-text-muted)',
-                }}
-              />
-            </ActionIcon>
+            <Tooltip label={cavemanOn ? 'Concise mode (on)' : 'Concise mode (off)'}>
+              <ActionIcon
+                variant="subtle"
+                size="lg"
+                onClick={() => setPref('caveman', cavemanOn ? 'false' : 'true')}
+                aria-label={cavemanOn ? 'Disable concise mode' : 'Enable concise mode'}
+              >
+                <Zap
+                  size={18}
+                  aria-hidden="true"
+                  style={{
+                    color: cavemanOn
+                      ? 'var(--phantom-accent-gold)'
+                      : 'var(--phantom-text-muted)',
+                  }}
+                />
+              </ActionIcon>
+            </Tooltip>
           </Popover.Target>
           <Popover.Dropdown
             style={{
@@ -267,13 +271,15 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
         {/* Font Scale Menu */}
         <Menu shadow="md" width={120} position="bottom-end">
           <Menu.Target>
-            <ActionIcon
-              variant="subtle"
-              size="lg"
-              aria-label="Font scale settings"
-            >
-              <Type size={18} aria-hidden="true" />
-            </ActionIcon>
+            <Tooltip label="Font scale">
+              <ActionIcon
+                variant="subtle"
+                size="lg"
+                aria-label="Font scale settings"
+              >
+                <Type size={18} aria-hidden="true" />
+              </ActionIcon>
+            </Tooltip>
           </Menu.Target>
           <Menu.Dropdown>
             <Menu.Label>Font Scale</Menu.Label>
@@ -294,13 +300,15 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
         {/* Theme Picker Menu */}
         <Menu shadow="md" width={180} position="bottom-end">
           <Menu.Target>
-            <ActionIcon
-              variant="subtle"
-              size="lg"
-              aria-label="Theme picker"
-            >
-              <Palette size={18} aria-hidden="true" />
-            </ActionIcon>
+            <Tooltip label="Theme">
+              <ActionIcon
+                variant="subtle"
+                size="lg"
+                aria-label="Theme picker"
+              >
+                <Palette size={18} aria-hidden="true" />
+              </ActionIcon>
+            </Tooltip>
           </Menu.Target>
           <Menu.Dropdown>
             <Menu.Label>Theme</Menu.Label>
@@ -330,25 +338,29 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
         </Menu>
 
         {/* Theme Toggle */}
-        <ActionIcon
-          variant="subtle"
-          size="lg"
-          onClick={toggleColorScheme}
-          aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-        >
-          {isDark ? (
-            <Sun size={18} aria-hidden="true" />
-          ) : (
-            <Moon size={18} aria-hidden="true" />
-          )}
-        </ActionIcon>
+        <Tooltip label={isDark ? 'Light mode' : 'Dark mode'}>
+          <ActionIcon
+            variant="subtle"
+            size="lg"
+            onClick={toggleColorScheme}
+            aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+          >
+            {isDark ? (
+              <Sun size={18} aria-hidden="true" />
+            ) : (
+              <Moon size={18} aria-hidden="true" />
+            )}
+          </ActionIcon>
+        </Tooltip>
 
         {/* Help */}
         <Popover width={360} position="bottom-end" shadow="md" withArrow>
           <Popover.Target>
-            <ActionIcon variant="subtle" size="lg" aria-label="Help">
-              <HelpCircle size={18} aria-hidden="true" />
-            </ActionIcon>
+            <Tooltip label="Help">
+              <ActionIcon variant="subtle" size="lg" aria-label="Help">
+                <HelpCircle size={18} aria-hidden="true" />
+              </ActionIcon>
+            </Tooltip>
           </Popover.Target>
           <Popover.Dropdown
             style={{

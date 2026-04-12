@@ -11,5 +11,5 @@ echo "PhantomOS — The System"
 echo "======================"
 
 # Start the desktop app via turbo (launches server + Electron)
-echo "Starting Electron desktop app..."
+echo "Starting PhantomOS desktop app..."
 bun run dev:desktop

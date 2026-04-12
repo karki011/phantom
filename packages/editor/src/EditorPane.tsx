@@ -3,7 +3,7 @@
  * Fetches file content on mount, saves on Ctrl+S.
  * @author Subash Karki
  */
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, type CSSProperties } from 'react';
 import { LazyEditor, configureMonacoForWorkspace } from './LazyMonaco.js';
 
 interface EditorPaneProps {
@@ -135,6 +135,74 @@ export const EditorPane = ({
     return () => window.removeEventListener('keydown', handler);
   }, [worktreeId, filePath, saveFile]);
 
+  // Right-click context menu
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const ctxRef = useRef<HTMLDivElement>(null);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setCtxMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) setCtxMenu(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [ctxMenu]);
+
+  const copyPath = useCallback((relative?: boolean) => {
+    if (!filePath) return;
+    const path = relative ? filePath : (repoPath ? `${repoPath}/${filePath}` : filePath);
+    navigator.clipboard.writeText(path);
+    setCtxMenu(null);
+  }, [filePath, repoPath]);
+
+  // Warn before closing pane with unsaved changes
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: CustomEvent) => {
+      if (e.detail?.paneId === paneId) {
+        if (!window.confirm('This file has unsaved changes. Close anyway?')) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      }
+    };
+    window.addEventListener('phantom:pane-close' as any, handler);
+    return () => window.removeEventListener('phantom:pane-close' as any, handler);
+  }, [dirty, paneId]);
+
+  const ctxMenuStyle: CSSProperties = {
+    position: 'fixed',
+    left: ctxMenu?.x ?? 0,
+    top: ctxMenu?.y ?? 0,
+    zIndex: 9999,
+    background: 'var(--phantom-surface-card, #1a1a2e)',
+    border: '1px solid var(--phantom-border-subtle, rgba(255,255,255,0.12))',
+    borderRadius: 6,
+    padding: '4px 0',
+    minWidth: 180,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+  };
+
+  const ctxItemStyle: CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 12px',
+    fontSize: 12,
+    cursor: 'pointer',
+    color: 'rgba(255,255,255,0.8)',
+    background: 'transparent',
+    border: 'none',
+    width: '100%',
+    textAlign: 'left',
+  };
+
   if (loading) {
     return (
       <div
@@ -157,6 +225,7 @@ export const EditorPane = ({
     <div style={{ width: '100%', height: '100%', position: 'relative', display: 'flex', flexDirection: 'column' }} data-pane-id={paneId}>
       {/* Editor toolbar */}
       <div
+        onContextMenu={handleContextMenu}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -208,6 +277,43 @@ export const EditorPane = ({
           readOnly: !worktreeId && !onChange,
         }}
       />
+      {/* Context menu */}
+      {ctxMenu && (
+        <div ref={ctxRef} style={ctxMenuStyle}>
+          <button
+            type="button"
+            style={ctxItemStyle}
+            onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
+            onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
+            onClick={() => copyPath(true)}
+          >
+            Copy relative path
+          </button>
+          <button
+            type="button"
+            style={ctxItemStyle}
+            onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
+            onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
+            onClick={() => copyPath(false)}
+          >
+            Copy full path
+          </button>
+          {dirty && (
+            <>
+              <div style={{ height: 1, background: 'var(--phantom-border-subtle, rgba(255,255,255,0.08))', margin: '4px 0' }} />
+              <button
+                type="button"
+                style={{ ...ctxItemStyle, color: 'var(--phantom-accent-gold, #f59e0b)' }}
+                onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
+                onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
+                onClick={() => { saveFile(); setCtxMenu(null); }}
+              >
+                Save file
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };

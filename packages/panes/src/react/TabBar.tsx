@@ -27,10 +27,20 @@ const barStyle: CSSProperties = {
   height: 32,
   background: 'var(--tab-bar-bg, rgba(0,0,0,0.3))',
   borderBottom: '1px solid var(--pane-border, rgba(255,255,255,0.08))',
-  overflow: 'visible',
+  overflow: 'hidden',
   userSelect: 'none',
-  gap: 2,
   padding: '0 4px',
+};
+
+const tabsScrollStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 2,
+  flex: 1,
+  minWidth: 0,
+  overflowX: 'auto',
+  overflowY: 'hidden',
+  scrollbarWidth: 'none',
 };
 
 const tabStyle = (active: boolean): CSSProperties => ({
@@ -42,6 +52,7 @@ const tabStyle = (active: boolean): CSSProperties => ({
   fontSize: 12,
   borderRadius: 4,
   cursor: 'pointer',
+  flexShrink: 0,
   background: active ? 'rgba(255,255,255,0.08)' : 'transparent',
   color: active ? '#fff' : 'rgba(255,255,255,0.55)',
   border: 'none',
@@ -244,11 +255,18 @@ export function TabBar({ paneMenu }: TabBarProps) {
     setDragOverIndex(null);
   }, []);
 
+  // Auto-scroll active tab into view
+  const activeTabRef = useCallback((node: HTMLDivElement | null) => {
+    if (node) node.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+  }, [activeTabId]);
+
   return (
     <div style={barStyle}>
+      <div style={tabsScrollStyle}>
       {tabs.map((t, i) => (
         <div
           key={t.id}
+          ref={t.id === activeTabId ? activeTabRef : undefined}
           style={{
             ...tabStyle(t.id === activeTabId),
             ...(dragOverIndex === i
@@ -308,7 +326,8 @@ export function TabBar({ paneMenu }: TabBarProps) {
           )}
         </div>
       ))}
-      <div style={{ position: 'relative' }} ref={menuRef}>
+      </div>
+      <div style={{ position: 'relative', flexShrink: 0 }} ref={menuRef}>
         <button
           type="button"
           style={addStyle}

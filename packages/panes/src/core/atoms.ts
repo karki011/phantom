@@ -33,8 +33,8 @@ function makePane<TData>(
   };
 }
 
-function makeTab<TData>(label = 'Home'): Tab<TData> {
-  const pane = makePane<TData>('workspace-home', {} as TData, 'Home');
+function makeTab(label = 'Home'): Tab {
+  const pane = makePane('workspace-home', {}, 'Home');
   return {
     id: uid(),
     label,
@@ -79,7 +79,7 @@ export const activePaneAtom = atom((get) => {
 // Tab operation atoms (write)
 // ---------------------------------------------------------------------------
 
-export const addTabAtom = atom(null, (_get, set, label = 'New Tab') => {
+export const addTabAtom = atom(null, (_get, set, label: string = 'New Tab') => {
   const tab = makeTab(label);
   set(paneStateAtom, (s) => ({
     ...s,
@@ -183,7 +183,17 @@ export const addPaneAsTabAtom = atom(
   },
 );
 
-export const closePaneAtom = atom(null, (_get, set, paneId: string) => {
+export const closePaneAtom = atom(null, (get, set, paneId: string) => {
+  // Allow panes to cancel close (e.g. unsaved editor changes)
+  if (typeof window !== 'undefined') {
+    const closeEvent = new CustomEvent('phantom:pane-close', {
+      detail: { paneId },
+      cancelable: true,
+    });
+    const allowed = window.dispatchEvent(closeEvent);
+    if (!allowed) return; // Pane vetoed the close
+  }
+
   set(paneStateAtom, (s) => {
     // Check if any tab has this pane as a terminal — if so, dispatch kill event
     for (const tab of s.tabs) {
@@ -200,7 +210,14 @@ export const closePaneAtom = atom(null, (_get, set, paneId: string) => {
       ...s,
       tabs: s.tabs.map((t) => {
         if (!(paneId in t.panes)) return t;
-        const layout = removePaneFromLayout(t.layout, paneId) ?? t.layout;
+
+        // Prevent closing the last pane in a tab — keeps layout valid
+        if (Object.keys(t.panes).length <= 1) return t;
+
+        const layout = removePaneFromLayout(t.layout, paneId);
+        // If layout became null despite the guard, preserve the tab as-is
+        if (!layout) return t;
+
         const { [paneId]: _, ...panes } = t.panes;
         const activePaneId =
           t.activePaneId === paneId
@@ -255,6 +272,7 @@ export const splitPaneAtom = atom(
   ) => {
     const tab = get(activeTabAtom);
     if (!tab) return '';
+    if (!tab.panes[paneId]) return '';
 
     // For terminal splits without explicit cwd, inherit from the source pane
     let resolvedData = newData;
@@ -436,10 +454,10 @@ export const movePaneToTabAtom = atom(
       });
 
       // Filter out null entries (removed tabs)
-      tabs = tabs.filter(Boolean) as Tab[];
-      if (tabs.length === 0) return s; // Safety: never empty
+      const filtered = tabs.filter((t): t is Tab => t !== null);
+      if (filtered.length === 0) return s; // Safety: never empty
 
-      return { ...s, tabs };
+      return { ...s, tabs: filtered };
     });
   },
 );
@@ -522,22 +540,10 @@ let coldBoot = true;
  * On cold boot, check which terminal tabs have restorable sessions.
  * Keep restorable terminals (mark for cold restore), strip dead ones.
  */
-function restoreOrStripTerminals(state: WorkspaceState, worktreeId?: string): WorkspaceState {
-  // Try to fetch restorable sessions from the server
-  let restorableIds = new Set<string>();
-  if (worktreeId) {
-    try {
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', `/api/terminal-sessions/${worktreeId}`, false);
-      xhr.send();
-      if (xhr.status === 200) {
-        const sessions = JSON.parse(xhr.responseText);
-        restorableIds = new Set(sessions.map((s: { paneId: string }) => s.paneId));
-      }
-    } catch {
-      // If server isn't ready, treat all as non-restorable
-    }
-  }
+function restoreOrStripTerminals(state: WorkspaceState, _worktreeId?: string): WorkspaceState {
+  // All terminals are marked for cold restore — they handle reconnection
+  // failures gracefully via WebSocket auto-reconnect with backoff.
+  // No synchronous health check needed.
 
   const processedTabs = state.tabs.map((tab) => {
     const paneEntries = Object.entries(tab.panes);
@@ -545,26 +551,43 @@ function restoreOrStripTerminals(state: WorkspaceState, worktreeId?: string): Wo
 
     for (const [id, pane] of paneEntries) {
       if (pane.kind === 'terminal') {
-        if (restorableIds.has(id)) {
-          // Mark for cold restore — TerminalPane will pick this up
-          updatedPanes[id] = { ...pane, data: { ...(pane.data as any), coldRestore: true } };
-        }
-        // else: drop the pane (dead terminal)
+        // Always attempt restore — dead sessions fail gracefully
+        updatedPanes[id] = { ...pane, data: { ...(pane.data as any), coldRestore: true } };
       } else {
         updatedPanes[id] = pane;
       }
     }
 
-    // If tab had only dead terminals, skip it
+    // If tab is somehow empty, skip it
     if (Object.keys(updatedPanes).length === 0) return null;
 
-    // Strip dead terminal panes from the layout tree (handles split tabs)
+    // Ensure layout is consistent with surviving panes
     let layout = tab.layout;
-    for (const [id, pane] of paneEntries) {
-      if (pane.kind === 'terminal' && !updatedPanes[id]) {
+    for (const [id] of paneEntries) {
+      if (!updatedPanes[id]) {
         const stripped = removePaneFromLayout(layout, id);
         if (stripped) layout = stripped;
       }
+    }
+
+    // If layout became null (all panes stripped), skip the tab
+    if (!layout) return null;
+
+    // Final consistency: if layout references paneIds not in the panes map, rebuild
+    const layoutIds = getLayoutPaneIds(layout);
+    const paneIds = new Set(Object.keys(updatedPanes));
+    const hasOrphan = layoutIds.some((id) => !paneIds.has(id));
+    if (hasOrphan) {
+      // Rebuild layout from surviving panes
+      const ids = Object.keys(updatedPanes);
+      if (ids.length === 0) return null;
+      layout = ids.length === 1
+        ? { type: 'pane' as const, paneId: ids[0] }
+        : ids.reduce<any>((acc, pid, i) =>
+            i === 0
+              ? { type: 'pane' as const, paneId: pid }
+              : { type: 'split' as const, direction: 'horizontal' as const, children: [acc, { type: 'pane' as const, paneId: pid }], splitPercentage: 50 },
+          null);
     }
 
     return { ...tab, layout, panes: updatedPanes };

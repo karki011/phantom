@@ -5,7 +5,8 @@
  * @author Subash Karki
  */
 import { logger } from '../logger.js';
-import { createReadStream, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { createReadStream, readdirSync, statSync } from 'node:fs';
+import * as fsPromises from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { basename, join } from 'node:path';
 import { eq, and } from 'drizzle-orm';
@@ -191,17 +192,20 @@ const calculateCostMicros = (acc: TokenAccumulator): number =>
 /**
  * Tail-read a JSONL file to get the LAST assistant message's context size.
  * Reads only the last 50KB — cheap enough to run every 10 seconds.
+ * Uses async fs.promises to avoid blocking the event loop.
  */
-const tailReadContext = (filePath: string): number | null => {
+const tailReadContext = async (filePath: string): Promise<number | null> => {
+  let handle: fsPromises.FileHandle | null = null;
   try {
-    const stat = statSync(filePath);
+    handle = await fsPromises.open(filePath, 'r');
+    const stat = await handle.stat();
     const size = stat.size;
     // Read last 50KB (enough for several messages)
     const readSize = Math.min(size, 50_000);
-    const fd = openSync(filePath, 'r');
     const buffer = Buffer.alloc(readSize);
-    readSync(fd, buffer, 0, readSize, size - readSize);
-    closeSync(fd);
+    await handle.read(buffer, 0, readSize, size - readSize);
+    await handle.close();
+    handle = null;
 
     const chunk = buffer.toString('utf-8');
     const lines = chunk.split('\n').filter(Boolean);
@@ -216,7 +220,11 @@ const tailReadContext = (filePath: string): number | null => {
         }
       } catch { /* skip malformed line at chunk boundary */ }
     }
-  } catch { /* file not found or read error */ }
+  } catch { /* file not found or read error */ } finally {
+    if (handle) {
+      try { await handle.close(); } catch { /* ignore */ }
+    }
+  }
   return null;
 };
 
@@ -260,7 +268,7 @@ const findActiveJsonlByCwd = (cwd: string | null): string | null => {
 };
 
 export const startActiveContextPoller = (broadcast: Broadcast): void => {
-  const poll = () => {
+  const poll = async () => {
     const activeSessions = db
       .select({ id: sessions.id, cwd: sessions.cwd, lastInputTokens: sessions.lastInputTokens, model: sessions.model })
       .from(sessions)
@@ -272,7 +280,7 @@ export const startActiveContextPoller = (broadcast: Broadcast): void => {
       const jsonlPath = findActiveJsonlByCwd(session.cwd) ?? findJsonlPath(session.id);
       if (!jsonlPath) continue;
 
-      const ctx = tailReadContext(jsonlPath);
+      const ctx = await tailReadContext(jsonlPath);
       if (ctx !== null && ctx !== session.lastInputTokens) {
         const ctxPct = Math.round((ctx / getMaxContext(session.model)) * 100);
         db.update(sessions)
@@ -390,6 +398,10 @@ export const scanJsonlSessions = async (broadcast: Broadcast): Promise<void> => 
  * @author Subash Karki
  */
 export const startPeriodicRescan = (broadcast: Broadcast): void => {
+  // Track rescan attempts per session — stop retrying after MAX_RESCAN_ATTEMPTS
+  const rescanAttempts = new Map<string, number>();
+  const MAX_RESCAN_ATTEMPTS = 5;
+
   const rescan = async () => {
     // Find sessions with 0 input tokens that might have JSONL data now
     const emptySessions = db
@@ -401,17 +413,33 @@ export const startPeriodicRescan = (broadcast: Broadcast): void => {
     let enrichedCount = 0;
 
     for (const session of emptySessions) {
+      // Skip sessions that have exceeded retry limit
+      const attempts = rescanAttempts.get(session.id) ?? 0;
+      if (attempts >= MAX_RESCAN_ATTEMPTS) continue;
+
       const jsonlPath = findActiveJsonlByCwd(session.cwd) ?? findJsonlPath(session.id);
-      if (!jsonlPath) continue;
+      if (!jsonlPath) {
+        rescanAttempts.set(session.id, attempts + 1);
+        continue;
+      }
 
       // Check file has content (>100 bytes to skip nearly-empty files)
       try {
         const stat = statSync(jsonlPath);
-        if (stat.size < 100) continue;
-      } catch { continue; }
+        if (stat.size < 100) {
+          rescanAttempts.set(session.id, attempts + 1);
+          continue;
+        }
+      } catch {
+        rescanAttempts.set(session.id, attempts + 1);
+        continue;
+      }
 
       const acc = await parseJsonlFile(jsonlPath);
-      if (acc.messageCount === 0) continue;
+      if (acc.messageCount === 0) {
+        rescanAttempts.set(session.id, attempts + 1);
+        continue;
+      }
 
       const costMicros = calculateCostMicros(acc);
 
@@ -434,6 +462,8 @@ export const startPeriodicRescan = (broadcast: Broadcast): void => {
         .where(eq(sessions.id, session.id))
         .run();
 
+      // Success — clear retry counter
+      rescanAttempts.delete(session.id);
       enrichedCount++;
     }
 
