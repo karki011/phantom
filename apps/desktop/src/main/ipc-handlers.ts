@@ -4,10 +4,11 @@
  * Future: theme switching, settings, direct Hono calls bypassing HTTP.
  * @author Subash Karki
  */
-import { ipcMain, dialog, shell, BrowserWindow } from 'electron';
+import { app, ipcMain, dialog, shell, BrowserWindow } from 'electron';
+import { setAllowQuit } from './lifecycle.js';
 import { execFile } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, extname } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -248,5 +249,45 @@ export const registerIpcHandlers = (): void => {
     } catch { /* skip */ }
 
     return results;
+  });
+
+  /** Scan workspace source files for Monaco Go to Definition support */
+  ipcMain.handle('phantom:scan-source-files', (_e, repoPath: string) => {
+    const results: { path: string; content: string }[] = [];
+    const MAX_FILES = 500;
+    const MAX_FILE_SIZE = 200 * 1024; // 200KB per file
+    const SKIP_DIRS = new Set([
+      'node_modules', 'dist', 'build', '.git', '.next',
+      'coverage', '.turbo', '.cache', '.output', '__pycache__',
+    ]);
+    const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx']);
+
+    function walk(dir: string, relBase: string): void {
+      if (results.length >= MAX_FILES) return;
+      let entries: string[];
+      try { entries = readdirSync(dir); } catch { return; }
+      for (const entry of entries) {
+        if (results.length >= MAX_FILES) return;
+        const absPath = join(dir, entry);
+        const relPath = relBase ? `${relBase}/${entry}` : entry;
+        try {
+          const stat = statSync(absPath);
+          if (stat.isDirectory()) {
+            if (!SKIP_DIRS.has(entry)) walk(absPath, relPath);
+          } else if (SOURCE_EXTS.has(extname(entry).toLowerCase()) && stat.size <= MAX_FILE_SIZE) {
+            results.push({ path: relPath, content: readFileSync(absPath, 'utf-8') });
+          }
+        } catch { /* skip unreadable */ }
+      }
+    }
+
+    walk(repoPath, '');
+    return results;
+  });
+
+  /** Quit the app — called by shutdown ceremony after cleanup completes */
+  ipcMain.handle('phantom:quit', () => {
+    setAllowQuit(true);
+    app.quit();
   });
 };

@@ -6,6 +6,7 @@
 import { app, BrowserWindow, nativeImage, shell } from 'electron';
 import { join } from 'node:path';
 import { is } from '@electron-toolkit/utils';
+import { allowQuit } from './lifecycle.js';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -45,6 +46,14 @@ export const createWindow = (): void => {
   mainWindow.on('ready-to-show', () => {
     mainWindow?.maximize();
     mainWindow?.show();
+  });
+
+  // Intercept window close — show shutdown ceremony instead of instant close
+  mainWindow.on('close', (event) => {
+    if (!allowQuit()) {
+      event.preventDefault();
+      mainWindow?.webContents.send('phantom:initiate-shutdown');
+    }
   });
 
   // Open external links in browser

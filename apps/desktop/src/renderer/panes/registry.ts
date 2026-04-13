@@ -25,6 +25,9 @@ const ChatPane = lazy(() =>
 const DiffPane = lazy(() =>
   import('@phantom-os/editor').then((m) => ({ default: m.DiffPane })),
 );
+const JournalPane = lazy(() =>
+  import('../components/JournalPane').then((m) => ({ default: m.JournalPane })),
+);
 
 const Loading = () =>
   createElement(
@@ -100,6 +103,16 @@ export const paneDefinitions: Record<string, PaneDefinition> = {
       ),
     defaultTitle: 'Diff',
   },
+  journal: {
+    kind: 'journal',
+    title: 'Journal',
+    icon: '📅',
+    render: (_pane: Pane) =>
+      createElement(Suspense, { fallback: createElement(Loading) },
+        createElement(JournalPane),
+      ),
+    defaultTitle: 'Journal',
+  },
   'workspace-home': {
     kind: 'workspace-home',
     title: 'Home',
@@ -120,4 +133,5 @@ export const paneMenu = [
   { kind: 'terminal', label: 'Terminal', icon: '▶' },
   { kind: 'editor', label: 'Editor', icon: '📝' },
   { kind: 'chat', label: 'Chat', icon: '💬' },
+  { kind: 'journal', label: 'Journal', icon: '📅' },
 ];

@@ -111,16 +111,24 @@ export const clearFileTreeAtom = atom(null, (_get, set) => {
 // Right sidebar active tab
 // ---------------------------------------------------------------------------
 
-export const rightSidebarTabAtom = atomWithStorage<'files' | 'changes'>(
+export const rightSidebarTabAtom = atomWithStorage<'files' | 'changes' | 'activity'>(
   'phantom-right-sidebar-tab',
   'files',
 );
 
 // ---------------------------------------------------------------------------
-// Git changes count (written by ChangesView, read by RightSidebar tabs)
+// Git status for the active worktree
+// Owned by RightSidebar (always mounted) so the badge stays in sync
+// even when the Changes tab is inactive and ChangesView is unmounted.
 // ---------------------------------------------------------------------------
 
-export const gitChangesCountAtom = atom(0);
+export const gitStatusAtom = atom<import('../lib/api').GitStatusResult | null>(null);
+
+/** Derived count — drives the Changes tab badge */
+export const gitChangesCountAtom = atom((get) => {
+  const status = get(gitStatusAtom);
+  return status?.files.length ?? 0;
+});
 
 // ---------------------------------------------------------------------------
 // Root file count (derived from file tree root entries)

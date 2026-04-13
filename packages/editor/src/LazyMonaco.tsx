@@ -109,6 +109,21 @@ export async function configureMonacoForWorkspace(repoPath: string): Promise<voi
       diagnosticCodesToIgnore: [2307],
     });
   }
+
+  // Phase 3: Load project source files as models for Go to Definition
+  const sourceFiles = await window.phantomOS.invoke(
+    'phantom:scan-source-files', repoPath,
+  ) as { path: string; content: string }[] | null;
+
+  if (sourceFiles && sourceFiles.length > 0) {
+    for (const { path, content } of sourceFiles) {
+      const uri = monaco.Uri.parse(`file:///${path}`);
+      // Only create model if it doesn't already exist (e.g. already open in editor)
+      if (!monaco.editor.getModel(uri)) {
+        monaco.editor.createModel(content, undefined, uri);
+      }
+    }
+  }
 }
 
 const MonacoEditor = lazy(() =>

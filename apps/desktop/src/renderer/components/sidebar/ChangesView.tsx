@@ -3,15 +3,23 @@
  * Shows staged and unstaged files with stage/unstage actions and commit input.
  * @author Subash Karki
  */
-import { Menu, ScrollArea, Text, Textarea, Tooltip } from '@mantine/core';
-import { useAtomValue, useSetAtom } from 'jotai';
-import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw, Plus, Minus, Check, ArrowUp, ArrowDown, Undo2, MoreVertical, RotateCcw, Archive, ArchiveRestore, Download, ClipboardCopy, ExternalLink } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { Menu, ScrollArea, Skeleton, Text, Textarea, Tooltip } from '@mantine/core';
+import { useAtomValue, useSetAtom, useStore } from 'jotai';
+import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw, Plus, Minus, Check, ArrowUp, ArrowDown, Undo2, MoreVertical, RotateCcw, Archive, ArchiveRestore, Download, ClipboardCopy, ExternalLink, Sparkles, RotateCw, PenLine } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
+import { aiCommitFamily, addCommitGenAtom } from '../../atoms/aiCommit';
+import type { AiCommitState } from '../../atoms/aiCommit';
 import { activeWorktreeAtom } from '../../atoms/worktrees';
-import { gitChangesCountAtom, selectedFileAtom } from '../../atoms/fileExplorer';
-import type { GitFileChange, GitStatusResult } from '../../lib/api';
-import { fetchApi, getGitStatus, gitStage, gitUnstage, gitStageAll, gitCommit, gitPush, gitPull, gitDiscard, gitClean, gitUndoCommit, gitStash, gitStashPop, gitFetch } from '../../lib/api';
+import { gitStatusAtom, selectedFileAtom } from '../../atoms/fileExplorer';
+import type { GitFileChange } from '../../lib/api';
+import { fetchApi, gitStage, gitUnstage, gitStageAll, gitCommit, gitPush, gitPull, gitDiscard, gitClean, gitUndoCommit, gitStash, gitStashPop, gitFetch, gitGenerateCommitMsg, gitCancelCommitMsg } from '../../lib/api';
+import { showSystemNotification } from '../notifications/SystemToast';
+
+const showCommitError = (msg: string) => {
+  const clean = msg.replace(/^git commit failed:\s*/i, '');
+  showSystemNotification('Git Error', clean, 'warning');
+};
 
 const STATUS_CONFIG = {
   modified: { label: 'Modified', icon: FilePen, color: 'var(--phantom-accent-gold, #f59e0b)' },
@@ -175,82 +183,72 @@ function FileRow({ file, worktreeId, onStage, onDiscard }: {
 
 export function ChangesView() {
   const worktree = useAtomValue(activeWorktreeAtom);
-  const setChangesCount = useSetAtom(gitChangesCountAtom);
-  const [status, setStatus] = useState<GitStatusResult | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Git status is polled by RightSidebar (always mounted) and stored in
+  // gitStatusAtom. We read it here — no local polling needed.
+  const status = useAtomValue(gitStatusAtom);
   const [commitMsg, setCommitMsg] = useState('');
   const [committing, setCommitting] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [pulling, setPulling] = useState(false);
   const [pushFeedback, setPushFeedback] = useState<'success' | 'error' | null>(null);
   const [pullFeedback, setPullFeedback] = useState<'success' | 'error' | null>(null);
+  const [commitMode, setCommitMode] = useState<'ai' | 'manual'>('ai');
+  const store = useStore();
+  const addCommitGen = useSetAtom(addCommitGenAtom);
+  const aiCommit: AiCommitState = useAtomValue(
+    worktree ? aiCommitFamily(worktree.id) : aiCommitFamily('__none__'),
+  );
+  const [aiEditMsg, setAiEditMsg] = useState('');
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const refresh = useCallback(() => {
-    if (!worktree) return;
-    setLoading(true);
-    getGitStatus(worktree.id)
-      .then(setStatus)
-      .catch(() => setStatus(null))
-      .finally(() => setLoading(false));
+  // Clear commit message and AI state when switching worktrees
+  useEffect(() => {
+    setCommitMsg('');
+    setCommitMode('ai');
+    setAiEditMsg('');
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
   }, [worktree?.id]);
 
-  // Refresh + sync GitStatusCard on WorktreeHome (only for user actions, not polling)
+  // Sync AI-generated message to editable field when ready
+  useEffect(() => {
+    if (aiCommit.phase === 'ready' && aiCommit.message) {
+      setAiEditMsg(aiCommit.message);
+    }
+  }, [aiCommit.phase, aiCommit.message]);
+
+  // Trigger refresh in the parent poller + WorktreeHome git card
   const refreshAndSync = useCallback(() => {
-    refresh();
     window.dispatchEvent(new Event('phantom:git-refresh'));
-  }, [refresh]);
-
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, 10_000);
-    return () => clearInterval(interval);
-  }, [refresh]);
-
-  // Background fetch every 60s so ahead/behind counts stay fresh
-  useEffect(() => {
-    if (!worktree) return;
-    // Fetch once on mount, then every 60s
-    gitFetch(worktree.id).catch(() => {});
-    const fetchInterval = setInterval(() => {
-      gitFetch(worktree.id).catch(() => {});
-    }, 60_000);
-    return () => clearInterval(fetchInterval);
-  }, [worktree?.id]);
+  }, []);
 
   const stagedFiles = status?.files.filter((f) => f.staged) ?? [];
   const unstagedFiles = status?.files.filter((f) => !f.staged) ?? [];
   const totalChanges = status?.files.length ?? 0;
 
-  // Sync count to shared atom so tab badge can read it
-  useEffect(() => {
-    setChangesCount(totalChanges);
-  }, [totalChanges, setChangesCount]);
-
   const handleStage = useCallback(async (path: string) => {
     if (!worktree) return;
-    await gitStage(worktree.id, [path]);
+    try { await gitStage(worktree.id, [path]); } catch (err: any) { showCommitError(err?.message ?? 'Stage failed'); }
     refreshAndSync();
   }, [worktree?.id, refreshAndSync]);
 
   const handleUnstage = useCallback(async (path: string) => {
     if (!worktree) return;
-    await gitUnstage(worktree.id, [path]);
+    try { await gitUnstage(worktree.id, [path]); } catch (err: any) { showCommitError(err?.message ?? 'Unstage failed'); }
     refreshAndSync();
   }, [worktree?.id, refreshAndSync]);
 
   const handleDiscard = useCallback(async (path: string, isUntracked: boolean) => {
     if (!worktree) return;
-    if (isUntracked) {
-      await gitClean(worktree.id, [path]);
-    } else {
-      await gitDiscard(worktree.id, [path]);
-    }
+    try {
+      if (isUntracked) { await gitClean(worktree.id, [path]); }
+      else { await gitDiscard(worktree.id, [path]); }
+    } catch (err: any) { showCommitError(err?.message ?? 'Discard failed'); }
     refreshAndSync();
   }, [worktree?.id, refreshAndSync]);
 
   const handleStageAll = useCallback(async () => {
     if (!worktree) return;
-    await gitStageAll(worktree.id);
+    try { await gitStageAll(worktree.id); } catch (err: any) { showCommitError(err?.message ?? 'Stage all failed'); }
     refreshAndSync();
   }, [worktree?.id, refreshAndSync]);
 
@@ -261,8 +259,9 @@ export function ChangesView() {
       await gitCommit(worktree.id, commitMsg.trim());
       setCommitMsg('');
       refreshAndSync();
-    } catch { /* refresh shows current state */ }
-    finally { setCommitting(false); }
+    } catch (err: any) {
+      showCommitError(err?.message ?? 'Commit failed');
+    } finally { setCommitting(false); }
   }, [worktree?.id, commitMsg, stagedFiles.length, refreshAndSync]);
 
   const handlePush = useCallback(async () => {
@@ -299,19 +298,19 @@ export function ChangesView() {
 
   const handleUndoCommit = useCallback(async () => {
     if (!worktree) return;
-    await gitUndoCommit(worktree.id);
+    try { await gitUndoCommit(worktree.id); } catch (err: any) { showCommitError(err?.message ?? 'Undo failed'); }
     refreshAndSync();
   }, [worktree?.id, refreshAndSync]);
 
   const handleStash = useCallback(async () => {
     if (!worktree) return;
-    await gitStash(worktree.id);
+    try { await gitStash(worktree.id); } catch (err: any) { showCommitError(err?.message ?? 'Stash failed'); }
     refreshAndSync();
   }, [worktree?.id, refreshAndSync]);
 
   const handleStashPop = useCallback(async () => {
     if (!worktree) return;
-    await gitStashPop(worktree.id);
+    try { await gitStashPop(worktree.id); } catch (err: any) { showCommitError(err?.message ?? 'Stash pop failed'); }
     refreshAndSync();
   }, [worktree?.id, refreshAndSync]);
 
@@ -320,6 +319,43 @@ export function ChangesView() {
     await gitFetch(worktree.id);
     refreshAndSync();
   }, [worktree?.id, refreshAndSync]);
+
+  const handleGenerateMsg = useCallback(async () => {
+    if (!worktree) return;
+    // Set atom to generating state
+    store.set(aiCommitFamily(worktree.id), { phase: 'generating', message: null, error: null });
+    addCommitGen(worktree.id);
+    setAiEditMsg('');
+
+    // Client-side timeout (45s fallback)
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      const current = store.get(aiCommitFamily(worktree.id));
+      if (current.phase === 'generating') {
+        store.set(aiCommitFamily(worktree.id), { phase: 'error', message: null, error: 'Generation timed out' });
+      }
+    }, 45_000);
+
+    try {
+      await gitGenerateCommitMsg(worktree.id);
+    } catch (err: any) {
+      store.set(aiCommitFamily(worktree.id), { phase: 'error', message: null, error: err?.message ?? 'Failed to start generation' });
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    }
+  }, [worktree?.id, store, addCommitGen]);
+
+  const handleAiCommit = useCallback(async () => {
+    if (!worktree || !aiEditMsg.trim() || stagedFiles.length === 0) return;
+    setCommitting(true);
+    try {
+      await gitCommit(worktree.id, aiEditMsg.trim());
+      setAiEditMsg('');
+      store.set(aiCommitFamily(worktree.id), { phase: 'idle', message: null, error: null });
+      refreshAndSync();
+    } catch (err: any) {
+      showCommitError(err?.message ?? 'Commit failed');
+    } finally { setCommitting(false); }
+  }, [worktree?.id, aiEditMsg, stagedFiles.length, refreshAndSync, store]);
 
   if (!worktree) {
     return (
@@ -370,8 +406,8 @@ export function ChangesView() {
         <Tooltip label="Refresh status" position="bottom" withArrow fz="xs">
           <RefreshCw
             size={11}
-            style={{ color: 'var(--phantom-text-muted)', cursor: 'pointer', animation: loading ? 'spin 1s linear infinite' : 'none' }}
-            onClick={refresh}
+            style={{ color: 'var(--phantom-text-muted)', cursor: 'pointer' }}
+            onClick={refreshAndSync}
           />
         </Tooltip>
         <Menu position="bottom-end" withArrow shadow="md" width={180}>
@@ -418,7 +454,17 @@ export function ChangesView() {
       {/* File list */}
       <ScrollArea style={{ flex: 1 }} scrollbarSize={6}>
         <div style={{ padding: '4px 0' }}>
-          {totalChanges === 0 && status ? (
+          {!status ? (
+            <div style={{ padding: '8px 12px' }}>
+              <Skeleton height={12} width="40%" mb={10} />
+              <Skeleton height={14} mb={6} />
+              <Skeleton height={14} mb={6} />
+              <Skeleton height={14} mb={6} />
+              <Skeleton height={12} width="40%" mb={10} mt={12} />
+              <Skeleton height={14} mb={6} />
+              <Skeleton height={14} mb={6} />
+            </div>
+          ) : totalChanges === 0 ? (
             <Text fz="0.75rem" c="var(--phantom-text-muted)" ta="center" py="xl" px="sm">
               Working tree clean
             </Text>
@@ -478,54 +524,267 @@ export function ChangesView() {
       {/* Commit area */}
       {stagedFiles.length > 0 && (
         <div style={{ borderTop: '1px solid var(--phantom-border-subtle)', padding: 8, flexShrink: 0 }}>
-          <Textarea
-            placeholder="Commit message..."
-            value={commitMsg}
-            onChange={(e) => setCommitMsg(e.currentTarget.value)}
-            minRows={2}
-            maxRows={4}
-            autosize
-            styles={{
-              input: {
-                fontSize: '0.75rem',
-                backgroundColor: 'var(--phantom-surface-base, #1a1a1a)',
-                border: '1px solid var(--phantom-border-subtle)',
-                color: 'var(--phantom-text-primary)',
-              },
-            }}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                e.preventDefault();
-                handleCommit();
-              }
-            }}
-          />
-          <div
-            onClick={handleCommit}
-            style={{
-              marginTop: 6,
-              padding: '5px 0',
-              textAlign: 'center',
-              borderRadius: 4,
-              cursor: commitMsg.trim() && !committing ? 'pointer' : 'default',
-              backgroundColor: commitMsg.trim() && !committing ? 'var(--phantom-status-success, #22c55e)' : 'var(--phantom-surface-elevated, #2a2a2a)',
-              color: commitMsg.trim() && !committing ? '#000' : 'var(--phantom-text-muted)',
-              fontSize: '0.73rem',
-              fontWeight: 600,
-              transition: 'all 150ms ease',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-            }}
-          >
-            <Check size={12} />
-            {committing ? 'Committing...' : `Commit (${stagedFiles.length} file${stagedFiles.length !== 1 ? 's' : ''})`}
-          </div>
+
+          {/* ── AI Mode: Idle ── */}
+          {commitMode === 'ai' && aiCommit.phase === 'idle' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div
+                onClick={handleGenerateMsg}
+                style={{
+                  padding: '7px 0',
+                  textAlign: 'center',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  background: 'linear-gradient(135deg, var(--phantom-accent-cyan, #00d4ff) 0%, #0891b2 100%)',
+                  color: '#000',
+                  fontSize: '0.73rem',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  transition: 'opacity 150ms ease',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.85'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+              >
+                <Sparkles size={13} />
+                AI Commit
+              </div>
+              <Text
+                fz="0.65rem"
+                c="var(--phantom-text-muted)"
+                ta="center"
+                style={{ cursor: 'pointer' }}
+                onClick={() => setCommitMode('manual')}
+              >
+                or write manually
+              </Text>
+            </div>
+          )}
+
+          {/* ── AI Mode: Generating ── */}
+          {commitMode === 'ai' && aiCommit.phase === 'generating' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, animation: 'ai-fadein 300ms ease-out' }}>
+              {/* Shimmer bar */}
+              <div style={{
+                height: 3,
+                borderRadius: 2,
+                overflow: 'hidden',
+                backgroundColor: 'var(--phantom-surface-elevated, #2a2a2a)',
+              }}>
+                <div style={{
+                  height: '100%',
+                  width: '40%',
+                  borderRadius: 2,
+                  background: 'linear-gradient(90deg, transparent, var(--phantom-accent-cyan, #00d4ff), transparent)',
+                  animation: 'ai-shimmer 1.5s ease-in-out infinite',
+                }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <Sparkles size={12} style={{ color: 'var(--phantom-accent-cyan, #00d4ff)', animation: 'ai-breathe 2s ease-in-out infinite' }} />
+                <Text fz="0.72rem" c="var(--phantom-accent-cyan, #00d4ff)" fw={500}>
+                  Generating commit message...
+                </Text>
+              </div>
+              <Text
+                fz="0.6rem"
+                c="var(--phantom-text-muted)"
+                ta="center"
+                style={{ cursor: 'pointer' }}
+                onClick={() => {
+                  if (worktree) {
+                    gitCancelCommitMsg(worktree.id).catch(() => {});
+                    store.set(aiCommitFamily(worktree.id), { phase: 'idle', message: null, error: null });
+                  }
+                  if (timeoutRef.current) clearTimeout(timeoutRef.current);
+                }}
+              >
+                Cancel
+              </Text>
+            </div>
+          )}
+
+          {/* ── AI Mode: Ready ── */}
+          {commitMode === 'ai' && aiCommit.phase === 'ready' && (
+            <div style={{ animation: 'ai-fadein 400ms ease-out' }}>
+              <Textarea
+                placeholder="Edit commit message..."
+                value={aiEditMsg}
+                onChange={(e) => setAiEditMsg(e.currentTarget.value)}
+                minRows={6}
+                maxRows={16}
+                autosize
+                styles={{
+                  input: {
+                    fontSize: '0.75rem',
+                    backgroundColor: 'var(--phantom-surface-base, #1a1a1a)',
+                    border: '1px solid var(--phantom-accent-cyan, #00d4ff)',
+                    color: 'var(--phantom-text-primary)',
+                    boxShadow: '0 0 6px rgba(0, 212, 255, 0.15)',
+                    resize: 'vertical',
+                  },
+                }}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAiCommit();
+                  }
+                }}
+              />
+              <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+                <div
+                  onClick={handleAiCommit}
+                  style={{
+                    flex: 1,
+                    padding: '5px 0',
+                    textAlign: 'center',
+                    borderRadius: 4,
+                    cursor: aiEditMsg.trim() && !committing ? 'pointer' : 'default',
+                    backgroundColor: aiEditMsg.trim() && !committing ? 'var(--phantom-status-success, #22c55e)' : 'var(--phantom-surface-elevated, #2a2a2a)',
+                    color: aiEditMsg.trim() && !committing ? '#000' : 'var(--phantom-text-muted)',
+                    fontSize: '0.73rem',
+                    fontWeight: 600,
+                    transition: 'all 150ms ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Check size={12} />
+                  {committing ? 'Committing...' : `Commit (${stagedFiles.length})`}
+                </div>
+                <Tooltip label="Regenerate" position="top" withArrow fz="xs">
+                  <div
+                    onClick={handleGenerateMsg}
+                    style={{
+                      padding: '5px 8px',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      backgroundColor: 'var(--phantom-surface-elevated, #2a2a2a)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      transition: 'background-color 150ms ease',
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-card, #333)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated, #2a2a2a)'; }}
+                  >
+                    <RotateCw size={12} style={{ color: 'var(--phantom-accent-cyan, #00d4ff)' }} />
+                  </div>
+                </Tooltip>
+              </div>
+            </div>
+          )}
+
+          {/* ── AI Mode: Error ── */}
+          {commitMode === 'ai' && aiCommit.phase === 'error' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, animation: 'ai-fadein 300ms ease-out' }}>
+              <Text fz="0.7rem" c="var(--phantom-status-error, #ef4444)" ta="center">
+                {aiCommit.error ?? 'Generation failed'}
+              </Text>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                <Text
+                  fz="0.65rem"
+                  c="var(--phantom-accent-cyan, #00d4ff)"
+                  style={{ cursor: 'pointer' }}
+                  onClick={handleGenerateMsg}
+                >
+                  Retry
+                </Text>
+                <Text fz="0.65rem" c="var(--phantom-text-muted)">|</Text>
+                <Text
+                  fz="0.65rem"
+                  c="var(--phantom-text-muted)"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setCommitMode('manual')}
+                >
+                  Write manually
+                </Text>
+              </div>
+            </div>
+          )}
+
+          {/* ── Manual Mode ── */}
+          {commitMode === 'manual' && (
+            <>
+              <Textarea
+                placeholder="Commit message..."
+                value={commitMsg}
+                onChange={(e) => setCommitMsg(e.currentTarget.value)}
+                minRows={6}
+                maxRows={16}
+                autosize
+                styles={{
+                  input: {
+                    fontSize: '0.75rem',
+                    backgroundColor: 'var(--phantom-surface-base, #1a1a1a)',
+                    border: '1px solid var(--phantom-border-subtle)',
+                    color: 'var(--phantom-text-primary)',
+                    resize: 'vertical',
+                  },
+                }}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    handleCommit();
+                  }
+                }}
+              />
+              <div
+                onClick={handleCommit}
+                style={{
+                  marginTop: 6,
+                  padding: '5px 0',
+                  textAlign: 'center',
+                  borderRadius: 4,
+                  cursor: commitMsg.trim() && !committing ? 'pointer' : 'default',
+                  backgroundColor: commitMsg.trim() && !committing ? 'var(--phantom-status-success, #22c55e)' : 'var(--phantom-surface-elevated, #2a2a2a)',
+                  color: commitMsg.trim() && !committing ? '#000' : 'var(--phantom-text-muted)',
+                  fontSize: '0.73rem',
+                  fontWeight: 600,
+                  transition: 'all 150ms ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <Check size={12} />
+                {committing ? 'Committing...' : `Commit (${stagedFiles.length} file${stagedFiles.length !== 1 ? 's' : ''})`}
+              </div>
+              <Text
+                fz="0.65rem"
+                c="var(--phantom-accent-cyan, #00d4ff)"
+                ta="center"
+                mt={4}
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                onClick={() => { setCommitMode('ai'); if (worktree) store.set(aiCommitFamily(worktree.id), { phase: 'idle', message: null, error: null }); }}
+              >
+                <Sparkles size={10} />
+                Use AI instead
+              </Text>
+            </>
+          )}
         </div>
       )}
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes ai-shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(350%); }
+        }
+        @keyframes ai-breathe {
+          0%, 100% { opacity: 0.5; filter: drop-shadow(0 0 2px var(--phantom-accent-cyan, #00d4ff)); }
+          50% { opacity: 1; filter: drop-shadow(0 0 8px var(--phantom-accent-cyan, #00d4ff)); }
+        }
+        @keyframes ai-fadein {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }

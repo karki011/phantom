@@ -4,9 +4,11 @@
  *
  * @author Subash Karki
  */
-import { useSetAtom } from 'jotai';
+import { useSetAtom, useStore } from 'jotai';
 import { useEffect } from 'react';
 
+import { aiCommitFamily, removeCommitGenAtom } from '../atoms/aiCommit';
+import { removePrCreatingAtom } from '../atoms/activity';
 import { refreshAchievementsAtom } from '../atoms/achievements';
 import { refreshHunterAtom } from '../atoms/hunter';
 import { pushFeedEventAtom } from '../atoms/liveFeed';
@@ -15,6 +17,16 @@ import {
   refreshRecentSessionsAtom,
 } from '../atoms/sessions';
 import { sseConnectionAtom, systemNotificationsAtom } from '../atoms/system';
+import { showSystemNotification } from '../components/notifications/SystemToast';
+import { appendJournalLog } from '../lib/api';
+
+/** Append a line to today's journal work log (fire-and-forget) */
+const logToJournal = (line: string): void => {
+  const d = new Date();
+  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  appendJournalLog(date, `${time} · ${line}`).catch(() => {});
+};
 
 const SSE_URL = '/events';
 
@@ -31,6 +43,9 @@ export const useSystemEvents = (): void => {
   const dispatchNotification = useSetAtom(systemNotificationsAtom);
   const pushFeedEvent = useSetAtom(pushFeedEventAtom);
   const setSseConnection = useSetAtom(sseConnectionAtom);
+  const removePrCreating = useSetAtom(removePrCreatingAtom);
+  const removeCommitGen = useSetAtom(removeCommitGenAtom);
+  const store = useStore();
 
   useEffect(() => {
     let source: EventSource | null = null;
@@ -67,6 +82,7 @@ export const useSystemEvents = (): void => {
           const sessionData = parsed.data as Record<string, unknown> | undefined;
           if (eventType === 'session:new') {
             const sessionName = String(sessionData?.repo ?? sessionData?.name ?? 'unknown');
+            logToJournal(`[${sessionName}] Session started`);
             pushFeedEvent({
               id: `feed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               type: eventType,
@@ -76,6 +92,11 @@ export const useSystemEvents = (): void => {
             });
           } else if (eventType === 'session:end') {
             const sessionId = String(sessionData?.id ?? '').slice(0, 8);
+            const tokens = Number(sessionData?.inputTokens ?? 0) + Number(sessionData?.outputTokens ?? 0);
+            const costMicros = Number(sessionData?.estimatedCostMicros ?? 0);
+            const costStr = costMicros > 0 ? `, $${(costMicros / 1_000_000).toFixed(2)}` : '';
+            const tokenStr = tokens > 0 ? `, ${tokens > 1000 ? `${(tokens / 1000).toFixed(0)}K` : tokens} tokens` : '';
+            logToJournal(`Session ended (${sessionId})${tokenStr}${costStr}`);
             pushFeedEvent({
               id: `feed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               type: eventType,
@@ -181,6 +202,68 @@ export const useSystemEvents = (): void => {
             },
           });
         }
+
+        // PR creation events (background Claude)
+        if (eventType === 'pr:success') {
+          const data = parsed.data as { worktreeId?: string; worktreeName?: string; output?: string } | undefined;
+          if (data?.worktreeId) {
+            removePrCreating(data.worktreeId);
+          }
+          // Try to extract PR URL from Claude's output (usually the last URL in output)
+          const output = data?.output ?? '';
+          const urlMatch = output.match(/https:\/\/github\.com\/[^\s)]+\/pull\/\d+/);
+          const prUrl = urlMatch ? urlMatch[0] : null;
+          const name = data?.worktreeName ?? 'unknown';
+          logToJournal(`[${name}] PR created${prUrl ? `: ${prUrl}` : ''}`);
+          showSystemNotification(
+            'PR Created',
+            prUrl ? `${name}: ${prUrl}` : `${name}: PR created successfully`,
+            'success',
+          );
+          return;
+        }
+
+        if (eventType === 'pr:error') {
+          const data = parsed.data as { worktreeId?: string; worktreeName?: string; error?: string } | undefined;
+          if (data?.worktreeId) {
+            removePrCreating(data.worktreeId);
+          }
+          const name = data?.worktreeName ?? 'unknown';
+          const error = data?.error ?? 'Unknown error';
+          showSystemNotification(
+            'PR Failed',
+            `${name}: ${error}`,
+            'warning',
+          );
+          return;
+        }
+
+        // AI commit message generation events
+        if (eventType === 'commit-msg:ready') {
+          const data = parsed.data as { worktreeId?: string; message?: string } | undefined;
+          if (data?.worktreeId) {
+            removeCommitGen(data.worktreeId);
+            store.set(aiCommitFamily(data.worktreeId), {
+              phase: 'ready',
+              message: data.message ?? '',
+              error: null,
+            });
+          }
+          return;
+        }
+
+        if (eventType === 'commit-msg:error') {
+          const data = parsed.data as { worktreeId?: string; error?: string } | undefined;
+          if (data?.worktreeId) {
+            removeCommitGen(data.worktreeId);
+            store.set(aiCommitFamily(data.worktreeId), {
+              phase: 'error',
+              message: null,
+              error: data.error ?? 'Generation failed',
+            });
+          }
+          return;
+        }
       };
 
       source.onerror = () => {
@@ -210,5 +293,8 @@ export const useSystemEvents = (): void => {
     dispatchNotification,
     pushFeedEvent,
     setSseConnection,
+    removePrCreating,
+    removeCommitGen,
+    store,
   ]);
 };

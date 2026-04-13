@@ -22,7 +22,7 @@ import {
 import { usePaneStore } from '@phantom-os/panes';
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
-  AlertTriangle, FileCode, GitBranch,
+  AlertTriangle, CalendarDays, FileCode, GitBranch,
   MessageSquare, Pencil, Play, Plus, Sparkles,
   Star, Terminal as TerminalIcon, Trash2,
 } from 'lucide-react';
@@ -99,6 +99,7 @@ function QuickActionCard({
         border: '1px solid var(--phantom-border-subtle)',
         transition: 'border-color 0.2s, box-shadow 0.2s',
         minHeight: '4.5rem',
+        width: 120,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -123,7 +124,8 @@ function QuickActionCard({
 
 type GitStatusState = 'loading' | 'unavailable' | 'error' | GitStatus;
 
-function GitStatusCard({ state }: { state: GitStatusState }) {
+/** Compact git status rendered inline (no Paper wrapper) — used inside the Tools card */
+function InlineGitStatus({ state }: { state: GitStatusState }) {
   if (state === 'loading' || state === 'unavailable' || state === 'error') {
     const message =
       state === 'loading'
@@ -132,23 +134,22 @@ function GitStatusCard({ state }: { state: GitStatusState }) {
           ? 'No git repository'
           : 'Git status unavailable';
     return (
-      <Paper p="md" bg="var(--phantom-surface-card)" radius="md" style={{ border: '1px solid var(--phantom-border-subtle)' }}>
-        <Group gap="xs" mb="xs">
+      <Stack gap={4}>
+        <Group gap="xs">
           <GitBranch size={14} style={{ color: 'var(--phantom-text-muted)' }} />
           <Text fz="xs" fw={600} c="var(--phantom-text-secondary)">Git Status</Text>
         </Group>
         <Text fz="xs" c="var(--phantom-text-muted)">{message}</Text>
-      </Paper>
+      </Stack>
     );
   }
   const status = state;
-
   const isDirty = status.staged > 0 || status.modified > 0 || status.untracked > 0;
   const dotColor = isDirty ? 'var(--phantom-status-warning)' : 'var(--phantom-status-active)';
 
   return (
-    <Paper p="md" bg="var(--phantom-surface-card)" radius="md" style={{ border: '1px solid var(--phantom-border-subtle)' }}>
-      <Group gap="xs" mb="xs">
+    <Stack gap={4}>
+      <Group gap="xs">
         <GitBranch size={14} style={{ color: 'var(--phantom-accent-glow)' }} />
         <Text fz="xs" fw={600} c="var(--phantom-text-secondary)">Git Status</Text>
       </Group>
@@ -162,10 +163,10 @@ function GitStatusCard({ state }: { state: GitStatusState }) {
           <Text fz="xs" c="var(--phantom-status-warning)">{status.behind} behind</Text>
         )}
       </Group>
-      <Text fz="xs" c="var(--phantom-text-muted)" mt={4}>
+      <Text fz="xs" c="var(--phantom-text-muted)">
         {status.staged} staged &middot; {status.modified} modified &middot; {status.untracked} untracked
       </Text>
-    </Paper>
+    </Stack>
   );
 }
 
@@ -309,6 +310,7 @@ export function WorktreeHome() {
   const openEditor = useCallback(() => store.addPaneAsTab('editor', {} as Record<string, unknown>, 'Editor'), [store]);
   const openClaude = useCallback(() => store.addPaneAsTab('terminal', { cwd: worktree?.worktreePath, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>, 'Claude'), [store, worktree]);
   const openChat = useCallback(() => store.addPaneAsTab('chat', { cwd: worktree?.worktreePath } as Record<string, unknown>, 'Chat'), [store, worktree]);
+  const openJournal = useCallback(() => store.addPaneAsTab('journal', {} as Record<string, unknown>, 'Journal'), [store]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -335,12 +337,16 @@ export function WorktreeHome() {
             e.preventDefault();
             openTerminal();
             break;
+          case 'd':
+            e.preventDefault();
+            store.addPaneAsTab('journal', {} as Record<string, unknown>, 'Journal');
+            break;
         }
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [openClaude, openTerminal, openEditor, openChat, navigate]);
+  }, [openClaude, openTerminal, openEditor, openChat, navigate, store]);
 
   // Guard: worktree was deleted externally
   if (worktree && worktree.worktreeValid === false) {
@@ -374,92 +380,238 @@ export function WorktreeHome() {
 
   return (
     <div style={{ height: '100%', overflow: 'auto', padding: '24px' }}>
-      <Stack align="center" gap="lg" maw={1400} w="100%" mx="auto">
-        {/* Two-column layout: Recipes | Tools + Info */}
+      <div style={{ maxWidth: 1400, width: '100%', margin: '0 auto' }}>
+        {/* Setup status banners — full width */}
+        {setupStatus === 'running' && (
+          <Paper p="sm" mb="md" bg="color-mix(in srgb, var(--phantom-accent-glow) 10%, var(--phantom-surface-card))" radius="md" style={{ border: '1px solid var(--phantom-accent-glow)' }}>
+            <Group gap="xs">
+              <Loader size={14} color="var(--phantom-accent-glow)" />
+              <Text fz="xs" c="var(--phantom-accent-glow)">Installing dependencies...</Text>
+            </Group>
+          </Paper>
+        )}
+        {setupStatus === 'failed' && (
+          <Paper p="sm" mb="md" bg="color-mix(in srgb, var(--phantom-status-warning) 10%, var(--phantom-surface-card))" radius="md" style={{ border: '1px solid var(--phantom-status-warning)' }}>
+            <Text fz="xs" c="var(--phantom-status-warning)">Setup failed — check terminal for details</Text>
+          </Paper>
+        )}
+
+        {/* Free-flow dashboard cards */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(0, 3fr) minmax(240px, 2fr)',
-            gap: 'var(--mantine-spacing-lg)',
-            width: '100%',
-            alignItems: 'start',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: 16,
+            alignItems: 'stretch',
           }}
           className="phantom-home-grid"
         >
-          {/* LEFT COLUMN — Project Recipes */}
-          <Stack gap="md">
-            {setupStatus === 'running' && (
-              <Paper p="sm" bg="color-mix(in srgb, var(--phantom-accent-glow) 10%, var(--phantom-surface-card))" radius="md" style={{ border: '1px solid var(--phantom-accent-glow)' }}>
-                <Group gap="xs">
-                  <Loader size={14} color="var(--phantom-accent-glow)" />
-                  <Text fz="xs" c="var(--phantom-accent-glow)">Installing dependencies...</Text>
-                </Group>
-              </Paper>
-            )}
-            {setupStatus === 'failed' && (
-              <Paper p="sm" bg="color-mix(in srgb, var(--phantom-status-warning) 10%, var(--phantom-surface-card))" radius="md" style={{ border: '1px solid var(--phantom-status-warning)' }}>
-                <Text fz="xs" c="var(--phantom-status-warning)">Setup failed — check terminal for details</Text>
-              </Paper>
-            )}
-            {allRecipes.length > 0 && (
+          {/* Tools + Git Status Card — full width */}
+          <Paper
+            p="md"
+            bg="var(--phantom-surface-card)"
+            radius="md"
+            style={{
+              border: '1px solid var(--phantom-border-subtle)',
+              gridColumn: '1 / -1',
+              alignSelf: 'start',
+            }}
+          >
+            <Text fz="xs" fw={600} c="var(--phantom-text-muted)" tt="uppercase" mb="sm" style={{ letterSpacing: '0.08em' }}>
+              Tools
+            </Text>
+            <Group gap="sm" wrap="wrap" align="stretch" justify="center">
+              <QuickActionCard
+                icon={<TerminalIcon size={20} style={{ color: 'var(--phantom-accent-glow)' }} />}
+                label="Terminal"
+                shortcut="Ctrl+`"
+                onClick={openTerminal}
+              />
+              <QuickActionCard
+                icon={<FileCode size={20} style={{ color: 'var(--phantom-accent-glow)' }} />}
+                label="Editor"
+                shortcut="Ctrl+N"
+                onClick={openEditor}
+              />
+              <QuickActionCard
+                icon={<Sparkles size={20} style={{ color: 'var(--phantom-accent-gold)' }} />}
+                label="New Session"
+                shortcut="Ctrl+J"
+                onClick={openClaude}
+              />
+              <QuickActionCard
+                icon={<MessageSquare size={20} style={{ color: 'var(--phantom-accent-glow)' }} />}
+                label="Chat"
+                shortcut="Ctrl+K"
+                onClick={openChat}
+              />
+              <QuickActionCard
+                icon={<CalendarDays size={20} style={{ color: 'var(--phantom-accent-glow)' }} />}
+                label="Journal"
+                shortcut="Ctrl+D"
+                onClick={openJournal}
+              />
+              {/* Git Status — inline as a card in the same row */}
               <Paper
-                p="md"
+                p="sm"
                 bg="var(--phantom-surface-card)"
                 radius="md"
-                style={{ border: '1px solid var(--phantom-border-subtle)' }}
+                style={{
+                  border: '1px solid var(--phantom-border-subtle)',
+                  minHeight: '4.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
-                <Group gap="xs" mb="sm" justify="space-between">
-                  <Group gap="xs">
-                    <Text fz="xs" fw={600} c="var(--phantom-accent-glow)" tt="uppercase" style={{ letterSpacing: '0.08em' }}>
-                      {projectProfile?.type} · {projectProfile?.buildSystem}
-                    </Text>
-                    <Text fz="xs" c="var(--phantom-text-muted)">
-                      {allRecipes.length} commands
-                    </Text>
-                  </Group>
-                  <ActionIcon
-                    size="xs"
-                    variant="subtle"
-                    color="teal"
-                    onClick={() => setRecipeModal({ opened: true, mode: 'create' })}
-                    title="Create custom recipe"
-                    data-testid="create-recipe-button"
-                  >
-                    <Plus size={14} />
-                  </ActionIcon>
+                <InlineGitStatus state={gitStatusState} />
+              </Paper>
+            </Group>
+          </Paper>
+
+          {/* Recipes Card */}
+          {allRecipes.length > 0 && (
+            <Paper
+              p="md"
+              bg="var(--phantom-surface-card)"
+              radius="md"
+              style={{
+                border: '1px solid var(--phantom-border-subtle)',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <Group gap="xs" mb="sm" justify="space-between">
+                <Group gap="xs">
+                  <Text fz="xs" fw={600} c="var(--phantom-accent-glow)" tt="uppercase" style={{ letterSpacing: '0.08em' }}>
+                    {projectProfile?.type} · {projectProfile?.buildSystem}
+                  </Text>
+                  <Text fz="xs" c="var(--phantom-text-muted)">
+                    {allRecipes.length} commands
+                  </Text>
                 </Group>
+                <ActionIcon
+                  size="xs"
+                  variant="subtle"
+                  color="teal"
+                  onClick={() => setRecipeModal({ opened: true, mode: 'create' })}
+                  title="Create custom recipe"
+                  data-testid="create-recipe-button"
+                >
+                  <Plus size={14} />
+                </ActionIcon>
+              </Group>
 
-                <Tabs value={activeRecipeTab} onChange={setActiveRecipeTab}>
-                  <Tabs.List
-                    style={{
-                      borderBottom: '1px solid var(--phantom-border-subtle)',
-                      '--tabs-list-border-size': '0px',
-                    } as React.CSSProperties}
+              <Tabs value={activeRecipeTab} onChange={setActiveRecipeTab} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <Tabs.List
+                  style={{
+                    borderBottom: '1px solid var(--phantom-border-subtle)',
+                    '--tabs-list-border-size': '0px',
+                    flexShrink: 0,
+                  } as React.CSSProperties}
+                >
+                  <Tabs.Tab
+                    value="all"
+                    fz="xs"
+                    c={activeRecipeTab === 'all' ? 'var(--phantom-accent-glow)' : 'var(--phantom-text-muted)'}
+                    style={{ borderBottom: activeRecipeTab === 'all' ? '2px solid var(--phantom-accent-glow)' : 'none' }}
                   >
-                    <Tabs.Tab
-                      value="all"
-                      fz="xs"
-                      c={activeRecipeTab === 'all' ? 'var(--phantom-accent-glow)' : 'var(--phantom-text-muted)'}
-                      style={{ borderBottom: activeRecipeTab === 'all' ? '2px solid var(--phantom-accent-glow)' : 'none' }}
-                    >
-                      All ({allRecipes.length})
-                    </Tabs.Tab>
-                    <Tabs.Tab
-                      value="favorites"
-                      fz="xs"
-                      c={activeRecipeTab === 'favorites' ? 'var(--phantom-accent-glow)' : 'var(--phantom-text-muted)'}
-                      style={{ borderBottom: activeRecipeTab === 'favorites' ? '2px solid var(--phantom-accent-glow)' : 'none' }}
-                    >
-                      <Group gap={4}>
-                        <Star size={12} />
-                        Favorites ({favoriteRecipes.length})
-                      </Group>
-                    </Tabs.Tab>
-                  </Tabs.List>
+                    All ({allRecipes.length})
+                  </Tabs.Tab>
+                  <Tabs.Tab
+                    value="favorites"
+                    fz="xs"
+                    c={activeRecipeTab === 'favorites' ? 'var(--phantom-accent-glow)' : 'var(--phantom-text-muted)'}
+                    style={{ borderBottom: activeRecipeTab === 'favorites' ? '2px solid var(--phantom-accent-glow)' : 'none' }}
+                  >
+                    <Group gap={4}>
+                      <Star size={12} />
+                      Favorites ({favoriteRecipes.length})
+                    </Group>
+                  </Tabs.Tab>
+                </Tabs.List>
 
-                  <Tabs.Panel value="all">
-                    <Stack gap={2} style={{ maxHeight: '60vh', overflowY: 'auto' }} mt="xs">
-                      {allRecipes.map((recipe) => (
+                <Tabs.Panel value="all" style={{ flex: 1, minHeight: 0 }}>
+                  <Stack gap={2} style={{ flex: 1, overflowY: 'auto' }} mt="xs">
+                    {allRecipes.map((recipe) => (
+                      <Group
+                        key={recipe.id}
+                        gap="sm"
+                        wrap="nowrap"
+                        py={5}
+                        px={8}
+                        style={{
+                          borderRadius: 4,
+                          cursor: 'pointer',
+                          transition: 'background-color 100ms ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated)';
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                        }}
+                      >
+                        <ActionIcon
+                          size="xs"
+                          variant="transparent"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite(recipe.id);
+                          }}
+                          style={{ flexShrink: 0 }}
+                        >
+                          <Star
+                            size={14}
+                            fill={recipe.favorite ? 'var(--phantom-accent-glow)' : 'none'}
+                            color={recipe.favorite ? 'var(--phantom-accent-glow)' : 'var(--phantom-text-muted)'}
+                          />
+                        </ActionIcon>
+                        <ActionIcon
+                          size="xs"
+                          variant="filled"
+                          color="green"
+                          radius="xl"
+                          style={{ flexShrink: 0 }}
+                          onClick={() => {
+                            store.addPaneAsTab('terminal', {
+                              cwd: worktree?.worktreePath ?? project?.repoPath,
+                              initialCommand: recipe.command,
+                              worktreeId: worktree?.id,
+                              projectId: project?.id,
+                              recipeCommand: recipe.command,
+                              recipeLabel: recipe.label,
+                              recipeCategory: recipe.category,
+                            } as Record<string, unknown>, recipe.label);
+                          }}
+                        >
+                          <Play size={10} />
+                        </ActionIcon>
+                        <Text fz="0.78rem" fw={500} c="var(--phantom-text-primary)" style={{ minWidth: 80 }}>
+                          {recipe.label}
+                        </Text>
+                        <Text fz="0.7rem" c="var(--phantom-text-muted)" ff="'JetBrains Mono', monospace" truncate style={{ flex: 1 }}>
+                          {recipe.command}
+                        </Text>
+                        {!recipe.auto && (
+                          <Group gap={2} style={{ flexShrink: 0 }}>
+                            <ActionIcon size="xs" variant="transparent" onClick={(e) => { e.stopPropagation(); openEditModal(recipe); }}>
+                              <Pencil size={12} color="var(--phantom-text-muted)" />
+                            </ActionIcon>
+                            <ActionIcon size="xs" variant="transparent" onClick={(e) => { e.stopPropagation(); deleteCustomRecipe(recipe.id); }}>
+                              <Trash2 size={12} color="var(--phantom-text-muted)" />
+                            </ActionIcon>
+                          </Group>
+                        )}
+                      </Group>
+                    ))}
+                  </Stack>
+                </Tabs.Panel>
+
+                <Tabs.Panel value="favorites" style={{ flex: 1, minHeight: 0 }}>
+                  <Stack gap={2} style={{ flex: 1, overflowY: 'auto' }} mt="xs">
+                    {favoriteRecipes.length > 0 ? (
+                      favoriteRecipes.map((recipe) => (
                         <Group
                           key={recipe.id}
                           gap="sm"
@@ -489,8 +641,8 @@ export function WorktreeHome() {
                           >
                             <Star
                               size={14}
-                              fill={recipe.favorite ? 'var(--phantom-accent-glow)' : 'none'}
-                              color={recipe.favorite ? 'var(--phantom-accent-glow)' : 'var(--phantom-text-muted)'}
+                              fill="var(--phantom-accent-glow)"
+                              color="var(--phantom-accent-glow)"
                             />
                           </ActionIcon>
                           <ActionIcon
@@ -530,192 +682,71 @@ export function WorktreeHome() {
                             </Group>
                           )}
                         </Group>
-                      ))}
-                    </Stack>
-                  </Tabs.Panel>
-
-                  <Tabs.Panel value="favorites">
-                    <Stack gap={2} style={{ maxHeight: '60vh', overflowY: 'auto' }} mt="xs">
-                      {favoriteRecipes.length > 0 ? (
-                        favoriteRecipes.map((recipe) => (
-                          <Group
-                            key={recipe.id}
-                            gap="sm"
-                            wrap="nowrap"
-                            py={5}
-                            px={8}
-                            style={{
-                              borderRadius: 4,
-                              cursor: 'pointer',
-                              transition: 'background-color 100ms ease',
-                            }}
-                            onMouseEnter={(e) => {
-                              (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated)';
-                            }}
-                            onMouseLeave={(e) => {
-                              (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                            }}
-                          >
-                            <ActionIcon
-                              size="xs"
-                              variant="transparent"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleFavorite(recipe.id);
-                              }}
-                              style={{ flexShrink: 0 }}
-                            >
-                              <Star
-                                size={14}
-                                fill="var(--phantom-accent-glow)"
-                                color="var(--phantom-accent-glow)"
-                              />
-                            </ActionIcon>
-                            <ActionIcon
-                              size="xs"
-                              variant="filled"
-                              color="green"
-                              radius="xl"
-                              style={{ flexShrink: 0 }}
-                              onClick={() => {
-                                store.addPaneAsTab('terminal', {
-                                  cwd: worktree?.worktreePath ?? project?.repoPath,
-                                  initialCommand: recipe.command,
-                                  worktreeId: worktree?.id,
-                                  projectId: project?.id,
-                                  recipeCommand: recipe.command,
-                                  recipeLabel: recipe.label,
-                                  recipeCategory: recipe.category,
-                                } as Record<string, unknown>, recipe.label);
-                              }}
-                            >
-                              <Play size={10} />
-                            </ActionIcon>
-                            <Text fz="0.78rem" fw={500} c="var(--phantom-text-primary)" style={{ minWidth: 80 }}>
-                              {recipe.label}
-                            </Text>
-                            <Text fz="0.7rem" c="var(--phantom-text-muted)" ff="'JetBrains Mono', monospace" truncate style={{ flex: 1 }}>
-                              {recipe.command}
-                            </Text>
-                            {!recipe.auto && (
-                              <Group gap={2} style={{ flexShrink: 0 }}>
-                                <ActionIcon size="xs" variant="transparent" onClick={(e) => { e.stopPropagation(); openEditModal(recipe); }}>
-                                  <Pencil size={12} color="var(--phantom-text-muted)" />
-                                </ActionIcon>
-                                <ActionIcon size="xs" variant="transparent" onClick={(e) => { e.stopPropagation(); deleteCustomRecipe(recipe.id); }}>
-                                  <Trash2 size={12} color="var(--phantom-text-muted)" />
-                                </ActionIcon>
-                              </Group>
-                            )}
-                          </Group>
-                        ))
-                      ) : (
-                        <Text fz="xs" c="var(--phantom-text-muted)" ta="center" py="lg">
-                          Star a recipe to pin it here
-                        </Text>
-                      )}
-                    </Stack>
-                  </Tabs.Panel>
-                </Tabs>
-              </Paper>
-            )}
-
-            {/* Recent Chats */}
-            {recentChats.length > 0 && (
-              <Paper
-                p="md"
-                bg="var(--phantom-surface-card)"
-                radius="md"
-                style={{ border: '1px solid var(--phantom-border-subtle)' }}
-              >
-                <Group gap="xs" mb="sm">
-                  <MessageSquare size={14} style={{ color: 'var(--phantom-accent-glow)' }} />
-                  <Text fz="xs" fw={600} c="var(--phantom-text-secondary)">Recent Chats</Text>
-                </Group>
-                <Stack gap={4}>
-                  {recentChats.map((chat) => (
-                    <Group
-                      key={chat.id}
-                      gap="sm"
-                      py={4}
-                      px={6}
-                      style={{
-                        cursor: 'pointer',
-                        borderRadius: 4,
-                        transition: 'background-color 100ms ease',
-                      }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                      onClick={() => {
-                        store.addPaneAsTab('chat', { cwd: worktree?.worktreePath, conversationId: chat.id } as Record<string, unknown>, 'Chat');
-                      }}
-                    >
-                      <MessageSquare size={12} style={{ color: 'var(--phantom-text-muted)', flexShrink: 0 }} />
-                      <Text fz="0.78rem" c="var(--phantom-text-primary)" lineClamp={1} style={{ flex: 1 }}>
-                        {chat.title}
+                      ))
+                    ) : (
+                      <Text fz="xs" c="var(--phantom-text-muted)" ta="center" py="lg">
+                        Star a recipe to pin it here
                       </Text>
-                      <Text fz="0.65rem" c="var(--phantom-text-muted)" style={{ flexShrink: 0 }}>
-                        {formatRelativeTime(chat.updatedAt)}
-                      </Text>
-                    </Group>
-                  ))}
-                </Stack>
-              </Paper>
-            )}
-          </Stack>
+                    )}
+                  </Stack>
+                </Tabs.Panel>
+              </Tabs>
+            </Paper>
+          )}
 
-          {/* RIGHT COLUMN — Tools + Info */}
-          <Stack gap="md">
-            {/* Tools */}
+          {/* Plans Card */}
+          {worktree?.id && <PlansCard worktreeId={worktree.id} />}
+
+          {/* Running Servers Card */}
+          {worktree?.id && <RunningServersCard worktreeId={worktree.id} />}
+
+          {/* Tasks Card */}
+          {worktree?.worktreePath && <TasksCard cwd={worktree.worktreePath} />}
+
+          {/* Recent Chats Card */}
+          {recentChats.length > 0 && (
             <Paper
               p="md"
               bg="var(--phantom-surface-card)"
               radius="md"
-              style={{ border: '1px solid var(--phantom-border-subtle)' }}
+              style={{
+                border: '1px solid var(--phantom-border-subtle)',
+              }}
             >
-              <Text fz="xs" fw={600} c="var(--phantom-text-muted)" tt="uppercase" mb="sm" style={{ letterSpacing: '0.08em' }}>
-                Tools
-              </Text>
-              <SimpleGrid cols={2} spacing="sm">
-                <QuickActionCard
-                  icon={<TerminalIcon size={20} style={{ color: 'var(--phantom-accent-glow)' }} />}
-                  label="Terminal"
-                  shortcut="Ctrl+`"
-                  onClick={openTerminal}
-                />
-                <QuickActionCard
-                  icon={<FileCode size={20} style={{ color: 'var(--phantom-accent-glow)' }} />}
-                  label="Editor"
-                  shortcut="Ctrl+N"
-                  onClick={openEditor}
-                />
-                <QuickActionCard
-                  icon={<Sparkles size={20} style={{ color: 'var(--phantom-accent-gold)' }} />}
-                  label="New Session"
-                  shortcut="Ctrl+J"
-                  onClick={openClaude}
-                />
-                <QuickActionCard
-                  icon={<MessageSquare size={20} style={{ color: 'var(--phantom-accent-glow)' }} />}
-                  label="Chat"
-                  shortcut="Ctrl+K"
-                  onClick={openChat}
-                />
-              </SimpleGrid>
+              <Group gap="xs" mb="sm">
+                <MessageSquare size={14} style={{ color: 'var(--phantom-accent-glow)' }} />
+                <Text fz="xs" fw={600} c="var(--phantom-text-secondary)">Recent Chats</Text>
+              </Group>
+              <Stack gap={4}>
+                {recentChats.map((chat) => (
+                  <Group
+                    key={chat.id}
+                    gap="sm"
+                    py={4}
+                    px={6}
+                    style={{
+                      cursor: 'pointer',
+                      borderRadius: 4,
+                      transition: 'background-color 100ms ease',
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    onClick={() => {
+                      store.addPaneAsTab('chat', { cwd: worktree?.worktreePath, conversationId: chat.id } as Record<string, unknown>, 'Chat');
+                    }}
+                  >
+                    <MessageSquare size={12} style={{ color: 'var(--phantom-text-muted)', flexShrink: 0 }} />
+                    <Text fz="0.78rem" c="var(--phantom-text-primary)" lineClamp={1} style={{ flex: 1 }}>
+                      {chat.title}
+                    </Text>
+                    <Text fz="0.65rem" c="var(--phantom-text-muted)" style={{ flexShrink: 0 }}>
+                      {formatRelativeTime(chat.updatedAt)}
+                    </Text>
+                  </Group>
+                ))}
+              </Stack>
             </Paper>
-
-            {/* Running Servers */}
-            {worktree?.id && <RunningServersCard worktreeId={worktree.id} />}
-
-            {/* Live Tasks */}
-            {worktree?.worktreePath && <TasksCard cwd={worktree.worktreePath} />}
-
-            {/* Plans */}
-            {worktree?.id && <PlansCard worktreeId={worktree.id} />}
-
-            {/* Git Status + Daily Quests */}
-            <GitStatusCard state={gitStatusState} />
-          </Stack>
+          )}
         </div>
 
         {/* Quote */}
@@ -724,11 +755,11 @@ export function WorktreeHome() {
           c="var(--phantom-text-muted)"
           fs="italic"
           ta="center"
-          mt="md"
+          mt="lg"
         >
           &ldquo;{quote}&rdquo;
         </Text>
-      </Stack>
+      </div>
 
       <RecipeFormModal
         opened={recipeModal.opened}

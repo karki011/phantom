@@ -10,7 +10,6 @@ import { usePaneStore } from '@phantom-os/panes';
 import { Search, X } from 'lucide-react';
 
 import {
-  clearFileTreeAtom,
   expandedFoldersAtom,
   fetchDirectoryAtom,
   fileTreeAtom,
@@ -35,7 +34,6 @@ export function FilesView() {
 
   const fetchDirectory = useSetAtom(fetchDirectoryAtom);
   const toggleFolder = useSetAtom(toggleFolderAtom);
-  const clearFileTree = useSetAtom(clearFileTreeAtom);
 
   const store = usePaneStore();
 
@@ -58,13 +56,9 @@ export function FilesView() {
     return () => clearTimeout(timer);
   }, [searchQuery, activeWorktree?.id]);
 
-  // Fetch root when worktree changes
-  useEffect(() => {
-    if (activeWorktree) {
-      clearFileTree();
-      fetchDirectory({ worktreeId: activeWorktree.id, path: '/' });
-    }
-  }, [activeWorktree?.id, fetchDirectory, clearFileTree]);
+  // File tree clear + root prefetch is handled by RightSidebar (always
+  // mounted). Clear search when worktree changes.
+  useEffect(() => { setSearchQuery(''); }, [activeWorktree?.id]);
 
   // When a folder is expanded, fetch its children
   const handleToggleFolder = useCallback(

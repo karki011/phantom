@@ -157,7 +157,7 @@ const czBrand: MantineColorsTuple = [
 
 export const czDarkTokens: ThemeTokens = {
   name: 'cz-dark',
-  label: 'CloudZero Dark',
+  label: 'Dark',
 
   colors: {
     gray: czGray,

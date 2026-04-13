@@ -27,9 +27,11 @@ const barStyle: CSSProperties = {
   height: 32,
   background: 'var(--tab-bar-bg, rgba(0,0,0,0.3))',
   borderBottom: '1px solid var(--pane-border, rgba(255,255,255,0.08))',
-  overflow: 'hidden',
+  overflow: 'visible',
   userSelect: 'none',
   padding: '0 4px',
+  position: 'relative',
+  zIndex: 10,
 };
 
 const tabsScrollStyle: CSSProperties = {
@@ -82,11 +84,9 @@ const addStyle: CSSProperties = {
   position: 'relative',
 };
 
-const menuStyle: CSSProperties = {
-  position: 'absolute',
-  top: '100%',
-  left: 0,
-  zIndex: 9999,
+const menuBaseStyle: CSSProperties = {
+  position: 'fixed',
+  zIndex: 99999,
   background: 'var(--pane-header-bg, #1a1a2e)',
   border: '1px solid var(--pane-border, rgba(255,255,255,0.12))',
   borderRadius: 6,
@@ -149,6 +149,31 @@ export function TabBar({ paneMenu }: TabBarProps) {
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
+
+  // Track which panes have unsaved changes (dirty state)
+  const [dirtyPanes, setDirtyPanes] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const handler = (e: CustomEvent<{ paneId: string; dirty: boolean }>) => {
+      setDirtyPanes((prev) => {
+        const next = new Set(prev);
+        if (e.detail.dirty) {
+          next.add(e.detail.paneId);
+        } else {
+          next.delete(e.detail.paneId);
+        }
+        return next;
+      });
+    };
+    window.addEventListener('phantom:pane-dirty' as any, handler);
+    return () => window.removeEventListener('phantom:pane-dirty' as any, handler);
+  }, []);
+
+  const isTabDirty = useCallback(
+    (tab: typeof tabs[0]) =>
+      Object.keys(tab.panes).some((pid) => dirtyPanes.has(pid)),
+    [dirtyPanes],
+  );
 
   // Close menu on outside click
   useEffect(() => {
@@ -308,8 +333,21 @@ export function TabBar({ paneMenu }: TabBarProps) {
           ) : (
             <span
               title={t.label}
-              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-            >{t.label}</span>
+              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              {isTabDirty(t) && (
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: 'var(--phantom-accent-gold, #f59e0b)',
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+              {t.label}
+            </span>
           )}
           {!Object.values(t.panes).some((p) => p.kind === 'workspace-home') && (
             <button
@@ -327,7 +365,7 @@ export function TabBar({ paneMenu }: TabBarProps) {
         </div>
       ))}
       </div>
-      <div style={{ position: 'relative', flexShrink: 0 }} ref={menuRef}>
+      <div style={{ flexShrink: 0 }} ref={menuRef}>
         <button
           type="button"
           style={addStyle}
@@ -337,7 +375,15 @@ export function TabBar({ paneMenu }: TabBarProps) {
           +
         </button>
         {menuOpen && paneMenu && (
-          <div style={menuStyle}>
+          <div style={{
+            ...menuBaseStyle,
+            ...((): CSSProperties => {
+              const rect = menuRef.current?.getBoundingClientRect();
+              return rect
+                ? { top: rect.bottom + 4, left: rect.left }
+                : { top: 0, left: 0 };
+            })(),
+          }}>
             {paneMenu.map((item) => (
               <button
                 key={item.kind}

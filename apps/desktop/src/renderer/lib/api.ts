@@ -593,6 +593,128 @@ export const gitFetch = (worktreeId: string): Promise<{ ok: boolean }> =>
     body: JSON.stringify({ action: 'fetch' }),
   });
 
+export const gitGenerateCommitMsg = (worktreeId: string): Promise<{ ok: boolean; status: string }> =>
+  fetchApi<{ ok: boolean; status: string }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'generate-commit-msg' }),
+  });
+
+export const gitCancelCommitMsg = (worktreeId: string): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'cancel-commit-msg' }),
+  });
+
+// ---------------------------------------------------------------------------
+// Git Activity
+// ---------------------------------------------------------------------------
+
+export interface PrStatus {
+  url: string;
+  state: string;
+  title: string;
+  number: number;
+  headRefName: string;
+  baseRefName: string;
+}
+
+export interface CiRun {
+  name: string;
+  status: string;
+  conclusion: string | null;
+  url: string;
+  createdAt: string;
+  databaseId: number;
+}
+
+export interface CommitInfo {
+  sha: string;
+  shortSha: string;
+  message: string;
+  author: string;
+  timeAgo: string;
+  url: string | null;
+}
+
+export const gitCreatePr = (worktreeId: string): Promise<{ ok: boolean; status: string }> =>
+  fetchApi<{ ok: boolean; status: string }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'create-pr' }),
+  });
+
+export const gitPrStatus = async (worktreeId: string): Promise<PrStatus | null> => {
+  const res = await fetchApi<{ ok: boolean; pr: PrStatus | null }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'pr-status' }),
+  });
+  return res.pr;
+};
+
+export const gitCiRuns = async (worktreeId: string): Promise<CiRun[] | null> => {
+  const res = await fetchApi<{ ok: boolean; runs: CiRun[] | null }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'ci-runs' }),
+  });
+  return res.runs;
+};
+
+export const gitRecentCommits = async (worktreeId: string): Promise<CommitInfo[]> => {
+  const res = await fetchApi<{ ok: boolean; commits: CommitInfo[] }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'recent-commits' }),
+  });
+  return res.commits;
+};
+
+// ---------------------------------------------------------------------------
+// Daily Journal
+// ---------------------------------------------------------------------------
+
+export interface JournalEntry {
+  date: string;
+  morningBrief: string | null;
+  morningGeneratedAt: number | null;
+  workLog: string[];
+  endOfDayRecap: string | null;
+  eodGeneratedAt: number | null;
+  notes: string;
+}
+
+export const getJournal = (date: string): Promise<JournalEntry> =>
+  fetchApi<JournalEntry>(`/api/journal/${date}`);
+
+export const listJournalDates = (limit = 30): Promise<string[]> =>
+  fetchApi<string[]>(`/api/journal/list?limit=${limit}`);
+
+export const generateMorningBrief = (date: string): Promise<{ ok: boolean; entry: JournalEntry }> =>
+  fetchApi<{ ok: boolean; entry: JournalEntry }>(`/api/journal/${date}/generate-morning`, {
+    method: 'POST',
+  });
+
+export const generateEndOfDay = (date: string): Promise<{ ok: boolean; entry: JournalEntry }> =>
+  fetchApi<{ ok: boolean; entry: JournalEntry }>(`/api/journal/${date}/generate-eod`, {
+    method: 'POST',
+  });
+
+export const appendJournalLog = (date: string, line: string): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/journal/${date}/log`, {
+    method: 'POST',
+    body: JSON.stringify({ line }),
+  });
+
+export const updateJournalNotes = (date: string, notes: string): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/journal/${date}/notes`, {
+    method: 'PUT',
+    body: JSON.stringify({ notes }),
+  });
+
+// ---------------------------------------------------------------------------
+// Cleanup
+// ---------------------------------------------------------------------------
+
+export const cleanupTerminals = (): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>('/api/cleanup/terminals', { method: 'POST' });
+
 // ---------------------------------------------------------------------------
 // User Preferences
 // ---------------------------------------------------------------------------

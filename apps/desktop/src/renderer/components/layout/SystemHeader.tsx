@@ -15,11 +15,12 @@ import {
   Tooltip,
   useMantineColorScheme,
 } from '@mantine/core';
-import { useAtom } from 'jotai';
-import { ArrowLeft, Circle, Cpu, HelpCircle, MemoryStick, Moon, Palette, Sun, Swords, Type, Zap } from 'lucide-react';
+import { useAtom, useSetAtom } from 'jotai';
+import { ArrowLeft, Circle, Cpu, HelpCircle, MemoryStick, Moon, Palette, Power, Sun, Swords, Type, Zap } from 'lucide-react';
 import { themeRegistry } from '@phantom-os/theme';
 
 import { type FontScale, fontScaleAtom, themeNameAtom } from '../../atoms/system';
+import { shutdownVisibleAtom } from '../../atoms/shutdown';
 import { usePreferences } from '../../hooks/usePreferences';
 import { useRouter } from '../../hooks/useRouter';
 import { useSystemMetrics } from '../../hooks/useSystemMetrics';
@@ -50,6 +51,7 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
   const { isHome, navigate } = useRouter();
   const { isEnabled, setPref } = usePreferences();
   const metrics = useSystemMetrics();
+  const setShutdownVisible = useSetAtom(shutdownVisibleAtom);
   const gamificationOn = isEnabled('gamification');
   const cavemanOn = isEnabled('caveman');
 
@@ -299,7 +301,7 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
         </Menu>
 
         {/* Theme Picker Menu */}
-        <Menu shadow="md" width={180} position="bottom-end">
+        <Menu shadow="md" width={220} position="bottom-end">
           <Menu.Target>
             <Tooltip label="Theme">
               <ActionIcon
@@ -574,6 +576,19 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
             </Stack>
           </Popover.Dropdown>
         </Popover>
+
+        {/* Power Off */}
+        <Tooltip label="Power Off" position="bottom" withArrow fz="xs">
+          <ActionIcon
+            variant="subtle"
+            size="lg"
+            onClick={() => setShutdownVisible(true)}
+            aria-label="Power Off"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            <Power size={16} style={{ color: 'var(--phantom-text-muted)' }} />
+          </ActionIcon>
+        </Tooltip>
       </Group>
     </Group>
   );

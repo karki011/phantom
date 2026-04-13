@@ -59,8 +59,29 @@ export const EditorPane = ({
   }, [repoPath]);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const contentRef = useRef(content);
   contentRef.current = content;
+
+  // Broadcast dirty state to TabBar via custom event
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('phantom:pane-dirty', {
+        detail: { paneId, dirty },
+      }),
+    );
+  }, [paneId, dirty]);
+
+  // Clean up dirty state on unmount
+  useEffect(() => {
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent('phantom:pane-dirty', {
+          detail: { paneId, dirty: false },
+        }),
+      );
+    };
+  }, [paneId]);
 
   // Fetch file content — worktree API or generic file-read API
   useEffect(() => {
@@ -103,20 +124,20 @@ export const EditorPane = ({
     if (!filePath || saving) return;
     setSaving(true);
     try {
-      if (worktreeId) {
-        await fetch(`/api/worktrees/${worktreeId}/file`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: filePath, content: contentRef.current }),
-        });
-      } else {
-        await fetch('/api/file-write', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: filePath, content: contentRef.current }),
-        });
-      }
+      const url = worktreeId
+        ? `/api/worktrees/${worktreeId}/file`
+        : '/api/file-write';
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: filePath, content: contentRef.current }),
+      });
+      if (!res.ok) throw new Error(`Save failed (${res.status})`);
       setDirty(false);
+      setSaveError(false);
+    } catch {
+      setSaveError(true);
+      setTimeout(() => setSaveError(false), 3000);
     } finally {
       setSaving(false);
     }
@@ -134,6 +155,14 @@ export const EditorPane = ({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [worktreeId, filePath, saveFile]);
+
+  // Listen for save-all-editors event (triggered by shutdown ceremony)
+  useEffect(() => {
+    if (!filePath || !dirty) return;
+    const handler = () => { saveFile(); };
+    window.addEventListener('phantom:save-all-editors', handler);
+    return () => window.removeEventListener('phantom:save-all-editors', handler);
+  }, [filePath, dirty, saveFile]);
 
   // Right-click context menu
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
@@ -267,7 +296,8 @@ export const EditorPane = ({
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {getFileName(filePath)}
         </span>
-        {dirty && <span style={{ color: 'var(--phantom-accent-gold, #f59e0b)' }}>{saving ? 'Saving...' : 'Modified'}</span>}
+        {saveError && <span style={{ color: 'var(--phantom-status-error, #ef4444)' }}>Save failed</span>}
+        {dirty && !saveError && <span style={{ color: 'var(--phantom-accent-gold, #f59e0b)' }}>{saving ? 'Saving...' : 'Modified'}</span>}
         <button
           type="button"
           onClick={() => setEditorFontSize((s) => Math.max(8, s - 1))}

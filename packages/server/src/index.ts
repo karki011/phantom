@@ -40,6 +40,8 @@ import { setupTerminalWs } from './routes/terminal-ws.js';
 import { terminalRestoreRoutes } from './routes/terminal-restore.js';
 import { systemMetricsRoutes } from './routes/system-metrics.js';
 import { graphRoutes } from './routes/graph.js';
+import { journalRoutes } from './routes/journal.js';
+import { cleanupRoutes } from './routes/cleanup.js';
 import { graphEngine } from './services/graph-engine.js';
 import { startMcpServer, stopMcpServer } from './mcp/index.js';
 import { destroyAllPtys, initDaemonClient, disconnectDaemon } from './terminal-manager.js';
@@ -115,6 +117,8 @@ app.route('/api', preferencesRoutes);
 app.route('/api', terminalRestoreRoutes);
 app.route('/api', systemMetricsRoutes);
 app.route('/api', graphRoutes);
+app.route('/api', journalRoutes);
+app.route('/api', cleanupRoutes);
 
 // SSE endpoint
 app.get('/events', (c) => {

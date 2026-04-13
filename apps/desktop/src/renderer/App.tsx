@@ -13,13 +13,14 @@
  * @author Subash Karki
  */
 import { AppShell, Group, Stack, Text } from '@mantine/core';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Flame, Trophy } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { WorkspaceProvider, Workspace, switchWorkspaceAtom, activePaneAtom } from '@phantom-os/panes';
 import { paneDefinitions, paneMenu } from './panes/registry';
 import { unlockedCountAtom, refreshAchievementsAtom } from './atoms/achievements';
+import { shutdownVisibleAtom } from './atoms/shutdown';
 import { activeTopTabAtom, fontScaleAtom, sseConnectionAtom } from './atoms/system';
 import { selectedFileAtom } from './atoms/fileExplorer';
 import { activeWorktreeAtom, activeWorktreeIdAtom } from './atoms/worktrees';
@@ -46,6 +47,10 @@ import { useSessions } from './hooks/useSessions';
 import { useHealthCheck } from './hooks/useHealthCheck';
 import { useSystemEvents } from './hooks/useSystemEvents';
 import { SplashScreen } from './components/brand/SplashScreen';
+import { ShutdownCeremony } from './components/brand/ShutdownCeremony';
+import { QuickOpen } from './components/QuickOpen';
+import { RecipeQuickLaunch } from './components/RecipeQuickLaunch';
+import { generateMorningBrief } from './lib/api';
 
 /** Render cockpit sub-route content (sessions, tokens, profile, etc.) */
 const ViewContent = ({ route }: { route: Route }) => {
@@ -84,16 +89,78 @@ export const App = () => {
   // Periodic backend health polling
   const { isConnected } = useHealthCheck();
 
-  // Splash screen state — dismiss as soon as server is ready
+  // Splash screen state
   const [splashDone, setSplashDone] = useState(false);
   const [splashStatus, setSplashStatus] = useState('Initializing The System...');
+  const [bootSteps, setBootSteps] = useState<import('./components/brand/SplashScreen').BootStep[]>([
+    { id: 'server', label: 'Starting server...', doneLabel: 'Server connected', status: 'running' },
+    { id: 'workspace', label: 'Loading workspace...', doneLabel: 'Workspace loaded', status: 'pending' },
+    { id: 'journal', label: 'Generating morning brief...', doneLabel: 'Morning brief ready', status: 'pending' },
+  ]);
 
-  // Dismiss splash as soon as connected
+  const updateBootStep = (id: string, status: 'running' | 'done' | 'error') => {
+    setBootSteps((prev) => prev.map((s) => (s.id === id ? { ...s, status } : s)));
+  };
+
+  // Boot ceremony — step-by-step system checks
   useEffect(() => {
     if (isConnected && !splashDone) {
-      setSplashStatus('Ready');
-      const timer = setTimeout(() => setSplashDone(true), 800);
-      return () => clearTimeout(timer);
+      let cancelled = false;
+
+      // Ensure each step is visible for at least minMs before moving on
+      const stepWithMinTime = async (fn: () => Promise<void>, minMs: number) => {
+        const start = Date.now();
+        await fn();
+        const elapsed = Date.now() - start;
+        if (elapsed < minMs) await new Promise((r) => setTimeout(r, minMs - elapsed));
+      };
+
+      const runBoot = async () => {
+        // Step 1: Server connected (already done — just show it)
+        await stepWithMinTime(async () => {
+          updateBootStep('server', 'done');
+        }, 600);
+
+        // Step 2: Load workspace
+        updateBootStep('workspace', 'running');
+        await stepWithMinTime(async () => {
+          // Workspace loads via existing atoms — just a visual step
+        }, 800);
+        updateBootStep('workspace', 'done');
+
+        // Step 3: Morning journal
+        updateBootStep('journal', 'running');
+        await stepWithMinTime(async () => {
+          const today = new Date();
+          const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          try {
+            await generateMorningBrief(dateStr);
+          } catch {
+            // 409 or error — skip silently
+          }
+        }, 800);
+        updateBootStep('journal', 'done');
+
+        // All steps done — hold for a moment so user sees all ✓, then dismiss
+        if (!cancelled) {
+          await new Promise((r) => setTimeout(r, 1000));
+          setSplashStatus('Ready');
+          setTimeout(() => setSplashDone(true), 500);
+        }
+      };
+
+      // Safety timeout — don't block boot for more than 15s
+      const safetyTimer = setTimeout(() => {
+        if (!cancelled) {
+          cancelled = true;
+          setSplashStatus('Ready');
+          setTimeout(() => setSplashDone(true), 400);
+        }
+      }, 15_000);
+
+      runBoot().finally(() => clearTimeout(safetyTimer));
+
+      return () => { cancelled = true; clearTimeout(safetyTimer); };
     }
   }, [isConnected, splashDone]);
 
@@ -122,6 +189,16 @@ export const App = () => {
   const activeWsId = useAtomValue(activeWorktreeIdAtom);
   const achievementCount = useAtomValue(unlockedCountAtom);
   const refreshAchievements = useSetAtom(refreshAchievementsAtom);
+  const [shutdownVisible, setShutdownVisible] = useAtom(shutdownVisibleAtom);
+
+  // Listen for Cmd+Q intercept from Electron main process
+  useEffect(() => {
+    if (window.phantomOS?.on) {
+      window.phantomOS.on('phantom:initiate-shutdown', () => {
+        setShutdownVisible(true);
+      });
+    }
+  }, [setShutdownVisible]);
 
   // Switch pane store when active worktree changes
   const switchWorkspace = useSetAtom(switchWorkspaceAtom);
@@ -155,8 +232,17 @@ export const App = () => {
 
   return (
     <WorkspaceProvider definitions={paneDefinitions}>
+    <QuickOpen />
+    <RecipeQuickLaunch />
+    {shutdownVisible && (
+      <ShutdownCeremony
+        visible={shutdownVisible}
+        onCancel={() => setShutdownVisible(false)}
+        onQuit={() => { window.phantomOS?.invoke('phantom:quit'); }}
+      />
+    )}
     {!splashDone && (
-      <SplashScreen visible={!isConnected} status={splashStatus} />
+      <SplashScreen visible={!splashDone} status={splashStatus} steps={bootSteps} />
     )}
     <AppShell
       header={{ height: '3.5rem' }}

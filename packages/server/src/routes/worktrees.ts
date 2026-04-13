@@ -2,7 +2,7 @@
  * PhantomOS Worktree Routes
  * @author Subash Karki
  */
-import { exec, execSync } from 'node:child_process';
+import { exec, execSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { desc, eq } from 'drizzle-orm';
@@ -25,6 +25,13 @@ import { logger } from '../logger.js';
 type Broadcast = (event: string, data: unknown) => void;
 let broadcastFn: Broadcast = () => {};
 export const initWorktreeBroadcast = (broadcast: Broadcast): void => { broadcastFn = broadcast; };
+
+/** Track in-flight PR creations to prevent duplicates */
+const prInFlight = new Set<string>();
+/** Track in-flight commit message generation to prevent duplicates */
+const commitMsgInFlight = new Set<string>();
+const commitMsgChildren = new Map<string, ReturnType<typeof spawn>>();
+const prChildProcesses = new Map<string, ReturnType<typeof exec>>();
 
 /** Run dependency installation in background based on project profile */
 const autoSetup = (
@@ -337,7 +344,7 @@ worktreeRoutes.post('/worktrees/:id/git', async (c) => {
   }>();
   const { action } = body;
 
-  const allowed = ['fetch', 'pull', 'push', 'stage', 'unstage', 'stage-all', 'commit', 'discard', 'clean', 'undo-commit', 'stash', 'stash-pop'];
+  const allowed = ['fetch', 'pull', 'push', 'stage', 'unstage', 'stage-all', 'commit', 'discard', 'clean', 'undo-commit', 'stash', 'stash-pop', 'generate-commit-msg', 'cancel-commit-msg', 'create-pr', 'pr-status', 'ci-runs', 'recent-commits', 'get-branch'];
   if (!allowed.includes(action)) {
     return c.json({ error: `Invalid action: ${action}. Allowed: ${allowed.join(', ')}` }, 400);
   }
@@ -390,11 +397,206 @@ worktreeRoutes.post('/worktrees/:id/git', async (c) => {
       case 'stash-pop':
         cmd = 'git stash pop';
         break;
+      case 'get-branch': {
+        const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+          cwd: repoPath, encoding: 'utf-8', timeout: 5000, stdio: 'pipe',
+        }).trim();
+        const defaultBranch = (() => {
+          try {
+            return execSync('git symbolic-ref refs/remotes/origin/HEAD --short', {
+              cwd: repoPath, encoding: 'utf-8', timeout: 5000, stdio: 'pipe',
+            }).trim().replace('origin/', '');
+          } catch {
+            return 'main';
+          }
+        })();
+        return c.json({ ok: true, branch, defaultBranch });
+      }
+      case 'cancel-commit-msg': {
+        const child = commitMsgChildren.get(id);
+        if (child) {
+          child.kill('SIGTERM');
+          commitMsgInFlight.delete(id);
+          commitMsgChildren.delete(id);
+        }
+        return c.json({ ok: true });
+      }
+      case 'generate-commit-msg': {
+        if (commitMsgInFlight.has(id)) {
+          return c.json({ error: 'Commit message generation already in progress' }, 409);
+        }
+        commitMsgInFlight.add(id);
+
+        const response = c.json({ ok: true, status: 'generating' });
+
+        // Gather context in sync (fast git commands)
+        let stagedDiff = '';
+        let diffStat = '';
+        let recentLog = '';
+        try {
+          stagedDiff = execSync('git diff --cached', { cwd: repoPath, encoding: 'utf-8', timeout: 10_000, stdio: 'pipe' });
+          diffStat = execSync('git diff --cached --stat', { cwd: repoPath, encoding: 'utf-8', timeout: 5_000, stdio: 'pipe' });
+          recentLog = execSync('git log --oneline -10', { cwd: repoPath, encoding: 'utf-8', timeout: 5_000, stdio: 'pipe' });
+        } catch { /* allow partial data */ }
+
+        if (!stagedDiff.trim()) {
+          commitMsgInFlight.delete(id);
+          return c.json({ error: 'No staged changes found' }, 400);
+        }
+
+        // Truncate large diffs
+        const maxDiff = 8000;
+        const truncatedDiff = stagedDiff.length > maxDiff
+          ? stagedDiff.slice(0, maxDiff) + '\n...truncated'
+          : stagedDiff;
+
+        const prompt = `Generate a git commit message for these staged changes.
+
+Recent commits (match this style):
+${recentLog.trim()}
+
+Stats:
+${diffStat.trim()}
+
+Diff:
+${truncatedDiff}
+
+Rules:
+- Concise summary under 72 chars on first line
+- Use conventional commit format if recent commits follow it
+- Optional body after blank line for complex changes
+- Output ONLY the commit message text, nothing else`;
+
+        // Spawn Claude in background — use spawn with args to avoid shell escaping issues
+        const child = spawn('claude', ['--dangerously-skip-permissions', '-p', prompt], {
+          cwd: repoPath,
+          env: { ...process.env },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        commitMsgChildren.set(id, child);
+
+        let stdout = '';
+        let stderr = '';
+        child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+        child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+
+        const killTimer = setTimeout(() => { child.kill('SIGTERM'); }, 60_000);
+
+        child.on('close', (code) => {
+          clearTimeout(killTimer);
+          commitMsgInFlight.delete(id);
+          commitMsgChildren.delete(id);
+          if (code !== 0) {
+            const errMsg = stderr.trim() || `Process exited with code ${code}`;
+            broadcastFn('commit-msg:error', { worktreeId: id, error: errMsg });
+          } else {
+            const message = (stdout.trim()).replace(/^["']|["']$/g, '');
+            broadcastFn('commit-msg:ready', { worktreeId: id, message });
+          }
+        });
+
+        return response;
+      }
+      case 'create-pr': {
+        if (prInFlight.has(id)) {
+          return c.json({ error: 'PR creation already in progress for this worktree' }, 409);
+        }
+        prInFlight.add(id);
+
+        // Get worktree name for notifications
+        const wtName = worktree.name ?? worktree.branch ?? 'unknown';
+
+        // Respond immediately
+        const response = c.json({ ok: true, status: 'creating' });
+
+        // Spawn Claude in background
+        const child = exec(
+          'claude --dangerously-skip-permissions -p "/commit-push-pr"',
+          { cwd: repoPath, timeout: 120_000, maxBuffer: 1024 * 1024 },
+          (error, stdout, stderr) => {
+            prInFlight.delete(id);
+            prChildProcesses.delete(id);
+            if (error) {
+              const errMsg = stderr?.trim() || error.message || 'Unknown error';
+              broadcastFn('pr:error', { worktreeId: id, worktreeName: wtName, error: errMsg });
+            } else {
+              broadcastFn('pr:success', { worktreeId: id, worktreeName: wtName, output: stdout?.trim() ?? '' });
+            }
+          },
+        );
+        prChildProcesses.set(id, child);
+        return response;
+      }
+      case 'pr-status': {
+        try {
+          const output = execSync(
+            'gh pr view --json url,state,title,number,headRefName,baseRefName',
+            { cwd: repoPath, encoding: 'utf-8', timeout: 10_000, stdio: 'pipe' },
+          );
+          const data = JSON.parse(output.trim());
+          return c.json({ ok: true, pr: data });
+        } catch {
+          // No PR exists or gh not installed
+          return c.json({ ok: true, pr: null });
+        }
+      }
+      case 'ci-runs': {
+        try {
+          const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+            cwd: repoPath, encoding: 'utf-8', timeout: 5_000, stdio: 'pipe',
+          }).trim();
+          const output = execSync(
+            `gh run list --branch "${branch.replace(/"/g, '\\"')}" --limit 15 --json status,conclusion,name,url,createdAt,databaseId`,
+            { cwd: repoPath, encoding: 'utf-8', timeout: 10_000, stdio: 'pipe' },
+          );
+          return c.json({ ok: true, runs: JSON.parse(output.trim()) });
+        } catch {
+          return c.json({ ok: true, runs: null });
+        }
+      }
+      case 'recent-commits': {
+        try {
+          const logOutput = execSync(
+            'git log --oneline -10 --format="%H|%h|%s|%an|%ar"',
+            { cwd: repoPath, encoding: 'utf-8', timeout: 5_000, stdio: 'pipe' },
+          ).trim();
+
+          // Get remote URL for building commit links
+          let repoUrl: string | null = null;
+          try {
+            const remote = execSync('git remote get-url origin', {
+              cwd: repoPath, encoding: 'utf-8', timeout: 5_000, stdio: 'pipe',
+            }).trim();
+            // Convert SSH to HTTPS: git@github.com:user/repo.git → https://github.com/user/repo
+            if (remote.startsWith('git@')) {
+              repoUrl = remote.replace(/^git@([^:]+):/, 'https://$1/').replace(/\.git$/, '');
+            } else if (remote.startsWith('https://')) {
+              repoUrl = remote.replace(/\.git$/, '');
+            }
+          } catch { /* no remote */ }
+
+          const commits = logOutput.split('\n').filter(Boolean).map((line) => {
+            const [sha, shortSha, message, author, timeAgo] = line.split('|');
+            return {
+              sha,
+              shortSha,
+              message,
+              author,
+              timeAgo,
+              url: repoUrl ? `${repoUrl}/commit/${sha}` : null,
+            };
+          });
+
+          return c.json({ ok: true, commits });
+        } catch {
+          return c.json({ ok: true, commits: [] });
+        }
+      }
       default:
         cmd = `git ${action}`;
     }
 
-    execSync(cmd, { cwd: repoPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe' });
+    const output = execSync(cmd, { cwd: repoPath, encoding: 'utf-8', timeout: 30_000, stdio: 'pipe' });
     return c.json({ ok: true, action });
   } catch (err: any) {
     const stderr = err?.stderr?.toString?.()?.trim() || '';
