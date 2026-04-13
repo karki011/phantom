@@ -139,7 +139,7 @@ function CreateFirstWorktree({ projectId, projectName, defaultBranch }: { projec
       // Auto-open Claude session in the new worktree
       if (ws?.worktreePath) {
         setTimeout(() => {
-          store.addPaneAsTab('terminal', { cwd: ws.worktreePath, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>, 'Claude');
+          store.addPaneAsTab('terminal', { cwd: ws.worktreePath, initialCommand: 'claude --dangerously-skip-permissions --worktree' } as Record<string, unknown>, 'Claude');
         }, 500);
       }
     } catch {

@@ -203,6 +203,25 @@ export const purgeAllSessions = (): void => {
   }
 };
 
+/** Delete terminal sessions for a specific worktree (worktree deletion cascade) */
+export const purgeSessionsByWorktree = (worktreeId: string): string[] => {
+  try {
+    const sessions = db.select({ paneId: terminalSessions.paneId })
+      .from(terminalSessions)
+      .where(eq(terminalSessions.worktreeId, worktreeId))
+      .all();
+    const paneIds = sessions.map((s) => s.paneId);
+    if (paneIds.length > 0) {
+      db.delete(terminalSessions)
+        .where(eq(terminalSessions.worktreeId, worktreeId))
+        .run();
+    }
+    return paneIds;
+  } catch {
+    return [];
+  }
+};
+
 /** Convenience export for use as a namespace */
 export const historyWriter = {
   recordSession,
@@ -215,4 +234,5 @@ export const historyWriter = {
   stopHistoryWriter,
   markAllExited,
   purgeAllSessions,
+  purgeSessionsByWorktree,
 };

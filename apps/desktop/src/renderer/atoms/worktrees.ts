@@ -21,6 +21,8 @@ import {
   checkoutBranch,
   createBranch,
 } from '../lib/api';
+import { disposeSession } from '@phantom-os/terminal';
+import { paneStateAtom, stripTerminalPanes, makePane, makeTab } from '@phantom-os/panes';
 
 // ---------------------------------------------------------------------------
 // Projects
@@ -110,11 +112,38 @@ export const createWorktreeAtom = atom(
 export const deleteWorktreeAtom = atom(
   null,
   async (get, set, id: string) => {
-    await apiDeleteWorktree(id);
+    const wasActive = get(activeWorktreeIdAtom) === id;
+
+    const result = await apiDeleteWorktree(id);
+
+    // Dispose client-side terminal sessions the server killed
+    for (const paneId of result.killedPaneIds ?? []) {
+      disposeSession(paneId);
+    }
+
+    // If this was the active worktree, dispose ALL its terminal sessions
+    // and reset pane state to a clean home tab (bypasses closePaneAtom guards)
+    if (wasActive) {
+      const paneState = get(paneStateAtom);
+      for (const tab of paneState.tabs) {
+        for (const pane of Object.values(tab.panes)) {
+          if (pane.kind === 'terminal') {
+            disposeSession(pane.id);
+          }
+        }
+      }
+      // Replace entire pane state with a fresh home tab
+      const home = makePane('workspace-home', {}, 'Home');
+      const tab = makeTab('Home');
+      set(paneStateAtom, { tabs: [tab], activeTabId: tab.id });
+    }
+
     set(worktreesDataAtom, (prev) => prev.filter((w) => w.id !== id));
-    // If we deleted the active worktree, clear it
-    if (get(activeWorktreeIdAtom) === id) {
-      set(activeWorktreeIdAtom, null);
+
+    // Switch to another worktree or clear
+    if (wasActive) {
+      const remaining = get(worktreesDataAtom);
+      set(activeWorktreeIdAtom, remaining.length > 0 ? remaining[0].id : null);
     }
   },
 );

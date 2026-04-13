@@ -407,12 +407,14 @@ projectRoutes.get('/projects/:id/worktrees', async (c) => {
   const allWorktrees = await listWorktrees(project.repoPath);
 
   // Get all DB worktrees for this project (tracked worktree paths)
+  // Normalize: strip trailing slash + resolve symlinks for consistent comparison
+  const norm = (p: string) => p.replace(/\/+$/, '');
   const trackedPaths = new Set(
     db.select({ worktreePath: worktrees.worktreePath })
       .from(worktrees)
       .where(eq(worktrees.projectId, id))
       .all()
-      .map((r) => r.worktreePath)
+      .map((r) => norm(r.worktreePath ?? ''))
       .filter(Boolean),
   );
 
@@ -421,7 +423,7 @@ projectRoutes.get('/projects/:id/worktrees', async (c) => {
   const cutoff = Date.now() - SEVEN_DAYS_MS;
 
   const discovered = allWorktrees
-    .filter((wt) => !wt.isBare && wt.path !== project.repoPath && !trackedPaths.has(wt.path))
+    .filter((wt) => !wt.isBare && norm(wt.path) !== norm(project.repoPath) && !trackedPaths.has(norm(wt.path)))
     .map((wt) => {
       // Get last commit timestamp on this worktree's branch
       let lastCommitMs = 0;
@@ -452,15 +454,17 @@ projectRoutes.post('/projects/:id/worktrees/import', async (c) => {
   const project = db.select().from(projects).where(eq(projects.id, id)).get();
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
-  if (!body.path || !existsSync(body.path)) {
+  const normalizedPath = body.path.replace(/\/+$/, '');
+  if (!normalizedPath || !existsSync(normalizedPath)) {
     return c.json({ error: 'Worktree path does not exist' }, 400);
   }
 
-  // Check not already tracked
-  const existingWt = db.select().from(worktrees)
-    .where(eq(worktrees.worktreePath, body.path))
-    .get();
-  if (existingWt) {
+  // Check not already tracked (normalize stored paths for comparison)
+  const allTracked = db.select().from(worktrees)
+    .where(eq(worktrees.projectId, id))
+    .all();
+  const alreadyTracked = allTracked.some((wt) => (wt.worktreePath ?? '').replace(/\/+$/, '') === normalizedPath);
+  if (alreadyTracked) {
     return c.json({ error: 'Worktree already imported' }, 409);
   }
 
@@ -468,7 +472,7 @@ projectRoutes.post('/projects/:id/worktrees/import', async (c) => {
   let branch = 'unknown';
   try {
     branch = execSync('git rev-parse --abbrev-ref HEAD', {
-      cwd: body.path,
+      cwd: normalizedPath,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
@@ -480,7 +484,7 @@ projectRoutes.post('/projects/:id/worktrees/import', async (c) => {
     // Find the most recent commit reachable from HEAD that's also on another branch
     const result = execSync(
       `git log --decorate=short --simplify-by-decoration --oneline --first-parent -20 "${branch}"`,
-      { cwd: body.path, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 3000 },
+      { cwd: normalizedPath, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 3000 },
     ).trim();
     // Parse decorated refs — look for branch names other than our own
     for (const line of result.split('\n')) {
@@ -506,7 +510,7 @@ projectRoutes.post('/projects/:id/worktrees/import', async (c) => {
     name,
     branch,
     baseBranch,
-    worktreePath: body.path,
+    worktreePath: normalizedPath,
     portBase: null,
     sectionId: null,
     tabOrder: 0,

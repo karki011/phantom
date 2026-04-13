@@ -105,7 +105,7 @@ export const ActiveSessions = () => {
       if (!targetCwd) return;
       store.addPaneAsTab(
         'terminal',
-        { cwd: targetCwd, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>,
+        { cwd: targetCwd, initialCommand: 'claude --dangerously-skip-permissions --worktree' } as Record<string, unknown>,
         'Claude',
       );
     },

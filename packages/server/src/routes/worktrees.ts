@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { db, projects, worktrees } from '@phantom-os/db';
+import { db, projects, worktrees, paneStates } from '@phantom-os/db';
 import {
   createWorktree,
   removeWorktree,
@@ -16,6 +16,8 @@ import {
   createAndCheckoutBranch,
   hasUncommittedChanges,
 } from '../worktree-manager.js';
+import { destroyPty, getPtySession } from '../terminal-manager.js';
+import { historyWriter } from '../terminal-history.js';
 import { logger } from '../logger.js';
 
 // ---------------------------------------------------------------------------
@@ -178,7 +180,7 @@ worktreeRoutes.post('/worktrees', async (c) => {
   return c.json(worktree, 201);
 });
 
-/** DELETE /worktrees/:id — Remove worktree and its git worktree */
+/** DELETE /worktrees/:id — Remove worktree, cascade cleanup terminals + pane state */
 worktreeRoutes.delete('/worktrees/:id', async (c) => {
   const id = c.req.param('id');
 
@@ -192,14 +194,29 @@ worktreeRoutes.delete('/worktrees/:id', async (c) => {
     return c.json({ error: 'Worktree not found' }, 404);
   }
 
-  // Remove git worktree if it exists
+  // 1. Kill PTY sessions associated with this worktree and purge from DB
+  const killedPaneIds = historyWriter.purgeSessionsByWorktree(id);
+  for (const paneId of killedPaneIds) {
+    if (getPtySession(paneId)) {
+      destroyPty(paneId);
+    }
+  }
+
+  // 2. Delete saved pane layout for this worktree
+  try {
+    db.delete(paneStates).where(eq(paneStates.worktreeId, id)).run();
+  } catch { /* ignore — table may not have rows */ }
+
+  // 3. Remove git worktree from disk
   if (worktree.worktreePath) {
     await removeWorktree(worktree.worktreePath);
   }
 
+  // 4. Delete worktree record
   db.delete(worktrees).where(eq(worktrees.id, id)).run();
 
-  return c.json({ ok: true });
+  // Return killed pane IDs so the client can dispose its terminal sessions
+  return c.json({ ok: true, killedPaneIds });
 });
 
 /** PATCH /worktrees/:id — Update worktree fields */

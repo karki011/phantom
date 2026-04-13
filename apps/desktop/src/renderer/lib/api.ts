@@ -271,8 +271,8 @@ export const updateWorktree = (
     body: JSON.stringify(data),
   });
 
-export const deleteWorktree = (id: string): Promise<void> =>
-  fetchApi<void>(`/api/worktrees/${id}`, { method: 'DELETE' });
+export const deleteWorktree = (id: string): Promise<{ ok: boolean; killedPaneIds?: string[] }> =>
+  fetchApi<{ ok: boolean; killedPaneIds?: string[] }>(`/api/worktrees/${id}`, { method: 'DELETE' });
 
 export const deleteProject = (id: string, deleteWorktrees = false): Promise<void> =>
   fetchApi<void>(`/api/projects/${id}`, {

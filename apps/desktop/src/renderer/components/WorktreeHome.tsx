@@ -28,11 +28,12 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { activeWorktreeAtom, deleteWorktreeAtom, projectsAtom } from '../atoms/worktrees';
+import { activeWorktreeAtom, deleteWorktreeAtom, projectsAtom, refreshWorktreesAtom } from '../atoms/worktrees';
 import type { CustomRecipe } from '../atoms/recipes';
 import { useProjectProfile } from '../hooks/useProjectProfile';
 import { useRecipes, type EnrichedRecipe } from '../hooks/useRecipes';
 import { useRouter } from '../hooks/useRouter';
+import { getDiscoveredWorktrees, importWorktree } from '../lib/api';
 import { PlansCard } from './PlansCard';
 import { RecipeFormModal } from './RecipeFormModal';
 import { RunningServersCard } from './RunningServersCard';
@@ -306,9 +307,33 @@ export function WorktreeHome() {
   // Random quote (stable per mount)
   const quote = useMemo(() => QUOTES[Math.floor(Math.random() * QUOTES.length)], []);
 
+  const refreshWorktrees = useSetAtom(refreshWorktreesAtom);
+
   const openTerminal = useCallback(() => store.addPaneAsTab('terminal', { cwd: worktree?.worktreePath } as Record<string, unknown>, 'Terminal'), [store, worktree]);
   const openEditor = useCallback(() => store.addPaneAsTab('editor', {} as Record<string, unknown>, 'Editor'), [store]);
-  const openClaude = useCallback(() => store.addPaneAsTab('terminal', { cwd: worktree?.worktreePath, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>, 'Claude'), [store, worktree]);
+  const openClaude = useCallback(() => {
+    store.addPaneAsTab('terminal', { cwd: worktree?.worktreePath, initialCommand: 'claude --dangerously-skip-permissions --worktree' } as Record<string, unknown>, 'Claude');
+
+    // Auto-import worktrees Claude creates via --worktree flag.
+    // Poll every 2s for up to 2 minutes — worktree is usually created within seconds.
+    if (!project?.id) return;
+    const projectId = project.id;
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      if (attempts > 60) { clearInterval(poll); return; }
+      try {
+        const discovered = await getDiscoveredWorktrees(projectId);
+        if (discovered.length > 0) {
+          for (const wt of discovered) {
+            await importWorktree(projectId, { path: wt.path, name: wt.branch });
+          }
+          refreshWorktrees();
+          clearInterval(poll);
+        }
+      } catch { /* ignore — server may be busy */ }
+    }, 2_000);
+  }, [store, worktree, project, refreshWorktrees]);
   const openChat = useCallback(() => store.addPaneAsTab('chat', { cwd: worktree?.worktreePath } as Record<string, unknown>, 'Chat'), [store, worktree]);
   const openJournal = useCallback(() => store.addPaneAsTab('journal', {} as Record<string, unknown>, 'Journal'), [store]);
 
