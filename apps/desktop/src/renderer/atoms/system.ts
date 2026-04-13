@@ -1,6 +1,6 @@
 /**
  * System Jotai Atoms
- * Font scale, theme, and notification queue
+ * Font scale, font family, theme, and notification queue
  *
  * @author Subash Karki
  */
@@ -12,6 +12,7 @@ import { atomWithStorage } from 'jotai/utils';
 // ---------------------------------------------------------------------------
 
 export type FontScale = 0.9 | 1.0 | 1.1 | 1.25 | 1.5;
+export type FontFamily = 'jetbrains-mono' | 'fira-code' | 'inter' | 'space-grotesk' | 'ibm-plex-mono';
 export type ThemeMode = 'dark' | 'light';
 export type TopLevelTab = 'cockpit' | 'worktree';
 
@@ -36,6 +37,23 @@ export const sseConnectionAtom = atom<SseConnectionState>('connecting');
 export const fontScaleAtom = atomWithStorage<FontScale>(
   'phantom-font-scale',
   1.0,
+);
+
+// ---------------------------------------------------------------------------
+// Font family — persisted to localStorage
+// ---------------------------------------------------------------------------
+
+export const FONT_FAMILY_OPTIONS: { value: FontFamily; label: string; css: string }[] = [
+  { value: 'jetbrains-mono', label: 'JetBrains Mono', css: "'JetBrains Mono', monospace" },
+  { value: 'fira-code', label: 'Fira Code', css: "'Fira Code', monospace" },
+  { value: 'inter', label: 'Inter', css: "'Inter', sans-serif" },
+  { value: 'space-grotesk', label: 'Space Grotesk', css: "'Space Grotesk', sans-serif" },
+  { value: 'ibm-plex-mono', label: 'IBM Plex Mono', css: "'IBM Plex Mono', monospace" },
+];
+
+export const fontFamilyAtom = atomWithStorage<FontFamily>(
+  'phantom-font-family',
+  'jetbrains-mono',
 );
 
 // ---------------------------------------------------------------------------

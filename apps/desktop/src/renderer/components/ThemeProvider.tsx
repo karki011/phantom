@@ -1,18 +1,26 @@
 /**
- * ThemeProvider — reactive Mantine theme wrapper driven by Jotai atom.
- * Reads themeNameAtom and rebuilds the Mantine theme whenever it changes.
+ * ThemeProvider — reactive Mantine theme wrapper driven by Jotai atoms.
+ * Reads themeNameAtom + fontFamilyAtom and rebuilds the Mantine theme.
  * @author Subash Karki
  */
 import { MantineProvider } from '@mantine/core';
 import { useAtomValue } from 'jotai';
 import { themeRegistry, defaultTheme, buildPhantomTheme, buildCssVarsResolver } from '@phantom-os/theme';
-import { themeNameAtom } from '../atoms/system';
+import { themeNameAtom, fontFamilyAtom, FONT_FAMILY_OPTIONS } from '../atoms/system';
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const themeName = useAtomValue(themeNameAtom);
+  const fontFamily = useAtomValue(fontFamilyAtom);
   const tokens = themeRegistry.find(t => t.name === themeName) ?? defaultTheme;
-  const theme = buildPhantomTheme(tokens);
-  const cssVarsResolver = buildCssVarsResolver(tokens);
+
+  // Override body font with user selection, keep heading font (Orbitron)
+  const fontOption = FONT_FAMILY_OPTIONS.find(f => f.value === fontFamily);
+  const tokensWithFont = fontOption
+    ? { ...tokens, fontFamily: { body: fontOption.css, heading: tokens.fontFamily.heading } }
+    : tokens;
+
+  const theme = buildPhantomTheme(tokensWithFont);
+  const cssVarsResolver = buildCssVarsResolver(tokensWithFont);
 
   let defaultColorScheme: 'dark' | 'light' = 'dark';
   try {

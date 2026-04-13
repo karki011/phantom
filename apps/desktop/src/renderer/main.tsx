@@ -3,6 +3,7 @@
  * Electron renderer entry point — the sole frontend for PhantomOS.
  * @author Subash Karki
  */
+import './fonts/fonts.css';
 import '@mantine/core/styles.css';
 import { Notifications } from '@mantine/notifications';
 import '@mantine/notifications/styles.css';

@@ -48,6 +48,7 @@ import { ViewHeader } from '../layout/ViewHeader';
 // ---------------------------------------------------------------------------
 
 const ACHIEVEMENT_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
+  // Lucide icon names
   sparkles: Sparkles,
   ghost: Ghost,
   shield: Shield,
@@ -63,6 +64,19 @@ const ACHIEVEMENT_ICONS: Record<string, React.ComponentType<{ size?: number }>> 
   sunrise: Sunrise,
   globe: Globe,
   crown: Crown,
+  // Emoji → lucide mapping (achievement definitions use emojis)
+  '⚔️': Swords,
+  '👤': Ghost,
+  '👑': Crown,
+  '🌑': Moon,
+  '🏰': Shield,
+  '🌍': Globe,
+  '🔥': Flame,
+  '💎': Sparkles,
+  '📈': Zap,
+  '⭐': Sparkles,
+  '🌟': Sparkles,
+  '💫': Crown,
 };
 
 const getAchievementIcon = (iconName: string) =>

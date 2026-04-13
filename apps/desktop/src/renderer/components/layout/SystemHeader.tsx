@@ -19,7 +19,7 @@ import { useAtom, useSetAtom } from 'jotai';
 import { ArrowLeft, Circle, Cpu, HelpCircle, MemoryStick, Moon, Palette, Power, Sun, Swords, Type, Zap } from 'lucide-react';
 import { themeRegistry } from '@phantom-os/theme';
 
-import { type FontScale, fontScaleAtom, themeNameAtom } from '../../atoms/system';
+import { type FontScale, fontScaleAtom, fontFamilyAtom, FONT_FAMILY_OPTIONS, themeNameAtom } from '../../atoms/system';
 import { shutdownVisibleAtom } from '../../atoms/shutdown';
 import { usePreferences } from '../../hooks/usePreferences';
 import { useRouter } from '../../hooks/useRouter';
@@ -47,6 +47,7 @@ const formatBytes = (bytes: number): string => {
 export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }: SystemHeaderProps) => {
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const [fontScale, setFontScale] = useAtom(fontScaleAtom);
+  const [fontFamily, setFontFamily] = useAtom(fontFamilyAtom);
   const [themeName, setThemeName] = useAtom(themeNameAtom);
   const { isHome, navigate } = useRouter();
   const { isEnabled, setPref } = usePreferences();
@@ -293,6 +294,36 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
                 fw={fontScale === option.value ? 700 : 400}
                 c={fontScale === option.value ? 'var(--phantom-accent-glow)' : undefined}
                 aria-current={fontScale === option.value ? 'true' : undefined}
+              >
+                {option.label}
+              </Menu.Item>
+            ))}
+          </Menu.Dropdown>
+        </Menu>
+
+        {/* Font Family Menu */}
+        <Menu shadow="md" width={180} position="bottom-end">
+          <Menu.Target>
+            <Tooltip label="Font family">
+              <ActionIcon
+                variant="subtle"
+                size="lg"
+                aria-label="Font family settings"
+              >
+                <Text fz="0.7rem" fw={700} ff="'Orbitron', sans-serif" aria-hidden="true">Aa</Text>
+              </ActionIcon>
+            </Tooltip>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Label>Font Family</Menu.Label>
+            {FONT_FAMILY_OPTIONS.map((option) => (
+              <Menu.Item
+                key={option.value}
+                onClick={() => setFontFamily(option.value)}
+                fw={fontFamily === option.value ? 700 : 400}
+                c={fontFamily === option.value ? 'var(--phantom-accent-glow)' : undefined}
+                ff={option.css}
+                aria-current={fontFamily === option.value ? 'true' : undefined}
               >
                 {option.label}
               </Menu.Item>

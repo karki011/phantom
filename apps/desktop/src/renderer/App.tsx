@@ -17,7 +17,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Flame, Trophy } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { WorkspaceProvider, Workspace, switchWorkspaceAtom, activePaneAtom } from '@phantom-os/panes';
+import { WorkspaceProvider, Workspace, switchWorkspaceAtom, activePaneAtom, usePaneStore } from '@phantom-os/panes';
 import { paneDefinitions, paneMenu } from './panes/registry';
 import { unlockedCountAtom, refreshAchievementsAtom } from './atoms/achievements';
 import { shutdownVisibleAtom } from './atoms/shutdown';
@@ -51,6 +51,22 @@ import { ShutdownCeremony } from './components/brand/ShutdownCeremony';
 import { QuickOpen } from './components/QuickOpen';
 import { RecipeQuickLaunch } from './components/RecipeQuickLaunch';
 import { generateMorningBrief } from './lib/api';
+
+/** Listen for file-open events from terminal overlay and open in editor pane */
+const FileOpenListener = () => {
+  const store = usePaneStore();
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { filePath, title } = (e as CustomEvent).detail ?? {};
+      if (filePath) {
+        store.addPaneAsTab('editor', { filePath } as Record<string, unknown>, title ?? filePath.split('/').pop() ?? 'Plan');
+      }
+    };
+    window.addEventListener('phantom:open-file-in-editor', handler);
+    return () => window.removeEventListener('phantom:open-file-in-editor', handler);
+  }, [store]);
+  return null;
+};
 
 /** Render cockpit sub-route content (sessions, tokens, profile, etc.) */
 const ViewContent = ({ route }: { route: Route }) => {
@@ -232,6 +248,7 @@ export const App = () => {
 
   return (
     <WorkspaceProvider definitions={paneDefinitions}>
+    <FileOpenListener />
     <QuickOpen />
     <RecipeQuickLaunch />
     {shutdownVisible && (

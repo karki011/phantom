@@ -280,19 +280,32 @@ export const Cockpit = () => {
             </Stack>
           </Paper>
 
-          {/* Level Progress (gamification) */}
+          {/* Level Progress (gamification) — click to open hunter stats */}
           {showGamification && profile && (
             <Paper
               p="sm"
               bg="var(--phantom-surface-card)"
-              style={{ border: '1px solid var(--phantom-border-subtle)' }}
+              style={{
+                border: '1px solid var(--phantom-border-subtle)',
+                cursor: 'pointer',
+                transition: 'border-color 150ms ease, box-shadow 150ms ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'var(--phantom-accent-gold, #f59e0b)';
+                e.currentTarget.style.boxShadow = '0 0 0.5rem rgba(245, 158, 11, 0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'var(--phantom-border-subtle)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+              onClick={() => navigate('hunter-stats')}
             >
               <Group gap="xs" mb="xs">
                 <Shield size={14} style={{ color: 'var(--phantom-accent-gold, #f59e0b)' }} />
                 <Text fz="0.75rem" fw={600} c="var(--phantom-text-primary)">Level Progress</Text>
               </Group>
               <Text fz="xs" c="var(--phantom-text-secondary)" mb={6}>
-                {profile.rank} Rank — Level {profile.level}. {profile.xpToNext > 0 ? `${profile.xpToNext} XP to next level.` : 'Max level reached!'}
+                {profile.rank} Rank — Level {profile.level}. {(profile.xpToNext ?? 0) - (profile.xp ?? 0) > 0 ? `${(profile.xpToNext ?? 0) - (profile.xp ?? 0)} XP to next level.` : 'Max level reached!'}
               </Text>
               <div style={{
                 height: 6, borderRadius: 3, backgroundColor: 'var(--phantom-surface-elevated)',
@@ -300,7 +313,7 @@ export const Cockpit = () => {
               }}>
                 <div style={{
                   height: '100%', borderRadius: 3,
-                  width: `${Math.min(100, ((profile.xp ?? 0) / ((profile.xp ?? 0) + (profile.xpToNext ?? 1))) * 100)}%`,
+                  width: `${Math.min(100, ((profile.xp ?? 0) / (profile.xpToNext ?? 1)) * 100)}%`,
                   background: 'linear-gradient(90deg, var(--phantom-accent-glow), var(--phantom-accent-cyan))',
                   transition: 'width 500ms ease',
                 }} />
@@ -308,7 +321,7 @@ export const Cockpit = () => {
               <Group justify="space-between" mt={4}>
                 <Text fz="0.6rem" c="var(--phantom-text-muted)">XP</Text>
                 <Text fz="0.6rem" c="var(--phantom-text-muted)" ff="'JetBrains Mono', monospace">
-                  {profile.xp ?? 0} / {(profile.xp ?? 0) + (profile.xpToNext ?? 0)}
+                  {profile.xp ?? 0} / {profile.xpToNext ?? 0}
                 </Text>
               </Group>
             </Paper>

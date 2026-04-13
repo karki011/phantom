@@ -3,8 +3,7 @@
  * Shows incomplete tasks (top) and matching plans (bottom) in a single panel.
  * Collapsed: thin edge tab on right with task badge count.
  * Expanded: scrollable panel with both sections.
- * Plan items are expandable to show full markdown content inline.
- * Panel auto-widens from 250px to 350px when a plan is expanded.
+ * Clicking a plan opens it in the editor pane via phantom:open-file-in-editor event.
  * Auto-hides when zero tasks AND zero plans exist.
  * @author Subash Karki
  */
@@ -117,27 +116,6 @@ function usePlans(cwd: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Hook: usePlanContent — lazy-loads plan file content on expand
-// ---------------------------------------------------------------------------
-
-function usePlanContent(fullPath: string | null) {
-  const [content, setContent] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!fullPath) { setContent(null); return; }
-    setLoading(true);
-    fetch(`/api/file-read?path=${encodeURIComponent(fullPath)}`)
-      .then((r) => (r.ok ? r.text() : ''))
-      .then(setContent)
-      .catch(() => setContent(''))
-      .finally(() => setLoading(false));
-  }, [fullPath]);
-
-  return { content, loading };
-}
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -197,89 +175,62 @@ const StatusIcon = ({ status }: { status: string }) => {
 
 const PlanItem = memo(function PlanItem({
   plan,
-  isExpanded,
-  onToggle,
 }: {
   plan: PlanFile;
-  isExpanded: boolean;
-  onToggle: () => void;
 }) {
-  const { content, loading } = usePlanContent(isExpanded ? plan.fullPath : null);
+  const handleClick = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('phantom:open-file-in-editor', {
+      detail: { filePath: plan.fullPath, title: plan.title },
+    }));
+  }, [plan.fullPath, plan.title]);
 
   return (
     <div>
-      {/* Plan header row */}
       <div
-        onClick={onToggle}
+        onClick={handleClick}
         style={{
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           gap: 8,
-          padding: '6px 12px',
+          padding: '7px 12px',
           cursor: 'pointer',
           borderRadius: 4,
-          transition: 'background-color 100ms ease',
+          borderLeft: '2px solid transparent',
+          transition: 'background-color 150ms ease, border-color 150ms ease',
         }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.04)'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+        onMouseEnter={(e) => {
+          const el = e.currentTarget as HTMLElement;
+          el.style.backgroundColor = 'rgba(167, 139, 250, 0.08)';
+          el.style.borderLeftColor = 'var(--phantom-accent-glow, #a78bfa)';
+        }}
+        onMouseLeave={(e) => {
+          const el = e.currentTarget as HTMLElement;
+          el.style.backgroundColor = 'transparent';
+          el.style.borderLeftColor = 'transparent';
+        }}
       >
-        <div style={{ transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 150ms ease' }}>
-          <IconChevron direction="down" />
+        <div style={{ paddingTop: 2, flexShrink: 0 }}>
+          <IconFileText color="var(--phantom-accent-glow, #a78bfa)" />
         </div>
-        <IconFileText color="var(--phantom-accent-glow, #a78bfa)" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
             fontSize: '11px',
             fontFamily: 'JetBrains Mono, monospace',
             color: 'var(--phantom-text-primary, #eee)',
-            lineHeight: 1.4,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            lineHeight: 1.5,
+            wordBreak: 'break-word',
           }}>
             {plan.title}
           </div>
+          <span style={{
+            fontSize: '9px',
+            fontFamily: 'JetBrains Mono, monospace',
+            color: 'var(--phantom-text-muted, #666)',
+          }}>
+            {formatAge(plan.modifiedAt)}
+          </span>
         </div>
-        <span style={{
-          fontSize: '9px',
-          fontFamily: 'JetBrains Mono, monospace',
-          color: 'var(--phantom-text-muted, #666)',
-          flexShrink: 0,
-        }}>
-          {formatAge(plan.modifiedAt)}
-        </span>
       </div>
-
-      {/* Expanded content */}
-      {isExpanded && (
-        <div style={{
-          padding: '4px 12px 8px 36px',
-          maxHeight: 300,
-          overflowY: 'auto',
-        }}>
-          {loading ? (
-            <span style={{
-              fontSize: '10px',
-              fontFamily: 'JetBrains Mono, monospace',
-              color: 'var(--phantom-text-muted, #666)',
-            }}>
-              Loading...
-            </span>
-          ) : (
-            <pre style={{
-              fontSize: '10px',
-              fontFamily: 'JetBrains Mono, monospace',
-              color: 'var(--phantom-text-secondary, #aaa)',
-              lineHeight: 1.5,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              margin: 0,
-            }}>
-              {content}
-            </pre>
-          )}
-        </div>
-      )}
     </div>
   );
 });
@@ -288,8 +239,7 @@ const PlanItem = memo(function PlanItem({
 // Main Component
 // ---------------------------------------------------------------------------
 
-const PANEL_WIDTH = 250;
-const PANEL_WIDTH_EXPANDED = 350;
+const PANEL_WIDTH = 320;
 const TAB_WIDTH = 24;
 
 export const TaskOverlayPanel = memo(function TaskOverlayPanel({
@@ -300,15 +250,9 @@ export const TaskOverlayPanel = memo(function TaskOverlayPanel({
   const tasks = useIncompleteTasks(cwd);
   const plans = usePlans(cwd);
   const [expanded, setExpanded] = useState(false);
-  const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const hasPlanExpanded = expandedPlan !== null;
-  const panelWidth = hasPlanExpanded ? PANEL_WIDTH_EXPANDED : PANEL_WIDTH;
-
-  const togglePlan = useCallback((filename: string) => {
-    setExpandedPlan((prev) => (prev === filename ? null : filename));
-  }, []);
+  const panelWidth = PANEL_WIDTH;
 
   // Click-outside to collapse
   useEffect(() => {
@@ -572,8 +516,6 @@ export const TaskOverlayPanel = memo(function TaskOverlayPanel({
                     <PlanItem
                       key={plan.filename}
                       plan={plan}
-                      isExpanded={expandedPlan === plan.filename}
-                      onToggle={() => togglePlan(plan.filename)}
                     />
                   ))}
                 </div>
