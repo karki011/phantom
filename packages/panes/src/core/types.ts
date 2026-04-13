@@ -76,6 +76,7 @@ export interface PaneActions<TData = Record<string, unknown>> {
   // Tab operations
   addTab: (label?: string) => string;
   removeTab: (tabId: string) => void;
+  closeOtherTabs: (keepTabId: string) => void;
   setActiveTab: (tabId: string) => void;
   reorderTab: (fromIndex: number, toIndex: number) => void;
   renameTab: (tabId: string, label: string) => void;

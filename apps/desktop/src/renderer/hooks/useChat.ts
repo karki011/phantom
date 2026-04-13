@@ -6,6 +6,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+const apiBase = (window as any).__PHANTOM_API_BASE ?? '';
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -54,8 +56,8 @@ export const useChat = (cwd?: string, worktreeId?: string | null, projectContext
     if (worktreeId === undefined) return; // Wait for worktree info
 
     const url = worktreeId
-      ? `/api/chat/conversations?worktreeId=${worktreeId}`
-      : '/api/chat/conversations';
+      ? `${apiBase}/api/chat/conversations?worktreeId=${worktreeId}`
+      : `${apiBase}/api/chat/conversations`;
 
     fetch(url)
       .then((r) => r.json())
@@ -84,7 +86,7 @@ export const useChat = (cwd?: string, worktreeId?: string | null, projectContext
       return;
     }
 
-    fetch(`/api/chat/history?conversationId=${activeConversationId}&limit=100`)
+    fetch(`${apiBase}/api/chat/history?conversationId=${activeConversationId}&limit=100`)
       .then((r) => r.json())
       .then((rows: { id: string; role: string; content: string; model?: string; createdAt: number }[]) => {
         setMessages(rows.map((r) => ({
@@ -101,7 +103,7 @@ export const useChat = (cwd?: string, worktreeId?: string | null, projectContext
   /** Create a new conversation and switch to it */
   const newChat = useCallback(async () => {
     try {
-      const resp = await fetch('/api/chat/conversations', {
+      const resp = await fetch(`${apiBase}/api/chat/conversations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ worktreeId, model }),
@@ -124,7 +126,7 @@ export const useChat = (cwd?: string, worktreeId?: string | null, projectContext
   const ensureConversation = useCallback(async (): Promise<string> => {
     if (activeConversationId) return activeConversationId;
 
-    const resp = await fetch('/api/chat/conversations', {
+    const resp = await fetch(`${apiBase}/api/chat/conversations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ worktreeId, model }),
@@ -172,7 +174,7 @@ export const useChat = (cwd?: string, worktreeId?: string | null, projectContext
     try {
       abortRef.current = new AbortController();
 
-      const response = await fetch('/api/chat', {
+      const response = await fetch(`${apiBase}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -248,7 +250,7 @@ export const useChat = (cwd?: string, worktreeId?: string | null, projectContext
       );
 
       // Persist both messages to DB (with conversationId)
-      fetch('/api/chat/save', {
+      fetch(`${apiBase}/api/chat/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -292,7 +294,7 @@ export const useChat = (cwd?: string, worktreeId?: string | null, projectContext
 
   /** Delete a conversation and its messages */
   const deleteConversation = useCallback(async (id: string) => {
-    await fetch(`/api/chat/conversations/${id}`, { method: 'DELETE' }).catch(() => {});
+    await fetch(`${apiBase}/api/chat/conversations/${id}`, { method: 'DELETE' }).catch(() => {});
     setConversations((prev) => prev.filter((c) => c.id !== id));
     if (activeConversationId === id) {
       setActiveConversationId(null);
@@ -308,8 +310,8 @@ export const useChat = (cwd?: string, worktreeId?: string | null, projectContext
 
     // Clear DB history
     const url = worktreeId
-      ? `/api/chat/history?worktreeId=${worktreeId}`
-      : '/api/chat/history';
+      ? `${apiBase}/api/chat/history?worktreeId=${worktreeId}`
+      : `${apiBase}/api/chat/history`;
     fetch(url, { method: 'DELETE' }).catch(() => {});
     setConversations([]);
     setActiveConversationId(null);

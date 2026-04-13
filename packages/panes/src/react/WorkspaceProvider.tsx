@@ -21,6 +21,7 @@ import {
   activePaneAtom,
   addTabAtom,
   removeTabAtom,
+  closeOtherTabsAtom,
   setActiveTabAtom,
   reorderTabAtom,
   renameTabAtom,
@@ -68,6 +69,7 @@ export interface PaneStoreCompat {
   // Tab operations
   addTab: (label?: string) => string;
   removeTab: (tabId: string) => void;
+  closeOtherTabs: (keepTabId: string) => void;
   setActiveTab: (tabId: string) => void;
   reorderTab: (fromIndex: number, toIndex: number) => void;
   renameTab: (tabId: string, label: string) => void;
@@ -115,6 +117,7 @@ export function usePaneStore(): PaneStoreCompat {
   // Write dispatchers
   const _addTab = useSetAtom(addTabAtom);
   const _removeTab = useSetAtom(removeTabAtom);
+  const _closeOtherTabs = useSetAtom(closeOtherTabsAtom);
   const _setActiveTab = useSetAtom(setActiveTabAtom);
   const _reorderTab = useSetAtom(reorderTabAtom);
   const _renameTab = useSetAtom(renameTabAtom);
@@ -137,6 +140,7 @@ export function usePaneStore(): PaneStoreCompat {
       // Tab operations — match old Zustand API signatures
       addTab: (label?: string) => _addTab(label),
       removeTab: (tabId: string) => _removeTab(tabId),
+      closeOtherTabs: (keepTabId: string) => _closeOtherTabs(keepTabId),
       setActiveTab: (tabId: string) => _setActiveTab(tabId),
       reorderTab: (fromIndex: number, toIndex: number) =>
         _reorderTab({ from: fromIndex, to: toIndex }),
@@ -188,6 +192,7 @@ export function usePaneStore(): PaneStoreCompat {
       _activePane,
       _addTab,
       _removeTab,
+      _closeOtherTabs,
       _setActiveTab,
       _reorderTab,
       _renameTab,

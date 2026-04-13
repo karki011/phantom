@@ -6,6 +6,8 @@
  */
 import { useEffect, useState } from 'react';
 
+const apiBase = (window as any).__PHANTOM_API_BASE ?? '';
+
 export interface TopProcess {
   name: string;
   memMB: number;
@@ -27,7 +29,7 @@ export const useSystemMetrics = () => {
 
   useEffect(() => {
     const fetchMetrics = () =>
-      fetch('/api/system-metrics')
+      fetch(`${apiBase}/api/system-metrics`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (data) setMetrics(data as SystemMetrics);

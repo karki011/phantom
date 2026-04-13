@@ -125,6 +125,44 @@ export const removeTabAtom = atom(null, (get, set, tabId: string) => {
   });
 });
 
+export const closeOtherTabsAtom = atom(null, (get, set, keepTabId: string) => {
+  const state = get(paneStateAtom);
+  const removableTabs = state.tabs.filter(
+    (t) => t.id !== keepTabId && !Object.values(t.panes).some((p) => p.kind === 'workspace-home'),
+  );
+
+  // Veto check + terminal cleanup for each removable tab
+  if (typeof window !== 'undefined') {
+    for (const tab of removableTabs) {
+      for (const pane of Object.values(tab.panes)) {
+        const closeEvent = new CustomEvent('phantom:pane-close', {
+          detail: { paneId: pane.id },
+          cancelable: true,
+        });
+        const allowed = window.dispatchEvent(closeEvent);
+        if (!allowed) return; // A pane vetoed — abort
+      }
+    }
+    for (const tab of removableTabs) {
+      for (const pane of Object.values(tab.panes)) {
+        if (pane.kind === 'terminal') {
+          window.dispatchEvent(
+            new CustomEvent('phantom:terminal-kill', { detail: { paneId: pane.id } }),
+          );
+        }
+      }
+    }
+  }
+
+  const removableIds = new Set(removableTabs.map((t) => t.id));
+  set(paneStateAtom, (s) => {
+    const tabs = s.tabs.filter((t) => !removableIds.has(t.id));
+    if (tabs.length === 0) return s;
+    const activeTabId = (s.activeTabId && removableIds.has(s.activeTabId)) ? keepTabId : s.activeTabId;
+    return { ...s, tabs, activeTabId };
+  });
+});
+
 export const setActiveTabAtom = atom(null, (_get, set, tabId: string) => {
   set(paneStateAtom, (s) => ({ ...s, activeTabId: tabId }));
 });

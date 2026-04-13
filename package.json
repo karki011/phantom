@@ -22,6 +22,7 @@
     "test:stress:realtime": "vitest run --reporter=verbose packages/server/src/__stress__/realtime.stress.test.ts",
     "test:stress:projects": "vitest run --reporter=verbose packages/server/src/__stress__/projects-worktrees.stress.test.ts",
     "test:stress:resources": "vitest run --reporter=verbose packages/server/src/__stress__/resource-limits.stress.test.ts",
+    "dist:mac": "turbo build && cd apps/desktop && bun run dist:mac",
     "postinstall": "chmod +x node_modules/.bun/node-pty@*/node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true; bash scripts/patch-electron-name.sh"
   },
   "dependencies": {

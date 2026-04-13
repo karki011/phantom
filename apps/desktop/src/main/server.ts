@@ -1,17 +1,15 @@
 /**
  * PhantomOS Desktop — Server Bootstrap
- * Runs the Hono API server as a child process using system Node.js
- * so native modules (better-sqlite3) work without Electron V8 conflicts.
+ * Runs the Hono API server as a child process.
+ * Dev: waits for turbo dev server.
+ * Production: uses utilityProcess.fork() for Electron Node ABI + PTY compat.
  * @author Subash Karki
  */
-import { spawn, type ChildProcess } from 'node:child_process';
+import { type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
-import { app } from 'electron';
+import { app, utilityProcess, type UtilityProcess } from 'electron';
 
-let serverProcess: ChildProcess | null = null;
-
-/** Monorepo root (two levels up from apps/desktop/) */
-const monoRoot = join(__dirname, '..', '..', '..', '..');
+let serverProcess: ChildProcess | UtilityProcess | null = null;
 
 /** Poll the health endpoint until the server responds */
 const waitForServer = (port: number, maxWaitMs = 15000): Promise<void> =>
@@ -46,7 +44,6 @@ const isServerRunning = async (port: number): Promise<boolean> => {
 
 /**
  * Wait for an external server (e.g. turbo dev) to become reachable.
- * Returns true if the server appeared within the deadline, false otherwise.
  */
 const waitForExternalServer = (
   port: number,
@@ -68,9 +65,6 @@ const waitForExternalServer = (
 /** Start the API server and wait for it to be ready */
 export const startServer = async (): Promise<void> => {
   if (!app.isPackaged) {
-    // DEV MODE: turbo always starts the server — just wait for it.
-    // Never spawn our own to avoid dual-process races and duplicate
-    // GraphEngine instances writing to the same SQLite.
     console.log('[PhantomOS Desktop] Dev mode — waiting for turbo server on :3849');
     const ready = await waitForExternalServer(3849, 30_000, 500);
     if (ready) {
@@ -81,19 +75,28 @@ export const startServer = async (): Promise<void> => {
     return;
   }
 
-  // PRODUCTION: Electron owns the server — spawn it as a child process.
-  const entry = join(process.resourcesPath, 'server', 'index.js');
+  // PRODUCTION: wait for app ready (utilityProcess requires it)
+  await app.whenReady();
 
-  console.log(`[PhantomOS Desktop] Starting API server: node ${entry}`);
+  const entry = join(process.resourcesPath, 'server', 'index.cjs');
+  const unpackedModules = join(process.resourcesPath, 'app.asar.unpacked', 'node_modules');
 
-  serverProcess = spawn('node', [entry], {
-    cwd: monoRoot,
-    env: { ...process.env },
-    stdio: ['ignore', 'inherit', 'inherit'],
+  console.log(`[PhantomOS Desktop] Starting API server: ${entry}`);
+
+  serverProcess = utilityProcess.fork(entry, [], {
+    cwd: app.getPath('home'),
+    stdio: 'pipe',
+    env: {
+      ...process.env,
+      NODE_PATH: unpackedModules,
+    },
   });
 
-  serverProcess.on('error', (err) => {
-    console.error('[PhantomOS Desktop] Server process error:', err.message);
+  serverProcess.stdout?.on('data', (chunk: Buffer) => {
+    process.stdout.write(chunk.toString());
+  });
+  serverProcess.stderr?.on('data', (chunk: Buffer) => {
+    process.stderr.write(chunk.toString());
   });
 
   serverProcess.on('exit', (code) => {
@@ -111,11 +114,7 @@ export const startServer = async (): Promise<void> => {
 
 export const stopServer = (): void => {
   if (serverProcess) {
-    serverProcess.kill('SIGTERM');
+    serverProcess.kill();
     serverProcess = null;
   }
 };
-
-// === DISABLED (M4): Terminal daemon — needs output routing rewrite ===
-// ensureTerminalDaemon, isDaemonRunning, DAEMON_PID_FILE removed.
-// Recover from git history when M4 terminal daemon work resumes.

@@ -1,0 +1,42 @@
+appId: com.phantomos.desktop
+productName: PhantomOS
+copyright: Copyright © 2026 Subash Karki
+
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - dist/**/*
+
+extraResources:
+  - from: ../../packages/server/dist
+    to: server
+    filter:
+      - "**/*"
+
+mac:
+  category: public.app-category.developer-tools
+  icon: resources/icon.icns
+  target:
+    - target: dmg
+      arch:
+        - arm64
+    - target: zip
+      arch:
+        - arm64
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+
+dmg:
+  title: "PhantomOS ${version}"
+  artifactName: "PhantomOS-${version}-${arch}.dmg"
+
+asar: true
+asarUnpack:
+  - "node_modules/**"
+
+npmRebuild: false
+nodeGypRebuild: false
+buildDependenciesFromSource: false

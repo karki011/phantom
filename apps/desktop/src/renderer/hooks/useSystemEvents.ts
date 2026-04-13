@@ -28,7 +28,8 @@ const logToJournal = (line: string): void => {
   appendJournalLog(date, `${time} · ${line}`).catch(() => {});
 };
 
-const SSE_URL = '/events';
+const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3849' : '';
+const SSE_URL = `${API_BASE}/events`;
 
 interface SSEEvent {
   type: string;

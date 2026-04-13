@@ -50,7 +50,7 @@ import { SplashScreen } from './components/brand/SplashScreen';
 import { ShutdownCeremony } from './components/brand/ShutdownCeremony';
 import { QuickOpen } from './components/QuickOpen';
 import { RecipeQuickLaunch } from './components/RecipeQuickLaunch';
-import { generateMorningBrief } from './lib/api';
+import { fetchApi, generateMorningBrief, type JournalEntry } from './lib/api';
 
 /** Listen for file-open events from terminal overlay and open in editor pane */
 const FileOpenListener = () => {
@@ -150,9 +150,13 @@ export const App = () => {
           const today = new Date();
           const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
           try {
-            await generateMorningBrief(dateStr);
+            // Check if already generated to avoid a 409 console error
+            const existing = await fetchApi<JournalEntry>(`/api/journal/${dateStr}`);
+            if (!existing.morningGeneratedAt) {
+              await generateMorningBrief(dateStr);
+            }
           } catch {
-            // 409 or error — skip silently
+            // Network error or other failure — skip silently
           }
         }, 800);
         updateBootStep('journal', 'done');

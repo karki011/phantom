@@ -5,8 +5,8 @@
  */
 import './fonts/fonts.css';
 import '@mantine/core/styles.css';
-import { Notifications } from '@mantine/notifications';
-import '@mantine/notifications/styles.css';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { Provider as JotaiProvider } from 'jotai';
 import { jotaiStore } from '@phantom-os/panes';
 import { StrictMode } from 'react';
@@ -47,7 +47,23 @@ createRoot(container).render(
   <StrictMode>
     <JotaiProvider store={jotaiStore}>
       <ThemeProvider>
-        <Notifications position="top-right" />
+        <ToastContainer
+          position="top-right"
+          autoClose={4000}
+          hideProgressBar={false}
+          newestOnTop
+          closeOnClick
+          pauseOnHover
+          draggable={false}
+          theme="dark"
+          toastStyle={{
+            backgroundColor: 'var(--phantom-surface-card)',
+            borderRadius: 8,
+            border: '1px solid var(--phantom-border-subtle)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            fontSize: '0.82rem',
+          }}
+        />
         <ErrorBoundary>
           <App />
         </ErrorBoundary>

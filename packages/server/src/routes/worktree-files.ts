@@ -367,7 +367,7 @@ worktreeFileRoutes.get('/worktrees/:id/git-status', (c) => {
   if (!root) return c.json({ error: 'Worktree not found' }, 404);
 
   try {
-    const output = execSync('git status -b --porcelain --untracked-files=all', {
+    const output = execSync('git --no-optional-locks status -b --porcelain --untracked-files=all', {
       cwd: root,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],

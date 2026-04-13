@@ -55,18 +55,23 @@ class GraphEngineService {
     });
 
     // Check all projects — build graphs for any that don't have persisted data
+    // Limit concurrent builds to MAX_IN_MEMORY to avoid EMFILE from too many watchers
     const allProjects = db.select().from(projects).all();
-    let built = 0;
+    const needsBuild: typeof allProjects = [];
     for (const project of allProjects) {
       const meta = this.persistence.loadMeta(project.id);
       if (!meta || meta.fileCount === 0) {
-        // No graph data yet — trigger background build
-        void this.buildProject(project.id, project.repoPath);
-        built++;
+        needsBuild.push(project);
       }
     }
 
-    logger.info('GraphEngine', `Initialized (LRU mode, max ${MAX_IN_MEMORY} in memory). Queued ${built} builds for projects missing graph data.`);
+    // Build only the first batch immediately; the rest will build on-demand when accessed
+    const immediateBuild = needsBuild.slice(0, MAX_IN_MEMORY);
+    for (const project of immediateBuild) {
+      void this.buildProject(project.id, project.repoPath);
+    }
+
+    logger.info('GraphEngine', `Initialized (LRU mode, max ${MAX_IN_MEMORY} in memory). Building ${immediateBuild.length}/${needsBuild.length} projects now, rest on-demand.`);
   }
 
   // ---------------------------------------------------------------------------
@@ -110,8 +115,9 @@ class GraphEngineService {
         `Graph built for ${projectId}: ${stats.fileCount} files, ${stats.totalEdges} edges in ${durationMs}ms`,
       );
 
-      // Start file watcher after initial build completes
-      if (!ctx.watcher.isWatching()) {
+      // Only start file watcher if this project is within the LRU limit
+      // to avoid EMFILE errors from too many concurrent watchers
+      if (!ctx.watcher.isWatching() && this.lru.indexOf(projectId) >= this.lru.length - MAX_IN_MEMORY) {
         ctx.watcher.start();
       }
 
@@ -132,6 +138,16 @@ class GraphEngineService {
     const ctx = this.resolve(projectId);
     if (!ctx) return null;
     return ctx.query.getStats(projectId);
+  }
+
+  /** Get stats for all projects in one call (from persisted meta) */
+  getAllStats(): Record<string, { fileCount: number; totalEdges: number }> {
+    const allMeta = this.persistence.loadAllMeta();
+    const result: Record<string, { fileCount: number; totalEdges: number }> = {};
+    for (const meta of allMeta) {
+      result[meta.projectId] = { fileCount: meta.fileCount, totalEdges: meta.totalEdges };
+    }
+    return result;
   }
 
   /** Get all file paths in the graph for a project */
@@ -350,8 +366,8 @@ class GraphEngineService {
       ctx.graph.addEdge(edge);
     }
 
-    // Start file watcher after hydration
-    if (!ctx.watcher.isWatching()) {
+    // Only start file watcher if within LRU limit to avoid EMFILE
+    if (!ctx.watcher.isWatching() && this.instances.size <= MAX_IN_MEMORY) {
       ctx.watcher.start();
     }
 

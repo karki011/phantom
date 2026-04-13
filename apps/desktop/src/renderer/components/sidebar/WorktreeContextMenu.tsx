@@ -1,6 +1,6 @@
 /**
  * WorktreeContextMenu — right-click context menu for worktree items
- * Uses a pending action ref so callbacks fire cleanly after menu closes.
+ * Uses Mantine Menu with Floating UI for auto-positioning at cursor.
  *
  * @author Subash Karki
  */
@@ -41,28 +41,16 @@ export function WorktreeContextMenu({
   onDelete,
 }: WorktreeContextMenuProps) {
   const [opened, setOpened] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const pendingAction = useRef<(() => void) | null>(null);
+  const targetRef = useRef<HTMLDivElement>(null);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setPosition({ x: e.clientX, y: e.clientY });
-    setOpened(true);
-  }, []);
-
-  const handleOpenChange = useCallback((isOpen: boolean) => {
-    setOpened(isOpen);
-    if (!isOpen && pendingAction.current) {
-      const action = pendingAction.current;
-      pendingAction.current = null;
-      requestAnimationFrame(action);
+    if (targetRef.current) {
+      targetRef.current.style.left = `${e.clientX}px`;
+      targetRef.current.style.top = `${e.clientY}px`;
     }
-  }, []);
-
-  const queueAction = useCallback((action: () => void) => {
-    pendingAction.current = action;
-    setOpened(false);
+    setOpened(true);
   }, []);
 
   return (
@@ -70,26 +58,22 @@ export function WorktreeContextMenu({
       <div onContextMenu={handleContextMenu}>{children}</div>
       <Menu
         opened={opened}
-        onChange={handleOpenChange}
+        onChange={setOpened}
         shadow="md"
         width={200}
         position="bottom-start"
+        withinPortal
+        middlewares={{ shift: true, flip: true }}
         styles={{
           dropdown: {
             backgroundColor: 'var(--phantom-surface-card)',
             borderColor: 'var(--phantom-border-subtle)',
-            position: 'fixed',
-            left: position.x,
-            top: position.y,
           },
           item: {
             fontSize: '0.8rem',
             color: 'var(--phantom-text-secondary)',
             padding: '8px 12px',
             cursor: 'pointer',
-            '&[data-hovered]': {
-              backgroundColor: 'var(--phantom-surface-hover)',
-            },
           },
           separator: {
             borderColor: 'var(--phantom-border-subtle)',
@@ -97,32 +81,29 @@ export function WorktreeContextMenu({
         }}
       >
         <Menu.Target>
-          <div style={{ position: 'fixed', left: position.x, top: position.y, width: 0, height: 0 }} />
+          <div
+            ref={targetRef}
+            style={{ position: 'fixed', width: 1, height: 1, pointerEvents: 'none' }}
+          />
         </Menu.Target>
         <Menu.Dropdown>
           <Menu.Item
             leftSection={<FolderOpen size={14} />}
-            onClick={() => {
-              if (worktreePath) invoke('phantom:open-in-finder', worktreePath);
-            }}
+            onClick={() => { if (worktreePath) invoke('phantom:open-in-finder', worktreePath); }}
             disabled={!worktreePath}
           >
             Open in Finder
           </Menu.Item>
           <Menu.Item
             leftSection={<ExternalLink size={14} />}
-            onClick={() => {
-              if (worktreePath) invoke('phantom:open-in-editor', worktreePath);
-            }}
+            onClick={() => { if (worktreePath) invoke('phantom:open-in-editor', worktreePath); }}
             disabled={!worktreePath}
           >
             Open in Editor
           </Menu.Item>
           <Menu.Item
             leftSection={<Clipboard size={14} />}
-            onClick={() => {
-              if (worktreePath) navigator.clipboard.writeText(worktreePath);
-            }}
+            onClick={() => { if (worktreePath) navigator.clipboard.writeText(worktreePath); }}
             disabled={!worktreePath}
           >
             Copy Path
@@ -130,13 +111,13 @@ export function WorktreeContextMenu({
           <Menu.Divider />
           <Menu.Item
             leftSection={<Edit3 size={14} />}
-            onClick={() => queueAction(onRename)}
+            onClick={onRename}
           >
             Rename
           </Menu.Item>
           <Menu.Item
             leftSection={<Terminal size={14} />}
-            onClick={() => queueAction(onOpenTerminal)}
+            onClick={onOpenTerminal}
           >
             Open in Terminal
           </Menu.Item>
@@ -144,7 +125,7 @@ export function WorktreeContextMenu({
           <Menu.Item
             leftSection={<X size={14} />}
             color="red"
-            onClick={() => queueAction(onDelete)}
+            onClick={onDelete}
           >
             Close Worktree
           </Menu.Item>

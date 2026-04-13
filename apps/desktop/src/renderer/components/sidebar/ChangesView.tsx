@@ -5,7 +5,7 @@
  */
 import { Menu, ScrollArea, Skeleton, Text, Textarea, Tooltip } from '@mantine/core';
 import { useAtomValue, useSetAtom, useStore } from 'jotai';
-import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw, Plus, Minus, Check, ArrowUp, ArrowDown, Undo2, MoreVertical, RotateCcw, Archive, ArchiveRestore, Download, ClipboardCopy, ExternalLink, Sparkles, RotateCw, PenLine } from 'lucide-react';
+import { FilePlus, FileX, FilePen, FileQuestion, RefreshCw, Plus, Minus, Check, ArrowUp, ArrowDown, Undo2, MoreVertical, RotateCcw, Archive, ArchiveRestore, Download, ClipboardCopy, ExternalLink, Sparkles, RotateCw, PenLine, ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
 import { aiCommitFamily, addCommitGenAtom } from '../../atoms/aiCommit';
@@ -13,7 +13,7 @@ import type { AiCommitState } from '../../atoms/aiCommit';
 import { activeWorktreeAtom } from '../../atoms/worktrees';
 import { gitStatusAtom, selectedFileAtom } from '../../atoms/fileExplorer';
 import type { GitFileChange } from '../../lib/api';
-import { fetchApi, gitStage, gitUnstage, gitStageAll, gitCommit, gitPush, gitPull, gitDiscard, gitClean, gitUndoCommit, gitStash, gitStashPop, gitFetch, gitGenerateCommitMsg, gitCancelCommitMsg } from '../../lib/api';
+import { fetchApi, gitStage, gitUnstage, gitStageAll, gitCommit, gitPush, gitPull, gitDiscard, gitClean, gitDiscardAll, gitUndoCommit, gitStash, gitStashPop, gitFetch, gitGenerateCommitMsg, gitCancelCommitMsg } from '../../lib/api';
 import { showSystemNotification } from '../notifications/SystemToast';
 
 const showCommitError = (msg: string) => {
@@ -43,7 +43,7 @@ function FileRow({ file, worktreeId, onStage, onDiscard }: {
   const fileName = file.path.split('/').pop() ?? file.path;
   const dirPath = file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : '';
   const [menuOpened, setMenuOpened] = useState(false);
-  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+  const menuTargetRef = useRef<HTMLDivElement>(null);
 
   const handleClick = useCallback(async () => {
     if (file.status === 'deleted') return;
@@ -66,7 +66,10 @@ function FileRow({ file, worktreeId, onStage, onDiscard }: {
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    setMenuPosition({ x: e.clientX, y: e.clientY });
+    if (menuTargetRef.current) {
+      menuTargetRef.current.style.left = `${e.clientX}px`;
+      menuTargetRef.current.style.top = `${e.clientY}px`;
+    }
     setMenuOpened(true);
   }, []);
 
@@ -120,21 +123,20 @@ function FileRow({ file, worktreeId, onStage, onDiscard }: {
       {/* Right-click context menu */}
       <Menu
         opened={menuOpened}
-        onChange={(val) => { if (!val) setMenuOpened(false); }}
-        position="right-start"
-        withArrow
+        onChange={setMenuOpened}
+        position="bottom-start"
+        shadow="md"
+        withinPortal
+        middlewares={{ shift: true, flip: true }}
         styles={{
           dropdown: {
             backgroundColor: 'var(--phantom-surface-card)',
-            border: '1px solid var(--phantom-border-subtle)',
-            position: 'fixed',
-            left: menuPosition.x,
-            top: menuPosition.y,
+            borderColor: 'var(--phantom-border-subtle)',
           },
         }}
       >
         <Menu.Target>
-          <div style={{ position: 'absolute', width: 0, height: 0 }} />
+          <div ref={menuTargetRef} style={{ position: 'fixed', width: 1, height: 1, pointerEvents: 'none' }} />
         </Menu.Target>
         <Menu.Dropdown>
           {file.status !== 'deleted' && (
@@ -199,6 +201,8 @@ export function ChangesView() {
     worktree ? aiCommitFamily(worktree.id) : aiCommitFamily('__none__'),
   );
   const [aiEditMsg, setAiEditMsg] = useState('');
+  const [stagedCollapsed, setStagedCollapsed] = useState(false);
+  const [changesCollapsed, setChangesCollapsed] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clear commit message and AI state when switching worktrees
@@ -251,6 +255,12 @@ export function ChangesView() {
     try { await gitStageAll(worktree.id); } catch (err: any) { showCommitError(err?.message ?? 'Stage all failed'); }
     refreshAndSync();
   }, [worktree?.id, refreshAndSync]);
+
+  const handleDiscardAll = useCallback(async () => {
+    if (!worktree || totalChanges === 0) return;
+    try { await gitDiscardAll(worktree.id); } catch (err: any) { showCommitError(err?.message ?? 'Discard all failed'); }
+    refreshAndSync();
+  }, [worktree?.id, totalChanges, refreshAndSync]);
 
   const handleCommit = useCallback(async () => {
     if (!worktree || !commitMsg.trim() || stagedFiles.length === 0) return;
@@ -474,7 +484,16 @@ export function ChangesView() {
               {stagedFiles.length > 0 && (
                 <div style={{ marginBottom: 4 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px' }}>
-                    <Text fz="0.65rem" fw={700} tt="uppercase" c="var(--phantom-status-success, #22c55e)" style={{ letterSpacing: '0.05em', flex: 1 }}>
+                    <div onClick={() => setStagedCollapsed((v) => !v)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                      {stagedCollapsed
+                        ? <ChevronRight size={11} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />
+                        : <ChevronDown size={11} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />}
+                    </div>
+                    <Text
+                      fz="0.65rem" fw={700} tt="uppercase" c="var(--phantom-status-success, #22c55e)"
+                      style={{ letterSpacing: '0.05em', flex: 1, cursor: 'pointer' }}
+                      onClick={() => setStagedCollapsed((v) => !v)}
+                    >
                       Staged ({stagedFiles.length})
                     </Text>
                     <Tooltip label="Unstage all" position="top" withArrow fz="xs">
@@ -486,7 +505,7 @@ export function ChangesView() {
                       </div>
                     </Tooltip>
                   </div>
-                  {stagedFiles.map((file) => (
+                  {!stagedCollapsed && stagedFiles.map((file) => (
                     <FileRow key={`staged-${file.path}`} file={file} worktreeId={worktree.id} onStage={() => handleUnstage(file.path)} />
                   ))}
                 </div>
@@ -496,16 +515,30 @@ export function ChangesView() {
               {unstagedFiles.length > 0 && (
                 <div style={{ marginBottom: 4 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px' }}>
-                    <Text fz="0.65rem" fw={700} tt="uppercase" c="var(--phantom-accent-gold, #f59e0b)" style={{ letterSpacing: '0.05em', flex: 1 }}>
+                    <div onClick={() => setChangesCollapsed((v) => !v)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                      {changesCollapsed
+                        ? <ChevronRight size={11} style={{ color: 'var(--phantom-accent-gold, #f59e0b)' }} />
+                        : <ChevronDown size={11} style={{ color: 'var(--phantom-accent-gold, #f59e0b)' }} />}
+                    </div>
+                    <Text
+                      fz="0.65rem" fw={700} tt="uppercase" c="var(--phantom-accent-gold, #f59e0b)"
+                      style={{ letterSpacing: '0.05em', flex: 1, cursor: 'pointer' }}
+                      onClick={() => setChangesCollapsed((v) => !v)}
+                    >
                       Changes ({unstagedFiles.length})
                     </Text>
+                    <Tooltip label="Discard all changes" position="top" withArrow fz="xs">
+                      <div onClick={handleDiscardAll} style={{ cursor: 'pointer', padding: 2 }}>
+                        <Undo2 size={11} style={{ color: 'var(--phantom-text-muted)' }} />
+                      </div>
+                    </Tooltip>
                     <Tooltip label="Stage all" position="top" withArrow fz="xs">
                       <div onClick={handleStageAll} style={{ cursor: 'pointer', padding: 2 }}>
                         <Plus size={11} style={{ color: 'var(--phantom-text-muted)' }} />
                       </div>
                     </Tooltip>
                   </div>
-                  {unstagedFiles.map((file) => (
+                  {!changesCollapsed && unstagedFiles.map((file) => (
                     <FileRow
                       key={`unstaged-${file.path}`}
                       file={file}

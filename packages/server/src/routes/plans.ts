@@ -159,6 +159,9 @@ plansRoutes.get('/plans', async (c) => {
     terms.some((term) => term.length >= 6 && content.includes(term));
 
   // Categorize each plan as branch-specific or project-level
+  // Only the "branch" type (Local checkout) sees project-level plans.
+  // Worktrees only see their own branch-scoped plans.
+  const isLocalBranch = worktree.type === 'branch';
   const branchPlans: PlanFile[] = [];
   const projectPlans: PlanFile[] = [];
 
@@ -166,7 +169,7 @@ plansRoutes.get('/plans', async (c) => {
     const content = plan._content.toLowerCase();
     if (matchesTerm(content, branchTerms)) {
       branchPlans.push(toClientPlan(plan));
-    } else if (matchesTerm(content, projectTerms)) {
+    } else if (isLocalBranch && matchesTerm(content, projectTerms)) {
       projectPlans.push(toClientPlan(plan));
     }
   }

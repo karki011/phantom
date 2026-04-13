@@ -1,11 +1,11 @@
 /**
  * EmptyState — welcoming empty state when no projects exist
- * Shows a big "Open Repository" button + drag hint
+ * Shows a big "Add Project" button + drag hint
  *
  * @author Subash Karki
  */
 import { Button, Text } from '@mantine/core';
-import { FolderOpen } from 'lucide-react';
+import { FolderPlus } from 'lucide-react';
 
 interface EmptyStateProps {
   onOpenRepository: () => void;
@@ -36,12 +36,12 @@ export function EmptyState({ onOpenRepository }: EmptyStateProps) {
           marginBottom: 4,
         }}
       >
-        <FolderOpen size={24} style={{ color: 'var(--phantom-accent-purple)' }} />
+        <FolderPlus size={24} style={{ color: 'var(--phantom-accent-purple)' }} />
       </div>
       <Button
         variant="light"
         size="sm"
-        leftSection={<FolderOpen size={16} />}
+        leftSection={<FolderPlus size={16} />}
         onClick={onOpenRepository}
         styles={{
           root: {
@@ -54,7 +54,7 @@ export function EmptyState({ onOpenRepository }: EmptyStateProps) {
           },
         }}
       >
-        Open Repository
+        Add Project
       </Button>
       <Text fz="0.7rem" c="var(--phantom-text-muted)" ta="center">
         or drag a folder here

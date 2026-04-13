@@ -20,7 +20,8 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import {
   BookOpen,
   Download,
-  FolderOpen,
+  FolderPlus,
+  FolderSearch,
   Gamepad2,
   GitBranch,
   LayoutPanelLeft,
@@ -39,6 +40,7 @@ import {
 import { type BranchesData, getProjectBranches } from '../lib/api';
 import { showSystemNotification } from './notifications/SystemToast';
 import { CloneRepoModal } from './sidebar/CloneRepoModal';
+import { ScanProjectsModal } from './sidebar/ScanProjectsModal';
 
 /** Call Electron's native folder picker via IPC */
 const pickFolder = async (): Promise<string | null> => {
@@ -59,7 +61,7 @@ const slugify = (name: string): string =>
 // ---------------------------------------------------------------------------
 
 const GETTING_STARTED = [
-  { icon: BookOpen, title: 'Open a repository', description: 'Browse and open any local git repo to start working' },
+  { icon: BookOpen, title: 'Add a project', description: 'Add a local git repo or scan a directory for multiple projects' },
   { icon: GitBranch, title: 'Create a worktree', description: 'Each worktree is an isolated environment with its own branch' },
   { icon: LayoutPanelLeft, title: 'Split panes & terminals', description: 'Arrange editors, terminals, and dashboards side by side' },
   { icon: Gamepad2, title: 'Track XP & achievements', description: 'Earn XP, climb hunter ranks, and unlock achievements' },
@@ -233,6 +235,7 @@ export function WelcomePage() {
   const openRepo = useSetAtom(openRepositoryAtom);
 
   const [cloneOpen, setCloneOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
 
   useEffect(() => { refreshProjects(); }, [refreshProjects]);
 
@@ -277,9 +280,13 @@ export function WelcomePage() {
 
         {/* Action buttons */}
         <Group justify="center" gap="md" mb={40}>
-          <Button variant="light" size="md" leftSection={<FolderOpen size={18} />} onClick={handleOpenProject}
+          <Button variant="light" size="md" leftSection={<FolderPlus size={18} />} onClick={handleOpenProject}
             styles={{ root: { backgroundColor: 'var(--phantom-surface-card)', color: 'var(--phantom-text-primary)', border: '1px solid var(--phantom-border-subtle)' } }}>
-            Open Project
+            Add Project
+          </Button>
+          <Button variant="light" size="md" leftSection={<FolderSearch size={18} />} onClick={() => setScanOpen(true)}
+            styles={{ root: { backgroundColor: 'var(--phantom-surface-card)', color: 'var(--phantom-text-primary)', border: '1px solid var(--phantom-border-subtle)' } }}>
+            Scan Directory
           </Button>
           <Button variant="light" size="md" leftSection={<Download size={18} />} onClick={() => setCloneOpen(true)}
             styles={{ root: { backgroundColor: 'var(--phantom-surface-card)', color: 'var(--phantom-text-primary)', border: '1px solid var(--phantom-border-subtle)' } }}>
@@ -288,6 +295,7 @@ export function WelcomePage() {
         </Group>
 
         <CloneRepoModal opened={cloneOpen} onClose={() => setCloneOpen(false)} />
+        <ScanProjectsModal opened={scanOpen} onClose={() => setScanOpen(false)} />
 
         {/* Two-column layout */}
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xl">

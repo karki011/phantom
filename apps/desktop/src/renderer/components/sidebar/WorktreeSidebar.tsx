@@ -17,8 +17,11 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   ChevronsLeft,
   Download,
-  FolderOpen,
+  FolderPlus,
+  FolderSearch,
   Plus,
+  Settings2,
+  Star,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -39,6 +42,8 @@ import { ResizeHandle } from './ResizeHandle';
 import { ProjectSection } from './ProjectSection';
 import { EmptyState } from './EmptyState';
 import { CloneRepoModal } from './CloneRepoModal';
+import { ScanProjectsModal } from './ScanProjectsModal';
+import { ManageProjectsModal } from './ManageProjectsModal';
 
 /** Call Electron's native folder picker via IPC */
 const pickFolder = async (): Promise<string | null> => {
@@ -72,8 +77,11 @@ export function WorktreeSidebar() {
   const refreshWorktrees = useSetAtom(refreshWorktreesAtom);
   const openRepo = useSetAtom(openRepositoryAtom);
 
+  const starredCount = projects.filter((p) => p.starred).length;
   const [isDragOver, setIsDragOver] = useState(false);
   const [cloneOpen, setCloneOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
 
   // Track which project should show inline worktree input from header "+"
   const [inlineInputProjectId, setInlineInputProjectId] = useState<string | null>(null);
@@ -288,7 +296,33 @@ export function WorktreeSidebar() {
           ) : (
           <ScrollArea style={{ flex: 1 }} scrollbarSize={6}>
             <div style={{ padding: '4px 0' }}>
-              {projects.map((project, idx) => (
+              {/* Starred projects section */}
+              {starredCount > 0 && (
+                <>
+                  <div style={{ padding: '4px 12px 2px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Star size={10} style={{ fill: 'var(--phantom-accent-gold)', color: 'var(--phantom-accent-gold)' }} />
+                    <Text fz="0.65rem" fw={600} c="var(--phantom-accent-gold)" tt="uppercase" style={{ letterSpacing: '0.08em' }}>
+                      Starred
+                    </Text>
+                    <Text fz="0.6rem" c="var(--phantom-text-muted)" ml="auto">{starredCount}/5</Text>
+                  </div>
+                  {projects.filter((p) => p.starred).map((project) => (
+                    <ProjectSection
+                      key={project.id}
+                      project={project}
+                      worktrees={worktreesByProject.get(project.id) ?? []}
+                      isExpanded={expandedProjects.includes(project.id)}
+                      activeWorktreeId={activeWorktreeId}
+                      starredCount={starredCount}
+                      onToggle={() => toggleProject(project.id)}
+                      onSelectWorktree={setActiveWorktreeId}
+                    />
+                  ))}
+                  <div style={{ height: 1, backgroundColor: 'var(--phantom-border-subtle)', margin: '8px 12px', opacity: 0.5 }} />
+                </>
+              )}
+              {/* All other projects */}
+              {projects.filter((p) => !p.starred).map((project, idx) => (
                 <div key={project.id}>
                   {idx > 0 && (
                     <div style={{ height: 1, backgroundColor: 'var(--phantom-border-subtle)', margin: '6px 12px', opacity: 0.5 }} />
@@ -298,6 +332,7 @@ export function WorktreeSidebar() {
                     worktrees={worktreesByProject.get(project.id) ?? []}
                     isExpanded={expandedProjects.includes(project.id)}
                     activeWorktreeId={activeWorktreeId}
+                    starredCount={starredCount}
                     onToggle={() => toggleProject(project.id)}
                     onSelectWorktree={setActiveWorktreeId}
                   />
@@ -321,7 +356,7 @@ export function WorktreeSidebar() {
                 size="xs"
                 style={{ flex: 1 }}
                 leftSection={
-                  <FolderOpen
+                  <FolderPlus
                     size={14}
                     style={{ color: 'var(--phantom-text-muted)' }}
                   />
@@ -334,32 +369,73 @@ export function WorktreeSidebar() {
                   },
                 }}
               >
-                Open
+                Add Project
               </Button>
-              <Button
-                variant="subtle"
-                size="xs"
-                style={{ flex: 1 }}
-                leftSection={
+              <Tooltip label="Scan directory for repos" position="top">
+                <Button
+                  variant="subtle"
+                  size="xs"
+                  px={8}
+                  onClick={() => setScanOpen(true)}
+                  styles={{
+                    label: {
+                      color: 'var(--phantom-text-secondary)',
+                      fontSize: '0.75rem',
+                    },
+                  }}
+                >
+                  <FolderSearch
+                    size={14}
+                    style={{ color: 'var(--phantom-text-muted)' }}
+                  />
+                </Button>
+              </Tooltip>
+              <Tooltip label="Clone repository" position="top">
+                <Button
+                  variant="subtle"
+                  size="xs"
+                  px={8}
+                  onClick={() => setCloneOpen(true)}
+                  styles={{
+                    label: {
+                      color: 'var(--phantom-text-secondary)',
+                      fontSize: '0.75rem',
+                    },
+                  }}
+                >
                   <Download
                     size={14}
                     style={{ color: 'var(--phantom-text-muted)' }}
                   />
-                }
-                onClick={() => setCloneOpen(true)}
-                styles={{
-                  label: {
-                    color: 'var(--phantom-text-secondary)',
-                    fontSize: '0.75rem',
-                  },
-                }}
-              >
-                Clone
-              </Button>
+                </Button>
+              </Tooltip>
+              {projects.length > 0 && (
+                <Tooltip label="Manage projects" position="top">
+                  <Button
+                    variant="subtle"
+                    size="xs"
+                    px={8}
+                    onClick={() => setManageOpen(true)}
+                    styles={{
+                      label: {
+                        color: 'var(--phantom-text-secondary)',
+                        fontSize: '0.75rem',
+                      },
+                    }}
+                  >
+                    <Settings2
+                      size={14}
+                      style={{ color: 'var(--phantom-text-muted)' }}
+                    />
+                  </Button>
+                </Tooltip>
+              )}
             </div>
           </div>
 
           <CloneRepoModal opened={cloneOpen} onClose={() => setCloneOpen(false)} />
+          <ScanProjectsModal opened={scanOpen} onClose={() => setScanOpen(false)} />
+          <ManageProjectsModal opened={manageOpen} onClose={() => setManageOpen(false)} />
 
           {/* Resize handle on right edge */}
           <ResizeHandle

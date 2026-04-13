@@ -117,6 +117,7 @@ export const projects = sqliteTable('projects', {
   worktreeBaseDir: text('worktree_base_dir'),
   color: text('color'),
   profile: text('profile'),  // JSON: ProjectProfile
+  starred: integer('starred').default(0),
   createdAt: integer('created_at').notNull(),
 });
 
@@ -142,6 +143,7 @@ export const worktrees = sqliteTable('workspaces', {
   baseBranch: text('base_branch'),
   tabOrder: integer('tab_order').default(0),
   isActive: integer('is_active').default(0),
+  ticketUrl: text('ticket_url'),
   createdAt: integer('created_at').notNull(),
 });
 

@@ -96,9 +96,9 @@ export const PlansCard = memo(function PlansCard({ worktreeId }: { worktreeId: s
       p="md"
       bg="var(--phantom-surface-card)"
       radius="md"
-      style={{ border: '1px solid var(--phantom-border-subtle)' }}
+      style={{ border: '1px solid var(--phantom-border-subtle)', maxHeight: 420, display: 'flex', flexDirection: 'column' }}
     >
-      <Group gap="xs" mb="sm">
+      <Group gap="xs" mb="sm" style={{ flexShrink: 0 }}>
         <FileText size={14} style={{ color: 'var(--phantom-accent-glow)' }} />
         <Text fz="xs" fw={600} c="var(--phantom-text-secondary)">Plans</Text>
         <Text fz="xs" c="var(--phantom-text-muted)">{total}</Text>
@@ -110,7 +110,7 @@ export const PlansCard = memo(function PlansCard({ worktreeId }: { worktreeId: s
           />
         </Tooltip>
       </Group>
-      <Stack gap={4} style={{ maxHeight: 240, overflowY: 'auto' }}>
+      <Stack gap={4} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {/* Branch-specific plans */}
         {grouped.branch.length > 0 && (
           <>

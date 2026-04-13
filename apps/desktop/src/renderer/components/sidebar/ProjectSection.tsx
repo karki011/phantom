@@ -13,11 +13,11 @@ import {
   Tooltip,
   UnstyledButton,
 } from '@mantine/core';
-import { ChevronRight, GitBranch, Plus, RefreshCw, Sparkles } from 'lucide-react';
+import { ChevronRight, GitBranch, Plus, RefreshCw, Sparkles, Star } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSetAtom } from 'jotai';
 import type { DiscoveredWorktree, ProjectData, WorktreeData } from '../../lib/api';
-import { detectProjectProfile, getDiscoveredWorktrees, importWorktree, renameProject } from '../../lib/api';
+import { detectProjectProfile, getDiscoveredWorktrees, importWorktree, renameProject, toggleProjectStar } from '../../lib/api';
 import { refreshProjectsAtom, refreshWorktreesAtom } from '../../atoms/worktrees';
 import { WorktreeItem } from './WorktreeItem';
 import { InlineWorktreeInput } from './InlineWorktreeInput';
@@ -30,15 +30,19 @@ interface ProjectSectionProps {
   worktrees: WorktreeData[];
   isExpanded: boolean;
   activeWorktreeId: string | null;
+  starredCount: number;
   onToggle: () => void;
   onSelectWorktree: (id: string) => void;
 }
+
+const MAX_STARRED = 5;
 
 export function ProjectSection({
   project,
   worktrees,
   isExpanded,
   activeWorktreeId,
+  starredCount,
   onToggle,
   onSelectWorktree,
 }: ProjectSectionProps) {
@@ -105,6 +109,13 @@ export function ProjectSection({
     } catch { /* silent */ }
   }, [project.id, refreshWorktrees, refreshProjects]);
 
+  const handleToggleStar = useCallback(async () => {
+    try {
+      await toggleProjectStar(project.id);
+      refreshProjects();
+    } catch { /* silent */ }
+  }, [project.id, refreshProjects]);
+
   const handleAddWorktree = useCallback(() => {
     setShowNewInput(true);
     if (!isExpanded) onToggle();
@@ -142,6 +153,8 @@ export function ProjectSection({
   return (
     <div>
       <ProjectContextMenu
+        isStarred={!!project.starred}
+        onToggleStar={handleToggleStar}
         onAddWorktree={handleAddWorktree}
         onRename={() => {
           setRenameValue(project.name);
@@ -226,6 +239,34 @@ export function ProjectSection({
                 {project.name}
               </Text>
             )}
+            <Tooltip
+              label={project.starred ? 'Unstar' : starredCount >= MAX_STARRED ? `Max ${MAX_STARRED} starred` : 'Star project'}
+              position="right"
+            >
+              <ActionIcon
+                variant="subtle"
+                size={18}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!project.starred && starredCount >= MAX_STARRED) return;
+                  handleToggleStar();
+                }}
+                aria-label={project.starred ? 'Unstar project' : 'Star project'}
+                style={{
+                  flexShrink: 0,
+                  cursor: !project.starred && starredCount >= MAX_STARRED ? 'not-allowed' : 'pointer',
+                  opacity: !project.starred && starredCount >= MAX_STARRED ? 0.3 : 1,
+                }}
+              >
+                <Star
+                  size={11}
+                  style={project.starred
+                    ? { fill: 'var(--phantom-accent-gold)', color: 'var(--phantom-accent-gold)' }
+                    : { color: 'var(--phantom-text-muted)' }
+                  }
+                />
+              </ActionIcon>
+            </Tooltip>
             <Text fz="0.7rem" c="var(--phantom-text-muted)">
               {worktrees.length}
             </Text>

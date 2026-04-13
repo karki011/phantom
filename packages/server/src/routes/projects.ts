@@ -4,12 +4,12 @@
  */
 import { randomUUID } from 'node:crypto';
 import { exec, execSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, type Dirent } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { desc, eq, and } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { db, projects, worktrees, worktreeSections } from '@phantom-os/db';
+import { db, projects, worktrees, worktreeSections, paneStates, chatConversations, chatMessages, terminalSessions } from '@phantom-os/db';
 import { isGitRepo, getDefaultBranch, getRepoName, getWorktreeDir, listWorktrees, cloneRepo } from '../worktree-manager.js';
 import { removeWorktree } from '../worktree-manager.js';
 import { detectProject } from '../project-detector.js';
@@ -197,6 +197,129 @@ projectRoutes.post('/projects/open', async (c) => {
   return c.json({ project, worktree: branchEntry }, 201);
 });
 
+/** POST /projects/scan — Scan a directory for git repositories */
+projectRoutes.post('/projects/scan', async (c) => {
+  const body = await c.req.json<{ directory: string; maxDepth?: number }>();
+  const { directory } = body;
+  const maxDepth = body.maxDepth ?? 2;
+
+  if (!directory) {
+    return c.json({ error: 'directory is required' }, 400);
+  }
+
+  if (!existsSync(directory)) {
+    return c.json({ error: 'Directory does not exist' }, 400);
+  }
+
+  // Get already-tracked repo paths for deduplication
+  const tracked = new Set(
+    db.select({ repoPath: projects.repoPath }).from(projects).all().map((r) => r.repoPath),
+  );
+
+  const found: Array<{ path: string; name: string; alreadyAdded: boolean }> = [];
+
+  const scan = (dir: string, depth: number) => {
+    if (depth > maxDepth) return;
+    try {
+      const entries: Dirent[] = readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+        const full = join(dir, entry.name);
+        if (isGitRepo(full)) {
+          found.push({
+            path: full,
+            name: getRepoName(full),
+            alreadyAdded: tracked.has(full),
+          });
+        } else {
+          scan(full, depth + 1);
+        }
+      }
+    } catch { /* permission denied, etc */ }
+  };
+
+  // Also check if the directory itself is a git repo
+  if (isGitRepo(directory)) {
+    found.push({
+      path: directory,
+      name: getRepoName(directory),
+      alreadyAdded: tracked.has(directory),
+    });
+  }
+
+  scan(directory, 1);
+
+  return c.json({ repos: found });
+});
+
+/** POST /projects/batch-open — Open multiple repositories at once */
+projectRoutes.post('/projects/batch-open', async (c) => {
+  const body = await c.req.json<{ repoPaths: string[] }>();
+  const { repoPaths } = body;
+
+  if (!repoPaths?.length) {
+    return c.json({ error: 'repoPaths is required' }, 400);
+  }
+
+  const results: Array<{ repoPath: string; project?: any; worktree?: any; error?: string }> = [];
+
+  for (const repoPath of repoPaths) {
+    if (!existsSync(repoPath) || !isGitRepo(repoPath)) {
+      results.push({ repoPath, error: 'Not a valid git repository' });
+      continue;
+    }
+
+    // Check if already exists
+    const existing = db.select().from(projects).where(eq(projects.repoPath, repoPath)).get();
+    if (existing) {
+      const firstWorktree = db.select().from(worktrees).where(eq(worktrees.projectId, existing.id)).get();
+      results.push({ repoPath, project: existing, worktree: firstWorktree ?? null });
+      continue;
+    }
+
+    const name = getRepoName(repoPath);
+    const defaultBranch = await getDefaultBranch(repoPath);
+
+    const project = {
+      id: randomUUID(),
+      name,
+      repoPath,
+      defaultBranch,
+      worktreeBaseDir: getWorktreeDir(name, ''),
+      color: null,
+      createdAt: Date.now(),
+    };
+
+    db.insert(projects).values(project).run();
+
+    const profile = detectProject(repoPath);
+    db.update(projects).set({ profile: JSON.stringify(profile) }).where(eq(projects.id, project.id)).run();
+
+    const branchEntry = {
+      id: randomUUID(),
+      projectId: project.id,
+      type: 'branch' as const,
+      name: 'Local',
+      branch: defaultBranch,
+      worktreePath: repoPath,
+      portBase: null,
+      sectionId: null,
+      baseBranch: null,
+      tabOrder: 0,
+      isActive: 1,
+      createdAt: Date.now(),
+    };
+    db.insert(worktrees).values(branchEntry).run();
+
+    backgroundFetch(repoPath);
+    void graphEngine.buildProject(project.id, repoPath).catch(() => {});
+
+    results.push({ repoPath, project, worktree: branchEntry });
+  }
+
+  return c.json({ results });
+});
+
 /** POST /projects/clone — Clone a repo and create project + branch worktree */
 projectRoutes.post('/projects/clone', async (c) => {
   const body = await c.req.json<{ url: string; targetDir?: string }>();
@@ -337,6 +460,34 @@ projectRoutes.patch('/projects/:id', async (c) => {
 
   db.update(projects)
     .set({ name: body.name.trim() })
+    .where(eq(projects.id, id))
+    .run();
+
+  const updated = db.select().from(projects).where(eq(projects.id, id)).get();
+  return c.json(updated);
+});
+
+/** POST /projects/:id/star — Toggle starred status */
+projectRoutes.post('/projects/:id/star', async (c) => {
+  const id = c.req.param('id');
+
+  const project = db.select().from(projects).where(eq(projects.id, id)).get();
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const newStarred = project.starred ? 0 : 1;
+
+  // Enforce max 5 starred projects
+  if (newStarred === 1) {
+    const starredCount = db.select().from(projects).where(eq(projects.starred, 1)).all().length;
+    if (starredCount >= 5) {
+      return c.json({ error: 'Maximum 5 starred projects allowed' }, 400);
+    }
+  }
+
+  db.update(projects)
+    .set({ starred: newStarred })
     .where(eq(projects.id, id))
     .run();
 
@@ -532,7 +683,8 @@ projectRoutes.delete('/projects/:id', async (c) => {
     return c.json({ error: 'Project not found' }, 404);
   }
 
-  // Remove all git worktrees for this project
+  // Remove only actual git worktrees — skip "branch" type entries
+  // which point to the main repo checkout (never delete those)
   const projectWorktrees = db
     .select()
     .from(worktrees)
@@ -540,9 +692,22 @@ projectRoutes.delete('/projects/:id', async (c) => {
     .all();
 
   for (const wt of projectWorktrees) {
-    if (wt.worktreePath) {
+    if (wt.worktreePath && wt.type !== 'branch') {
       await removeWorktree(wt.worktreePath);
     }
+  }
+
+  // Clean up related data for each worktree
+  for (const wt of projectWorktrees) {
+    try { db.delete(paneStates).where(eq(paneStates.worktreeId, wt.id)).run(); } catch {}
+    try {
+      const convs = db.select({ id: chatConversations.id }).from(chatConversations).where(eq(chatConversations.workspaceId, wt.id)).all();
+      for (const conv of convs) {
+        db.delete(chatMessages).where(eq(chatMessages.conversationId, conv.id)).run();
+      }
+      db.delete(chatConversations).where(eq(chatConversations.workspaceId, wt.id)).run();
+    } catch {}
+    try { db.delete(terminalSessions).where(eq(terminalSessions.worktreeId, wt.id)).run(); } catch {}
   }
 
   // Remove graph data for this project
@@ -552,6 +717,14 @@ projectRoutes.delete('/projects/:id', async (c) => {
   db.delete(worktrees).where(eq(worktrees.projectId, id)).run();
   db.delete(worktreeSections).where(eq(worktreeSections.projectId, id)).run();
   db.delete(projects).where(eq(projects.id, id)).run();
+
+  // Clean orphaned rows — chat/pane data whose worktree no longer exists
+  try {
+    const { sql } = await import('drizzle-orm');
+    db.run(sql`DELETE FROM chat_messages WHERE conversation_id IN (SELECT id FROM chat_conversations WHERE workspace_id NOT IN (SELECT id FROM workspaces))`);
+    db.run(sql`DELETE FROM chat_conversations WHERE workspace_id NOT IN (SELECT id FROM workspaces)`);
+    db.run(sql`DELETE FROM pane_states WHERE worktree_id NOT IN (SELECT id FROM workspaces)`);
+  } catch { /* non-critical cleanup */ }
 
   return c.json({ ok: true });
 });

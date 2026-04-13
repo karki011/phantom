@@ -10,6 +10,8 @@ import { Circle, GitGraph } from 'lucide-react';
 import { useGraphStatus } from '../../hooks/useGraphStatus';
 import type { GraphPhase } from '../../atoms/graph';
 
+const apiBase = (window as any).__PHANTOM_API_BASE ?? '';
+
 // ---------------------------------------------------------------------------
 // Pulse animation (inline keyframes injected once)
 // ---------------------------------------------------------------------------
@@ -206,7 +208,7 @@ function StaleIndicator({ stats }: { stats: { files: number } | null }) {
         style={{ cursor: 'pointer' }}
         onClick={() => {
           // Fire rebuild request
-          fetch('/api/graph/rebuild', { method: 'POST' }).catch(() => {});
+          fetch(`${apiBase}/api/graph/rebuild`, { method: 'POST' }).catch(() => {});
         }}
       >
         <span style={{ position: 'relative', display: 'inline-flex' }}>

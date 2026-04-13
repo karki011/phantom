@@ -22,22 +22,24 @@ import {
 import { usePaneStore } from '@phantom-os/panes';
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
-  AlertTriangle, CalendarDays, FileCode, GitBranch,
+  AlertTriangle, CalendarDays, ExternalLink, FileCode, GitBranch,
   MessageSquare, Pencil, Play, Plus, Sparkles,
   Star, Terminal as TerminalIcon, Trash2,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { activeWorktreeAtom, deleteWorktreeAtom, projectsAtom, refreshWorktreesAtom } from '../atoms/worktrees';
+import { activeWorktreeAtom, deleteWorktreeAtom, projectsAtom } from '../atoms/worktrees';
 import type { CustomRecipe } from '../atoms/recipes';
 import { useProjectProfile } from '../hooks/useProjectProfile';
 import { useRecipes, type EnrichedRecipe } from '../hooks/useRecipes';
 import { useRouter } from '../hooks/useRouter';
-import { getDiscoveredWorktrees, importWorktree } from '../lib/api';
+import { InlineWorktreeInput } from './sidebar/InlineWorktreeInput';
 import { PlansCard } from './PlansCard';
 import { RecipeFormModal } from './RecipeFormModal';
 import { RunningServersCard } from './RunningServersCard';
 import { TasksCard } from './TasksCard';
+
+const apiBase = (window as any).__PHANTOM_API_BASE ?? '';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -234,7 +236,7 @@ export function WorktreeHome() {
   // Fetch recent chats for this worktree
   useEffect(() => {
     if (!worktree?.id) return;
-    fetch(`/api/chat/conversations?worktreeId=${worktree.id}&limit=5`)
+    fetch(`${apiBase}/api/chat/conversations?worktreeId=${worktree.id}&limit=5`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((convs) => { if (Array.isArray(convs)) setRecentChats(convs); })
       .catch(() => {});
@@ -243,7 +245,7 @@ export function WorktreeHome() {
   // Listen for auto-setup SSE events
   useEffect(() => {
     if (!worktree?.id) return;
-    const eventSource = new EventSource('/events');
+    const eventSource = new EventSource(`${apiBase}/events`);
     eventSource.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
@@ -286,7 +288,7 @@ export function WorktreeHome() {
 
     // Poll every 60s — quiet background fetch + status refresh
     const poll = setInterval(() => {
-      fetch(`/api/worktrees/${worktree?.id}/git`, {
+      fetch(`${apiBase}/api/worktrees/${worktree?.id}/git`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'fetch' }),
@@ -307,33 +309,36 @@ export function WorktreeHome() {
   // Random quote (stable per mount)
   const quote = useMemo(() => QUOTES[Math.floor(Math.random() * QUOTES.length)], []);
 
-  const refreshWorktrees = useSetAtom(refreshWorktreesAtom);
+  const [showNewSessionModal, setShowNewSessionModal] = useState(false);
+  const claudeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // On mount: check if a pending Claude session was requested (global flag set by InlineWorktreeInput)
+  useEffect(() => {
+    const pending = (window as any).__phantomPendingClaude as string | undefined;
+    if (pending && worktree?.worktreePath) {
+      delete (window as any).__phantomPendingClaude;
+      // Clear any previous timer but DON'T clear on re-render — only on new pending
+      if (claudeTimerRef.current) clearTimeout(claudeTimerRef.current);
+      claudeTimerRef.current = setTimeout(() => {
+        claudeTimerRef.current = null;
+        store.addPaneAsTab('terminal', { cwd: worktree.worktreePath, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>, 'Claude');
+      }, 1500);
+    }
+  }, [worktree?.id, store]);
 
   const openTerminal = useCallback(() => store.addPaneAsTab('terminal', { cwd: worktree?.worktreePath } as Record<string, unknown>, 'Terminal'), [store, worktree]);
   const openEditor = useCallback(() => store.addPaneAsTab('editor', {} as Record<string, unknown>, 'Editor'), [store]);
   const openClaude = useCallback(() => {
-    store.addPaneAsTab('terminal', { cwd: worktree?.worktreePath, initialCommand: 'claude --dangerously-skip-permissions --worktree' } as Record<string, unknown>, 'Claude');
+    const isDefaultBranch = !worktree || worktree.branch === (project?.defaultBranch ?? 'main');
+    if (isDefaultBranch && project?.id) {
+      // On default branch → show modal to create a new worktree first
+      setShowNewSessionModal(true);
+    } else {
+      // On feature branch → just start a session
+      store.addPaneAsTab('terminal', { cwd: worktree?.worktreePath, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>, 'Claude');
+    }
+  }, [store, worktree, project]);
 
-    // Auto-import worktrees Claude creates via --worktree flag.
-    // Poll every 2s for up to 2 minutes — worktree is usually created within seconds.
-    if (!project?.id) return;
-    const projectId = project.id;
-    let attempts = 0;
-    const poll = setInterval(async () => {
-      attempts++;
-      if (attempts > 60) { clearInterval(poll); return; }
-      try {
-        const discovered = await getDiscoveredWorktrees(projectId);
-        if (discovered.length > 0) {
-          for (const wt of discovered) {
-            await importWorktree(projectId, { path: wt.path, name: wt.branch });
-          }
-          refreshWorktrees();
-          clearInterval(poll);
-        }
-      } catch { /* ignore — server may be busy */ }
-    }, 2_000);
-  }, [store, worktree, project, refreshWorktrees]);
   const openChat = useCallback(() => store.addPaneAsTab('chat', { cwd: worktree?.worktreePath } as Record<string, unknown>, 'Chat'), [store, worktree]);
   const openJournal = useCallback(() => store.addPaneAsTab('journal', {} as Record<string, unknown>, 'Journal'), [store]);
 
@@ -442,9 +447,36 @@ export function WorktreeHome() {
               alignSelf: 'start',
             }}
           >
-            <Text fz="xs" fw={600} c="var(--phantom-text-muted)" tt="uppercase" mb="sm" style={{ letterSpacing: '0.08em' }}>
-              Tools
-            </Text>
+            <Group justify="space-between" align="center" mb="sm">
+              <Text fz="xs" fw={600} c="var(--phantom-text-muted)" tt="uppercase" style={{ letterSpacing: '0.08em' }}>
+                Tools
+              </Text>
+              {worktree?.ticketUrl && (
+                <Group
+                  gap={4}
+                  style={{
+                    cursor: 'pointer',
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    backgroundColor: 'var(--phantom-surface-elevated, #2a2a2a)',
+                    transition: 'background-color 150ms ease',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-card, #333)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated, #2a2a2a)'; }}
+                  onClick={() => window.open(worktree.ticketUrl!, '_blank')}
+                >
+                  <ExternalLink size={10} style={{ color: 'var(--phantom-accent-cyan, #00d4ff)' }} />
+                  <Text fz="0.65rem" c="var(--phantom-accent-cyan, #00d4ff)" fw={500}>
+                    {(() => {
+                      const url = worktree.ticketUrl!;
+                      // Extract ticket key from Jira-style URLs (e.g. PROJ-123)
+                      const match = url.match(/([A-Z]+-\d+)/);
+                      return match ? match[1] : 'View Ticket';
+                    })()}
+                  </Text>
+                </Group>
+              )}
+            </Group>
             <Group gap="sm" wrap="wrap" align="stretch" justify="center">
               <QuickActionCard
                 icon={<TerminalIcon size={20} style={{ color: 'var(--phantom-accent-glow)' }} />}
@@ -504,6 +536,7 @@ export function WorktreeHome() {
                 border: '1px solid var(--phantom-border-subtle)',
                 display: 'flex',
                 flexDirection: 'column',
+                maxHeight: 420,
               }}
             >
               <Group gap="xs" mb="sm" justify="space-between">
@@ -556,8 +589,8 @@ export function WorktreeHome() {
                   </Tabs.Tab>
                 </Tabs.List>
 
-                <Tabs.Panel value="all" style={{ flex: 1, minHeight: 0 }}>
-                  <Stack gap={2} style={{ flex: 1, overflowY: 'auto' }} mt="xs">
+                <Tabs.Panel value="all" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                  <Stack gap={2} mt="xs">
                     {allRecipes.map((recipe) => (
                       <Group
                         key={recipe.id}
@@ -633,8 +666,8 @@ export function WorktreeHome() {
                   </Stack>
                 </Tabs.Panel>
 
-                <Tabs.Panel value="favorites" style={{ flex: 1, minHeight: 0 }}>
-                  <Stack gap={2} style={{ flex: 1, overflowY: 'auto' }} mt="xs">
+                <Tabs.Panel value="favorites" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                  <Stack gap={2} mt="xs">
                     {favoriteRecipes.length > 0 ? (
                       favoriteRecipes.map((recipe) => (
                         <Group
@@ -793,6 +826,15 @@ export function WorktreeHome() {
         mode={recipeModal.mode}
         initialValues={recipeModal.initialValues}
       />
+
+      {showNewSessionModal && project && (
+        <InlineWorktreeInput
+          projectId={project.id}
+          projectName={project.name}
+          defaultBranch={project.defaultBranch}
+          onDone={() => setShowNewSessionModal(false)}
+        />
+      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { getTerminalTheme } from './theme.js';
 
+const apiBase = (window as any).__PHANTOM_API_BASE ?? '';
 const API_PORT = 3849;
 
 export interface TerminalSession {
@@ -191,7 +192,7 @@ export const attachSession = async (
   // If cold restore, fetch and write scrollback BEFORE connecting WebSocket
   if (options?.coldRestore) {
     try {
-      const resp = await fetch(`/api/terminal-sessions/scrollback/${paneId}`);
+      const resp = await fetch(`${apiBase}/api/terminal-sessions/scrollback/${paneId}`);
       if (resp.ok) {
         const { scrollback } = await resp.json();
         if (scrollback) {

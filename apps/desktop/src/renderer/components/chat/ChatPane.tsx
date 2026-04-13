@@ -21,6 +21,8 @@ import Markdown from 'react-markdown';
 import { activeWorktreeAtom } from '../../atoms/worktrees';
 import { useChat, type ChatMessage, type ChatConversation } from '../../hooks/useChat';
 
+const apiBase = (window as any).__PHANTOM_API_BASE ?? '';
+
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
@@ -367,7 +369,7 @@ export const ChatPane = ({ paneId: _paneId, cwd }: ChatPaneProps) => {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const resp = await fetch('/api/chat/upload', { method: 'POST', body: formData });
+      const resp = await fetch(`${apiBase}/api/chat/upload`, { method: 'POST', body: formData });
       const data = await resp.json() as { path: string; name: string };
       setAttachments((prev) => [...prev, { path: data.path, name: data.name }]);
     } catch {

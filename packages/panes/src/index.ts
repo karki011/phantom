@@ -31,6 +31,7 @@ export {
   activePaneAtom,
   addTabAtom,
   removeTabAtom,
+  closeOtherTabsAtom,
   setActiveTabAtom,
   reorderTabAtom,
   addPaneAsTabAtom,

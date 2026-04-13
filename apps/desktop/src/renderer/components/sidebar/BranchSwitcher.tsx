@@ -72,8 +72,7 @@ export function BranchSwitcher({
 
   // Context menu state
   const [menuOpened, setMenuOpened] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const pendingAction = useRef<(() => void) | null>(null);
+  const menuTargetRef = useRef<HTMLDivElement>(null);
 
   // Branch picker modal state
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -91,22 +90,11 @@ export function BranchSwitcher({
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setPosition({ x: e.clientX, y: e.clientY });
-    setMenuOpened(true);
-  }, []);
-
-  const handleMenuChange = useCallback((isOpen: boolean) => {
-    setMenuOpened(isOpen);
-    if (!isOpen && pendingAction.current) {
-      const action = pendingAction.current;
-      pendingAction.current = null;
-      requestAnimationFrame(action);
+    if (menuTargetRef.current) {
+      menuTargetRef.current.style.left = `${e.clientX}px`;
+      menuTargetRef.current.style.top = `${e.clientY}px`;
     }
-  }, []);
-
-  const queueAction = useCallback((action: () => void) => {
-    pendingAction.current = action;
-    setMenuOpened(false);
+    setMenuOpened(true);
   }, []);
 
   const handleGitAction = useCallback(
@@ -204,26 +192,22 @@ export function BranchSwitcher({
       {/* Context menu */}
       <Menu
         opened={menuOpened}
-        onChange={handleMenuChange}
+        onChange={setMenuOpened}
         shadow="md"
         width={200}
         position="bottom-start"
+        withinPortal
+        middlewares={{ shift: true, flip: true }}
         styles={{
           dropdown: {
             backgroundColor: 'var(--phantom-surface-card)',
             borderColor: 'var(--phantom-border-subtle)',
-            position: 'fixed',
-            left: position.x,
-            top: position.y,
           },
           item: {
             fontSize: '0.8rem',
             color: 'var(--phantom-text-secondary)',
             padding: '8px 12px',
             cursor: 'pointer',
-            '&[data-hovered]': {
-              backgroundColor: 'var(--phantom-surface-hover)',
-            },
           },
           separator: {
             borderColor: 'var(--phantom-border-subtle)',
@@ -231,12 +215,12 @@ export function BranchSwitcher({
         }}
       >
         <Menu.Target>
-          <div style={{ position: 'fixed', left: position.x, top: position.y, width: 0, height: 0 }} />
+          <div ref={menuTargetRef} style={{ position: 'fixed', width: 1, height: 1, pointerEvents: 'none' }} />
         </Menu.Target>
         <Menu.Dropdown>
           <Menu.Item
             leftSection={<GitBranch size={14} />}
-            onClick={() => queueAction(() => setPickerOpen(true))}
+            onClick={() => setPickerOpen(true)}
           >
             Switch Branch...
           </Menu.Item>

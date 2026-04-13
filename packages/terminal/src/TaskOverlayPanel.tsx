@@ -9,6 +9,8 @@
  */
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
+const apiBase = (window as any).__PHANTOM_API_BASE ?? '';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -48,7 +50,7 @@ function useIncompleteTasks(cwd: string) {
   const lastHash = useRef('');
 
   const refresh = useCallback(() => {
-    fetch(`/api/tasks/by-cwd?cwd=${encodeURIComponent(cwd)}`)
+    fetch(`${apiBase}/api/tasks/by-cwd?cwd=${encodeURIComponent(cwd)}`)
       .then((r) => (r.ok ? r.json() : []))
       .then((all: TaskData[]) => {
         const incomplete = all.filter(
@@ -88,7 +90,7 @@ function usePlans(cwd: string) {
   const lastHash = useRef('');
 
   const refresh = useCallback(() => {
-    fetch(`/api/plans/by-cwd?cwd=${encodeURIComponent(cwd)}`)
+    fetch(`${apiBase}/api/plans/by-cwd?cwd=${encodeURIComponent(cwd)}`)
       .then((r) => (r.ok ? r.json() : { branch: [], project: [] }))
       .then((data: GroupedPlans) => {
         const all = [...(data.branch ?? []), ...(data.project ?? [])];

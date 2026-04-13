@@ -7,7 +7,8 @@
  */
 import { useEffect, useState } from 'react';
 
-const HEALTH_URL = '/health';
+const apiBase = (window as any).__PHANTOM_API_BASE ?? '';
+const HEALTH_URL = `${apiBase}/health`;
 const POLL_INTERVAL_MS = 10_000;
 
 export const useHealthCheck = () => {

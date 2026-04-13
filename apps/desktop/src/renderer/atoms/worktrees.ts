@@ -32,7 +32,9 @@ const projectsDataAtom = atom<ProjectData[]>([]);
 const projectsLoadingAtom = atom(false);
 const projectsErrorAtom = atom<unknown>(null);
 
-export const projectsAtom = atom((get) => get(projectsDataAtom));
+export const projectsAtom = atom((get) =>
+  [...get(projectsDataAtom)].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
+);
 export const projectsLoadingStateAtom = atom((get) => get(projectsLoadingAtom));
 
 export const refreshProjectsAtom = atom(null, async (_get, set) => {
@@ -100,7 +102,7 @@ export const createWorktreeAtom = atom(
   async (
     _get,
     set,
-    params: { projectId: string; name?: string; branch?: string; baseBranch?: string },
+    params: { projectId: string; name?: string; branch?: string; baseBranch?: string; ticketUrl?: string },
   ) => {
     const worktree = await apiCreateWorktree(params);
     set(worktreesDataAtom, (prev) => [...prev, worktree]);

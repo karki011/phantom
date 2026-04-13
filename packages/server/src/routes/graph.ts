@@ -8,6 +8,12 @@ import { logger } from '../logger.js';
 
 export const graphRoutes = new Hono();
 
+/** GET /graph/stats/all — Return graph stats for all projects in one call */
+graphRoutes.get('/graph/stats/all', (c) => {
+  const allStats = graphEngine.getAllStats();
+  return c.json(allStats);
+});
+
 /** GET /graph/:projectId/stats — Return graph stats */
 graphRoutes.get('/graph/:projectId/stats', (c) => {
   const projectId = c.req.param('projectId');

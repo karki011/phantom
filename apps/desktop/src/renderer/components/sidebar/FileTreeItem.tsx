@@ -108,6 +108,7 @@ export function FileTreeItem({
       onChange={(val) => { if (!val) setMenuOpened(false); }}
       position="bottom-start"
       withinPortal
+      middlewares={{ shift: true, flip: true }}
       styles={{
         dropdown: {
           backgroundColor: 'var(--phantom-surface-card)',

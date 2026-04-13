@@ -13,6 +13,9 @@ coverage
 .vite
 .turbo
 *.tsbuildinfo
+release/
+*.dmg
+*.blockmap
 
 # Environment
 .env

@@ -4,10 +4,11 @@
  */
 import { exec, execSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, unlinkSync } from 'node:fs';
+import { join } from 'node:path';
 import { desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { db, projects, worktrees, paneStates } from '@phantom-os/db';
+import { db, projects, worktrees, paneStates, chatConversations, chatMessages, terminalSessions } from '@phantom-os/db';
 import {
   createWorktree,
   removeWorktree,
@@ -122,6 +123,7 @@ worktreeRoutes.post('/worktrees', async (c) => {
     name?: string;
     branch?: string;
     baseBranch?: string;
+    ticketUrl?: string;
   }>();
 
   const { projectId } = body;
@@ -164,6 +166,7 @@ worktreeRoutes.post('/worktrees', async (c) => {
     sectionId: null,
     tabOrder: 0,
     isActive: 1,
+    ticketUrl: body.ticketUrl ?? null,
     createdAt: Date.now(),
   };
 
@@ -207,6 +210,20 @@ worktreeRoutes.delete('/worktrees/:id', async (c) => {
     db.delete(paneStates).where(eq(paneStates.worktreeId, id)).run();
   } catch { /* ignore — table may not have rows */ }
 
+  // 2b. Delete chat conversations + messages for this worktree
+  try {
+    const convs = db.select({ id: chatConversations.id }).from(chatConversations).where(eq(chatConversations.workspaceId, id)).all();
+    for (const conv of convs) {
+      db.delete(chatMessages).where(eq(chatMessages.conversationId, conv.id)).run();
+    }
+    db.delete(chatConversations).where(eq(chatConversations.workspaceId, id)).run();
+  } catch { /* ignore */ }
+
+  // 2c. Delete terminal session history for this worktree
+  try {
+    db.delete(terminalSessions).where(eq(terminalSessions.worktreeId, id)).run();
+  } catch { /* ignore */ }
+
   // 3. Remove git worktree from disk
   if (worktree.worktreePath) {
     await removeWorktree(worktree.worktreePath);
@@ -227,6 +244,7 @@ worktreeRoutes.patch('/worktrees/:id', async (c) => {
     sectionId?: string | null;
     tabOrder?: number;
     isActive?: number;
+    ticketUrl?: string | null;
   }>();
 
   const worktree = db
@@ -244,6 +262,7 @@ worktreeRoutes.patch('/worktrees/:id', async (c) => {
   if (body.sectionId !== undefined) updates.sectionId = body.sectionId;
   if (body.tabOrder !== undefined) updates.tabOrder = body.tabOrder;
   if (body.isActive !== undefined) updates.isActive = body.isActive;
+  if (body.ticketUrl !== undefined) updates.ticketUrl = body.ticketUrl;
 
   if (Object.keys(updates).length === 0) {
     return c.json({ error: 'No fields to update' }, 400);
@@ -343,6 +362,21 @@ worktreeRoutes.post('/worktrees/:id/create-branch', async (c) => {
   return c.json(updated);
 });
 
+/** Remove stale index.lock if a previous git process crashed */
+function clearStaleLock(repoPath: string): void {
+  // Resolve the actual git dir — works for both repos and worktrees
+  try {
+    const gitDir = execSync('git rev-parse --git-dir', {
+      cwd: repoPath, encoding: 'utf-8', timeout: 3000, stdio: 'pipe',
+    }).trim();
+    const lockPath = join(
+      gitDir.startsWith('/') ? gitDir : join(repoPath, gitDir),
+      'index.lock',
+    );
+    if (existsSync(lockPath)) unlinkSync(lockPath);
+  } catch { /* ignore — worst case the real git command will report the lock */ }
+}
+
 /** POST /worktrees/:id/git — Run a git action */
 worktreeRoutes.post('/worktrees/:id/git', async (c) => {
   const id = c.req.param('id');
@@ -361,7 +395,7 @@ worktreeRoutes.post('/worktrees/:id/git', async (c) => {
   }>();
   const { action } = body;
 
-  const allowed = ['fetch', 'pull', 'push', 'stage', 'unstage', 'stage-all', 'commit', 'discard', 'clean', 'undo-commit', 'stash', 'stash-pop', 'generate-commit-msg', 'cancel-commit-msg', 'create-pr', 'pr-status', 'ci-runs', 'recent-commits', 'get-branch'];
+  const allowed = ['fetch', 'pull', 'push', 'stage', 'unstage', 'stage-all', 'commit', 'discard', 'discard-all', 'clean', 'undo-commit', 'stash', 'stash-pop', 'generate-commit-msg', 'cancel-commit-msg', 'create-pr', 'pr-status', 'ci-runs', 'recent-commits', 'get-branch'];
   if (!allowed.includes(action)) {
     return c.json({ error: `Invalid action: ${action}. Allowed: ${allowed.join(', ')}` }, 400);
   }
@@ -374,6 +408,7 @@ worktreeRoutes.post('/worktrees/:id/git', async (c) => {
         break;
       case 'stage': {
         if (!body.paths?.length) return c.json({ error: 'paths required for stage' }, 400);
+        clearStaleLock(repoPath);
         const safePaths = body.paths.map((p) => `"${p.replace(/"/g, '\\"')}"`).join(' ');
         cmd = `git add -- ${safePaths}`;
         break;
@@ -385,18 +420,27 @@ worktreeRoutes.post('/worktrees/:id/git', async (c) => {
         break;
       }
       case 'stage-all':
+        clearStaleLock(repoPath);
         cmd = 'git add -A';
         break;
       case 'commit': {
         if (!body.message?.trim()) return c.json({ error: 'message required for commit' }, 400);
+        clearStaleLock(repoPath);
         const safeMsg = body.message.replace(/"/g, '\\"');
         cmd = `git commit -m "${safeMsg}"`;
         break;
       }
       case 'discard': {
         if (!body.paths?.length) return c.json({ error: 'paths required for discard' }, 400);
+        clearStaleLock(repoPath);
         const safePaths = body.paths.map((p) => `"${p.replace(/"/g, '\\"')}"`).join(' ');
         cmd = `git checkout -- ${safePaths}`;
+        break;
+      }
+      case 'discard-all': {
+        clearStaleLock(repoPath);
+        // Discard tracked changes + remove untracked files in one shot
+        cmd = 'git checkout -- . && git clean -fd';
         break;
       }
       case 'clean': {
@@ -409,6 +453,7 @@ worktreeRoutes.post('/worktrees/:id/git', async (c) => {
         cmd = 'git reset --soft HEAD~1';
         break;
       case 'stash':
+        clearStaleLock(repoPath);
         cmd = 'git stash';
         break;
       case 'stash-pop':

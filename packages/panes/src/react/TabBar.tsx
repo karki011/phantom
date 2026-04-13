@@ -442,6 +442,17 @@ export function TabBar({ paneMenu }: TabBarProps) {
               Close Tab
             </button>
           )}
+          {tabs.length > 1 && (
+            <button
+              type="button"
+              style={menuItemStyle}
+              onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
+              onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
+              onClick={() => { store.closeOtherTabs(ctxTabId); setCtxTabId(null); }}
+            >
+              Close Other Tabs
+            </button>
+          )}
         </div>
       )}
     </div>

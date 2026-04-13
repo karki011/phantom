@@ -8,6 +8,8 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import type { RunningServer } from '../lib/api';
 import { getRunningServers, stopServer } from '../lib/api';
 
+const apiBase = (window as any).__PHANTOM_API_BASE ?? '';
+
 const formatUptime = (startedAt: number): string => {
   const ms = Date.now() - startedAt;
   const sec = Math.floor(ms / 1000);
@@ -35,7 +37,7 @@ export const RunningServersCard = memo(function RunningServersCard({ worktreeId 
     const interval = setInterval(refresh, 3000);
 
     // Listen for SSE server events
-    const eventSource = new EventSource('/events');
+    const eventSource = new EventSource(`${apiBase}/events`);
     eventSource.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);

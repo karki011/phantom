@@ -105,7 +105,12 @@ export interface DailyQuestData {
 // Base URL
 // ---------------------------------------------------------------------------
 
-const BASE_URL = '';
+export const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3849' : '';
+
+// Make available globally for packages (terminal, etc.) that can't import from here
+(window as any).__PHANTOM_API_BASE = API_BASE;
+
+const BASE_URL = API_BASE;
 
 // ---------------------------------------------------------------------------
 // Generic fetch wrapper
@@ -203,6 +208,7 @@ export interface ProjectData {
   defaultBranch: string;
   worktreeBaseDir: string;
   color: string | null;
+  starred: number;
   createdAt: number;
 }
 
@@ -220,6 +226,7 @@ export interface WorktreeData {
   isActive: number;
   createdAt: number;
   worktreeValid: boolean;
+  ticketUrl?: string | null;
 }
 
 export interface FileEntry {
@@ -256,6 +263,7 @@ export const createWorktree = (data: {
   name?: string;
   branch?: string;
   baseBranch?: string;
+  ticketUrl?: string;
 }): Promise<WorktreeData> =>
   fetchApi<WorktreeData>('/api/worktrees', {
     method: 'POST',
@@ -286,6 +294,9 @@ export const renameProject = (id: string, name: string): Promise<ProjectData> =>
     body: JSON.stringify({ name }),
   });
 
+export const toggleProjectStar = (id: string): Promise<ProjectData> =>
+  fetchApi<ProjectData>(`/api/projects/${id}/star`, { method: 'POST' });
+
 export interface OpenRepositoryResult {
   project: ProjectData;
   worktree: WorktreeData;
@@ -295,6 +306,37 @@ export const openRepository = (repoPath: string): Promise<OpenRepositoryResult> 
   fetchApi<OpenRepositoryResult>('/api/projects/open', {
     method: 'POST',
     body: JSON.stringify({ repoPath }),
+  });
+
+export interface ScannedRepo {
+  path: string;
+  name: string;
+  alreadyAdded: boolean;
+}
+
+export interface ScanResult {
+  repos: ScannedRepo[];
+}
+
+export const scanDirectory = (directory: string, maxDepth?: number): Promise<ScanResult> =>
+  fetchApi<ScanResult>('/api/projects/scan', {
+    method: 'POST',
+    body: JSON.stringify({ directory, maxDepth }),
+  });
+
+export interface BatchOpenResult {
+  results: Array<{
+    repoPath: string;
+    project?: ProjectData;
+    worktree?: WorktreeData;
+    error?: string;
+  }>;
+}
+
+export const batchOpenRepositories = (repoPaths: string[]): Promise<BatchOpenResult> =>
+  fetchApi<BatchOpenResult>('/api/projects/batch-open', {
+    method: 'POST',
+    body: JSON.stringify({ repoPaths }),
   });
 
 export interface BranchesData {
@@ -567,6 +609,12 @@ export const gitClean = (worktreeId: string, paths: string[]): Promise<{ ok: boo
   fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
     method: 'POST',
     body: JSON.stringify({ action: 'clean', paths }),
+  });
+
+export const gitDiscardAll = (worktreeId: string): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>(`/api/worktrees/${worktreeId}/git`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'discard-all' }),
   });
 
 export const gitUndoCommit = (worktreeId: string): Promise<{ ok: boolean }> =>

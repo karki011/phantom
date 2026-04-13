@@ -15,6 +15,8 @@ import {
 } from '../atoms/graph';
 import { activeWorktreeAtom } from '../atoms/worktrees';
 
+const apiBase = (window as any).__PHANTOM_API_BASE ?? '';
+
 // ---------------------------------------------------------------------------
 // SSE event shapes (from backend)
 // ---------------------------------------------------------------------------
@@ -106,7 +108,7 @@ export const useGraphStatus = (): GraphStatus => {
 
     let cancelled = false;
 
-    fetch(`/api/graph/${encodeURIComponent(projectId)}/stats`)
+    fetch(`${apiBase}/api/graph/${encodeURIComponent(projectId)}/stats`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled || !data) return;
@@ -142,7 +144,7 @@ export const useGraphStatus = (): GraphStatus => {
 
     const connect = () => {
       if (unmounted) return;
-      source = new EventSource('/events');
+      source = new EventSource(`${apiBase}/events`);
 
       source.onmessage = (event) => {
         let parsed: { type: string; data?: Record<string, unknown> };

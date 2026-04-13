@@ -15,6 +15,7 @@ import {
   activePaneAtom,
   addTabAtom,
   removeTabAtom,
+  closeOtherTabsAtom,
   setActiveTabAtom,
   reorderTabAtom,
   renameTabAtom,
@@ -63,6 +64,7 @@ function getState(): PaneStore {
     // Tab operations
     addTab: (label?: string) => jotaiStore.set(addTabAtom, label),
     removeTab: (tabId: string) => jotaiStore.set(removeTabAtom, tabId),
+    closeOtherTabs: (keepTabId: string) => jotaiStore.set(closeOtherTabsAtom, keepTabId),
     setActiveTab: (tabId: string) => jotaiStore.set(setActiveTabAtom, tabId),
     reorderTab: (from: number, to: number) =>
       jotaiStore.set(reorderTabAtom, { from, to }),

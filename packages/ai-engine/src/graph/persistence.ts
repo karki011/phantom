@@ -236,6 +236,33 @@ export class GraphPersistence {
     };
   }
 
+  /** Load graph metadata for all projects */
+  loadAllMeta(): GraphStats[] {
+    const rows = this.sqlite
+      .prepare('SELECT * FROM graph_meta')
+      .all() as Array<{
+        project_id: string;
+        last_built_at: number | null;
+        last_updated_at: number | null;
+        file_count: number | null;
+        edge_count: number | null;
+        layer2_count: number | null;
+        coverage: number | null;
+      }>;
+
+    return rows.map((row) => ({
+      projectId: row.project_id,
+      totalNodes: (row.file_count ?? 0) + (row.layer2_count ?? 0),
+      totalEdges: row.edge_count ?? 0,
+      fileCount: row.file_count ?? 0,
+      moduleCount: 0,
+      layer2Count: row.layer2_count ?? 0,
+      lastBuiltAt: row.last_built_at ?? 0,
+      lastUpdatedAt: row.last_updated_at ?? 0,
+      coverage: row.coverage ?? 0,
+    }));
+  }
+
   // ---------------------------------------------------------------------------
   // Cleanup
   // ---------------------------------------------------------------------------

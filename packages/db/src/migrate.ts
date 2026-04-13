@@ -183,8 +183,16 @@ export const runMigrations = (sqlite: Database.Database): void => {
   // Project Intelligence column
   try { sqlite.exec('ALTER TABLE projects ADD COLUMN profile TEXT'); } catch {}
 
+  // Project starred/favorite column
+  try { sqlite.exec('ALTER TABLE projects ADD COLUMN starred INTEGER DEFAULT 0'); } catch {}
+
   // Workspace column migrations
   addColumn('workspaces', 'base_branch', 'TEXT', 'NULL');
+
+  // Add ticket_url column to workspaces (worktrees) — safe to re-run
+  try {
+    sqlite.exec(`ALTER TABLE workspaces ADD COLUMN ticket_url TEXT`);
+  } catch { /* column already exists */ }
 
   // Workspace indexes
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_workspaces_project_id ON workspaces(project_id)`);
