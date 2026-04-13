@@ -10,7 +10,10 @@
 // Node Types
 // ---------------------------------------------------------------------------
 
-export type NodeType = 'file' | 'module' | 'function' | 'class' | 'type' | 'component';
+export type NodeType =
+  | 'file' | 'module' | 'function' | 'class' | 'type' | 'component'
+  | 'decision' | 'outcome' | 'pattern'
+  | 'document';
 
 export interface BaseNode {
   id: string;
@@ -90,13 +93,63 @@ export interface ComponentNode extends BaseNode {
   isExported: boolean;
 }
 
+/** Knowledge Layer: A decision recorded by the orchestrator */
+export interface DecisionNode extends BaseNode {
+  type: 'decision';
+  goal: string;
+  strategyId: string;
+  strategyName: string;
+  confidence: number;
+  complexity: string;
+  risk: string;
+  filesInvolved: string[];
+  durationMs: number;
+}
+
+/** Knowledge Layer: The outcome of a decision */
+export interface OutcomeNode extends BaseNode {
+  type: 'outcome';
+  decisionId: string;
+  success: boolean;
+  evaluationScore: number;
+  recommendation: 'accept' | 'refine' | 'escalate';
+  failureReason?: string;
+  refinementCount: number;
+}
+
+/** Knowledge Layer: Emergent pattern distilled from repeated decisions */
+export interface PatternNode extends BaseNode {
+  type: 'pattern';
+  name: string;
+  description: string;
+  frequency: number;
+  successRate: number;
+  applicableComplexities: string[];
+  applicableRisks: string[];
+}
+
+/** Document Layer: A project document (README, ADR, design doc) */
+export interface DocumentNode extends BaseNode {
+  type: 'document';
+  path: string;
+  title: string;
+  format: 'markdown' | 'text';
+  sections: string[];
+  contentHash: string;
+  wordCount: number;
+}
+
 export type GraphNode =
   | FileNode
   | ModuleNode
   | FunctionNode
   | ClassNode
   | TypeDefinitionNode
-  | ComponentNode;
+  | ComponentNode
+  | DecisionNode
+  | OutcomeNode
+  | PatternNode
+  | DocumentNode;
 
 // ---------------------------------------------------------------------------
 // Edge Types
@@ -110,7 +163,11 @@ export type EdgeType =
   | 'calls'
   | 'implements'
   | 'renders'
-  | 'uses_hook';
+  | 'uses_hook'
+  | 'informed_by'
+  | 'outcome_of'
+  | 'exemplified_by'
+  | 'documents';
 
 export interface GraphEdge {
   id: string;
@@ -148,6 +205,8 @@ export interface ContextResult {
   edges: GraphEdge[];
   /** Modules depended on by relevant files */
   modules: ModuleNode[];
+  /** Documents related to the relevant files */
+  documents: DocumentNode[];
   /** Relevance score (0-1) for each file */
   scores: Map<string, number>;
 }

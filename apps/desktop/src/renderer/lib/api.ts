@@ -715,6 +715,10 @@ export const updateJournalNotes = (date: string, notes: string): Promise<{ ok: b
 export const cleanupTerminals = (): Promise<{ ok: boolean }> =>
   fetchApi<{ ok: boolean }>('/api/cleanup/terminals', { method: 'POST' });
 
+/** Shutdown cleanup — kills PTYs + purges DB session records */
+export const shutdownTerminals = (): Promise<{ ok: boolean }> =>
+  fetchApi<{ ok: boolean }>('/api/cleanup/terminals/shutdown', { method: 'POST' });
+
 // ---------------------------------------------------------------------------
 // User Preferences
 // ---------------------------------------------------------------------------

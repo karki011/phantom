@@ -14,6 +14,7 @@ import type {
   StrategyOutput,
   TaskContext,
 } from '../types/strategy.js';
+import { applyPriorFailurePenalty } from './prior-penalty.js';
 
 // ---------------------------------------------------------------------------
 // Debate types
@@ -36,40 +37,45 @@ export class DebateStrategy implements ReasoningStrategy {
   readonly description =
     'Multi-perspective deliberation for high-risk decisions. Simulates advocate vs. critic debate with judge synthesis.';
 
-  private readonly numRounds = 2;
+  private numRounds: number;
+
+  constructor(options?: { numRounds?: number }) {
+    this.numRounds = options?.numRounds ?? 2;
+  }
 
   shouldActivate(context: TaskContext): ActivationScore {
     const { complexity, risk, blastRadius } = context;
 
+    let base: ActivationScore;
+
     if (risk === 'critical') {
-      return {
+      base = {
         score: 0.9,
         reason: 'Critical risk — debate deliberation strongly recommended',
       };
-    }
-    if (risk === 'high' && (complexity === 'moderate' || complexity === 'complex' || complexity === 'critical')) {
-      return {
+    } else if (risk === 'high' && (complexity === 'moderate' || complexity === 'complex' || complexity === 'critical')) {
+      base = {
         score: 0.8,
         reason: `High risk with ${complexity} complexity — debate deliberation recommended`,
       };
-    }
-    if (risk === 'high' && complexity === 'simple') {
-      return {
+    } else if (risk === 'high' && complexity === 'simple') {
+      base = {
         score: 0.6,
         reason: 'High risk but simple complexity — debate may help identify hidden risks',
       };
-    }
-    if (blastRadius > 15) {
-      return {
+    } else if (blastRadius > 15) {
+      base = {
         score: 0.7,
         reason: `Large blast radius (${blastRadius} files) — multi-perspective review recommended`,
       };
+    } else {
+      base = {
+        score: 0.05,
+        reason: 'Low risk — debate deliberation rarely needed',
+      };
     }
 
-    return {
-      score: 0.05,
-      reason: 'Low risk — debate deliberation rarely needed',
-    };
+    return applyPriorFailurePenalty(base, this.id, context);
   }
 
   async execute(input: StrategyInput): Promise<StrategyOutput> {
@@ -81,8 +87,18 @@ export class DebateStrategy implements ReasoningStrategy {
     // 1. Build advocate position
     const advocatePoints = this.buildAdvocatePoints(context, filePaths);
 
-    // 2. Build critic position
+    // 2. Build critic position (enriched with prior failure knowledge)
     const criticPoints = this.buildCriticPoints(context);
+
+    // If prior failures exist for similar goals, the critic starts from known failure points
+    const priorFailures = context.signals.priorFailures as Array<{ strategyId: string; failureReason: string | null }> | undefined;
+    if (priorFailures && priorFailures.length > 0) {
+      for (const failure of priorFailures) {
+        if (failure.failureReason) {
+          criticPoints.push(`Prior approach "${failure.strategyId}" failed: ${failure.failureReason}`);
+        }
+      }
+    }
 
     // 3. Run debate rounds
     const rounds = this.runRounds(advocatePoints, criticPoints);

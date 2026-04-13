@@ -12,6 +12,19 @@
 export type TaskComplexity = 'simple' | 'moderate' | 'complex' | 'critical';
 export type TaskRisk = 'low' | 'medium' | 'high' | 'critical';
 
+export interface PriorFailureSignal {
+  strategyId: string;
+  strategyName: string;
+  failureReason: string | null;
+  confidence: number;
+}
+
+export interface PriorSuccessSignal {
+  strategyId: string;
+  strategyName: string;
+  confidence: number;
+}
+
 export interface TaskContext {
   /** What the user is trying to accomplish */
   goal: string;
@@ -25,8 +38,13 @@ export interface TaskContext {
   risk: TaskRisk;
   /** Whether the task involves ambiguous requirements */
   isAmbiguous: boolean;
-  /** Additional signals from the graph */
-  signals: Record<string, unknown>;
+  /** Additional signals from the graph and knowledge system */
+  signals: Record<string, unknown> & {
+    /** Strategies that failed on similar goals (injected by assessor) */
+    priorFailures?: PriorFailureSignal[];
+    /** Strategies that succeeded on similar goals (injected by assessor) */
+    priorSuccess?: PriorSuccessSignal;
+  };
 }
 
 // ---------------------------------------------------------------------------

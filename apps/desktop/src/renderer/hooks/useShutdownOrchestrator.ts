@@ -1,9 +1,20 @@
 /**
- * useShutdownOrchestrator — runs shutdown cleanup steps sequentially
+ * useShutdownOrchestrator — runs shutdown cleanup steps sequentially.
+ *
+ * Step order matters: terminals are closed FIRST so the pane state save
+ * (step 2) persists a layout without dead terminal panes. On next boot
+ * the user gets a clean workspace instead of stale blank terminals.
+ *
+ * Refresh (Cmd+R) does NOT run the ceremony, so terminals survive via
+ * the existing hot-restore / cold-restore paths.
+ *
  * @author Subash Karki
  */
 import { useCallback, useRef, useState } from 'react';
-import { cleanupTerminals, generateEndOfDay } from '../lib/api';
+import { shutdownTerminals, generateEndOfDay } from '../lib/api';
+import { disposeAllSessions } from '@phantom-os/terminal';
+import { paneStateAtom, stripTerminalPanes } from '@phantom-os/panes';
+import { useStore } from 'jotai';
 
 type StepStatus = 'pending' | 'running' | 'done' | 'error';
 type Phase = 'idle' | 'confirming' | 'running' | 'done';
@@ -16,9 +27,9 @@ interface StepState {
 }
 
 const INITIAL_STEPS: StepState[] = [
+  { id: 'terminals', label: 'Closing terminal sessions...', doneLabel: 'Terminals closed', status: 'pending' },
   { id: 'panes', label: 'Saving pane state...', doneLabel: 'Pane state saved', status: 'pending' },
   { id: 'editors', label: 'Saving unsaved files...', doneLabel: 'Files saved', status: 'pending' },
-  { id: 'terminals', label: 'Closing terminal sessions...', doneLabel: 'Terminals closed', status: 'pending' },
   { id: 'journal', label: 'Generating end-of-day journal...', doneLabel: 'Journal generated', status: 'pending' },
 ];
 
@@ -26,6 +37,7 @@ export function useShutdownOrchestrator() {
   const [phase, setPhase] = useState<Phase>('idle');
   const [steps, setSteps] = useState<StepState[]>(INITIAL_STEPS);
   const cancelledRef = useRef(false);
+  const store = useStore();
 
   const updateStep = (id: string, status: StepStatus) => {
     setSteps((prev) => prev.map((s) => (s.id === id ? { ...s, status } : s)));
@@ -54,22 +66,26 @@ export function useShutdownOrchestrator() {
 
     const today = todayStr();
 
-    // Step 1: Save pane state (fire custom event, wait briefly)
+    // Step 1: Close terminals — kill client sessions, purge server PTYs + DB,
+    // then strip terminal panes from atom state so the next save is clean.
+    await runStep('terminals', async () => {
+      disposeAllSessions();
+      await shutdownTerminals();
+      const current = store.get(paneStateAtom);
+      store.set(paneStateAtom, stripTerminalPanes(current));
+    });
+
+    // Step 2: Save pane state (now clean — no terminal panes)
     await runStep('panes', () => new Promise<void>((resolve) => {
       window.dispatchEvent(new Event('phantom:flush-pane-save'));
       setTimeout(resolve, 500);
     }));
 
-    // Step 2: Save unsaved files (fire custom event, wait briefly)
+    // Step 3: Save unsaved files
     await runStep('editors', () => new Promise<void>((resolve) => {
       window.dispatchEvent(new Event('phantom:save-all-editors'));
       setTimeout(resolve, 500);
     }));
-
-    // Step 3: Close terminals
-    await runStep('terminals', async () => {
-      await cleanupTerminals();
-    });
 
     // Step 4: Generate EOD journal
     await runStep('journal', async () => {
@@ -83,7 +99,7 @@ export function useShutdownOrchestrator() {
     // All steps done — signal ready to quit
     setPhase('done');
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [store]);
 
   const confirm = useCallback(() => {
     setPhase('confirming');

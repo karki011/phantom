@@ -11,6 +11,9 @@ import type { EventBus } from '../events/event-bus.js';
 import type { BlastRadiusResult, ContextResult } from '../types/graph.js';
 import type { StrategyInput, StrategyOutput } from '../types/strategy.js';
 import type { GoalInput, OrchestratorResult } from './types.js';
+import type { KnowledgeWriter } from './knowledge-writer.js';
+import type { Compactor } from './compactor.js';
+import type { DecisionQuery } from '../graph/decision-query.js';
 import { TaskAssessor } from './assessor.js';
 import { Evaluator } from './evaluator.js';
 
@@ -20,12 +23,22 @@ const ADVISOR_STRATEGY_ID = 'advisor';
 export class Orchestrator {
   private assessor = new TaskAssessor();
   private evaluator = new Evaluator();
+  private knowledgeWriter: KnowledgeWriter | null = null;
+  private compactor: Compactor | null = null;
+  private compactionDone = false;
 
   constructor(
     private graphQuery: GraphQuery,
     private strategyRegistry: StrategyRegistry,
     private eventBus: EventBus,
-  ) {}
+    options?: { knowledgeWriter?: KnowledgeWriter; compactor?: Compactor; decisionQuery?: DecisionQuery },
+  ) {
+    this.knowledgeWriter = options?.knowledgeWriter ?? null;
+    this.compactor = options?.compactor ?? null;
+    if (options?.decisionQuery) {
+      this.assessor.setDecisionQuery(options.decisionQuery);
+    }
+  }
 
   /**
    * Process a user goal through the full strategy pipeline.
@@ -38,6 +51,12 @@ export class Orchestrator {
    */
   async process(input: GoalInput): Promise<OrchestratorResult> {
     const pipelineStart = Date.now();
+
+    // Lazy compaction: run once on first process() call
+    if (this.compactor && !this.compactionDone) {
+      this.compactor.run();
+      this.compactionDone = true;
+    }
 
     // Step 1: Graph Context — merge context from all active files
     const graphContext = this.gatherContext(input);
@@ -95,7 +114,15 @@ export class Orchestrator {
       }
     }
 
-    // Step 10: Assemble result
+    // Step 10: Record decision + outcome to knowledge DB (non-blocking)
+    if (this.knowledgeWriter) {
+      this.knowledgeWriter.record(
+        { strategy: { id: selectedStrategy.id, name: selectedStrategy.name, reason: activationScore?.score.reason ?? 'selected', score: activationScore?.score.score ?? 0 }, alternatives: [], context: { files: graphContext.files.map((f) => ({ path: f.path, relevance: graphContext.scores.get(f.id) ?? 0 })), blastRadius: blastRadius.direct.length + blastRadius.transitive.length, relatedFiles }, taskContext, output, totalDurationMs: Date.now() - pipelineStart },
+        evaluation,
+      );
+    }
+
+    // Step 11: Assemble result
     const contextFiles = graphContext.files.map((f) => ({
       path: f.path,
       relevance: graphContext.scores.get(f.id) ?? 0,
@@ -169,13 +196,14 @@ export class Orchestrator {
     const activeFiles = input.activeFiles ?? [];
 
     if (activeFiles.length === 0) {
-      return { files: [], edges: [], modules: [], scores: new Map() };
+      return { files: [], edges: [], modules: [], documents: [], scores: new Map() };
     }
 
     // Merge context results from all active files
     const mergedFiles = new Map<string, ContextResult['files'][number]>();
     const mergedEdges = new Map<string, ContextResult['edges'][number]>();
     const mergedModules = new Map<string, ContextResult['modules'][number]>();
+    const mergedDocuments = new Map<string, ContextResult['documents'][number]>();
     const mergedScores = new Map<string, number>();
 
     for (const filePath of activeFiles) {
@@ -196,12 +224,17 @@ export class Orchestrator {
       for (const mod of ctx.modules) {
         mergedModules.set(mod.id, mod);
       }
+
+      for (const doc of ctx.documents) {
+        mergedDocuments.set(doc.id, doc);
+      }
     }
 
     return {
       files: [...mergedFiles.values()],
       edges: [...mergedEdges.values()],
       modules: [...mergedModules.values()],
+      documents: [...mergedDocuments.values()],
       scores: mergedScores,
     };
   }

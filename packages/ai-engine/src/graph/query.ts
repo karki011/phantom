@@ -8,6 +8,7 @@ import type { InMemoryGraph } from './in-memory-graph.js';
 import type {
   BlastRadiusResult,
   ContextResult,
+  DocumentNode,
   FileNode,
   GraphEdge,
   GraphNode,
@@ -25,13 +26,14 @@ export class GraphQuery {
   getContext(filePath: string, depth = 2): ContextResult {
     const root = this.graph.getFileByPath(filePath);
     if (!root) {
-      return { files: [], edges: [], modules: [], scores: new Map() };
+      return { files: [], edges: [], modules: [], documents: [], scores: new Map() };
     }
 
     const visited = new Set<string>();
     const files: FileNode[] = [];
     const edges: GraphEdge[] = [];
     const modules: ModuleNode[] = [];
+    const documents: DocumentNode[] = [];
     const scores = new Map<string, number>();
 
     // BFS from root node
@@ -53,6 +55,8 @@ export class GraphQuery {
         scores.set(node.id, score);
       } else if (node.type === 'module') {
         modules.push(node as ModuleNode);
+      } else if (node.type === 'document') {
+        documents.push(node as DocumentNode);
       }
 
       // Collect edges and traverse neighbors
@@ -74,7 +78,7 @@ export class GraphQuery {
     // Deduplicate edges
     const uniqueEdges = [...new Map(edges.map((e) => [e.id, e])).values()];
 
-    return { files, edges: uniqueEdges, modules, scores };
+    return { files, edges: uniqueEdges, modules, documents, scores };
   }
 
   /**

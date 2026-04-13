@@ -14,6 +14,7 @@ import type {
   StrategyOutput,
   TaskContext,
 } from '../types/strategy.js';
+import { applyPriorFailurePenalty } from './prior-penalty.js';
 
 // ---------------------------------------------------------------------------
 // Branch types
@@ -49,32 +50,34 @@ export class TreeOfThoughtStrategy implements ReasoningStrategy {
   shouldActivate(context: TaskContext): ActivationScore {
     const { complexity, risk, isAmbiguous } = context;
 
+    let base: ActivationScore;
+
     if (isAmbiguous && (complexity === 'moderate' || complexity === 'complex' || complexity === 'critical')) {
-      return {
+      base = {
         score: 0.85,
         reason: `Ambiguous task with ${complexity} complexity — tree-of-thought exploration recommended`,
       };
-    }
-    if (isAmbiguous && complexity === 'simple') {
-      return {
+    } else if (isAmbiguous && complexity === 'simple') {
+      base = {
         score: 0.5,
         reason: 'Ambiguous but simple task — tree-of-thought may help but is not critical',
       };
-    }
-    if (
+    } else if (
       (complexity === 'complex' || complexity === 'critical') &&
       (risk === 'medium' || risk === 'high' || risk === 'critical')
     ) {
-      return {
+      base = {
         score: 0.6,
         reason: `Complex task (${complexity}) with ${risk} risk — multiple approaches worth exploring`,
       };
+    } else {
+      base = {
+        score: 0.1,
+        reason: 'Simple or low-risk task — single path sufficient',
+      };
     }
 
-    return {
-      score: 0.1,
-      reason: 'Simple or low-risk task — single path sufficient',
-    };
+    return applyPriorFailurePenalty(base, this.id, context);
   }
 
   async execute(input: StrategyInput): Promise<StrategyOutput> {

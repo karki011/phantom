@@ -13,7 +13,10 @@ export type GraphEventType =
   | 'graph:build:error'
   | 'graph:update:start'
   | 'graph:update:complete'
-  | 'graph:stale';
+  | 'graph:stale'
+  | 'knowledge:decision:recorded'
+  | 'knowledge:pattern:discovered'
+  | 'knowledge:compaction:complete';
 
 export interface GraphBuildStartEvent {
   type: 'graph:build:start';
@@ -77,6 +80,32 @@ export interface GraphStaleEvent {
   timestamp: number;
 }
 
+export interface KnowledgeDecisionRecordedEvent {
+  type: 'knowledge:decision:recorded';
+  projectId: string;
+  decisionId: string;
+  strategyId: string;
+  confidence: number;
+  timestamp: number;
+}
+
+export interface KnowledgePatternDiscoveredEvent {
+  type: 'knowledge:pattern:discovered';
+  projectId: string;
+  patternName: string;
+  frequency: number;
+  successRate: number;
+  timestamp: number;
+}
+
+export interface KnowledgeCompactionCompleteEvent {
+  type: 'knowledge:compaction:complete';
+  projectId: string;
+  prunedDecisions: number;
+  patternsCreated: number;
+  timestamp: number;
+}
+
 export type GraphEvent =
   | GraphBuildStartEvent
   | GraphBuildProgressEvent
@@ -84,7 +113,10 @@ export type GraphEvent =
   | GraphBuildErrorEvent
   | GraphUpdateStartEvent
   | GraphUpdateCompleteEvent
-  | GraphStaleEvent;
+  | GraphStaleEvent
+  | KnowledgeDecisionRecordedEvent
+  | KnowledgePatternDiscoveredEvent
+  | KnowledgeCompactionCompleteEvent;
 
 /** Listener for graph events */
 export type GraphEventListener = (event: GraphEvent) => void;

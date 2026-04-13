@@ -4,6 +4,7 @@
  */
 import { Hono } from 'hono';
 import { destroyAllPtys } from '../terminal-manager.js';
+import { historyWriter } from '../terminal-history.js';
 
 export const cleanupRoutes = new Hono();
 
@@ -14,5 +15,17 @@ cleanupRoutes.post('/cleanup/terminals', (c) => {
     return c.json({ ok: true });
   } catch (err: any) {
     return c.json({ ok: false, error: err?.message ?? 'Failed to cleanup terminals' }, 500);
+  }
+});
+
+/** POST /cleanup/terminals/shutdown — Kill PTYs + purge DB records (shutdown ceremony) */
+cleanupRoutes.post('/cleanup/terminals/shutdown', (c) => {
+  try {
+    destroyAllPtys();
+    historyWriter.stopHistoryWriter();
+    historyWriter.purgeAllSessions();
+    return c.json({ ok: true });
+  } catch (err: any) {
+    return c.json({ ok: false, error: err?.message ?? 'Failed to shutdown terminals' }, 500);
   }
 });

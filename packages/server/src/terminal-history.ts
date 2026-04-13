@@ -194,6 +194,15 @@ export const markAllExited = (): void => {
   }
 };
 
+/** Delete all terminal session records from DB (shutdown ceremony) */
+export const purgeAllSessions = (): void => {
+  try {
+    db.delete(terminalSessions).run();
+  } catch {
+    // ignore
+  }
+};
+
 /** Convenience export for use as a namespace */
 export const historyWriter = {
   recordSession,
@@ -205,4 +214,5 @@ export const historyWriter = {
   startHistoryWriter,
   stopHistoryWriter,
   markAllExited,
+  purgeAllSessions,
 };

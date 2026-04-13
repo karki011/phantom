@@ -11,6 +11,7 @@ import type {
   StrategyOutput,
   TaskContext,
 } from '../types/strategy.js';
+import { applyPriorFailurePenalty } from './prior-penalty.js';
 
 export class AdvisorStrategy implements ReasoningStrategy {
   readonly id = 'advisor';
@@ -22,23 +23,23 @@ export class AdvisorStrategy implements ReasoningStrategy {
   shouldActivate(context: TaskContext): ActivationScore {
     const { complexity, risk, isAmbiguous, blastRadius } = context;
 
+    let base: ActivationScore;
+
     if (risk === 'high' || risk === 'critical') {
-      return { score: 0.85, reason: `High/critical risk (${risk}) — advisor review required` };
-    }
-    if (complexity === 'complex' || complexity === 'critical') {
-      return { score: 0.8, reason: `Complex/critical task (${complexity}) — advisor reasoning needed` };
-    }
-    if (isAmbiguous) {
-      return { score: 0.7, reason: 'Ambiguous requirements — advisor can disambiguate' };
-    }
-    if (blastRadius > 10) {
-      return { score: 0.6, reason: `Large blast radius (${blastRadius} files) — advisor should review` };
-    }
-    if (complexity === 'moderate' && risk === 'medium') {
-      return { score: 0.4, reason: 'Moderate complexity with medium risk — advisor may help' };
+      base = { score: 0.85, reason: `High/critical risk (${risk}) — advisor review required` };
+    } else if (complexity === 'complex' || complexity === 'critical') {
+      base = { score: 0.8, reason: `Complex/critical task (${complexity}) — advisor reasoning needed` };
+    } else if (isAmbiguous) {
+      base = { score: 0.7, reason: 'Ambiguous requirements — advisor can disambiguate' };
+    } else if (blastRadius > 10) {
+      base = { score: 0.6, reason: `Large blast radius (${blastRadius} files) — advisor should review` };
+    } else if (complexity === 'moderate' && risk === 'medium') {
+      base = { score: 0.4, reason: 'Moderate complexity with medium risk — advisor may help' };
+    } else {
+      base = { score: 0.1, reason: 'Low complexity/risk — advisor not needed' };
     }
 
-    return { score: 0.1, reason: 'Low complexity/risk — advisor not needed' };
+    return applyPriorFailurePenalty(base, this.id, context);
   }
 
   async execute(input: StrategyInput): Promise<StrategyOutput> {

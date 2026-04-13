@@ -14,6 +14,7 @@ import type {
   StrategyOutput,
   TaskContext,
 } from '../types/strategy.js';
+import { applyPriorFailurePenalty } from './prior-penalty.js';
 
 // ---------------------------------------------------------------------------
 // Graph types
@@ -41,35 +42,36 @@ export class GraphOfThoughtStrategy implements ReasoningStrategy {
   shouldActivate(context: TaskContext): ActivationScore {
     const { complexity, blastRadius, isAmbiguous } = context;
 
+    let base: ActivationScore;
+
     if (complexity === 'critical') {
-      return {
+      base = {
         score: 0.9,
         reason: 'Critical complexity — graph-of-thought decomposition strongly recommended',
       };
-    }
-    if (complexity === 'complex' && blastRadius > 10) {
-      return {
+    } else if (complexity === 'complex' && blastRadius > 10) {
+      base = {
         score: 0.85,
         reason: `Complex task with large blast radius (${blastRadius} files) — graph decomposition recommended`,
       };
-    }
-    if (complexity === 'complex' && !isAmbiguous) {
-      return {
+    } else if (complexity === 'complex' && !isAmbiguous) {
+      base = {
         score: 0.7,
         reason: 'Complex task with clear requirements — graph decomposition can parallelize subtasks',
       };
-    }
-    if (complexity === 'moderate' && blastRadius > 15) {
-      return {
+    } else if (complexity === 'moderate' && blastRadius > 15) {
+      base = {
         score: 0.6,
         reason: `Moderate complexity but large blast radius (${blastRadius} files) — graph decomposition may help`,
       };
+    } else {
+      base = {
+        score: 0.05,
+        reason: 'Simple or small-scope task — graph decomposition not needed',
+      };
     }
 
-    return {
-      score: 0.05,
-      reason: 'Simple or small-scope task — graph decomposition not needed',
-    };
+    return applyPriorFailurePenalty(base, this.id, context);
   }
 
   async execute(input: StrategyInput): Promise<StrategyOutput> {

@@ -10,12 +10,19 @@ import type {
   StrategyRegistryEntry,
   TaskContext,
 } from '../types/strategy.js';
+import type { StrategyPerformanceStore } from './performance-store.js';
 
 const FALLBACK_STRATEGY_ID = 'direct';
 const MIN_ACTIVATION_THRESHOLD = 0.1;
 
 export class StrategyRegistry {
   private entries = new Map<string, StrategyRegistryEntry>();
+  private performanceStore: StrategyPerformanceStore | null = null;
+
+  /** Attach a performance store for adaptive strategy scoring. */
+  setPerformanceStore(store: StrategyPerformanceStore): void {
+    this.performanceStore = store;
+  }
 
   /** Register a strategy with an optional priority (higher = preferred on ties). */
   register(strategy: ReasoningStrategy, priority = 0): void {
@@ -105,7 +112,22 @@ export class StrategyRegistry {
 
     for (const entry of this.entries.values()) {
       if (!entry.enabled) continue;
-      const score = entry.strategy.shouldActivate(context);
+      const rawScore = entry.strategy.shouldActivate(context);
+
+      // Apply historical performance weight if available
+      let adjustedScore = rawScore.score;
+      if (this.performanceStore) {
+        const weight = this.performanceStore.getHistoricalWeight(
+          entry.strategy.id,
+          context.complexity,
+        );
+        adjustedScore = rawScore.score * weight;
+      }
+
+      const score: ActivationScore = {
+        score: adjustedScore,
+        reason: rawScore.reason,
+      };
       results.push({ strategy: entry.strategy, score, priority: entry.priority });
     }
 

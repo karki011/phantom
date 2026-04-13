@@ -47,6 +47,7 @@ export {
   setupPaneAutoSave,
   makePane,
   makeTab,
+  stripTerminalPanes,
 } from './core/atoms.js';
 
 // ---------------------------------------------------------------------------

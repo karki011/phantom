@@ -70,7 +70,7 @@ function makeContextResult(fileCount: number): ContextResult {
     : [];
   const scores = new Map(files.map((f, i) => [f.id, 1 / (1 + i)]));
 
-  return { files, edges, modules: [], scores };
+  return { files, edges, modules: [], documents: [], scores };
 }
 
 function makeBlastRadius(directCount: number, transitiveCount: number): BlastRadiusResult {

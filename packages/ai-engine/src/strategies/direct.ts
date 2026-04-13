@@ -11,6 +11,7 @@ import type {
   StrategyOutput,
   TaskContext,
 } from '../types/strategy.js';
+import { applyPriorFailurePenalty } from './prior-penalty.js';
 
 export class DirectStrategy implements ReasoningStrategy {
   readonly id = 'direct';
@@ -22,17 +23,19 @@ export class DirectStrategy implements ReasoningStrategy {
   shouldActivate(context: TaskContext): ActivationScore {
     const { complexity, risk } = context;
 
+    let base: ActivationScore;
+
     if (complexity === 'simple' && risk === 'low') {
-      return { score: 0.9, reason: 'Simple task with low risk — ideal for direct execution' };
-    }
-    if (complexity === 'moderate' && risk === 'low') {
-      return { score: 0.6, reason: 'Moderate complexity but low risk — direct execution viable' };
-    }
-    if (complexity === 'simple' && risk === 'medium') {
-      return { score: 0.5, reason: 'Simple task with medium risk — direct execution possible with caution' };
+      base = { score: 0.9, reason: 'Simple task with low risk — ideal for direct execution' };
+    } else if (complexity === 'moderate' && risk === 'low') {
+      base = { score: 0.6, reason: 'Moderate complexity but low risk — direct execution viable' };
+    } else if (complexity === 'simple' && risk === 'medium') {
+      base = { score: 0.5, reason: 'Simple task with medium risk — direct execution possible with caution' };
+    } else {
+      base = { score: 0.2, reason: 'Complex or high-risk task — direct execution available as fallback' };
     }
 
-    return { score: 0.2, reason: 'Complex or high-risk task — direct execution available as fallback' };
+    return applyPriorFailurePenalty(base, this.id, context);
   }
 
   async execute(input: StrategyInput): Promise<StrategyOutput> {

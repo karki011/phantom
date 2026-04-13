@@ -85,6 +85,12 @@ export const attachSession = async (
     existing.container = container;
     container.appendChild(existing.wrapper);
 
+    // Capture scroll intent before any DOM work mutates xterm state
+    const restoreWasAtBottom = existing.wasAtBottom;
+    const restoreViewportY = existing.savedViewportY;
+    existing.savedViewportY = undefined;
+    existing.wasAtBottom = undefined;
+
     // Defer fit() until after browser layout — calling it synchronously
     // after appendChild measures the container before it has real dimensions,
     // which collapses the PTY to ~8 cols.
@@ -94,20 +100,6 @@ export const attachSession = async (
       // Repaint canvas — renderer skips frames while wrapper is detached
       existing.term.refresh(0, existing.term.rows - 1);
 
-      // Restore scroll position saved during detach
-      const buf = existing.term.buffer.active;
-      if (existing.wasAtBottom) {
-        // User was following live output — scroll to current bottom
-        existing.term.scrollToBottom();
-      } else if (existing.savedViewportY != null) {
-        // User was scrolled up reviewing history — restore exact position
-        // Clamp to current baseY in case buffer was trimmed
-        const target = Math.min(existing.savedViewportY, buf.baseY);
-        existing.term.scrollToLine(target);
-      }
-      existing.savedViewportY = undefined;
-      existing.wasAtBottom = undefined;
-
       // Send resize so server/PTY knows current dimensions
       if (existing.ws && existing.ws.readyState === WebSocket.OPEN) {
         const dims = existing.fit.proposeDimensions();
@@ -115,7 +107,36 @@ export const attachSession = async (
           existing.ws.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
         }
       }
+
+      // Defer scroll restoration to a SECOND frame — the first rAF
+      // repaints the canvas and recalculates the scrollbar height.
+      // Scrolling in the same frame uses stale scroll dimensions,
+      // causing the viewport to jump to line 0 on the first user scroll.
+      requestAnimationFrame(() => {
+        const buf = existing.term.buffer.active;
+        if (restoreWasAtBottom) {
+          existing.term.scrollToBottom();
+        } else if (restoreViewportY != null) {
+          const target = Math.min(restoreViewportY, buf.baseY);
+          existing.term.scrollToLine(target);
+        } else {
+          // No saved position (e.g. output arrived while detached) — go to bottom
+          existing.term.scrollToBottom();
+        }
+      });
     });
+
+    // Check WebSocket health — if it died while detached, the terminal
+    // would appear blank because no output is flowing. Reconnect now.
+    if (!existing.ws || existing.ws.readyState === WebSocket.CLOSED || existing.ws.readyState === WebSocket.CLOSING) {
+      console.log(`[TermReg] REATTACH-RECONNECT ${paneId.slice(0,8)} — ws dead, triggering reconnect`);
+      existing.connected = false;
+      // The connectWs function is scoped to the original session creation.
+      // Emit a synthetic reconnect by closing and letting the onclose handler fire.
+      // Since the ws is already CLOSED, we dispatch a focus event to trigger the
+      // resetReconnectOnFocus handler which will create a new connection.
+      window.dispatchEvent(new Event('focus'));
+    }
 
     // Resume ResizeObserver
     existing.observer?.disconnect();
@@ -191,7 +212,26 @@ export const attachSession = async (
   const MAX_RECONNECT_ATTEMPTS = 20;
   const RECONNECT_DELAYS = [500, 1000, 2000, 3000, 5000]; // escalating backoff
 
+  /** Reset reconnect counter — called on window focus so a sleeping laptop
+   *  doesn't permanently exhaust retries while the lid was closed. */
+  const resetReconnectOnFocus = () => {
+    if (!sessions.has(paneId)) {
+      window.removeEventListener('focus', resetReconnectOnFocus);
+      return;
+    }
+    const s = sessions.get(paneId)!;
+    if (!s.connected && s.ws?.readyState !== WebSocket.OPEN) {
+      console.log(`[TermReg] FOCUS-RECONNECT ${paneId.slice(0,8)} — resetting retries`);
+      reconnectAttempts = 0;
+      connectWs(true);
+    }
+  };
+  window.addEventListener('focus', resetReconnectOnFocus);
+
   function connectWs(isReconnect = false) {
+    // Don't open duplicate sockets
+    if (session.ws && session.ws.readyState === WebSocket.CONNECTING) return;
+
     const ws = new WebSocket(wsUrl);
     session.ws = ws;
 
@@ -274,6 +314,7 @@ export const attachSession = async (
     }
   });
   (session as any)._onDataDisposable = onDataDisposable;
+  (session as any)._focusHandler = resetReconnectOnFocus;
 
   // Set up ResizeObserver
   session.observer = createResizeObserver(paneId, container);
@@ -331,6 +372,11 @@ export const disposeSession = (paneId: string): void => {
 
   // Dispose onData listener
   (session as any)._onDataDisposable?.dispose();
+
+  // Remove focus-reconnect handler
+  if ((session as any)._focusHandler) {
+    window.removeEventListener('focus', (session as any)._focusHandler);
+  }
 
   // Disconnect observer
   session.observer?.disconnect();

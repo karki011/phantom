@@ -551,6 +551,79 @@ let activeWorkspaceId: string | null = null;
 let coldBoot = true;
 
 /**
+ * Strip ALL terminal panes from a WorkspaceState.
+ * Used during shutdown ceremony so the next boot starts with a clean layout.
+ * Tabs that become empty are replaced with a home pane.
+ */
+export function stripTerminalPanes(state: WorkspaceState): WorkspaceState {
+  const processedTabs = state.tabs.map((tab) => {
+    const nonTerminalPanes: Record<string, typeof tab.panes[string]> = {};
+    for (const [id, pane] of Object.entries(tab.panes)) {
+      if (pane.kind !== 'terminal') {
+        nonTerminalPanes[id] = pane;
+      }
+    }
+
+    // If no panes survive, replace with a home pane
+    if (Object.keys(nonTerminalPanes).length === 0) {
+      const home = makePane('workspace-home', {}, 'Home');
+      return {
+        ...tab,
+        label: 'Home',
+        layout: { type: 'pane' as const, paneId: home.id },
+        panes: { [home.id]: home },
+        activePaneId: home.id,
+      };
+    }
+
+    // Rebuild layout without terminal panes
+    let layout = tab.layout;
+    for (const [id, pane] of Object.entries(tab.panes)) {
+      if (pane.kind === 'terminal') {
+        const stripped = removePaneFromLayout(layout, id);
+        if (stripped) layout = stripped;
+      }
+    }
+
+    // Safety: if layout became null, rebuild from surviving panes
+    if (!layout) {
+      const ids = Object.keys(nonTerminalPanes);
+      layout = ids.length === 1
+        ? { type: 'pane' as const, paneId: ids[0] }
+        : ids.reduce<any>((acc, pid, i) =>
+            i === 0
+              ? { type: 'pane' as const, paneId: pid }
+              : { type: 'split' as const, direction: 'horizontal' as const, children: [acc, { type: 'pane' as const, paneId: pid }], splitPercentage: 50 },
+          null);
+    }
+
+    const activePaneId = nonTerminalPanes[tab.activePaneId ?? '']
+      ? tab.activePaneId
+      : Object.keys(nonTerminalPanes)[0];
+
+    return { ...tab, layout, panes: nonTerminalPanes, activePaneId };
+  });
+
+  // Deduplicate: if multiple tabs all became "Home" after stripping, keep just one
+  const seen = new Set<string>();
+  const dedupedTabs = processedTabs.filter((tab) => {
+    const panes = Object.values(tab.panes);
+    if (panes.length === 1 && panes[0].kind === 'workspace-home') {
+      if (seen.has('home')) return false;
+      seen.add('home');
+    }
+    return true;
+  });
+
+  const tabs = dedupedTabs.length > 0 ? dedupedTabs : processedTabs.slice(0, 1);
+  const activeTabId = tabs.some((t) => t.id === state.activeTabId)
+    ? state.activeTabId
+    : tabs[0].id;
+
+  return { tabs, activeTabId };
+}
+
+/**
  * On cold boot, check which terminal tabs have restorable sessions.
  * Keep restorable terminals (mark for cold restore), strip dead ones.
  */
