@@ -314,7 +314,7 @@ export const Cockpit = () => {
                 <div style={{
                   height: '100%', borderRadius: 3,
                   width: `${Math.min(100, ((profile.xp ?? 0) / (profile.xpToNext ?? 1)) * 100)}%`,
-                  background: 'linear-gradient(90deg, var(--phantom-accent-glow), var(--phantom-accent-cyan))',
+                  background: 'linear-gradient(90deg, var(--phantom-accent-glow), var(--phantom-accent-gold))',
                   transition: 'width 500ms ease',
                 }} />
               </div>
