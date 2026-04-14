@@ -46,6 +46,7 @@ import { cleanupRoutes } from './routes/cleanup.js';
 import { graphEngine } from './services/graph-engine.js';
 import { orchestratorEngine } from './services/orchestrator-engine.js';
 import { startMcpServer, stopMcpServer } from './mcp/index.js';
+import { registerPhantomMcpGlobal } from './services/mcp-config.js';
 import { destroyAllPtys, initDaemonClient, disconnectDaemon } from './terminal-manager.js';
 import { startHistoryWriter, stopHistoryWriter, markAllExited } from './terminal-history.js';
 
@@ -275,6 +276,10 @@ startHistoryWriter();
 startMcpServer().catch((err) =>
   logger.warn('MCP', 'MCP server start failed (non-fatal):', err),
 );
+
+// Register phantom-ai globally in ~/.mcp.json so every Claude session has
+// access to graph tools without per-project .mcp.json pollution.
+registerPhantomMcpGlobal();
 
 // Skip daemon — use direct PTY (node-pty) for terminal sessions.
 // The daemon has output routing bugs that cause black-screen terminals.

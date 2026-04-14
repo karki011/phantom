@@ -172,6 +172,8 @@ export const TerminalPane = ({
           height: '100%',
           padding: '4px',
           paddingTop: showRestoreBanner ? '40px' : '4px',
+          overflow: 'hidden',
+          boxSizing: 'border-box',
         }}
         data-pane-id={paneId}
         data-cold-restore={coldRestore ? 'true' : undefined}
