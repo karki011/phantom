@@ -129,16 +129,32 @@ export const attachSession = async (
       // Scrolling in the same frame uses stale scroll dimensions,
       // causing the viewport to jump to line 0 on the first user scroll.
       requestAnimationFrame(() => {
-        const buf = existing.term.buffer.active;
-        if (restoreWasAtBottom) {
-          existing.term.scrollToBottom();
-        } else if (restoreViewportY != null) {
-          const target = Math.min(restoreViewportY, buf.baseY);
-          existing.term.scrollToLine(target);
-        } else {
-          // No saved position (e.g. output arrived while detached) — go to bottom
-          existing.term.scrollToBottom();
-        }
+        const applyScroll = () => {
+          const buf = existing.term.buffer.active;
+          if (restoreWasAtBottom) {
+            existing.term.scrollToBottom();
+          } else if (restoreViewportY != null) {
+            const target = Math.min(restoreViewportY, buf.baseY);
+            existing.term.scrollToLine(target);
+          } else {
+            // No saved position (e.g. output arrived while detached) — go to bottom
+            existing.term.scrollToBottom();
+          }
+        };
+
+        applyScroll();
+
+        // Re-apply scroll after the ResizeObserver's debounced fit()
+        // fires (~100ms). That fit() can trigger a terminal resize which
+        // resets the viewport position, undoing the restore above.
+        // The 150ms delay ensures we run AFTER the observer settles.
+        setTimeout(applyScroll, 150);
+
+        // Resume ResizeObserver AFTER scroll is restored — creating it
+        // earlier causes its debounced fit() to fire mid-restoration
+        // and reset the viewport to line 0.
+        existing.observer?.disconnect();
+        existing.observer = createResizeObserver(paneId, container);
       });
     });
 
@@ -153,10 +169,6 @@ export const attachSession = async (
         (existing as any)._reconnect();
       }
     }
-
-    // Resume ResizeObserver
-    existing.observer?.disconnect();
-    existing.observer = createResizeObserver(paneId, container);
 
     // Focus the terminal
     existing.term.focus();
