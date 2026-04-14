@@ -3,4 +3,4 @@
  * @author Subash Karki
  */
 export { startMcpServer, stopMcpServer, createMcpServer } from './server.js';
-export type { GraphEngineAdapter, McpTextContent } from './handlers.js';
+export type { GraphEngineAdapter, OrchestratorEngineAdapter, McpTextContent } from './handlers.js';

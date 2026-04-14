@@ -10,6 +10,20 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { getTerminalTheme } from './theme.js';
 
+/**
+ * Force xterm to recalculate viewport scroll dimensions.
+ * Fixes: viewport scroll desync after fit() where mouse-wheel
+ * scrolling appears broken until text selection triggers a recalc.
+ * Reading then writing scrollTop forces a reflow of the scroll geometry.
+ */
+function syncViewport(term: Terminal): void {
+  const viewport = term.element?.querySelector('.xterm-viewport') as HTMLElement | null;
+  if (!viewport) return;
+  const { scrollTop } = viewport;
+  // eslint-disable-next-line no-self-assign -- intentional reflow trigger
+  viewport.scrollTop = scrollTop;
+}
+
 const apiBase = (window as any).__PHANTOM_API_BASE ?? '';
 const API_PORT = 3849;
 
@@ -97,6 +111,7 @@ export const attachSession = async (
     // which collapses the PTY to ~8 cols.
     requestAnimationFrame(() => {
       existing.fit.fit();
+      syncViewport(existing.term);
 
       // Repaint canvas — renderer skips frames while wrapper is detached
       existing.term.refresh(0, existing.term.rows - 1);
@@ -132,11 +147,11 @@ export const attachSession = async (
     if (!existing.ws || existing.ws.readyState === WebSocket.CLOSED || existing.ws.readyState === WebSocket.CLOSING) {
       console.log(`[TermReg] REATTACH-RECONNECT ${paneId.slice(0,8)} — ws dead, triggering reconnect`);
       existing.connected = false;
-      // The connectWs function is scoped to the original session creation.
-      // Emit a synthetic reconnect by closing and letting the onclose handler fire.
-      // Since the ws is already CLOSED, we dispatch a focus event to trigger the
-      // resetReconnectOnFocus handler which will create a new connection.
-      window.dispatchEvent(new Event('focus'));
+      // Call the stored reconnect function directly instead of dispatching
+      // a synthetic focus event (which fires ALL focus handlers in the app).
+      if ((existing as any)._reconnect) {
+        (existing as any)._reconnect();
+      }
     }
 
     // Resume ResizeObserver
@@ -156,6 +171,7 @@ export const attachSession = async (
   const wrapper = document.createElement('div');
   wrapper.style.width = '100%';
   wrapper.style.height = '100%';
+  wrapper.style.overflow = 'hidden';
 
   const term = new Terminal({
     theme: getTerminalTheme(),
@@ -163,6 +179,7 @@ export const attachSession = async (
     fontSize: 12,
     cursorBlink: true,
     cursorStyle: 'bar',
+    scrollback: 10_000,
   });
 
   const fit = new FitAddon();
@@ -185,9 +202,15 @@ export const attachSession = async (
   // Open xterm into the persistent wrapper (done ONCE)
   container.appendChild(wrapper);
   term.open(wrapper);
-  // Defer initial fit — synchronous fit() before browser layout yields ~8 cols.
-  // The WebSocket onopen handler will call fit() again before sending init dims.
-  requestAnimationFrame(() => fit.fit());
+  // Double-rAF: first frame completes browser layout, second measures stable
+  // dimensions.  Prevents xterm viewport getting 0-height on mount (which
+  // breaks mouse-wheel scroll until a text-selection forces a recalc).
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      fit.fit();
+      syncViewport(term);
+    });
+  });
 
   // If cold restore, fetch and write scrollback BEFORE connecting WebSocket
   if (options?.coldRestore) {
@@ -242,6 +265,7 @@ export const attachSession = async (
       // Re-fit to ensure accurate dimensions — the deferred rAF fit may
       // not have fired yet if the WebSocket connected very quickly.
       fit.fit();
+      syncViewport(term);
       const dims = fit.proposeDimensions();
       const md = options?.metadata;
       ws.send(JSON.stringify({
@@ -306,6 +330,12 @@ export const attachSession = async (
   }
 
   connectWs(false);
+
+  // Store reconnect fn so reattach can trigger it directly (avoids synthetic focus dispatch)
+  (session as any)._reconnect = () => {
+    reconnectAttempts = 0;
+    connectWs(true);
+  };
 
   // Wire terminal input — references session.ws so reconnection would work
   // Store the disposable so it can be cleaned up in disposeSession
@@ -414,8 +444,10 @@ function createResizeObserver(paneId: string, container: HTMLDivElement): Resize
     if (resizeTimer) clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       const session = sessions.get(paneId);
-      if (!session) return;
+      // Skip if session was disposed or detached (wrapper not in DOM)
+      if (!session || !session.container) return;
       session.fit.fit();
+      syncViewport(session.term);
       const dims = session.fit.proposeDimensions();
       if (dims && session.ws && session.ws.readyState === WebSocket.OPEN) {
         session.ws.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));

@@ -1,35 +1,25 @@
 /**
- * MCP Config Lifecycle — Writes and cleans up .mcp.json for Claude sessions
- * Each Claude terminal session gets a project-scoped MCP config so Claude
- * auto-discovers the PhantomOS AI engine tools.
+ * MCP Config Lifecycle — Global phantom-ai registration in ~/.mcp.json
  *
- * Reference counting ensures concurrent sessions sharing a cwd don't
- * clobber or prematurely delete the config.
+ * Instead of writing per-project .mcp.json files (which pollutes user repos),
+ * phantom-ai is registered once globally.  The MCP stdio-entry auto-detects
+ * which project to scope to via process.cwd().
+ *
+ * Also manages the `enabledMcpjsonServers` list in ~/.claude/settings.json
+ * so Claude knows to activate the server.
  *
  * @author Subash Karki
  */
-import { writeFileSync, unlinkSync, existsSync, readFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, readFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
+import { homedir } from 'node:os';
 import { db, worktrees, projects } from '@phantom-os/db';
 import { eq } from 'drizzle-orm';
 import { logger } from '../logger.js';
 
 // ---------------------------------------------------------------------------
-// Reference counting — tracks active Claude sessions per cwd
+// Helpers — project ID resolution (used by stdio-entry and terminal-ws)
 // ---------------------------------------------------------------------------
-
-const refCounts = new Map<string, number>();
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Resolve the path to the stdio entry point */
-function getStdioEntryPath(): string {
-  // In dev: resolve relative to this file's location
-  // packages/server/src/services/mcp-config.ts → packages/server/src/mcp/stdio-entry.ts
-  return resolve(import.meta.dirname, '..', 'mcp', 'stdio-entry.ts');
-}
 
 /** Look up projectId from a worktreeId */
 export function resolveProjectId(worktreeId: string): string | null {
@@ -58,127 +48,178 @@ export function resolveProjectIdFromCwd(cwd: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Config generation
+// Paths
+// ---------------------------------------------------------------------------
+
+const GLOBAL_MCP_JSON = join(homedir(), '.mcp.json');
+const CLAUDE_SETTINGS = join(homedir(), '.claude', 'settings.json');
+
+/** Resolve the path to the stdio entry point */
+function getStdioEntryPath(): string {
+  return resolve(import.meta.dirname, '..', 'mcp', 'stdio-entry.ts');
+}
+
+// ---------------------------------------------------------------------------
+// Global registration
 // ---------------------------------------------------------------------------
 
 /**
- * Build the .mcp.json content for a Claude session.
- * Uses stdio transport — Claude spawns the MCP server as a child process.
+ * Register phantom-ai in the global ~/.mcp.json so it's available in every
+ * Claude session.  The stdio-entry auto-detects the project from cwd,
+ * so no project-specific env vars are needed.
+ *
+ * Also ensures phantom-ai is in the `enabledMcpjsonServers` list in
+ * ~/.claude/settings.json.
+ *
+ * Safe to call multiple times — idempotent.
  */
-interface McpConfig {
-  mcpServers: Record<string, {
-    command: string;
-    args: string[];
-    env: Record<string, string>;
-  }>;
-}
-
-function buildMcpConfig(projectId: string): McpConfig {
+export function registerPhantomMcpGlobal(): void {
   const entryPath = getStdioEntryPath();
-  return {
-    mcpServers: {
-      'phantom-ai': {
-        command: 'npx',
-        args: ['tsx', entryPath],
-        env: {
-          PHANTOM_PROJECT_ID: projectId,
-          PHANTOM_API_PORT: String(process.env.PORT || 3849),
-        },
-      },
+  const serverDef = {
+    command: 'npx',
+    args: ['tsx', entryPath],
+    env: {
+      PHANTOM_API_PORT: String(process.env.PORT || 3849),
     },
   };
-}
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Write .mcp.json to the given cwd for a Claude session.
- * Safe for concurrent sessions — uses reference counting.
- * Returns true if config was written (or already exists).
- */
-export function writeMcpConfig(cwd: string, projectId: string): boolean {
-  const configPath = join(cwd, '.mcp.json');
-  const count = refCounts.get(cwd) ?? 0;
-
-  if (count > 0) {
-    // Verify file still exists; re-write if deleted externally
-    if (!existsSync(configPath)) {
+  // ── ~/.mcp.json ────────────────────────────────────────────────────────
+  try {
+    let config: Record<string, unknown> = {};
+    if (existsSync(GLOBAL_MCP_JSON)) {
       try {
-        const configDir = dirname(configPath);
-        mkdirSync(configDir, { recursive: true });
-        const config = { mcpServers: buildMcpConfig(projectId).mcpServers };
-        writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
-        logger.info('McpConfig', `Re-injected .mcp.json to ${cwd} (file was deleted externally)`);
-      } catch (err) {
-        logger.error('McpConfig', `Failed to re-inject .mcp.json to ${cwd}:`, err);
+        config = JSON.parse(readFileSync(GLOBAL_MCP_JSON, 'utf-8'));
+      } catch {
+        config = {};
       }
     }
-    refCounts.set(cwd, count + 1);
-    return true;
-  }
 
-  if (count === 0) {
-    // First session for this cwd — write the config
-    try {
-      // If an existing .mcp.json exists, merge our server into it
-      let config: Record<string, unknown> = {};
-      if (existsSync(configPath)) {
-        try {
-          config = JSON.parse(readFileSync(configPath, 'utf-8'));
-        } catch {
-          config = {};
-        }
+    const servers = (config.mcpServers ?? {}) as Record<string, unknown>;
+
+    // Check if already registered with the same entry path
+    const existing = servers['phantom-ai'] as Record<string, unknown> | undefined;
+    if (existing) {
+      const existingArgs = existing.args as string[] | undefined;
+      if (existingArgs && existingArgs[1] === entryPath) {
+        // Already registered with the correct entry — skip write
+        ensureEnabledInClaudeSettings();
+        return;
       }
-
-      const phantomConfig = buildMcpConfig(projectId);
-      const existingServers = (config.mcpServers ?? {}) as Record<string, unknown>;
-      config.mcpServers = { ...existingServers, ...phantomConfig.mcpServers };
-
-      writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
-      logger.info('McpConfig', `Wrote .mcp.json to ${cwd} for project ${projectId}`);
-    } catch (err) {
-      logger.error('McpConfig', `Failed to write .mcp.json to ${cwd}:`, err);
-      return false;
     }
+
+    servers['phantom-ai'] = serverDef;
+    config.mcpServers = servers;
+    writeFileSync(GLOBAL_MCP_JSON, JSON.stringify(config, null, 2) + '\n');
+    logger.info('McpConfig', `Registered phantom-ai in ${GLOBAL_MCP_JSON}`);
+  } catch (err) {
+    logger.error('McpConfig', `Failed to register phantom-ai globally:`, err);
   }
 
-  refCounts.set(cwd, count + 1); // Only increment after successful write or existing config
-  return true;
+  ensureEnabledInClaudeSettings();
 }
 
 /**
- * Clean up .mcp.json when a Claude session ends.
- * Only removes the file when the last session for that cwd closes.
+ * Ensure phantom-ai is in the enabledMcpjsonServers list in ~/.claude/settings.json.
+ * Claude only activates servers from .mcp.json that appear in this whitelist.
  */
-export function cleanupMcpConfig(cwd: string): void {
-  const count = refCounts.get(cwd) ?? 0;
-  if (count <= 1) {
-    // Last session — remove phantom-ai from config
-    refCounts.delete(cwd);
-    const configPath = join(cwd, '.mcp.json');
+function ensureEnabledInClaudeSettings(): void {
+  try {
+    const claudeDir = dirname(CLAUDE_SETTINGS);
+    if (!existsSync(claudeDir)) {
+      mkdirSync(claudeDir, { recursive: true });
+    }
 
-    try {
-      if (!existsSync(configPath)) return;
+    let settings: Record<string, unknown> = {};
+    if (existsSync(CLAUDE_SETTINGS)) {
+      try {
+        settings = JSON.parse(readFileSync(CLAUDE_SETTINGS, 'utf-8'));
+      } catch {
+        settings = {};
+      }
+    }
 
-      const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+    const enabled = (settings.enabledMcpjsonServers ?? []) as string[];
+    if (!enabled.includes('phantom-ai')) {
+      enabled.push('phantom-ai');
+      settings.enabledMcpjsonServers = enabled;
+      writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2) + '\n');
+      logger.info('McpConfig', 'Added phantom-ai to enabledMcpjsonServers');
+    }
+  } catch (err) {
+    logger.warn('McpConfig', `Failed to update Claude settings: ${(err as Error).message}`);
+  }
+}
+
+/**
+ * Remove phantom-ai from global ~/.mcp.json and enabledMcpjsonServers.
+ * Call on Phantom uninstall or when user explicitly disables the integration.
+ */
+export function unregisterPhantomMcpGlobal(): void {
+  // ── ~/.mcp.json ────────────────────────────────────────────────────────
+  try {
+    if (existsSync(GLOBAL_MCP_JSON)) {
+      const config = JSON.parse(readFileSync(GLOBAL_MCP_JSON, 'utf-8'));
       if (config.mcpServers?.['phantom-ai']) {
         delete config.mcpServers['phantom-ai'];
-
-        // If no servers left, delete the file entirely
         if (Object.keys(config.mcpServers).length === 0) {
-          unlinkSync(configPath);
-          logger.info('McpConfig', `Removed .mcp.json from ${cwd}`);
-        } else {
-          writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
-          logger.info('McpConfig', `Removed phantom-ai from .mcp.json in ${cwd}`);
+          delete config.mcpServers;
         }
+        if (Object.keys(config).length === 0) {
+          unlinkSync(GLOBAL_MCP_JSON);
+        } else {
+          writeFileSync(GLOBAL_MCP_JSON, JSON.stringify(config, null, 2) + '\n');
+        }
+        logger.info('McpConfig', 'Removed phantom-ai from ~/.mcp.json');
       }
-    } catch (err) {
-      logger.error('McpConfig', `Failed to clean up .mcp.json in ${cwd}:`, err);
     }
-  } else {
-    refCounts.set(cwd, count - 1);
+  } catch (err) {
+    logger.warn('McpConfig', `Failed to remove from ~/.mcp.json: ${(err as Error).message}`);
+  }
+
+  // ── ~/.claude/settings.json ────────────────────────────────────────────
+  try {
+    if (existsSync(CLAUDE_SETTINGS)) {
+      const settings = JSON.parse(readFileSync(CLAUDE_SETTINGS, 'utf-8'));
+      const enabled = (settings.enabledMcpjsonServers ?? []) as string[];
+      const idx = enabled.indexOf('phantom-ai');
+      if (idx !== -1) {
+        enabled.splice(idx, 1);
+        settings.enabledMcpjsonServers = enabled;
+        writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2) + '\n');
+        logger.info('McpConfig', 'Removed phantom-ai from enabledMcpjsonServers');
+      }
+    }
+  } catch (err) {
+    logger.warn('McpConfig', `Failed to update Claude settings: ${(err as Error).message}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Legacy cleanup — remove per-project .mcp.json phantom-ai entries
+// ---------------------------------------------------------------------------
+
+/**
+ * Clean up a per-project .mcp.json that was written by the old writeMcpConfig.
+ * Removes the phantom-ai entry; deletes the file if no other servers remain.
+ */
+export function cleanupLegacyMcpConfig(cwd: string): void {
+  const configPath = join(cwd, '.mcp.json');
+  try {
+    if (!existsSync(configPath)) return;
+
+    const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+    if (config.mcpServers?.['phantom-ai']) {
+      delete config.mcpServers['phantom-ai'];
+
+      if (Object.keys(config.mcpServers).length === 0) {
+        unlinkSync(configPath);
+        logger.info('McpConfig', `Removed legacy .mcp.json from ${cwd}`);
+      } else {
+        writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+        logger.info('McpConfig', `Removed phantom-ai from legacy .mcp.json in ${cwd}`);
+      }
+    }
+  } catch {
+    // Ignore — best-effort cleanup
   }
 }

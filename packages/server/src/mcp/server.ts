@@ -7,7 +7,23 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { graphEngine } from '../services/graph-engine.js';
+import { orchestratorEngine } from '../services/orchestrator-engine.js';
 import { logger } from '../logger.js';
+
+// ---------------------------------------------------------------------------
+// MCP Server Instructions — injected into Claude's system prompt on connect
+// ---------------------------------------------------------------------------
+
+const MCP_INSTRUCTIONS = `You have access to PhantomOS, a codebase intelligence system with a dependency graph and AI strategy pipeline.
+
+ALWAYS use these tools for codebase work:
+- phantom_graph_context: BEFORE modifying any file, get its dependencies and related files with relevance scores.
+- phantom_graph_blast_radius: BEFORE refactoring, check what files will break.
+- phantom_graph_related: When exploring unfamiliar code, find all files involved in a feature.
+- phantom_orchestrator_process: BEFORE starting complex tasks, route through the strategy pipeline for intelligent context.
+
+These tools understand the full dependency graph — they are faster and more accurate than manual file search.
+Prefer them over grep/find/glob when working within a known project.`;
 import {
   handleGraphContext,
   handleBlastRadius,
@@ -16,8 +32,11 @@ import {
   handlePath,
   handleBuild,
   handleListProjects,
+  handleOrchestratorProcess,
+  handleOrchestratorStrategies,
+  handleOrchestratorHistory,
 } from './handlers.js';
-import type { GraphEngineAdapter } from './handlers.js';
+import type { GraphEngineAdapter, OrchestratorEngineAdapter } from './handlers.js';
 
 // ---------------------------------------------------------------------------
 // State
@@ -57,6 +76,22 @@ const PathInput = z.object({
   to: z.string().describe('Target file path'),
 });
 
+const OrchestratorProcessInput = z.object({
+  projectId: z.string().describe('Project ID'),
+  goal: z.string().describe('What the user wants to accomplish'),
+  activeFiles: z.array(z.string()).optional().describe('Files the user is currently working with'),
+  hints: z.object({
+    isAmbiguous: z.boolean().optional(),
+    isCritical: z.boolean().optional(),
+    estimatedComplexity: z.enum(['simple', 'moderate', 'complex', 'critical']).optional(),
+  }).optional().describe('Optional hints about the task'),
+});
+
+const OrchestratorHistoryInput = z.object({
+  projectId: z.string().describe('Project ID'),
+  limit: z.number().optional().describe('Max results (default 20)'),
+});
+
 // ---------------------------------------------------------------------------
 // Tool Registration
 // ---------------------------------------------------------------------------
@@ -69,7 +104,7 @@ const PathInput = z.object({
  * to work around this — runtime validation is still enforced by the SDK via the
  * inputSchema zod objects. This is a known SDK issue.
  */
-function registerTools(server: McpServer, engine: GraphEngineAdapter, scopedProjectId?: string): void {
+function registerTools(server: McpServer, engine: GraphEngineAdapter, orchestrator?: OrchestratorEngineAdapter, scopedProjectId?: string): void {
   // Cast to `any` to work around TS2589 (infinite type depth) from the MCP SDK's
   // registerTool generics + zod v3. Runtime validation is still enforced by the SDK.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -163,6 +198,52 @@ function registerTools(server: McpServer, engine: GraphEngineAdapter, scopedProj
     { description: 'List all known projects with their IDs and repo paths.' },
     async () => handleListProjects(),
   );
+
+  // ---------------------------------------------------------------------------
+  // Orchestrator Tools — Strategy pipeline for intelligent reasoning
+  // ---------------------------------------------------------------------------
+
+  if (orchestrator) {
+    reg(
+      'phantom_orchestrator_process',
+      {
+        description: 'Route a goal through the AI strategy pipeline. Analyzes task complexity, selects the best reasoning strategy (Direct, Advisor, Self-Refine, Tree-of-Thought, Debate, Graph-of-Thought), gathers graph context, and returns strategy-enriched results. Call this BEFORE starting complex tasks to get intelligent context and strategy recommendations.',
+        inputSchema: schema(OrchestratorProcessInput, {
+          goal: z.string().describe('What the user wants to accomplish'),
+          activeFiles: z.array(z.string()).optional().describe('Files currently being worked with'),
+          hints: z.object({
+            isAmbiguous: z.boolean().optional(),
+            isCritical: z.boolean().optional(),
+            estimatedComplexity: z.enum(['simple', 'moderate', 'complex', 'critical']).optional(),
+          }).optional().describe('Optional task hints'),
+        }),
+      },
+      async (args: z.infer<typeof OrchestratorProcessInput>) =>
+        handleOrchestratorProcess(orchestrator, { projectId: pid(args), goal: args.goal, activeFiles: args.activeFiles, hints: args.hints }),
+    );
+
+    reg(
+      'phantom_orchestrator_strategies',
+      {
+        description: 'List all available reasoning strategies and whether they are enabled.',
+        inputSchema: schema(ProjectIdInput),
+      },
+      async (args: z.infer<typeof ProjectIdInput>) =>
+        handleOrchestratorStrategies(orchestrator, { projectId: pid(args) }),
+    );
+
+    reg(
+      'phantom_orchestrator_history',
+      {
+        description: 'View past orchestrator decisions, strategies used, and outcomes. Use to understand what reasoning approaches worked for similar tasks.',
+        inputSchema: schema(OrchestratorHistoryInput, {
+          limit: z.number().optional().describe('Max results (default 20)'),
+        }),
+      },
+      async (args: z.infer<typeof OrchestratorHistoryInput>) =>
+        handleOrchestratorHistory(orchestrator, { projectId: pid(args), limit: args.limit }),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -179,16 +260,16 @@ export async function startMcpServer(): Promise<void> {
     return;
   }
 
-  mcpServer = new McpServer({
-    name: 'phantom-os',
-    version: '1.0.0',
-  });
+  mcpServer = new McpServer(
+    { name: 'phantom-os', version: '1.0.0' },
+    { instructions: MCP_INSTRUCTIONS },
+  );
 
-  registerTools(mcpServer, graphEngine);
+  registerTools(mcpServer, graphEngine, orchestratorEngine);
 
   transport = new StdioServerTransport();
   await mcpServer.connect(transport);
-  logger.info('MCP', 'MCP server started on stdio transport');
+  logger.info('MCP', 'MCP server started on stdio transport (with orchestrator)');
 }
 
 /**
@@ -208,12 +289,12 @@ export async function stopMcpServer(): Promise<void> {
  * When scopedProjectId is provided, tools auto-inject that projectId
  * and don't require it as input — simplifies Claude's tool calls.
  */
-export function createMcpServer(engine: GraphEngineAdapter, scopedProjectId?: string): McpServer {
-  const server = new McpServer({
-    name: 'phantom-os',
-    version: '1.0.0',
-  });
+export function createMcpServer(engine: GraphEngineAdapter, scopedProjectId?: string, orchestrator?: OrchestratorEngineAdapter): McpServer {
+  const server = new McpServer(
+    { name: 'phantom-os', version: '1.0.0' },
+    { instructions: MCP_INSTRUCTIONS },
+  );
 
-  registerTools(server, engine, scopedProjectId);
+  registerTools(server, engine, orchestrator, scopedProjectId);
   return server;
 }
