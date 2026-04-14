@@ -19,6 +19,7 @@ export const preferencesRoutes = new Hono();
 const DEFAULTS: Record<string, string> = {
   gamification: 'false',
   caveman: 'false',
+  sounds: 'false',
 };
 
 /** Seed defaults for any missing keys */

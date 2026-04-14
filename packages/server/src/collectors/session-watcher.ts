@@ -110,7 +110,15 @@ const markCompleted = (filePath: string, broadcast: Broadcast, onEnd?: (id: stri
       .where(eq(sessions.id, existing.id))
       .run();
 
-    broadcast('session:end', { id: existing.id });
+    broadcast('session:end', {
+      id: existing.id,
+      cwd: existing.cwd,
+      repo: existing.repo,
+      name: existing.name,
+      inputTokens: existing.inputTokens,
+      outputTokens: existing.outputTokens,
+      estimatedCostMicros: existing.estimatedCostMicros,
+    });
 
     if (onEnd) {
       onEnd(existing.id);

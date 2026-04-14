@@ -12,10 +12,10 @@
  *
  * @author Subash Karki
  */
-import { AppShell, Group, Stack, Text } from '@mantine/core';
+import { AppShell, Group, Modal, Stack, Text } from '@mantine/core';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Flame, Trophy } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { WorkspaceProvider, Workspace, switchWorkspaceAtom, activePaneAtom, usePaneStore } from '@phantom-os/panes';
 import { paneDefinitions, paneMenu } from './panes/registry';
@@ -48,9 +48,32 @@ import { useHealthCheck } from './hooks/useHealthCheck';
 import { useSystemEvents } from './hooks/useSystemEvents';
 import { SplashScreen } from './components/brand/SplashScreen';
 import { ShutdownCeremony } from './components/brand/ShutdownCeremony';
+import { settingsVisibleAtom } from './atoms/settings';
+import { SettingsPage } from './components/SettingsPage';
+import { usePreferences } from './hooks/usePreferences';
+import { useCeremonySounds } from './hooks/useCeremonySounds';
 import { QuickOpen } from './components/QuickOpen';
 import { RecipeQuickLaunch } from './components/RecipeQuickLaunch';
 import { fetchApi, generateMorningBrief, type JournalEntry } from './lib/api';
+
+/** Listen for terminal title changes (OSC sequences) and update pane tab labels */
+const TerminalTitleListener = () => {
+  const store = usePaneStore();
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { paneId, title } = (e as CustomEvent).detail ?? {};
+      if (!paneId || !title) return;
+      const state = store.getState();
+      const tab = state.tabs.find((t: { panes: Record<string, unknown> }) => paneId in t.panes);
+      if (tab) {
+        store.renameTab(tab.id, title);
+      }
+    };
+    window.addEventListener('phantom:terminal-title', handler);
+    return () => window.removeEventListener('phantom:terminal-title', handler);
+  }, [store]);
+  return null;
+};
 
 /** Listen for file-open events from terminal overlay and open in editor pane */
 const FileOpenListener = () => {
@@ -105,6 +128,23 @@ export const App = () => {
   // Periodic backend health polling
   const { isConnected } = useHealthCheck();
 
+  const { isEnabled, prefs } = usePreferences();
+
+  // Ceremony sounds (Web Audio API — zero deps, gated by preferences)
+  const soundEventPrefs = Object.fromEntries(
+    Object.keys(prefs)
+      .filter(k => k.startsWith('sounds_evt_'))
+      .map(k => [k.replace('sounds_evt_', ''), prefs[k] !== 'false']),
+  );
+  const sounds = useCeremonySounds({
+    enabled: isEnabled('sounds'),
+    volume: prefs.sounds_volume ? Number(prefs.sounds_volume) : 0.5,
+    style: (prefs.sounds_style as 'electronic' | 'minimal' | 'warm' | 'retro') ?? 'electronic',
+    events: soundEventPrefs,
+  });
+  const soundsRef = useRef(sounds);
+  soundsRef.current = sounds;
+
   // Splash screen state
   const [splashDone, setSplashDone] = useState(false);
   const [splashStatus, setSplashStatus] = useState('Initializing The System...');
@@ -132,10 +172,12 @@ export const App = () => {
       };
 
       const runBoot = async () => {
+        soundsRef.current.bootStart();
         // Step 1: Server connected (already done — just show it)
         await stepWithMinTime(async () => {
           updateBootStep('server', 'done');
         }, 600);
+        soundsRef.current.stepComplete();
 
         // Step 2: Load workspace
         updateBootStep('workspace', 'running');
@@ -143,6 +185,7 @@ export const App = () => {
           // Workspace loads via existing atoms — just a visual step
         }, 800);
         updateBootStep('workspace', 'done');
+        soundsRef.current.stepComplete();
 
         // Step 3: Morning journal
         updateBootStep('journal', 'running');
@@ -160,11 +203,13 @@ export const App = () => {
           }
         }, 800);
         updateBootStep('journal', 'done');
+        soundsRef.current.stepComplete();
 
         // All steps done — hold for a moment so user sees all ✓, then dismiss
         if (!cancelled) {
           await new Promise((r) => setTimeout(r, 1000));
           setSplashStatus('Ready');
+          soundsRef.current.bootComplete();
           setTimeout(() => setSplashDone(true), 500);
         }
       };
@@ -210,6 +255,20 @@ export const App = () => {
   const achievementCount = useAtomValue(unlockedCountAtom);
   const refreshAchievements = useSetAtom(refreshAchievementsAtom);
   const [shutdownVisible, setShutdownVisible] = useAtom(shutdownVisibleAtom);
+  const [settingsVisible, setSettingsVisible] = useAtom(settingsVisibleAtom);
+
+  // Listen for sound events dispatched by useSystemEvents (session:end, task:complete)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { event?: string } | undefined;
+      if (!detail?.event) return;
+      const s = soundsRef.current;
+      if (detail.event === 'claude_complete') s.claudeComplete();
+      else if (detail.event === 'task_complete') s.taskComplete();
+    };
+    window.addEventListener('phantom:sound', handler);
+    return () => window.removeEventListener('phantom:sound', handler);
+  }, []);
 
   // Listen for Cmd+Q intercept from Electron main process
   useEffect(() => {
@@ -253,8 +312,35 @@ export const App = () => {
   return (
     <WorkspaceProvider definitions={paneDefinitions}>
     <FileOpenListener />
+    <TerminalTitleListener />
     <QuickOpen />
     <RecipeQuickLaunch />
+    {/* Settings modal */}
+    <Modal
+      opened={settingsVisible}
+      onClose={() => setSettingsVisible(false)}
+      size="85%"
+      centered
+      withCloseButton
+      overlayProps={{ backgroundOpacity: 0.6, blur: 4 }}
+      styles={{
+        content: {
+          background: 'var(--phantom-surface-bg, #0d0d10)',
+          border: '1px solid var(--phantom-border-subtle)',
+          borderRadius: 16,
+          height: '80vh',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          maxWidth: 900,
+        },
+        header: { display: 'none' },
+        body: { flex: 1, padding: 0, overflow: 'hidden' },
+      }}
+    >
+      <SettingsPage />
+    </Modal>
+
     {shutdownVisible && (
       <ShutdownCeremony
         visible={shutdownVisible}

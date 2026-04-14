@@ -345,6 +345,13 @@ export const attachSession = async (
     }
   });
   (session as any)._onDataDisposable = onDataDisposable;
+
+  // Forward OSC title changes (e.g. from peon-ping) to update pane tab labels
+  term.onTitleChange((title) => {
+    window.dispatchEvent(new CustomEvent('phantom:terminal-title', {
+      detail: { paneId, title },
+    }));
+  });
   (session as any)._focusHandler = resetReconnectOnFocus;
 
   // Set up ResizeObserver

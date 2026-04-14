@@ -8,6 +8,8 @@ import { useEffect } from 'react';
 import { Power } from 'lucide-react';
 import { CeremonyOverlay } from './CeremonyOverlay';
 import { useShutdownOrchestrator } from '../../hooks/useShutdownOrchestrator';
+import { useCeremonySounds } from '../../hooks/useCeremonySounds';
+import { usePreferences } from '../../hooks/usePreferences';
 
 interface ShutdownCeremonyProps {
   visible: boolean;
@@ -17,6 +19,19 @@ interface ShutdownCeremonyProps {
 
 export const ShutdownCeremony = ({ visible, onCancel, onQuit }: ShutdownCeremonyProps) => {
   const orchestrator = useShutdownOrchestrator();
+
+  const { isEnabled, prefs } = usePreferences();
+  const soundEventPrefs = Object.fromEntries(
+    Object.keys(prefs)
+      .filter(k => k.startsWith('sounds_evt_'))
+      .map(k => [k.replace('sounds_evt_', ''), prefs[k] !== 'false']),
+  );
+  const sounds = useCeremonySounds({
+    enabled: isEnabled('sounds'),
+    volume: prefs.sounds_volume ? Number(prefs.sounds_volume) : 0.5,
+    style: (prefs.sounds_style as 'electronic' | 'minimal' | 'warm' | 'retro') ?? 'electronic',
+    events: soundEventPrefs,
+  });
 
   // Enter confirming phase when overlay becomes visible
   useEffect(() => {
@@ -31,6 +46,30 @@ export const ShutdownCeremony = ({ visible, onCancel, onQuit }: ShutdownCeremony
       return () => clearTimeout(timer);
     }
   }, [orchestrator.phase, onQuit]);
+
+  // Play shutdownInit when confirming phase starts
+  useEffect(() => {
+    if (orchestrator.phase === 'confirming') {
+      sounds.shutdownInit();
+    }
+  }, [orchestrator.phase, sounds]);
+
+  // Play shutdownStart when running begins, shutdownComplete when done
+  useEffect(() => {
+    if (orchestrator.phase === 'running') {
+      sounds.shutdownStart();
+      sounds.resetStepCounter();
+    }
+    if (orchestrator.phase === 'done') {
+      sounds.shutdownComplete();
+    }
+  }, [orchestrator.phase, sounds]);
+
+  // Play shutdownStep on each step completion
+  useEffect(() => {
+    const doneCount = orchestrator.steps.filter(s => s.status === 'done').length;
+    sounds.onStepsDone(doneCount, sounds.shutdownStep);
+  }, [orchestrator.steps, sounds]);
 
   // Build footer based on phase
   let footer: React.ReactNode = null;

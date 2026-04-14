@@ -105,6 +105,14 @@ export const useSystemEvents = (): void => {
               message: `Session ended: ${sessionId}`,
               timestamp: Date.now(),
             });
+
+            // Dispatch sound event with project context
+            const cwd = String(sessionData?.cwd ?? '');
+            const repo = String(sessionData?.repo ?? '');
+            const project = repo || cwd.split('/').pop() || 'unknown';
+            window.dispatchEvent(new CustomEvent('phantom:sound', {
+              detail: { event: 'claude_complete', project, repo, cwd },
+            }));
           }
           return;
         }
@@ -133,6 +141,10 @@ export const useSystemEvents = (): void => {
               message: `Task completed: ${taskSubject}`,
               timestamp: Date.now(),
             });
+
+            window.dispatchEvent(new CustomEvent('phantom:sound', {
+              detail: { event: 'task_complete', task: taskSubject },
+            }));
           }
           return;
         }

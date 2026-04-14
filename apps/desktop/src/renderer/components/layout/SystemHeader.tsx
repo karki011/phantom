@@ -16,10 +16,11 @@ import {
   useMantineColorScheme,
 } from '@mantine/core';
 import { useAtom, useSetAtom } from 'jotai';
-import { ArrowLeft, Circle, Cpu, HelpCircle, MemoryStick, Moon, Palette, Power, Sun, Swords, Type, Zap } from 'lucide-react';
+import { ArrowLeft, Circle, Cpu, HelpCircle, MemoryStick, Moon, Palette, Power, Settings, Sun } from 'lucide-react';
 import { themeRegistry } from '@phantom-os/theme';
 
-import { type FontScale, fontScaleAtom, fontFamilyAtom, FONT_FAMILY_OPTIONS, themeNameAtom } from '../../atoms/system';
+import { themeNameAtom } from '../../atoms/system';
+import { settingsVisibleAtom } from '../../atoms/settings';
 import { shutdownVisibleAtom } from '../../atoms/shutdown';
 import { usePreferences } from '../../hooks/usePreferences';
 import { useRouter } from '../../hooks/useRouter';
@@ -30,13 +31,19 @@ interface SystemHeaderProps {
   isConnected?: boolean;
 }
 
-const FONT_SCALE_OPTIONS: { label: string; value: FontScale }[] = [
-  { label: '90%', value: 0.9 },
-  { label: '100%', value: 1.0 },
-  { label: '110%', value: 1.1 },
-  { label: '125%', value: 1.25 },
-  { label: '150%', value: 1.5 },
-];
+/** Inject hover style for header icons (once) */
+const HEADER_ICON_STYLE_ID = '__phantom-header-icon-hover';
+if (typeof document !== 'undefined' && !document.getElementById(HEADER_ICON_STYLE_ID)) {
+  const style = document.createElement('style');
+  style.id = HEADER_ICON_STYLE_ID;
+  style.textContent = `
+    .phantom-header-icon { background: transparent !important; }
+    .phantom-header-icon:hover { background: transparent !important; }
+    .phantom-header-icon svg { color: var(--phantom-text-muted); transition: color 150ms ease; }
+    .phantom-header-icon:hover svg { color: var(--phantom-accent-cyan, #00d4ff); }
+  `;
+  document.head.appendChild(style);
+}
 
 /** Format bytes to human-readable GB/MB */
 const formatBytes = (bytes: number): string => {
@@ -46,15 +53,13 @@ const formatBytes = (bytes: number): string => {
 
 export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }: SystemHeaderProps) => {
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
-  const [fontScale, setFontScale] = useAtom(fontScaleAtom);
-  const [fontFamily, setFontFamily] = useAtom(fontFamilyAtom);
   const [themeName, setThemeName] = useAtom(themeNameAtom);
   const { isHome, navigate } = useRouter();
-  const { isEnabled, setPref } = usePreferences();
+  const { isEnabled } = usePreferences();
   const metrics = useSystemMetrics();
+  const setSettingsVisible = useSetAtom(settingsVisibleAtom);
   const setShutdownVisible = useSetAtom(shutdownVisibleAtom);
   const gamificationOn = isEnabled('gamification');
-  const cavemanOn = isEnabled('caveman');
 
   const isDark = colorScheme === 'dark';
   const isConnected = isBackendConnected ?? false;
@@ -207,139 +212,13 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
 
       </Group>
 
-      {/* Right: Gamification toggle + Font scale + Theme toggle */}
+      {/* Right: Theme + Dark/Light + Help + Settings + Power */}
       <Group gap="xs" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-        {/* Gamification Toggle */}
-        <Tooltip label={gamificationOn ? 'Disable gamification' : 'Enable gamification'}>
-          <ActionIcon
-            variant="subtle"
-            size="lg"
-            onClick={() => setPref('gamification', gamificationOn ? 'false' : 'true')}
-            aria-label={gamificationOn ? 'Disable gamification' : 'Enable gamification'}
-          >
-            <Swords
-              size={18}
-              aria-hidden="true"
-              style={{
-                color: gamificationOn
-                  ? 'var(--phantom-accent-cyan)'
-                  : 'var(--phantom-text-muted)',
-              }}
-            />
-          </ActionIcon>
-        </Tooltip>
-
-        {/* Caveman Mode Toggle with Popover */}
-        <Popover width={280} position="bottom-end" withArrow shadow="md">
-          <Popover.Target>
-            <Tooltip label={cavemanOn ? 'Concise mode (on)' : 'Concise mode (off)'}>
-              <ActionIcon
-                variant="subtle"
-                size="lg"
-                onClick={() => setPref('caveman', cavemanOn ? 'false' : 'true')}
-                aria-label={cavemanOn ? 'Disable concise mode' : 'Enable concise mode'}
-              >
-                <Zap
-                  size={18}
-                  aria-hidden="true"
-                  style={{
-                    color: cavemanOn
-                      ? 'var(--phantom-accent-gold)'
-                      : 'var(--phantom-text-muted)',
-                  }}
-                />
-              </ActionIcon>
-            </Tooltip>
-          </Popover.Target>
-          <Popover.Dropdown
-            style={{
-              backgroundColor: 'var(--phantom-surface-card)',
-              borderColor: 'var(--phantom-border-subtle)',
-            }}
-          >
-            <Stack gap={6}>
-              <Text fw={600} fz="sm" c="var(--phantom-text-primary)">
-                Concise Mode {cavemanOn ? '(On)' : '(Off)'}
-              </Text>
-              <Text fz="xs" c="var(--phantom-text-secondary)" lh={1.4}>
-                Makes Claude respond with fewer tokens — cutting ~65-75% of output verbosity
-                while keeping full technical accuracy. Responses are terse and to-the-point.
-              </Text>
-              <Text fz="xs" c="var(--phantom-text-muted)" lh={1.4} fs="italic">
-                Same fix. Fewer words. Faster responses. Lower cost.
-              </Text>
-            </Stack>
-          </Popover.Dropdown>
-        </Popover>
-
-        {/* Font Scale Menu */}
-        <Menu shadow="md" width={120} position="bottom-end">
-          <Menu.Target>
-            <Tooltip label="Font scale">
-              <ActionIcon
-                variant="subtle"
-                size="lg"
-                aria-label="Font scale settings"
-              >
-                <Type size={18} aria-hidden="true" />
-              </ActionIcon>
-            </Tooltip>
-          </Menu.Target>
-          <Menu.Dropdown>
-            <Menu.Label>Font Scale</Menu.Label>
-            {FONT_SCALE_OPTIONS.map((option) => (
-              <Menu.Item
-                key={option.value}
-                onClick={() => setFontScale(option.value)}
-                fw={fontScale === option.value ? 700 : 400}
-                c={fontScale === option.value ? 'var(--phantom-accent-glow)' : undefined}
-                aria-current={fontScale === option.value ? 'true' : undefined}
-              >
-                {option.label}
-              </Menu.Item>
-            ))}
-          </Menu.Dropdown>
-        </Menu>
-
-        {/* Font Family Menu */}
-        <Menu shadow="md" width={180} position="bottom-end">
-          <Menu.Target>
-            <Tooltip label="Font family">
-              <ActionIcon
-                variant="subtle"
-                size="lg"
-                aria-label="Font family settings"
-              >
-                <Text fz="0.7rem" fw={700} ff="'Orbitron', sans-serif" aria-hidden="true">Aa</Text>
-              </ActionIcon>
-            </Tooltip>
-          </Menu.Target>
-          <Menu.Dropdown>
-            <Menu.Label>Font Family</Menu.Label>
-            {FONT_FAMILY_OPTIONS.map((option) => (
-              <Menu.Item
-                key={option.value}
-                onClick={() => setFontFamily(option.value)}
-                fw={fontFamily === option.value ? 700 : 400}
-                c={fontFamily === option.value ? 'var(--phantom-accent-glow)' : undefined}
-                ff={option.css}
-                aria-current={fontFamily === option.value ? 'true' : undefined}
-              >
-                {option.label}
-              </Menu.Item>
-            ))}
-          </Menu.Dropdown>
-        </Menu>
-
         {/* Theme Picker Menu */}
         <Menu shadow="md" width={220} position="bottom-end">
           <Menu.Target>
             <Tooltip label="Theme">
-              <ActionIcon
-                variant="subtle"
-                size="lg"
-                aria-label="Theme picker"
-              >
+              <ActionIcon variant="subtle" size="lg" aria-label="Theme picker" className="phantom-header-icon">
                 <Palette size={18} aria-hidden="true" />
               </ActionIcon>
             </Tooltip>
@@ -354,15 +233,7 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
                 c={themeName === t.name ? 'var(--phantom-accent-glow)' : undefined}
                 aria-current={themeName === t.name ? 'true' : undefined}
                 leftSection={
-                  <Box
-                    w={12}
-                    h={12}
-                    style={{
-                      borderRadius: '50%',
-                      background: t.colors[t.primaryColor]?.[5] ?? '#888',
-                      border: '1px solid var(--phantom-border-subtle)',
-                    }}
-                  />
+                  <Box w={12} h={12} style={{ borderRadius: '50%', background: t.colors[t.primaryColor]?.[5] ?? '#888', border: '1px solid var(--phantom-border-subtle)' }} />
                 }
               >
                 {t.label}
@@ -373,17 +244,8 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
 
         {/* Theme Toggle */}
         <Tooltip label={isDark ? 'Light mode' : 'Dark mode'}>
-          <ActionIcon
-            variant="subtle"
-            size="lg"
-            onClick={toggleColorScheme}
-            aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-          >
-            {isDark ? (
-              <Sun size={18} aria-hidden="true" />
-            ) : (
-              <Moon size={18} aria-hidden="true" />
-            )}
+          <ActionIcon variant="subtle" size="lg" onClick={toggleColorScheme} aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'} className="phantom-header-icon">
+            {isDark ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
           </ActionIcon>
         </Tooltip>
 
@@ -391,7 +253,7 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
         <Popover width={640} position="bottom-end" shadow="md" withArrow>
           <Popover.Target>
             <Tooltip label="Help">
-              <ActionIcon variant="subtle" size="lg" aria-label="Help">
+              <ActionIcon variant="subtle" size="lg" aria-label="Help" className="phantom-header-icon">
                 <HelpCircle size={18} aria-hidden="true" />
               </ActionIcon>
             </Tooltip>
@@ -508,7 +370,30 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
               <div>
                 <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Hunter Rank</Text>
                 <Text fz="xs" c="var(--phantom-text-secondary)">
-                  Earn XP by completing tasks, starting sessions, and maintaining streaks. Ranks go from E through SSS to National Level. Toggle with the ⚔ button.
+                  Earn XP by completing tasks, starting sessions, and maintaining streaks. Ranks go from E through SSS to National Level. Enable in Settings → Features.
+                </Text>
+              </div>
+
+              {/* Settings */}
+              <Text fw={700} fz="0.65rem" tt="uppercase" c="var(--phantom-text-muted)" style={{ letterSpacing: '0.05em', marginTop: 4 }}>
+                Settings
+              </Text>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Settings Modal (⚙)</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Click the gear icon to open settings. Controls appearance (theme, font, scale), sounds (ceremony audio with per-event toggles, volume, style presets), and feature toggles (gamification, concise mode).
+                </Text>
+              </div>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Ceremony Sounds</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Synthesized audio for boot and shutdown ceremonies. Choose from 4 styles: Electronic, Minimal, Warm, Retro. Per-event toggles with preview buttons. Off by default — enable in Settings → Sounds.
+                </Text>
+              </div>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Terminal Notifications</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Sound alerts when Claude Code sessions finish. Enable in Settings → Sounds → Terminal Events.
                 </Text>
               </div>
 
@@ -542,7 +427,7 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
               <div>
                 <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Concise Mode (⚡)</Text>
                 <Text fz="xs" c="var(--phantom-text-secondary)">
-                  Toggle from the header. Injects a system prompt that cuts Claude's output by ~65-75% while keeping full technical accuracy. Same fix, fewer words, lower cost.
+                  Enable in Settings → Features. Injects a system prompt that cuts Claude's output by ~65-75% while keeping full technical accuracy. Same fix, fewer words, lower cost.
                 </Text>
               </div>
 
@@ -554,6 +439,12 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
                 <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Persistent Terminals</Text>
                 <Text fz="xs" c="var(--phantom-text-secondary)">
                   Terminals survive worktree switches (hot restore) and app restarts (cold restore with scrollback). Split terminals via the <strong>+</strong> menu or header buttons (⊞ ⊟).
+                </Text>
+              </div>
+              <div>
+                <Text fw={600} fz="xs" c="var(--phantom-accent-glow)">Smart Tab Titles</Text>
+                <Text fz="xs" c="var(--phantom-text-secondary)">
+                  Terminal tab labels auto-update from processes running inside them. When Claude Code runs, the tab shows what it's doing.
                 </Text>
               </div>
 
@@ -597,6 +488,7 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
                   ['⌘ + T', 'New terminal'],
                   ['⌘ + W', 'Close pane'],
                   ['⌘ + \\', 'Split pane'],
+                  ['Esc', 'Close settings modal'],
                 ].map(([key, desc]) => (
                   <div key={key} style={{ display: 'contents' }}>
                     <Text fz="xs" ff="'JetBrains Mono', monospace" c="var(--phantom-accent-cyan)" fw={600}>{key}</Text>
@@ -608,16 +500,17 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
           </Popover.Dropdown>
         </Popover>
 
+        {/* Settings */}
+        <Tooltip label="Settings" position="bottom" withArrow fz="xs">
+          <ActionIcon variant="subtle" size="lg" onClick={() => setSettingsVisible(true)} aria-label="Open settings" className="phantom-header-icon">
+            <Settings size={18} />
+          </ActionIcon>
+        </Tooltip>
+
         {/* Power Off */}
         <Tooltip label="Power Off" position="bottom" withArrow fz="xs">
-          <ActionIcon
-            variant="subtle"
-            size="lg"
-            onClick={() => setShutdownVisible(true)}
-            aria-label="Power Off"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          >
-            <Power size={16} style={{ color: 'var(--phantom-text-muted)' }} />
+          <ActionIcon variant="subtle" size="lg" onClick={() => setShutdownVisible(true)} aria-label="Power Off" className="phantom-header-icon" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            <Power size={18} />
           </ActionIcon>
         </Tooltip>
       </Group>
