@@ -12,6 +12,7 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { sqlite, runMigrations } from '@phantom-os/db';
 import { graphEngine } from '../services/graph-engine.js';
+import { orchestratorEngine } from '../services/orchestrator-engine.js';
 import { createMcpServer } from './server.js';
 
 const projectId = process.env.PHANTOM_PROJECT_ID;
@@ -21,9 +22,10 @@ runMigrations(sqlite);
 
 // Initialize graph engine with a no-op broadcast (no SSE clients in standalone mode)
 graphEngine.init(() => {});
+orchestratorEngine.init(() => {});
 
 // Create and connect MCP server, scoped to project if specified
-const server = createMcpServer(graphEngine, projectId);
+const server = createMcpServer(graphEngine, projectId, orchestratorEngine);
 const transport = new StdioServerTransport();
 
 await server.connect(transport);

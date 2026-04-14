@@ -110,7 +110,7 @@
       "version": "1.0.0",
       "dependencies": {
         "@hono/node-server": "^1.19.13",
-        "@modelcontextprotocol/sdk": "^1.12.1",
+        "@modelcontextprotocol/sdk": "^1.29.0",
         "@phantom-os/ai-engine": "workspace:*",
         "@phantom-os/db": "workspace:*",
         "@phantom-os/gamification": "workspace:*",

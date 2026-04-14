@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.13",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@phantom-os/ai-engine": "workspace:*",
     "@phantom-os/db": "workspace:*",
     "@phantom-os/gamification": "workspace:*",
@@ -22,7 +23,6 @@
     "hono": "^4.12.12",
     "node-pty": "^1.1.0",
     "ws": "^8.20.0",
-    "@modelcontextprotocol/sdk": "^1.12.1",
     "zod": "^3.25.0"
   },
   "devDependencies": {

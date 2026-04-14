@@ -5,7 +5,7 @@
  */
 import { db, projects } from '@phantom-os/db';
 import { eq } from 'drizzle-orm';
-import type { GraphQuery } from '@phantom-os/ai-engine';
+import type { GraphQuery, GoalInput } from '@phantom-os/ai-engine';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -16,6 +16,13 @@ export interface GraphEngineAdapter {
   getQuery(projectId: string): GraphQuery | null;
   getStats(projectId: string): { projectId: string; fileCount: number; totalEdges: number; moduleCount: number; coverage: number; lastBuiltAt: number } | null;
   buildProject(projectId: string, repoPath: string): Promise<void>;
+}
+
+/** Minimal interface for the orchestrator engine — allows mocking in tests */
+export interface OrchestratorEngineAdapter {
+  process(input: GoalInput): Promise<import('@phantom-os/ai-engine').OrchestratorResult>;
+  getStrategies(projectId: string): Array<{ id: string; name: string; enabled: boolean; description: string }>;
+  getHistory(projectId: string, limit?: number): Array<Record<string, unknown>>;
 }
 
 /**
@@ -137,4 +144,61 @@ export function handleListProjects(): McpTextContent {
       repoPath: p.repoPath,
     })),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Orchestrator Handlers
+// ---------------------------------------------------------------------------
+
+export async function handleOrchestratorProcess(
+  orchestrator: OrchestratorEngineAdapter,
+  params: { projectId: string; goal: string; activeFiles?: string[]; hints?: GoalInput['hints'] },
+): Promise<McpTextContent> {
+  try {
+    const result = await orchestrator.process({
+      projectId: params.projectId,
+      goal: params.goal,
+      activeFiles: params.activeFiles,
+      hints: params.hints,
+    });
+
+    return textResult({
+      strategy: result.strategy,
+      alternatives: result.alternatives,
+      context: {
+        files: result.context.files.slice(0, 15),
+        blastRadius: result.context.blastRadius,
+        relatedFiles: result.context.relatedFiles.slice(0, 10),
+      },
+      taskAssessment: {
+        complexity: result.taskContext.complexity,
+        risk: result.taskContext.risk,
+        isAmbiguous: result.taskContext.isAmbiguous,
+      },
+      confidence: result.output.confidence,
+      durationMs: result.totalDurationMs,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Orchestrator processing failed';
+    return errorResult(message);
+  }
+}
+
+export function handleOrchestratorStrategies(
+  orchestrator: OrchestratorEngineAdapter,
+  params: { projectId: string },
+): McpTextContent {
+  const strategies = orchestrator.getStrategies(params.projectId);
+  if (strategies.length === 0) {
+    return errorResult('No orchestrator available for this project. Ensure the graph is built first.');
+  }
+  return textResult({ strategies });
+}
+
+export function handleOrchestratorHistory(
+  orchestrator: OrchestratorEngineAdapter,
+  params: { projectId: string; limit?: number },
+): McpTextContent {
+  const history = orchestrator.getHistory(params.projectId, params.limit ?? 20);
+  return textResult({ decisions: history, count: history.length });
 }
