@@ -785,7 +785,7 @@ export const setPreference = (key: string, value: string): Promise<Record<string
 // ---------------------------------------------------------------------------
 
 export async function fetchGitIdentity(): Promise<{ name: string; email: string }> {
-  const res = await fetch(`${API_BASE}/git-identity`);
+  const res = await fetch(`${API_BASE}/api/git-identity`);
   if (!res.ok) return { name: '', email: '' };
   return res.json();
 }
@@ -796,9 +796,10 @@ export async function applyClaudeIntegration(opts: {
   hooks: boolean;
   projectPath: string;
 }): Promise<void> {
-  await fetch(`${API_BASE}/claude-integration`, {
+  const res = await fetch(`${API_BASE}/api/claude-integration`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(opts),
   });
+  if (!res.ok) throw new Error(`Claude integration failed: ${res.statusText}`);
 }
