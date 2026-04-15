@@ -44,6 +44,7 @@ import { graphRoutes } from './routes/graph.js';
 import { orchestratorRoutes } from './routes/orchestrator.js';
 import { journalRoutes } from './routes/journal.js';
 import { cleanupRoutes } from './routes/cleanup.js';
+import cockpitRoutes from './routes/cockpit.js';
 import { graphEngine } from './services/graph-engine.js';
 import { orchestratorEngine } from './services/orchestrator-engine.js';
 import { startMcpServer, stopMcpServer } from './mcp/index.js';
@@ -128,6 +129,7 @@ app.route('/api', graphRoutes);
 app.route('/api', orchestratorRoutes);
 app.route('/api', journalRoutes);
 app.route('/api', cleanupRoutes);
+app.route('/api/cockpit', cockpitRoutes);
 
 // Claude integration — consent-based MCP/instructions/hooks setup
 app.post('/api/claude-integration', async (c) => {

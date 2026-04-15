@@ -4,15 +4,17 @@
  *
  * @author Subash Karki
  */
-import { Paper, Popover, ScrollArea, Stack, Text, TextInput, Group } from '@mantine/core';
+import { Paper, Popover, ScrollArea, Stack, Tabs, Text, TextInput, Group } from '@mantine/core';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
+  BarChart3,
   FolderGit2,
   GitBranch,
   GitGraph,
   Info,
+  Radio,
   Search,
   Shield,
 } from 'lucide-react';
@@ -25,6 +27,7 @@ import { usePreferences } from '../../hooks/usePreferences';
 import { useRouter } from '../../hooks/useRouter';
 import { useSessions } from '../../hooks/useSessions';
 import { LiveFeed } from './LiveFeed';
+import { CockView } from './CockView';
 
 const formatTokens = (count: number): string => {
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
@@ -90,7 +93,31 @@ export const Cockpit = () => {
     : '0';
 
   return (
-    <Stack gap="md" data-testid="cockpit-view">
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }} data-testid="cockpit-view">
+      <Tabs defaultValue="analytics" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <Tabs.List style={{ background: 'var(--phantom-surface-card)', borderBottom: '1px solid var(--phantom-border-subtle)' }}>
+          <Tabs.Tab
+            value="analytics"
+            leftSection={<BarChart3 size={14} />}
+            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}
+          >
+            Analytics
+          </Tabs.Tab>
+          <Tabs.Tab
+            value="feed"
+            leftSection={<Radio size={14} />}
+            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}
+          >
+            Live Feed
+          </Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value="analytics" style={{ flex: 1, overflow: 'auto' }}>
+          <CockView />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="feed" style={{ flex: 1, overflow: 'auto' }}>
+          <Stack gap="md" p="md">
       {/* Two-column: Live Feed | Projects + Snapshot */}
       <div
         style={{
@@ -361,6 +388,9 @@ export const Cockpit = () => {
           )}
         </Stack>
       </div>
-    </Stack>
+          </Stack>
+        </Tabs.Panel>
+      </Tabs>
+    </div>
   );
 };
