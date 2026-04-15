@@ -6,7 +6,7 @@
  */
 import { ScrollArea, Skeleton, Text } from '@mantine/core';
 import { useAtomValue, useSetAtom } from 'jotai';
-import React, { memo, useCallback, useEffect, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   CheckCircle,
   XCircle,
@@ -16,6 +16,7 @@ import {
   GitCommit,
   Play,
   ExternalLink,
+  ChevronRight,
 } from 'lucide-react';
 
 import { activeWorktreeAtom } from '../../atoms/worktrees';
@@ -25,12 +26,14 @@ import {
   ciRunsFamily,
   commitsFamily,
   addPrCreatingAtom,
+  activityRefreshAtom,
 } from '../../atoms/activity';
 import {
   gitCreatePr,
   gitPrStatus,
   gitCiRuns,
   gitRecentCommits,
+  type CiRun,
 } from '../../lib/api';
 import { showSystemNotification } from '../notifications/SystemToast';
 
@@ -171,31 +174,33 @@ const PrSection = memo(function PrSection({ worktreeId }: { worktreeId: string }
         </Text>
       )}
 
-      {/* Create PR button */}
-      <div
-        onClick={!isCreating ? handleCreatePr : undefined}
-        style={{
-          marginTop: 8,
-          padding: '5px 0',
-          textAlign: 'center',
-          borderRadius: 4,
-          cursor: isCreating ? 'default' : 'pointer',
-          backgroundColor: isCreating
-            ? 'var(--phantom-surface-elevated, #2a2a2a)'
-            : 'var(--phantom-accent-cyan, #06b6d4)',
-          color: isCreating ? 'var(--phantom-text-muted)' : '#000',
-          fontSize: '0.73rem',
-          fontWeight: 600,
-          transition: 'all 150ms ease',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 6,
-        }}
-      >
-        <GitPullRequest size={12} />
-        {isCreating ? 'Creating...' : 'Create PR with Claude'}
-      </div>
+      {/* Create PR button — hide when a PR already exists */}
+      {!pr && (
+        <div
+          onClick={!isCreating ? handleCreatePr : undefined}
+          style={{
+            marginTop: 8,
+            padding: '5px 0',
+            textAlign: 'center',
+            borderRadius: 4,
+            cursor: isCreating ? 'default' : 'pointer',
+            backgroundColor: isCreating
+              ? 'var(--phantom-surface-elevated, #2a2a2a)'
+              : 'var(--phantom-accent-cyan, #06b6d4)',
+            color: isCreating ? 'var(--phantom-text-muted)' : '#000',
+            fontSize: '0.73rem',
+            fontWeight: 600,
+            transition: 'all 150ms ease',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+          }}
+        >
+          <GitPullRequest size={12} />
+          {isCreating ? 'Creating...' : 'Create PR with Claude'}
+        </div>
+      )}
     </div>
   );
 });
@@ -228,17 +233,140 @@ function getCiLabel(status: string, conclusion: string | null): string {
   return status;
 }
 
+/** Group checks by workflow prefix (e.g. "ci / ci / lint / lint" → "ci") */
+function groupChecksByWorkflow(runs: CiRun[]): { workflow: string; checks: CiRun[] }[] {
+  const groups = new Map<string, CiRun[]>();
+  for (const run of runs) {
+    // Use first segment before " / " as group key, or the full name if no separator
+    const sep = run.name.indexOf(' / ');
+    const key = sep > 0 ? run.name.slice(0, sep) : run.name;
+    const group = groups.get(key);
+    if (group) group.push(run);
+    else groups.set(key, [run]);
+  }
+  return Array.from(groups, ([workflow, checks]) => ({ workflow, checks }));
+}
+
+function getGroupStatus(checks: CiRun[]): { icon: React.ReactNode; summary: string } {
+  const failed = checks.filter((c) => c.conclusion === 'failure').length;
+  const pending = checks.filter((c) => !c.conclusion).length;
+  const passed = checks.filter((c) => c.conclusion === 'success').length;
+
+  if (failed > 0) return {
+    icon: <XCircle size={12} style={{ color: 'var(--phantom-status-error, #ef4444)', flexShrink: 0 }} />,
+    summary: `${failed} failed`,
+  };
+  if (pending > 0) return {
+    icon: <Loader2 size={12} style={{ color: 'var(--phantom-accent-gold, #f59e0b)', animation: 'spin 1s linear infinite', flexShrink: 0 }} />,
+    summary: `${pending} pending`,
+  };
+  return {
+    icon: <CheckCircle size={12} style={{ color: 'var(--phantom-status-success, #22c55e)', flexShrink: 0 }} />,
+    summary: `${passed} passed`,
+  };
+}
+
+function CiWorkflowGroup({ workflow, checks }: { workflow: string; checks: CiRun[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const { icon, summary } = getGroupStatus(checks);
+
+  // Single check — render directly, no collapsing
+  if (checks.length === 1) {
+    const run = checks[0];
+    return (
+      <div
+        style={{ ...clickableRowBase, height: 26 }}
+        onClick={() => window.open(run.url, '_blank')}
+        onMouseEnter={onRowEnter}
+        onMouseLeave={onRowLeave}
+      >
+        {getCiStatusIcon(run.status, run.conclusion)}
+        <Text fz="0.68rem" c="var(--phantom-text-primary)" truncate style={{ flex: 1 }}>
+          {run.name}
+        </Text>
+        <Text fz="0.58rem" c="var(--phantom-text-muted)" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+          {getCiLabel(run.status, run.conclusion)}
+        </Text>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Group header — clickable to expand/collapse */}
+      <div
+        style={{ ...clickableRowBase, height: 26, cursor: 'pointer' }}
+        onClick={() => setExpanded((prev) => !prev)}
+        onMouseEnter={onRowEnter}
+        onMouseLeave={onRowLeave}
+      >
+        <ChevronRight
+          size={10}
+          style={{
+            color: 'var(--phantom-text-muted)',
+            transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+            transition: 'transform 120ms ease',
+            flexShrink: 0,
+          }}
+        />
+        {icon}
+        <Text fz="0.68rem" fw={500} c="var(--phantom-text-primary)" truncate style={{ flex: 1 }}>
+          {workflow}
+        </Text>
+        <Text fz="0.58rem" c="var(--phantom-text-muted)" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+          {checks.length} · {summary}
+        </Text>
+      </div>
+
+      {/* Expanded check list */}
+      {expanded && (
+        <div style={{ paddingLeft: 14 }}>
+          {checks.map((run) => (
+            <div
+              key={run.databaseId}
+              style={{ ...clickableRowBase, height: 24 }}
+              onClick={() => window.open(run.url, '_blank')}
+              onMouseEnter={onRowEnter}
+              onMouseLeave={onRowLeave}
+            >
+              {getCiStatusIcon(run.status, run.conclusion)}
+              <Text fz="0.63rem" c="var(--phantom-text-secondary)" truncate style={{ flex: 1 }}>
+                {run.name}
+              </Text>
+              <Text fz="0.55rem" c="var(--phantom-text-muted)" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+                {getCiLabel(run.status, run.conclusion)}
+              </Text>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const CiSection = memo(function CiSection({ worktreeId }: { worktreeId: string }) {
   const runs = useAtomValue(ciRunsFamily(worktreeId));
 
   // gh not available — hide section
   if (runs === null) return null;
 
+  const groups = runs.length > 0 ? groupChecksByWorkflow(runs) : [];
+  const totalFailed = runs.filter((r) => r.conclusion === 'failure').length;
+  const totalPending = runs.filter((r) => !r.conclusion && r.status === 'in_progress').length;
+
   return (
     <div style={{ padding: '6px 8px' }}>
       <div style={{ ...sectionHeaderStyle, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
         <Play size={11} />
         CI / CD Runs
+        {runs.length > 0 && (
+          <Text fz="0.6rem" c="var(--phantom-text-muted)" fw={400} ml={4}>
+            {runs.length} check{runs.length !== 1 ? 's' : ''}
+            {totalFailed > 0 && ` · ${totalFailed} failed`}
+            {totalFailed === 0 && totalPending > 0 && ` · ${totalPending} pending`}
+            {totalFailed === 0 && totalPending === 0 && ' · all passed'}
+          </Text>
+        )}
       </div>
 
       {runs.length === 0 ? (
@@ -246,25 +374,11 @@ const CiSection = memo(function CiSection({ worktreeId }: { worktreeId: string }
           No CI runs
         </Text>
       ) : (
-        <ScrollArea scrollbarSize={6} style={{ maxHeight: 200 }}>
-          {runs.map((run) => (
-            <div
-              key={run.databaseId}
-              style={{ ...clickableRowBase, height: 30 }}
-              onClick={() => window.open(run.url, '_blank')}
-              onMouseEnter={onRowEnter}
-              onMouseLeave={onRowLeave}
-            >
-              {getCiStatusIcon(run.status, run.conclusion)}
-              <Text fz="0.7rem" c="var(--phantom-text-primary)" truncate style={{ flex: 1 }}>
-                {run.name}
-              </Text>
-              <Text fz="0.6rem" c="var(--phantom-text-muted)" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
-                {getCiLabel(run.status, run.conclusion)}
-              </Text>
-            </div>
+        <div>
+          {groups.map((g) => (
+            <CiWorkflowGroup key={g.workflow} workflow={g.workflow} checks={g.checks} />
           ))}
-        </ScrollArea>
+        </div>
       )}
     </div>
   );
@@ -286,7 +400,7 @@ const CommitsSection = memo(function CommitsSection({ worktreeId }: { worktreeId
         Recent Commits
       </div>
 
-      <ScrollArea scrollbarSize={6} style={{ maxHeight: 180 }}>
+      <div>
         {commits.map((commit) => (
           <div
             key={commit.sha}
@@ -316,7 +430,7 @@ const CommitsSection = memo(function CommitsSection({ worktreeId }: { worktreeId
             </Text>
           </div>
         ))}
-      </ScrollArea>
+      </div>
     </div>
   );
 });
@@ -354,6 +468,7 @@ export function GitActivityPanel() {
   const setPrStatus = useSetAtom(prStatusFamily(wtId));
   const setCiRuns = useSetAtom(ciRunsFamily(wtId));
   const setCommits = useSetAtom(commitsFamily(wtId));
+  const refreshTrigger = useAtomValue(activityRefreshAtom);
   const [initialLoading, setInitialLoading] = useState(true);
 
   // Clear stale cached data and mark loading on worktree switch
@@ -364,12 +479,16 @@ export function GitActivityPanel() {
     setInitialLoading(true);
   }, [wtId, setPrStatus, setCiRuns, setCommits]);
 
+  // Adaptive CI polling: 10s when checks in-progress, 30s when settled
+  const ciHasPendingRef = useRef(false);
+  const ciTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (!worktree) return;
     const id = worktree.id;
     let cancelled = false;
 
-    // Equality guard — skip set() if data hasn't changed
+    // Equality guard — skip set() if data hasn't changed (avoids rerenders)
     let lastPrJson = '';
     let lastCiJson = '';
     let lastCommitsJson = '';
@@ -387,8 +506,11 @@ export function GitActivityPanel() {
         if (runs !== null) {
           const json = JSON.stringify(runs);
           if (json !== lastCiJson) { lastCiJson = json; setCiRuns(runs); }
+          // Track whether any checks are still pending/running
+          ciHasPendingRef.current = runs.some((r) => !r.conclusion);
         }
-      }).catch(() => {});
+        scheduleCiPoll();
+      }).catch(() => { scheduleCiPoll(); });
 
     const fetchCommits = () =>
       gitRecentCommits(id).then((commits) => {
@@ -397,20 +519,27 @@ export function GitActivityPanel() {
         if (json !== lastCommitsJson) { lastCommitsJson = json; setCommits(commits); }
       }).catch(() => {});
 
+    // Adaptive CI schedule: fast when pending, slow when settled
+    const scheduleCiPoll = () => {
+      if (cancelled) return;
+      if (ciTimerRef.current) clearTimeout(ciTimerRef.current);
+      const delay = ciHasPendingRef.current ? 10_000 : 30_000;
+      ciTimerRef.current = setTimeout(fetchCi, delay);
+    };
+
     // Fetch all, then clear loading
     Promise.all([fetchPr(), fetchCi(), fetchCommits()]).finally(() => {
       if (!cancelled) setInitialLoading(false);
     });
 
     const prInterval = setInterval(fetchPr, 60_000);
-    const ciInterval = setInterval(fetchCi, 30_000);
 
     return () => {
       cancelled = true;
       clearInterval(prInterval);
-      clearInterval(ciInterval);
+      if (ciTimerRef.current) clearTimeout(ciTimerRef.current);
     };
-  }, [wtId, setPrStatus, setCiRuns, setCommits]);
+  }, [wtId, refreshTrigger, setPrStatus, setCiRuns, setCommits]);
 
   if (!worktree) {
     return (
@@ -431,11 +560,11 @@ export function GitActivityPanel() {
 
         <div style={{ height: 1, backgroundColor: 'var(--phantom-border-subtle)', margin: '2px 8px' }} />
 
-        <CiSection worktreeId={worktree.id} />
+        <CommitsSection worktreeId={worktree.id} />
 
         <div style={{ height: 1, backgroundColor: 'var(--phantom-border-subtle)', margin: '2px 8px' }} />
 
-        <CommitsSection worktreeId={worktree.id} />
+        <CiSection worktreeId={worktree.id} />
       </ScrollArea>
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>

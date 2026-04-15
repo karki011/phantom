@@ -63,8 +63,7 @@ const TerminalTitleListener = () => {
     const handler = (e: Event) => {
       const { paneId, title } = (e as CustomEvent).detail ?? {};
       if (!paneId || !title) return;
-      const state = store.getState();
-      const tab = state.tabs.find((t: { panes: Record<string, unknown> }) => paneId in t.panes);
+      const tab = store.tabs.find((t: { panes: Record<string, unknown> }) => paneId in t.panes);
       if (tab) {
         store.renameTab(tab.id, title);
       }

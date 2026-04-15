@@ -24,6 +24,7 @@ import { InlineWorktreeInput } from './InlineWorktreeInput';
 import { ProjectContextMenu } from './ProjectContextMenu';
 import { RemoveProjectDialog } from './RemoveProjectDialog';
 import { BranchSwitcher } from './BranchSwitcher';
+import { PrBadge } from './PrBadge';
 
 interface ProjectSectionProps {
   project: ProjectData;
@@ -360,6 +361,7 @@ export function ProjectSection({
                   >
                     {ws.branch}
                   </Text>
+                  <PrBadge worktreeId={ws.id} />
                   <Text fz="0.65rem" c="var(--phantom-text-muted)">
                     {ws.name}
                   </Text>

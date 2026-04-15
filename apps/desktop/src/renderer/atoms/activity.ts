@@ -60,3 +60,13 @@ export const activeIsCreatingPrAtom = atom<boolean>((get) => {
   if (!wt) return false;
   return get(prCreatingSetAtom).has(wt.id);
 });
+
+// ---------------------------------------------------------------------------
+// Activity refresh trigger (bump to force immediate refetch)
+// ---------------------------------------------------------------------------
+
+/** Monotonic counter — bump to signal that activity data should be refetched */
+export const activityRefreshAtom = atom(0);
+export const bumpActivityRefreshAtom = atom(null, (_get, set) => {
+  set(activityRefreshAtom, (n) => n + 1);
+});

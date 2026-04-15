@@ -112,14 +112,10 @@ export function InlineWorktreeInput({
         branch,
         baseBranch,
         ticketUrl: ticketUrl.trim() || undefined,
+        startClaude: true,
       });
       if (ws) {
         onCreated?.(ws);
-        // Set global flag — WorktreeHome reads it on mount after the worktree switch
-        if (ws.worktreePath) {
-          console.log('[InlineWorktreeInput] Setting pending Claude for', ws.worktreePath);
-          (window as any).__phantomPendingClaude = ws.worktreePath;
-        }
       }
       onDone();
     } catch {

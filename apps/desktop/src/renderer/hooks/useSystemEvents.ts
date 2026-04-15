@@ -8,7 +8,7 @@ import { useSetAtom, useStore } from 'jotai';
 import { useEffect } from 'react';
 
 import { aiCommitFamily, removeCommitGenAtom } from '../atoms/aiCommit';
-import { removePrCreatingAtom } from '../atoms/activity';
+import { removePrCreatingAtom, bumpActivityRefreshAtom } from '../atoms/activity';
 import { refreshAchievementsAtom } from '../atoms/achievements';
 import { refreshHunterAtom } from '../atoms/hunter';
 import { pushFeedEventAtom } from '../atoms/liveFeed';
@@ -45,6 +45,7 @@ export const useSystemEvents = (): void => {
   const pushFeedEvent = useSetAtom(pushFeedEventAtom);
   const setSseConnection = useSetAtom(sseConnectionAtom);
   const removePrCreating = useSetAtom(removePrCreatingAtom);
+  const bumpActivityRefresh = useSetAtom(bumpActivityRefreshAtom);
   const removeCommitGen = useSetAtom(removeCommitGenAtom);
   const store = useStore();
 
@@ -222,6 +223,8 @@ export const useSystemEvents = (): void => {
           if (data?.worktreeId) {
             removePrCreating(data.worktreeId);
           }
+          // Immediately refetch PR status + CI checks
+          bumpActivityRefresh();
           // Try to extract PR URL from Claude's output (usually the last URL in output)
           const output = data?.output ?? '';
           const urlMatch = output.match(/https:\/\/github\.com\/[^\s)]+\/pull\/\d+/);
@@ -307,6 +310,7 @@ export const useSystemEvents = (): void => {
     pushFeedEvent,
     setSseConnection,
     removePrCreating,
+    bumpActivityRefresh,
     removeCommitGen,
     store,
   ]);

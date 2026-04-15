@@ -72,6 +72,13 @@ export const activeWorktreeAtom = atom((get) => {
   return get(worktreesDataAtom).find((w) => w.id === id) ?? null;
 });
 
+/**
+ * When a worktree is created and should auto-launch a Claude session,
+ * store the worktree path here. The NEW WorktreeHome consumes and clears it
+ * after the workspace switch settles — no timers, no window globals.
+ */
+export const pendingClaudeAtom = atom<string | null>(null);
+
 /** Worktrees grouped by projectId */
 export const worktreesByProjectAtom = atom((get) => {
   const worktrees = get(worktreesDataAtom);
@@ -107,10 +114,16 @@ export const createWorktreeAtom = atom(
   async (
     _get,
     set,
-    params: { projectId: string; name?: string; branch?: string; baseBranch?: string; ticketUrl?: string },
+    params: { projectId: string; name?: string; branch?: string; baseBranch?: string; ticketUrl?: string; startClaude?: boolean },
   ) => {
-    const worktree = await apiCreateWorktree(params);
+    const { startClaude, ...apiParams } = params;
+    const worktree = await apiCreateWorktree(apiParams);
     set(worktreesDataAtom, (prev) => [...prev, worktree]);
+    // Set pending Claude BEFORE switching workspace — the new WorktreeHome
+    // reads it on mount, which happens when the workspace switch renders.
+    if (startClaude && worktree.worktreePath) {
+      set(pendingClaudeAtom, worktree.worktreePath);
+    }
     set(activeWorktreeIdAtom, worktree.id);
     return worktree;
   },

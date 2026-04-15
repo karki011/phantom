@@ -623,14 +623,54 @@ Rules:
       }
       case 'ci-runs': {
         try {
+          // Try gh pr checks first — gives individual check runs (lint, test, build, etc.)
+          try {
+            const checksOutput = execSync(
+              'gh pr checks --json name,state,link,startedAt,completedAt,bucket,workflow',
+              { cwd: repoPath, encoding: 'utf-8', timeout: 10_000, stdio: 'pipe' },
+            );
+            const checks = JSON.parse(checksOutput.trim()) as Array<{
+              name: string;
+              state: string;
+              link: string;
+              startedAt: string;
+              completedAt: string | null;
+              bucket: string;
+              workflow: string;
+            }>;
+            // Map to CiRun shape for the frontend
+            const runs = checks.map((ch, i) => ({
+              name: ch.name,
+              status: ch.state === 'PENDING' ? 'in_progress' : 'completed',
+              conclusion: ch.bucket === 'pass' ? 'success'
+                : ch.bucket === 'fail' ? 'failure'
+                : ch.bucket === 'pending' ? null
+                : ch.bucket,
+              url: ch.link,
+              createdAt: ch.startedAt,
+              databaseId: i,
+            }));
+            return c.json({ ok: true, runs });
+          } catch {
+            // No PR — fall back to workflow runs
+          }
+
           const branch = execSync('git rev-parse --abbrev-ref HEAD', {
             cwd: repoPath, encoding: 'utf-8', timeout: 5_000, stdio: 'pipe',
           }).trim();
           const output = execSync(
-            `gh run list --branch "${branch.replace(/"/g, '\\"')}" --limit 15 --json status,conclusion,name,url,createdAt,databaseId`,
+            `gh run list --branch "${branch.replace(/"/g, '\\"')}" --limit 30 --json status,conclusion,name,url,createdAt,databaseId`,
             { cwd: repoPath, encoding: 'utf-8', timeout: 10_000, stdio: 'pipe' },
           );
-          return c.json({ ok: true, runs: JSON.parse(output.trim()) });
+          // Deduplicate by workflow name — keep only the latest run per workflow
+          const allRuns = JSON.parse(output.trim()) as Array<{ name: string; [k: string]: unknown }>;
+          const seen = new Set<string>();
+          const latestRuns = allRuns.filter((run) => {
+            if (seen.has(run.name)) return false;
+            seen.add(run.name);
+            return true;
+          });
+          return c.json({ ok: true, runs: latestRuns });
         } catch {
           return c.json({ ok: true, runs: null });
         }

@@ -133,28 +133,28 @@ export async function generateMorningBrief(
 
       // Merged PRs
       const prJson = run(
-        `gh pr list --repo "${project.repoPath}" --state merged --search "merged:>yesterday" --json title,number --limit 5`,
+        `gh pr list --repo "${project.repoPath}" --state merged --search "merged:>yesterday" --json title,number,url --limit 5`,
         project.repoPath,
       );
       if (prJson) {
         try {
-          const prs = JSON.parse(prJson) as Array<{ title: string; number: number }>;
+          const prs = JSON.parse(prJson) as Array<{ title: string; number: number; url: string }>;
           for (const pr of prs) {
-            lines.push(`- [${project.name}] PR #${pr.number} "${pr.title}" merged`);
+            lines.push(`- [${project.name}] [PR #${pr.number}](${pr.url}) "${pr.title}" merged`);
           }
         } catch { /* skip malformed JSON */ }
       }
 
       // Open PRs needing attention
       const openPrJson = run(
-        'gh pr list --state open --json title,number,updatedAt --limit 5',
+        'gh pr list --state open --json title,number,url --limit 5',
         project.repoPath,
       );
       if (openPrJson) {
         try {
-          const prs = JSON.parse(openPrJson) as Array<{ title: string; number: number }>;
-          if (prs.length > 0) {
-            lines.push(`- [${project.name}] ${prs.length} open PR${prs.length === 1 ? '' : 's'} awaiting review`);
+          const prs = JSON.parse(openPrJson) as Array<{ title: string; number: number; url: string }>;
+          for (const pr of prs) {
+            lines.push(`- [${project.name}] [PR #${pr.number}](${pr.url}) open: "${pr.title}"`);
           }
         } catch { /* skip */ }
       }
@@ -347,28 +347,28 @@ export async function generateEndOfDay(
 
       // Merged PRs today
       const mergedJson = run(
-        `gh pr list --state merged --search "merged:>=${todayStr()}" --json title,number --limit 5`,
+        `gh pr list --state merged --search "merged:>=${todayStr()}" --json title,number,url --limit 5`,
         project.repoPath,
       );
       if (mergedJson) {
         try {
-          const prs = JSON.parse(mergedJson) as Array<{ title: string; number: number }>;
+          const prs = JSON.parse(mergedJson) as Array<{ title: string; number: number; url: string }>;
           for (const pr of prs) {
-            projectLines.push(`- [${project.name}] PR #${pr.number} merged: "${pr.title}"`);
+            projectLines.push(`- [${project.name}] [PR #${pr.number}](${pr.url}) merged: "${pr.title}"`);
           }
         } catch { /* skip */ }
       }
 
       // Still open PRs
       const openJson = run(
-        'gh pr list --state open --json title,number --limit 3',
+        'gh pr list --state open --json title,number,url --limit 5',
         project.repoPath,
       );
       if (openJson) {
         try {
-          const prs = JSON.parse(openJson) as Array<{ title: string; number: number }>;
-          if (prs.length > 0) {
-            projectLines.push(`- [${project.name}] ${prs.length} PR${prs.length === 1 ? '' : 's'} still open`);
+          const prs = JSON.parse(openJson) as Array<{ title: string; number: number; url: string }>;
+          for (const pr of prs) {
+            projectLines.push(`- [${project.name}] [PR #${pr.number}](${pr.url}) open: "${pr.title}"`);
           }
         } catch { /* skip */ }
       }

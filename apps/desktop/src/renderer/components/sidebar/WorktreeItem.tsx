@@ -13,6 +13,7 @@ import { getGitStatus } from '../../lib/api';
 import { deleteWorktreeAtom, updateWorktreeAtom } from '../../atoms/worktrees';
 import { showSystemNotification } from '../notifications/SystemToast';
 import { WorktreeContextMenu } from './WorktreeContextMenu';
+import { PrBadge } from './PrBadge';
 
 interface WorktreeItemProps {
   worktree: WorktreeData;
@@ -268,6 +269,7 @@ export function WorktreeItem({
               </div>
             )}
           </div>
+          <PrBadge worktreeId={worktree.id} />
           {worktree.worktreeValid === false && (
             <AlertTriangle
               size={12}

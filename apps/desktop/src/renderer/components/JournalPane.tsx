@@ -40,33 +40,54 @@ function shiftDate(dateStr: string, days: number): string {
 // Content rendering — parse journal text into styled elements
 // ---------------------------------------------------------------------------
 
-/** Highlight [project-name] brackets in cyan */
+/** Highlight [project-name] brackets, markdown links, PR #numbers, and $amounts */
 function renderLine(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
-  let remaining = text;
   let key = 0;
 
-  // Match [project-name] patterns
-  const regex = /\[([^\]]+)\]/g;
+  // Step 1: Parse markdown links [text](url) and plain [brackets]
+  // Markdown links match [text](url), plain brackets match [text] not followed by (
+  const bracketRegex = /\[([^\]]+)\](?:\((https?:\/\/[^)]+)\))?/g;
   let match: RegExpExecArray | null;
   let lastIndex = 0;
 
-  while ((match = regex.exec(remaining)) !== null) {
+  while ((match = bracketRegex.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(remaining.slice(lastIndex, match.index));
+      parts.push(text.slice(lastIndex, match.index));
     }
-    parts.push(
-      <span key={key++} style={{ color: 'var(--phantom-accent-cyan, #06b6d4)', fontWeight: 600 }}>
-        [{match[1]}]
-      </span>,
-    );
-    lastIndex = regex.lastIndex;
+
+    const linkText = match[1];
+    const url = match[2];
+
+    if (url) {
+      // Clickable markdown link — open in system browser
+      parts.push(
+        <a
+          key={key++}
+          href={url}
+          onClick={(e) => { e.preventDefault(); window.open(url, '_blank'); }}
+          style={{ color: '#a855f7', fontWeight: 600, textDecoration: 'none', cursor: 'pointer' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
+        >
+          {linkText}
+        </a>,
+      );
+    } else {
+      // Plain [project-name] — cyan highlight
+      parts.push(
+        <span key={key++} style={{ color: 'var(--phantom-accent-cyan, #06b6d4)', fontWeight: 600 }}>
+          [{linkText}]
+        </span>,
+      );
+    }
+    lastIndex = bracketRegex.lastIndex;
   }
-  if (lastIndex < remaining.length) {
-    parts.push(remaining.slice(lastIndex));
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
   }
 
-  // Highlight PR #numbers
+  // Step 2: Highlight PR #numbers and $amounts in remaining text segments
   const finalParts: React.ReactNode[] = [];
   for (const part of parts) {
     if (typeof part !== 'string') { finalParts.push(part); continue; }

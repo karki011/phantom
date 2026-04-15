@@ -20,7 +20,7 @@ import {
   Tabs,
 } from '@mantine/core';
 import { usePaneStore } from '@phantom-os/panes';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom, useStore } from 'jotai';
 import {
   AlertTriangle, CalendarDays, ExternalLink, FileCode, GitBranch,
   MessageSquare, Pencil, Play, Plus, Sparkles,
@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { activeWorktreeAtom, deleteWorktreeAtom, projectsAtom } from '../atoms/worktrees';
+import { activeWorktreeAtom, deleteWorktreeAtom, pendingClaudeAtom, projectsAtom } from '../atoms/worktrees';
 import type { CustomRecipe } from '../atoms/recipes';
 import { useProjectProfile } from '../hooks/useProjectProfile';
 import { useRecipes, type EnrichedRecipe } from '../hooks/useRecipes';
@@ -310,21 +310,21 @@ export function WorktreeHome() {
   const quote = useMemo(() => QUOTES[Math.floor(Math.random() * QUOTES.length)], []);
 
   const [showNewSessionModal, setShowNewSessionModal] = useState(false);
-  const claudeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jotaiStore = useStore();
 
-  // On mount: check if a pending Claude session was requested (global flag set by InlineWorktreeInput)
+  // Auto-launch Claude session after workspace switch.
+  // Read the atom IMPERATIVELY on mount — not reactively. This ensures only
+  // the NEW WorktreeHome (mounted after switchWorkspaceAtom replaces paneState)
+  // processes the pending request. The OLD WorktreeHome never re-mounts, so
+  // its mount effect doesn't re-fire and can't race with the workspace switch.
   useEffect(() => {
-    const pending = (window as any).__phantomPendingClaude as string | undefined;
+    const pending = jotaiStore.get(pendingClaudeAtom);
     if (pending && worktree?.worktreePath) {
-      delete (window as any).__phantomPendingClaude;
-      // Clear any previous timer but DON'T clear on re-render — only on new pending
-      if (claudeTimerRef.current) clearTimeout(claudeTimerRef.current);
-      claudeTimerRef.current = setTimeout(() => {
-        claudeTimerRef.current = null;
-        store.addPaneAsTab('terminal', { cwd: worktree.worktreePath, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>, 'Claude');
-      }, 1500);
+      jotaiStore.set(pendingClaudeAtom, null);
+      store.addPaneAsTab('terminal', { cwd: worktree.worktreePath, initialCommand: 'claude --dangerously-skip-permissions' } as Record<string, unknown>, 'Claude');
     }
-  }, [worktree?.id, store]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: fires after workspace switch renders this WorktreeHome
+  }, []);
 
   const openTerminal = useCallback(() => store.addPaneAsTab('terminal', { cwd: worktree?.worktreePath } as Record<string, unknown>, 'Terminal'), [store, worktree]);
   const openEditor = useCallback(() => store.addPaneAsTab('editor', {} as Record<string, unknown>, 'Editor'), [store]);
