@@ -20,6 +20,7 @@ const DEFAULTS: Record<string, string> = {
   gamification: 'false',
   caveman: 'false',
   sounds: 'false',
+  fullscreen_on_start: 'true',
 };
 
 /** Seed defaults for any missing keys */
