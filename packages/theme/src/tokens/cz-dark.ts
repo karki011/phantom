@@ -230,6 +230,7 @@ export const czDarkTokens: ThemeTokens = {
       '--phantom-status-active': '#4ADE80',
       '--phantom-status-warning': '#FB923C',
       '--phantom-status-danger': '#F87171',
+      '--phantom-accent-purple': '#9333ea',
     },
     dark: {
       '--phantom-surface-bg': '#0d0d10',
@@ -245,6 +246,7 @@ export const czDarkTokens: ThemeTokens = {
       '--phantom-status-active': '#4ADE80',
       '--phantom-status-warning': '#FB923C',
       '--phantom-status-danger': '#F87171',
+      '--phantom-accent-purple': '#a855f7',
     },
   },
 };
