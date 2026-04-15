@@ -140,6 +140,7 @@ export function NeuralLinkPhase({ claudeDetected, onComplete }: Props) {
     <Stack
       gap="lg"
       style={{
+        width: '100%',
         maxWidth: 500,
         fontFamily: monoFont,
       }}

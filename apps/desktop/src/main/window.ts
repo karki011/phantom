@@ -42,9 +42,9 @@ export const createWindow = (): void => {
     },
   });
 
-  // Show window when ready (prevents white flash)
+  // Show window when ready — launch in macOS fullscreen
   mainWindow.on('ready-to-show', () => {
-    mainWindow?.maximize();
+    mainWindow?.setFullScreen(true);
     mainWindow?.show();
   });
 

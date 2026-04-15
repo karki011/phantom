@@ -75,6 +75,7 @@ export function AudioPhase({ onComplete }: Props) {
     <Stack
       gap="xl"
       style={{
+        width: '100%',
         maxWidth: 440,
         fontFamily: 'var(--phantom-font-mono, monospace)',
         color: 'var(--phantom-text-primary, #e2e8f0)',

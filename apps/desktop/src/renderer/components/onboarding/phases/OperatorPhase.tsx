@@ -72,6 +72,7 @@ export function OperatorPhase({ onComplete }: Props) {
     <Stack
       gap="lg"
       style={{
+        width: '100%',
         maxWidth: 440,
         fontFamily: monoFont,
       }}

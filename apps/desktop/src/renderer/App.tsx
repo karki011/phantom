@@ -122,6 +122,8 @@ const ViewContent = ({ route }: { route: Route }) => {
 };
 
 export const App = () => {
+  // ── All hooks MUST be declared before any conditional return ──
+
   // Establish SSE connection for live updates
   useSystemEvents();
 
@@ -130,18 +132,6 @@ export const App = () => {
 
   const { isEnabled, loaded: prefsLoaded, prefs } = usePreferences();
   const [onboardingDone, setOnboardingDone] = useState(false);
-
-  // Gate: show onboarding if not completed
-  if (prefsLoaded && !prefs.onboarding_completed && !onboardingDone) {
-    return <OnboardingFlow onComplete={() => setOnboardingDone(true)} />;
-  }
-
-  // Apply full-screen preference once on startup
-  useEffect(() => {
-    if (prefsLoaded && isEnabled('fullscreen_on_start')) {
-      window.phantomOS?.invoke('phantom:set-fullscreen', true);
-    }
-  }, [prefsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ceremony sounds (Web Audio API — zero deps, gated by preferences)
   const soundEventPrefs = Object.fromEntries(
@@ -167,9 +157,33 @@ export const App = () => {
     { id: 'journal', label: 'Generating morning brief...', doneLabel: 'Morning brief ready', status: 'pending' },
   ]);
 
+  const { route, isCockpitSubRoute } = useRouter();
+  const { profile } = useHunter();
+  const { active } = useSessions();
+  const fontScale = useAtomValue(fontScaleAtom);
+  const [zoomPercent, setZoomPercent] = useAtom(zoomPercentAtom);
+  const sseState = useAtomValue(sseConnectionAtom);
+  const activeTab = useAtomValue(activeTopTabAtom);
+  const activeWorktree = useAtomValue(activeWorktreeAtom);
+  const activeWsId = useAtomValue(activeWorktreeIdAtom);
+  const achievementCount = useAtomValue(unlockedCountAtom);
+  const refreshAchievements = useSetAtom(refreshAchievementsAtom);
+  const [shutdownVisible, setShutdownVisible] = useAtom(shutdownVisibleAtom);
+  const [settingsVisible, setSettingsVisible] = useAtom(settingsVisibleAtom);
+  const switchWorkspace = useSetAtom(switchWorkspaceAtom);
+  const activePane = useAtomValue(activePaneAtom);
+  const setSelectedFile = useSetAtom(selectedFileAtom);
+
   const updateBootStep = (id: string, status: 'running' | 'done' | 'error') => {
     setBootSteps((prev) => prev.map((s) => (s.id === id ? { ...s, status } : s)));
   };
+
+  // Apply full-screen preference once on startup
+  useEffect(() => {
+    if (prefsLoaded && isEnabled('fullscreen_on_start')) {
+      window.phantomOS?.invoke('phantom:set-fullscreen', true);
+    }
+  }, [prefsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Boot ceremony — step-by-step system checks
   useEffect(() => {
@@ -257,20 +271,6 @@ export const App = () => {
     };
   }, [isConnected, splashDone]);
 
-  const { route, isCockpitSubRoute } = useRouter();
-  const { profile } = useHunter();
-  const { active } = useSessions();
-  const fontScale = useAtomValue(fontScaleAtom);
-  const [zoomPercent, setZoomPercent] = useAtom(zoomPercentAtom);
-  const sseState = useAtomValue(sseConnectionAtom);
-  const activeTab = useAtomValue(activeTopTabAtom);
-  const activeWorktree = useAtomValue(activeWorktreeAtom);
-  const activeWsId = useAtomValue(activeWorktreeIdAtom);
-  const achievementCount = useAtomValue(unlockedCountAtom);
-  const refreshAchievements = useSetAtom(refreshAchievementsAtom);
-  const [shutdownVisible, setShutdownVisible] = useAtom(shutdownVisibleAtom);
-  const [settingsVisible, setSettingsVisible] = useAtom(settingsVisibleAtom);
-
   // Listen for sound events dispatched by useSystemEvents (session:end, task:complete)
   useEffect(() => {
     const handler = (e: Event) => {
@@ -294,7 +294,6 @@ export const App = () => {
   }, [setShutdownVisible]);
 
   // Switch pane store when active worktree changes
-  const switchWorkspace = useSetAtom(switchWorkspaceAtom);
   useEffect(() => {
     if (activeWsId) {
       switchWorkspace(activeWsId);
@@ -337,14 +336,30 @@ export const App = () => {
   }, [refreshAchievements]);
 
   // Sync active editor pane → file tree highlight (derive filePath to avoid excess re-renders)
-  const activePane = useAtomValue(activePaneAtom);
-  const setSelectedFile = useSetAtom(selectedFileAtom);
   const activePaneFilePath = (activePane?.kind === 'editor' || activePane?.kind === 'diff')
     ? ((activePane.data as Record<string, unknown>)?.filePath as string | undefined) ?? null
     : null;
   useEffect(() => {
     setSelectedFile(activePaneFilePath);
   }, [activePaneFilePath, setSelectedFile]);
+
+  // ── All hooks declared above — conditional returns safe below this line ──
+
+  // Gate: show onboarding if not completed
+  if (prefsLoaded && !prefs.onboarding_completed && !onboardingDone) {
+    return (
+      <>
+        <OnboardingFlow onComplete={() => setOnboardingDone(true)} />
+        {shutdownVisible && (
+          <ShutdownCeremony
+            visible={shutdownVisible}
+            onCancel={() => setShutdownVisible(false)}
+            onQuit={() => { window.phantomOS?.invoke('phantom:quit'); }}
+          />
+        )}
+      </>
+    );
+  }
 
   const isElectron = navigator.userAgent.includes('Electron');
 

@@ -56,6 +56,7 @@ export function DisplayPhase({ onComplete }: Props) {
     <Stack
       gap="xl"
       style={{
+        width: '100%',
         maxWidth: 520,
         fontFamily: monoFont,
       }}

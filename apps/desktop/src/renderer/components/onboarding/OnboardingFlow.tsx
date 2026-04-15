@@ -280,7 +280,7 @@ export function OnboardingFlow({ onComplete }: Props) {
           position: 'absolute',
           inset: 0,
           display: 'flex',
-          alignItems: 'flex-end',
+          alignItems: 'center',
           justifyContent: 'center',
           pointerEvents: 'none',
           zIndex: 10,
@@ -289,12 +289,18 @@ export function OnboardingFlow({ onComplete }: Props) {
         <div
           style={{
             width: '100%',
-            maxHeight: '75%',
+            maxWidth: 600,
+            maxHeight: '80%',
             overflowY: 'auto',
             padding: '2rem 2rem 3rem',
-            background: 'linear-gradient(to top, rgba(0,0,0,0.95) 80%, transparent)',
+            background: 'rgba(0,0,0,0.9)',
+            borderRadius: 16,
+            border: '1px solid rgba(0,212,255,0.15)',
             pointerEvents: 'auto',
             animation: 'onboarding-panel-slide-in 300ms ease-out both',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
           }}
         >
           {panel}

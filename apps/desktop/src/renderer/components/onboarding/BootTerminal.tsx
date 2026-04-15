@@ -98,6 +98,7 @@ export function BootTerminal({
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+      if ('speechSynthesis' in window) speechSynthesis.cancel();
     };
   }, []);
 
@@ -128,8 +129,20 @@ export function BootTerminal({
     if (waiting) {
       const delay = line.delay || 0;
       timerRef.current = setTimeout(() => {
-        // fire sound cue when the line starts
-        if (line.sound) onSound?.(line.sound);
+        // sound effects disabled — speech only
+        // speak text via Web Speech API
+        if (line.speech && 'speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(line.speech);
+          utterance.rate = 0.95;
+          utterance.pitch = 0.85;
+          utterance.volume = 0.8;
+          // Prefer a system English voice
+          const voices = speechSynthesis.getVoices();
+          const preferred = voices.find(v => v.name.includes('Samantha'))
+            ?? voices.find(v => v.lang.startsWith('en') && v.localService);
+          if (preferred) utterance.voice = preferred;
+          speechSynthesis.speak(utterance);
+        }
         // flash
         if (line.flash) triggerFlash();
         setWaiting(false);
@@ -213,9 +226,6 @@ export function BootTerminal({
         ];
       });
 
-      // fire typing sound per character
-      onSound?.('typing');
-
       timerRef.current = setTimeout(() => {
         setCharIdx((c) => c + 1);
       }, speed);
@@ -260,6 +270,14 @@ export function BootTerminal({
         transition: flash ? 'none' : 'background 0.1s ease',
         ...style,
       }}
+      styles={{
+        viewport: {
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          '& > div': { width: '100%' },
+        },
+      }}
     >
       <div
         style={{
@@ -268,6 +286,9 @@ export function BootTerminal({
           fontSize: 14,
           lineHeight: 1.8,
           color: 'var(--phantom-text-primary, #e0e0e0)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
         }}
       >
         {rendered.map((entry, idx) => {
@@ -281,6 +302,7 @@ export function BootTerminal({
                 color: glowColor ?? undefined,
                 textShadow: glowColor ? `0 0 8px ${glowColor}` : undefined,
                 whiteSpace: 'pre',
+                textAlign: 'center',
               }}
             >
               {entry.text}
