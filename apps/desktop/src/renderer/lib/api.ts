@@ -779,3 +779,26 @@ export const setPreference = (key: string, value: string): Promise<Record<string
     method: 'PUT',
     body: JSON.stringify({ value }),
   });
+
+// ---------------------------------------------------------------------------
+// Onboarding
+// ---------------------------------------------------------------------------
+
+export async function fetchGitIdentity(): Promise<{ name: string; email: string }> {
+  const res = await fetch(`${API_BASE}/git-identity`);
+  if (!res.ok) return { name: '', email: '' };
+  return res.json();
+}
+
+export async function applyClaudeIntegration(opts: {
+  mcp: boolean;
+  instructions: boolean;
+  hooks: boolean;
+  projectPath: string;
+}): Promise<void> {
+  await fetch(`${API_BASE}/claude-integration`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(opts),
+  });
+}
