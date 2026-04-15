@@ -527,7 +527,8 @@ projectRoutes.get('/projects/:id/branches', (c) => {
       if (!line) continue;
 
       const isCurrent = line.startsWith('* ');
-      const name = line.replace(/^\*\s+/, '');
+      // Strip leading markers: * = current branch, + = checked out in another worktree
+      const name = line.replace(/^[*+]\s+/, '');
 
       if (name.startsWith('remotes/')) {
         // Skip HEAD pointer

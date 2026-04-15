@@ -6,6 +6,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LazyDiffEditor } from './LazyMonaco.js';
 
+const API_BASE = typeof window !== 'undefined' ? (window as any).__PHANTOM_API_BASE ?? '' : '';
+
 interface DiffPaneProps {
   paneId: string;
   original: string;
@@ -56,7 +58,7 @@ export const DiffPane = ({
     if (!editable || saving) return;
     setSaving(true);
     try {
-      await fetch(`/api/worktrees/${worktreeId}/file`, {
+      await fetch(`${API_BASE}/api/worktrees/${worktreeId}/file`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: filePath, content: contentRef.current }),

@@ -31,6 +31,21 @@ export type SseConnectionState = 'connecting' | 'connected' | 'disconnected';
 export const sseConnectionAtom = atom<SseConnectionState>('connecting');
 
 // ---------------------------------------------------------------------------
+// Zoom factor — persisted to localStorage (Electron webContents zoom)
+// ---------------------------------------------------------------------------
+
+export const ZOOM_LEVELS = [50, 75, 85, 100, 110, 125, 150] as const;
+export type ZoomLevel = (typeof ZOOM_LEVELS)[number];
+
+export const ZOOM_OPTIONS: { label: string; value: string }[] =
+  ZOOM_LEVELS.map((z) => ({ label: `${z}%`, value: String(z) }));
+
+export const zoomPercentAtom = atomWithStorage<ZoomLevel>(
+  'phantom-zoom-percent',
+  100,
+);
+
+// ---------------------------------------------------------------------------
 // Font scale — persisted to localStorage
 // ---------------------------------------------------------------------------
 

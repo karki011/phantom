@@ -84,16 +84,21 @@ export const worktreesByProjectAtom = atom((get) => {
   return grouped;
 });
 
-export const refreshWorktreesAtom = atom(null, async (_get, set) => {
-  set(worktreesLoadingAtom, true);
+export const refreshWorktreesAtom = atom(null, async (get, set, silent?: boolean) => {
+  // silent=true skips loading flag (used by background polls to avoid flicker)
+  if (!silent) set(worktreesLoadingAtom, true);
   try {
     const data = await getWorktrees();
-    set(worktreesDataAtom, data);
+    // Only update if something actually changed — avoids unnecessary re-renders
+    const prev = get(worktreesDataAtom);
+    if (JSON.stringify(prev) !== JSON.stringify(data)) {
+      set(worktreesDataAtom, data);
+    }
     set(worktreesErrorAtom, null);
   } catch (err) {
     set(worktreesErrorAtom, err);
   } finally {
-    set(worktreesLoadingAtom, false);
+    if (!silent) set(worktreesLoadingAtom, false);
   }
 });
 

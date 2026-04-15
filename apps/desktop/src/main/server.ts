@@ -78,18 +78,17 @@ export const startServer = async (): Promise<void> => {
   // PRODUCTION: wait for app ready (utilityProcess requires it)
   await app.whenReady();
 
-  const entry = join(process.resourcesPath, 'server', 'index.cjs');
-  const unpackedModules = join(process.resourcesPath, 'app.asar.unpacked', 'node_modules');
+  // Use the preload wrapper that hooks Module._resolveFilename for native
+  // modules BEFORE the bundled server code runs. Electron's utilityProcess
+  // ignores NODE_PATH, so the preload intercepts require('better-sqlite3')
+  // and redirects to app.asar.unpacked/node_modules/.
+  const entry = join(process.resourcesPath, 'server-preload.cjs');
 
   console.log(`[PhantomOS Desktop] Starting API server: ${entry}`);
 
   serverProcess = utilityProcess.fork(entry, [], {
     cwd: app.getPath('home'),
     stdio: 'pipe',
-    env: {
-      ...process.env,
-      NODE_PATH: unpackedModules,
-    },
   });
 
   serverProcess.stdout?.on('data', (chunk: Buffer) => {

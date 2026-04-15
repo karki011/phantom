@@ -86,10 +86,12 @@ export function WorktreeSidebar() {
   // Track which project should show inline worktree input from header "+"
   const [inlineInputProjectId, setInlineInputProjectId] = useState<string | null>(null);
 
-  // Fetch on mount
+  // Fetch on mount + poll every 30s so external branch changes are picked up
   useEffect(() => {
     refreshProjects();
     refreshWorktrees();
+    const id = setInterval(() => refreshWorktrees(true /* silent */), 30_000);
+    return () => clearInterval(id);
   }, [refreshProjects, refreshWorktrees]);
 
   // Auto-expand the project containing the active worktree (once on startup)

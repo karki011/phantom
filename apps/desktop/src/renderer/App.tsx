@@ -21,7 +21,7 @@ import { WorkspaceProvider, Workspace, switchWorkspaceAtom, activePaneAtom, useP
 import { paneDefinitions, paneMenu } from './panes/registry';
 import { unlockedCountAtom, refreshAchievementsAtom } from './atoms/achievements';
 import { shutdownVisibleAtom } from './atoms/shutdown';
-import { activeTopTabAtom, fontScaleAtom, sseConnectionAtom } from './atoms/system';
+import { activeTopTabAtom, fontScaleAtom, sseConnectionAtom, zoomPercentAtom, ZOOM_LEVELS, type ZoomLevel } from './atoms/system';
 import { selectedFileAtom } from './atoms/fileExplorer';
 import { activeWorktreeAtom, activeWorktreeIdAtom } from './atoms/worktrees';
 import { Cockpit } from './components/cockpit/Cockpit';
@@ -248,6 +248,7 @@ export const App = () => {
   const { profile } = useHunter();
   const { active } = useSessions();
   const fontScale = useAtomValue(fontScaleAtom);
+  const [zoomPercent, setZoomPercent] = useAtom(zoomPercentAtom);
   const sseState = useAtomValue(sseConnectionAtom);
   const activeTab = useAtomValue(activeTopTabAtom);
   const activeWorktree = useAtomValue(activeWorktreeAtom);
@@ -291,6 +292,31 @@ export const App = () => {
   useEffect(() => {
     document.documentElement.style.fontSize = `${fontScale}rem`;
   }, [fontScale]);
+
+  // Apply zoom via Electron's native webContents.setZoomFactor (requires app restart once)
+  useEffect(() => {
+    window.phantomOS?.invoke('phantom:set-zoom', zoomPercent / 100);
+  }, [zoomPercent]);
+
+  // Ctrl+/- to zoom in/out, Ctrl+0 to reset
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const idx = ZOOM_LEVELS.indexOf(zoomPercent);
+      if ((e.key === '=' || e.key === '+') && idx < ZOOM_LEVELS.length - 1) {
+        e.preventDefault();
+        setZoomPercent(ZOOM_LEVELS[idx + 1] as ZoomLevel);
+      } else if (e.key === '-' && idx > 0) {
+        e.preventDefault();
+        setZoomPercent(ZOOM_LEVELS[idx - 1] as ZoomLevel);
+      } else if (e.key === '0') {
+        e.preventDefault();
+        setZoomPercent(100);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [zoomPercent, setZoomPercent]);
 
   // Initial achievements fetch
   useEffect(() => {

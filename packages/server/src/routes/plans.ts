@@ -13,6 +13,7 @@ import { db, projects, worktrees } from '@phantom-os/db';
 
 const PLANS_DIR = join(homedir(), '.claude', 'plans');
 const CACHE_TTL = 10_000; // 10s cache
+const PLANS_MAX_AGE = 48 * 60 * 60 * 1000; // Only show plans from last 48 hours
 
 interface PlanFile {
   filename: string;
@@ -70,11 +71,13 @@ async function scanPlans(): Promise<CachedPlan[]> {
       }),
     );
 
-    // Sort by modifiedAt descending (most recent first)
+    // Sort by modifiedAt descending (most recent first), keep only last 48 hours
     plans.sort((a, b) => b.modifiedAt - a.modifiedAt);
+    const cutoff = Date.now() - PLANS_MAX_AGE;
+    const recent = plans.filter((p) => p.modifiedAt >= cutoff);
 
-    planCache = { plans, ts: Date.now() };
-    return plans;
+    planCache = { plans: recent, ts: Date.now() };
+    return recent;
   } catch {
     return [];
   }

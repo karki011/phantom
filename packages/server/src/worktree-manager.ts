@@ -2,7 +2,7 @@
  * PhantomOS Worktree Manager — Git worktree operations
  * @author Subash Karki
  */
-import { exec, execSync } from 'node:child_process';
+import { exec, execSync, execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, basename } from 'node:path';
@@ -197,7 +197,7 @@ export const cloneRepo = (url: string, targetDir: string): Promise<void> => {
 
 /** Checkout a branch in a directory */
 export const checkoutBranch = (repoPath: string, branch: string): void => {
-  execSync(`git checkout ${branch}`, {
+  execFileSync('git', ['checkout', branch], {
     cwd: repoPath,
     encoding: 'utf-8',
     timeout: 30_000,
@@ -207,8 +207,9 @@ export const checkoutBranch = (repoPath: string, branch: string): void => {
 
 /** Create and checkout a new branch */
 export const createAndCheckoutBranch = (repoPath: string, branch: string, baseBranch?: string): void => {
-  const base = baseBranch ? ` ${baseBranch}` : '';
-  execSync(`git checkout -b ${branch}${base}`, {
+  const args = ['checkout', '-b', branch];
+  if (baseBranch) args.push(baseBranch);
+  execFileSync('git', args, {
     cwd: repoPath,
     encoding: 'utf-8',
     timeout: 30_000,

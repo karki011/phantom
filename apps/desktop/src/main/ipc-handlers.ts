@@ -285,6 +285,12 @@ export const registerIpcHandlers = (): void => {
     return results;
   });
 
+  /** Set app-wide zoom factor */
+  ipcMain.handle('phantom:set-zoom', (_e, factor: number) => {
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (win) win.webContents.setZoomFactor(factor);
+  });
+
   /** Quit the app — called by shutdown ceremony after cleanup completes */
   ipcMain.handle('phantom:quit', () => {
     setAllowQuit(true);

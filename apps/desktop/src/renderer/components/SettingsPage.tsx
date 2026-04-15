@@ -24,10 +24,13 @@ import { Palette, Volume2, Puzzle, Play } from 'lucide-react';
 
 import {
   type FontScale,
+  type ZoomLevel,
   fontScaleAtom,
   fontFamilyAtom,
   FONT_FAMILY_OPTIONS,
   themeNameAtom,
+  zoomPercentAtom,
+  ZOOM_OPTIONS,
 } from '../atoms/system';
 import { usePreferences } from '../hooks/usePreferences';
 import { useCeremonySounds, SOUND_EVENTS, SOUND_STYLES, type SoundStyle, type SoundEvent } from '../hooks/useCeremonySounds';
@@ -118,6 +121,7 @@ export const SettingsPage = () => {
   const [fontScale, setFontScale] = useAtom(fontScaleAtom);
   const [fontFamily, setFontFamily] = useAtom(fontFamilyAtom);
   const [themeName, setThemeName] = useAtom(themeNameAtom);
+  const [zoomPercent, setZoomPercent] = useAtom(zoomPercentAtom);
   const { prefs, isEnabled, setPref } = usePreferences();
 
   const isDark = colorScheme === 'dark';
@@ -205,6 +209,27 @@ export const SettingsPage = () => {
               color="cyan"
               size="md"
               aria-label="Toggle dark mode"
+            />
+          </div>
+        </Stack>
+      </Paper>
+
+      <Paper style={sectionCardStyle}>
+        <div style={sectionTitleStyle}>Display</div>
+        <Stack gap="sm">
+          <div style={rowStyle}>
+            <Text style={rowLabelStyle}>UI Zoom</Text>
+            <SegmentedControl
+              size="xs"
+              data={ZOOM_OPTIONS}
+              value={String(zoomPercent)}
+              onChange={(val) => setZoomPercent(Number(val) as ZoomLevel)}
+              styles={{
+                root: {
+                  background: 'var(--phantom-surface-elevated, rgba(255,255,255,0.04))',
+                  border: '1px solid var(--phantom-border-subtle)',
+                },
+              }}
             />
           </div>
         </Stack>

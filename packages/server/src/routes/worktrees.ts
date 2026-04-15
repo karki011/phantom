@@ -99,6 +99,17 @@ const toBranchName = (name: string): string =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
 
+/** Read the current branch for a worktree path (fast, no-throw) */
+function getLiveBranch(wtPath: string): string | null {
+  try {
+    return execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd: wtPath, encoding: 'utf-8', timeout: 3000, stdio: 'pipe',
+    }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 /** GET /worktrees — List all worktrees (optional ?projectId filter) */
 worktreeRoutes.get('/worktrees', (c) => {
   const projectId = c.req.query('projectId');
@@ -109,10 +120,23 @@ worktreeRoutes.get('/worktrees', (c) => {
     query = query.where(eq(worktrees.projectId, projectId)) as typeof query;
   }
 
-  const results = query.all().map((wt) => ({
-    ...wt,
-    worktreeValid: wt.worktreePath ? existsSync(wt.worktreePath) : false,
-  }));
+  const results = query.all().map((wt) => {
+    const valid = wt.worktreePath ? existsSync(wt.worktreePath) : false;
+    let { branch } = wt;
+
+    // For worktrees with a valid path, read the live branch from git
+    // so external branch changes (terminal, IDE) are always reflected.
+    if (valid && wt.worktreePath) {
+      const live = getLiveBranch(wt.worktreePath);
+      if (live && live !== branch) {
+        branch = live;
+        // Sync DB so subsequent reads are consistent
+        db.update(worktrees).set({ branch: live }).where(eq(worktrees.id, wt.id)).run();
+      }
+    }
+
+    return { ...wt, branch, worktreeValid: valid };
+  });
   return c.json(results);
 });
 
@@ -307,17 +331,12 @@ worktreeRoutes.post('/worktrees/:id/checkout', async (c) => {
     return c.json({ error: 'Uncommitted changes', dirty: true, changes: status.changes }, 409);
   }
 
-  // Attempt checkout
+  // Switch branch (git DWIM auto-creates tracking branch if only on remote)
   try {
     checkoutBranch(repoPath, body.branch);
-  } catch {
-    // Branch may not exist locally but may exist on remote — try tracking checkout
-    try {
-      createAndCheckoutBranch(repoPath, body.branch, `origin/${body.branch}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      return c.json({ error: `Failed to checkout branch: ${msg}` }, 500);
-    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ error: `Failed to switch branch: ${msg}` }, 500);
   }
 
   // Update DB record

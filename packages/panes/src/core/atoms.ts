@@ -4,6 +4,9 @@
  * @author Subash Karki
  */
 import { atom } from 'jotai';
+
+/** API base URL — set by the desktop app, empty in dev (Vite proxy handles it) */
+const API_BASE = typeof window !== 'undefined' ? (window as any).__PHANTOM_API_BASE ?? '' : '';
 import type { Pane, Tab, WorkspaceState } from './types.js';
 import {
   uid,
@@ -752,7 +755,7 @@ function migrateState(state: WorkspaceState): WorkspaceState {
 
 async function loadState(wsId: string): Promise<WorkspaceState> {
   try {
-    const res = await fetch(`/api/pane-states/${wsId}`);
+    const res = await fetch(`${API_BASE}/api/pane-states/${wsId}`);
     if (res.ok) {
       const saved = await res.json();
       if (saved?.tabs?.length > 0) {
@@ -776,7 +779,7 @@ async function loadState(wsId: string): Promise<WorkspaceState> {
       const saved = JSON.parse(raw);
       if (saved?.tabs?.length > 0) {
         // Migrate to new API backend
-        fetch(`/api/pane-states/${wsId}`, {
+        fetch(`${API_BASE}/api/pane-states/${wsId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: raw,
@@ -818,7 +821,7 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 function saveState(wsId: string, state: WorkspaceState): void {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    fetch(`/api/pane-states/${wsId}`, {
+    fetch(`${API_BASE}/api/pane-states/${wsId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(state),
