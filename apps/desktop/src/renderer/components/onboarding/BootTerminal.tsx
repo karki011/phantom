@@ -63,6 +63,20 @@ export function BootTerminal({
   const viewportRef = useRef<HTMLDivElement>(null);
   const completedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* reset state when lines prop changes (new boot script) */
+  const prevLinesRef = useRef(lines);
+  useEffect(() => {
+    if (prevLinesRef.current !== lines) {
+      prevLinesRef.current = lines;
+      setRendered([]);
+      setLineIdx(0);
+      setCharIdx(0);
+      setWaiting(true);
+      completedRef.current = false;
+    }
+  }, [lines]);
 
   /* auto-scroll to bottom whenever rendered changes */
   useEffect(() => {
@@ -75,13 +89,15 @@ export function BootTerminal({
   /* flash effect */
   const triggerFlash = useCallback(() => {
     setFlash(true);
-    setTimeout(() => setFlash(false), FLASH_DURATION);
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setFlash(false), FLASH_DURATION);
   }, []);
 
   /* clean up on unmount */
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
     };
   }, []);
 
