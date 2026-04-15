@@ -8,7 +8,7 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
-import { db, sqlite, runMigrations, seedDatabase } from '@phantom-os/db';
+import { db, sqlite, runMigrations, seedDatabase, userPreferences } from '@phantom-os/db';
 import { startSessionWatcher } from './collectors/session-watcher.js';
 import { startTaskWatcher } from './collectors/task-watcher.js';
 import {
@@ -34,6 +34,7 @@ import { chatRoutes } from './routes/chat.js';
 import { paneStateRoutes } from './routes/pane-states.js';
 import { plansRoutes } from './routes/plans.js';
 import { preferencesRoutes } from './routes/preferences.js';
+import { gitIdentityRoutes } from './routes/git-identity.js';
 import { API_PORT } from '@phantom-os/shared';
 import type { Server } from 'node:http';
 import { setupTerminalWs } from './routes/terminal-ws.js';
@@ -47,6 +48,8 @@ import { graphEngine } from './services/graph-engine.js';
 import { orchestratorEngine } from './services/orchestrator-engine.js';
 import { startMcpServer, stopMcpServer } from './mcp/index.js';
 import { registerPhantomMcpGlobal } from './services/mcp-config.js';
+import { applyClaudeIntegration } from './services/claude-integration.js';
+import { eq } from 'drizzle-orm';
 import { destroyAllPtys, initDaemonClient, disconnectDaemon } from './terminal-manager.js';
 import { startHistoryWriter, stopHistoryWriter, markAllExited } from './terminal-history.js';
 
@@ -118,12 +121,20 @@ app.route('/api', serverRoutes);
 app.route('/api', paneStateRoutes);
 app.route('/api', plansRoutes);
 app.route('/api', preferencesRoutes);
+app.route('/api', gitIdentityRoutes);
 app.route('/api', terminalRestoreRoutes);
 app.route('/api', systemMetricsRoutes);
 app.route('/api', graphRoutes);
 app.route('/api', orchestratorRoutes);
 app.route('/api', journalRoutes);
 app.route('/api', cleanupRoutes);
+
+// Claude integration — consent-based MCP/instructions/hooks setup
+app.post('/api/claude-integration', async (c) => {
+  const body = await c.req.json();
+  await applyClaudeIntegration(body);
+  return c.json({ ok: true });
+});
 
 // SSE endpoint
 app.get('/events', (c) => {
@@ -277,9 +288,16 @@ startMcpServer().catch((err) =>
   logger.warn('MCP', 'MCP server start failed (non-fatal):', err),
 );
 
-// Register phantom-ai globally in ~/.mcp.json so every Claude session has
-// access to graph tools without per-project .mcp.json pollution.
-registerPhantomMcpGlobal();
+// Register phantom-ai globally only if the user has opted in via preferences.
+// During onboarding Phase 4 (Neural Link), POST /api/claude-integration sets
+// this preference and calls registerPhantomMcpGlobal() directly.
+const mcpPref = db.select({ value: userPreferences.value })
+  .from(userPreferences)
+  .where(eq(userPreferences.key, 'claude_mcp_enabled'))
+  .get();
+if (mcpPref?.value === 'true') {
+  registerPhantomMcpGlobal();
+}
 
 // Skip daemon — use direct PTY (node-pty) for terminal sessions.
 // The daemon has output routing bugs that cause black-screen terminals.

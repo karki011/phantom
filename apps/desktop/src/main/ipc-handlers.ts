@@ -291,6 +291,12 @@ export const registerIpcHandlers = (): void => {
     if (win) win.webContents.setZoomFactor(factor);
   });
 
+  /** Toggle full-screen mode on the main window */
+  ipcMain.handle('phantom:set-fullscreen', (_e, enabled: boolean) => {
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (win) win.setFullScreen(enabled);
+  });
+
   /** Quit the app — called by shutdown ceremony after cleanup completes */
   ipcMain.handle('phantom:quit', () => {
     setAllowQuit(true);

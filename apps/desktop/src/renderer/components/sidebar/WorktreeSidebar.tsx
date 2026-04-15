@@ -15,6 +15,7 @@ import {
 } from '@mantine/core';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
+  AlertTriangle,
   ChevronsLeft,
   Download,
   FolderPlus,
@@ -37,6 +38,7 @@ import {
   refreshWorktreesAtom,
   worktreesByProjectAtom,
 } from '../../atoms/worktrees';
+import { gitChangesCountAtom } from '../../atoms/fileExplorer';
 import { showSystemNotification } from '../notifications/SystemToast';
 import { ResizeHandle } from './ResizeHandle';
 import { ProjectSection } from './ProjectSection';
@@ -72,6 +74,7 @@ export function WorktreeSidebar() {
   );
   const [collapsed, setCollapsed] = useAtom(leftSidebarCollapsedAtom);
   const [width, setWidth] = useAtom(leftSidebarWidthAtom);
+  const gitChangesCount = useAtomValue(gitChangesCountAtom);
 
   const refreshProjects = useSetAtom(refreshProjectsAtom);
   const refreshWorktrees = useSetAtom(refreshWorktreesAtom);
@@ -224,23 +227,186 @@ export function WorktreeSidebar() {
       }}
     >
       {collapsed ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 8 }}>
-          <Tooltip label="Expand sidebar" position="right">
-            <ActionIcon
-              variant="subtle"
-              size="sm"
-              onClick={() => setCollapsed(false)}
-              aria-label="Expand sidebar"
-            >
-              <ChevronsLeft
-                size={16}
-                style={{
-                  transform: 'rotate(180deg)',
-                  color: 'var(--phantom-text-muted)',
-                }}
-              />
-            </ActionIcon>
-          </Tooltip>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%' }}>
+          {/* Expand chevron */}
+          <div style={{ paddingTop: 8, paddingBottom: 6, borderBottom: '1px solid var(--phantom-border-subtle)', width: '100%', display: 'flex', justifyContent: 'center' }}>
+            <Tooltip label="Expand sidebar" position="right">
+              <ActionIcon
+                variant="subtle"
+                size="sm"
+                onClick={() => setCollapsed(false)}
+                aria-label="Expand sidebar"
+              >
+                <ChevronsLeft
+                  size={16}
+                  style={{
+                    transform: 'rotate(180deg)',
+                    color: 'var(--phantom-text-muted)',
+                  }}
+                />
+              </ActionIcon>
+            </Tooltip>
+          </div>
+
+          {/* Project avatars */}
+          <ScrollArea style={{ flex: 1, width: '100%' }} scrollbarSize={4}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '8px 0' }}>
+              {projects.map((project) => {
+                const worktrees = worktreesByProject.get(project.id) ?? [];
+                const hasActive = worktrees.some((w) => w.id === activeWorktreeId);
+                const color = project.color || 'var(--phantom-accent-purple, #a855f7)';
+                const letter = (project.name?.[0] ?? '?').toUpperCase();
+
+                const tooltipLines = [
+                  project.name,
+                  ...worktrees.map((w) =>
+                    `${w.id === activeWorktreeId ? '\u25B8 ' : '  '}${w.name} (${w.branch})${w.id === activeWorktreeId ? ' \u2190 active' : ''}`
+                  ),
+                  `${worktrees.length} worktree${worktrees.length !== 1 ? 's' : ''}`,
+                ];
+
+                return (
+                  <Tooltip
+                    key={project.id}
+                    label={tooltipLines.join('\n')}
+                    multiline
+                    position="right"
+                    withArrow
+                    openDelay={300}
+                    styles={{ tooltip: { whiteSpace: 'pre-line', fontSize: '0.7rem', maxWidth: 260 } }}
+                  >
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        setCollapsed(false);
+                        if (!expandedProjects.includes(project.id)) {
+                          setExpandedProjects((prev) => [...prev, project.id]);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setCollapsed(false);
+                          if (!expandedProjects.includes(project.id)) {
+                            setExpandedProjects((prev) => [...prev, project.id]);
+                          }
+                        }
+                      }}
+                      style={{
+                        position: 'relative',
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        color: color,
+                        backgroundColor: `color-mix(in srgb, ${color} 20%, transparent)`,
+                        border: hasActive
+                          ? '2px solid var(--phantom-accent-cyan, #00d4ff)'
+                          : '2px solid transparent',
+                        opacity: hasActive ? 1 : 0.6,
+                        cursor: 'pointer',
+                        transition: 'opacity 150ms ease, border-color 150ms ease',
+                        ...(hasActive ? { animation: 'collapsed-rail-pulse 2s ease-in-out infinite' } : {}),
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                      onMouseLeave={(e) => { if (!hasActive) (e.currentTarget as HTMLElement).style.opacity = '0.6'; }}
+                    >
+                      {letter}
+
+                      {/* Gold dot — changes badge (active project only) */}
+                      {hasActive && gitChangesCount > 0 && (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            bottom: -1,
+                            right: -1,
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            backgroundColor: 'var(--phantom-accent-gold, #f59e0b)',
+                            border: '1.5px solid var(--phantom-surface-card)',
+                          }}
+                        />
+                      )}
+
+                      {/* Starred overlay */}
+                      {project.starred ? (
+                        <Star
+                          size={7}
+                          style={{
+                            position: 'absolute',
+                            top: -2,
+                            right: -2,
+                            fill: 'var(--phantom-accent-gold, #f59e0b)',
+                            color: 'var(--phantom-accent-gold, #f59e0b)',
+                          }}
+                        />
+                      ) : null}
+                    </div>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          </ScrollArea>
+
+          {/* Warning icon for invalid worktrees */}
+          {(() => {
+            let invalidCount = 0;
+            for (const [, wts] of worktreesByProject) {
+              for (const w of wts) {
+                if (w.worktreeValid === false) invalidCount++;
+              }
+            }
+            if (invalidCount === 0) return null;
+            return (
+              <div style={{ padding: '4px 0', borderTop: '1px solid var(--phantom-border-subtle)', width: '100%', display: 'flex', justifyContent: 'center' }}>
+                <Tooltip label={`${invalidCount} worktree${invalidCount !== 1 ? 's' : ''} missing — expand to fix`} position="right">
+                  <div style={{ padding: 4, cursor: 'pointer' }} onClick={() => setCollapsed(false)}>
+                    <AlertTriangle size={14} style={{ color: 'var(--phantom-status-warning, #f59e0b)' }} />
+                  </div>
+                </Tooltip>
+              </div>
+            );
+          })()}
+
+          {/* Footer actions */}
+          <div style={{ borderTop: '1px solid var(--phantom-border-subtle)', padding: '6px 0', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+            <Tooltip label="Add project" position="right">
+              <ActionIcon
+                variant="subtle"
+                size="sm"
+                onClick={handleOpenRepository}
+                aria-label="Add project"
+              >
+                <Plus size={14} style={{ color: 'var(--phantom-text-muted)' }} />
+              </ActionIcon>
+            </Tooltip>
+            {projects.length > 0 && (
+              <Tooltip label="Manage projects" position="right">
+                <ActionIcon
+                  variant="subtle"
+                  size="sm"
+                  onClick={() => setManageOpen(true)}
+                  aria-label="Manage projects"
+                >
+                  <Settings2 size={14} style={{ color: 'var(--phantom-text-muted)' }} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+          </div>
+
+          {/* Modals still need to be available in collapsed mode */}
+          <ManageProjectsModal opened={manageOpen} onClose={() => setManageOpen(false)} />
+
+          <style>{`@keyframes collapsed-rail-pulse {
+            0%, 100% { border-color: var(--phantom-accent-cyan, #00d4ff); box-shadow: 0 0 4px rgba(0, 212, 255, 0.3); }
+            50% { border-color: var(--phantom-accent-cyan, #00d4ff); box-shadow: 0 0 10px rgba(0, 212, 255, 0.5); }
+          }`}</style>
         </div>
       ) : (
         <>

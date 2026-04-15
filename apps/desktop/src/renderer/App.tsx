@@ -51,6 +51,7 @@ import { ShutdownCeremony } from './components/brand/ShutdownCeremony';
 import { settingsVisibleAtom } from './atoms/settings';
 import { SettingsPage } from './components/SettingsPage';
 import { usePreferences } from './hooks/usePreferences';
+import { OnboardingFlow } from './components/onboarding/OnboardingFlow';
 import { useCeremonySounds } from './hooks/useCeremonySounds';
 import { QuickOpen } from './components/QuickOpen';
 import { RecipeQuickLaunch } from './components/RecipeQuickLaunch';
@@ -127,7 +128,20 @@ export const App = () => {
   // Periodic backend health polling
   const { isConnected } = useHealthCheck();
 
-  const { isEnabled, prefs } = usePreferences();
+  const { isEnabled, loaded: prefsLoaded, prefs } = usePreferences();
+  const [onboardingDone, setOnboardingDone] = useState(false);
+
+  // Gate: show onboarding if not completed
+  if (prefsLoaded && !prefs.onboarding_completed && !onboardingDone) {
+    return <OnboardingFlow onComplete={() => setOnboardingDone(true)} />;
+  }
+
+  // Apply full-screen preference once on startup
+  useEffect(() => {
+    if (prefsLoaded && isEnabled('fullscreen_on_start')) {
+      window.phantomOS?.invoke('phantom:set-fullscreen', true);
+    }
+  }, [prefsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ceremony sounds (Web Audio API — zero deps, gated by preferences)
   const soundEventPrefs = Object.fromEntries(

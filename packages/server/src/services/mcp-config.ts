@@ -151,6 +151,14 @@ function ensureEnabledInClaudeSettings(): void {
 }
 
 /**
+ * Sanitize a filesystem path into Claude's project directory key.
+ * Claude Code uses: replace '/' with '-', strip leading '-'.
+ */
+export function sanitizeProjectPath(projectPath: string): string {
+  return projectPath.replace(/\//g, '-').replace(/^-/, '');
+}
+
+/**
  * Remove phantom-ai from global ~/.mcp.json and enabledMcpjsonServers.
  * Call on Phantom uninstall or when user explicitly disables the integration.
  */

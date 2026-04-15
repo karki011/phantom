@@ -8,6 +8,7 @@
 import { useState, useRef, useCallback } from 'react';
 import {
   Box,
+  Button,
   Divider,
   Group,
   Paper,
@@ -20,7 +21,7 @@ import {
   useMantineColorScheme,
 } from '@mantine/core';
 import { useAtom } from 'jotai';
-import { Palette, Volume2, Puzzle, Play } from 'lucide-react';
+import { Palette, Volume2, Puzzle, Play, RotateCcw } from 'lucide-react';
 
 import {
   type FontScale,
@@ -50,6 +51,7 @@ const SECTIONS: SectionDef[] = [
   { id: 'appearance', label: 'Appearance', icon: <Palette size={16} /> },
   { id: 'sounds', label: 'Sounds', icon: <Volume2 size={16} /> },
   { id: 'features', label: 'Features', icon: <Puzzle size={16} /> },
+  { id: 'system', label: 'System', icon: <RotateCcw size={16} /> },
 ];
 
 // ---------------------------------------------------------------------------
@@ -515,6 +517,60 @@ export const SettingsPage = () => {
           </div>
         </Stack>
       </Paper>
+
+      <Paper style={sectionCardStyle}>
+        <div style={sectionTitleStyle}>Window</div>
+        <Stack gap="sm">
+          <div style={rowStyle}>
+            <div style={{ maxWidth: '70%' }}>
+              <Text style={rowLabelStyle}>Start in Full Screen</Text>
+              <Text style={rowDescStyle}>
+                Launch in native full screen mode. Exit anytime with the green
+                traffic light or Ctrl+Cmd+F.
+              </Text>
+            </div>
+            <Switch
+              checked={isEnabled('fullscreen_on_start')}
+              onChange={(e) => {
+                const enabled = e.currentTarget.checked;
+                setPref('fullscreen_on_start', enabled ? 'true' : 'false');
+                window.phantomOS?.invoke('phantom:set-fullscreen', enabled);
+              }}
+              color="cyan"
+              size="md"
+              aria-label="Start in full screen"
+            />
+          </div>
+        </Stack>
+      </Paper>
+    </Stack>
+  );
+
+  const renderSystem = () => (
+    <Stack gap="md">
+      <Paper style={sectionCardStyle}>
+        <div style={sectionTitleStyle}>Onboarding</div>
+        <Stack gap="sm">
+          <Text size="sm" fw={600} c="var(--phantom-text-primary)" ff="var(--phantom-font-mono, monospace)">
+            System
+          </Text>
+          <Text size="xs" c="var(--phantom-text-secondary)" mb="sm">
+            Re-run the first boot sequence to reconfigure your setup.
+          </Text>
+          <Button
+            variant="outline"
+            color="red"
+            size="xs"
+            onClick={async () => {
+              await setPref('onboarding_completed', '');
+              window.location.reload();
+            }}
+            style={{ fontFamily: 'var(--phantom-font-mono, monospace)' }}
+          >
+            Re-initialize System
+          </Button>
+        </Stack>
+      </Paper>
     </Stack>
   );
 
@@ -522,6 +578,7 @@ export const SettingsPage = () => {
     appearance: renderAppearance,
     sounds: renderSounds,
     features: renderFeatures,
+    system: renderSystem,
   };
 
   return (
