@@ -30,7 +30,7 @@ import { BreakdownPanel } from './BreakdownPanel';
 import { CockViewOverview } from './CockViewOverview';
 import { DailyCostChart } from './DailyCostChart';
 import { PeriodSwitcher } from './PeriodSwitcher';
-import { ToolUsageCard } from './ToolUsageCard';
+import { SkillUsageCard } from './SkillUsageCard';
 
 const formatCost = (micros: number): string => {
   const dollars = micros / 1_000_000;
@@ -198,9 +198,9 @@ export const CockView = () => {
             </PanelWrapper>
           </SimpleGrid>
 
-          {/* Row 4: Tool Usage History (full width) */}
-          <PanelWrapper fullWidth>
-            <ToolUsageCard period={period} />
+          {/* Row 4: Skill Usage */}
+          <PanelWrapper>
+            <SkillUsageCard period={period} />
           </PanelWrapper>
 
           {/* Row 5: Top Shell Commands (full width, conditional) */}

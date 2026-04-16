@@ -102,6 +102,10 @@ const extractToolDetail = (toolName: string, input: Record<string, unknown>): st
     const subject = input.subject as string | undefined;
     return subject ? subject.slice(0, 50) : toolName;
   }
+  if (toolName === 'Skill') {
+    const skill = input.skill as string | undefined;
+    return skill ? `/${skill}` : toolName;
+  }
   return toolName;
 };
 

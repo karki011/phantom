@@ -105,9 +105,19 @@ const processEntry = (entry: Record<string, unknown>, acc: TokenAccumulator, fou
       for (const block of content) {
         if (block && typeof block === 'object' && 'type' in block && (block as Record<string, unknown>).type === 'tool_use') {
           acc.toolUseCount++;
-          const toolName = (block as Record<string, unknown>).name as string;
+          const b = block as Record<string, unknown>;
+          const toolName = b.name as string;
           if (toolName) {
             acc.toolBreakdown[toolName] = (acc.toolBreakdown[toolName] ?? 0) + 1;
+            // Store per-skill/per-agent granularity for dashboard
+            if (toolName === 'Skill') {
+              const skill = (b.input as Record<string, unknown>)?.skill as string | undefined;
+              if (skill) acc.toolBreakdown[`Skill:/${skill}`] = (acc.toolBreakdown[`Skill:/${skill}`] ?? 0) + 1;
+            }
+            if (toolName === 'Agent') {
+              const desc = (b.input as Record<string, unknown>)?.description as string | undefined;
+              if (desc) acc.toolBreakdown[`Agent:${desc.slice(0, 50)}`] = (acc.toolBreakdown[`Agent:${desc.slice(0, 50)}`] ?? 0) + 1;
+            }
           }
         }
       }

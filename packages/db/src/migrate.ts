@@ -189,6 +189,15 @@ export const runMigrations = (sqlite: Database.Database): void => {
     // Column already exists — recalculation already done
   }
 
+  // One-time: force re-scan of sessions with Skill usage so per-skill keys get stored
+  try {
+    sqlite.exec(`ALTER TABLE sessions ADD COLUMN skill_rescan_v1 INTEGER DEFAULT 0`);
+    const count = sqlite.prepare(
+      `UPDATE sessions SET input_tokens = 0 WHERE tool_breakdown LIKE '%"Skill"%' AND tool_breakdown NOT LIKE '%"Skill:/%'`,
+    ).run();
+    console.log(`[Migration] Queued ${count.changes} sessions for Skill-detail rescan`);
+  } catch { /* column already exists — already done */ }
+
   // Indexes for frequently-queried columns
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_pid ON sessions(pid)`);

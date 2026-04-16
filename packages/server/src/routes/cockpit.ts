@@ -176,4 +176,66 @@ cockpitRoutes.get('/tool-usage', (c) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Skill Usage — aggregated from sessions.tool_breakdown "Skill:/" keys
+// ---------------------------------------------------------------------------
+
+cockpitRoutes.get('/skill-usage', (c) => {
+  const period = (c.req.query('period') ?? 'all') as CockpitPeriod;
+  if (!VALID_PERIODS.includes(period)) {
+    return c.json({ error: `Invalid period "${period}"` }, 400);
+  }
+
+  try {
+    const sinceMs = periodToMs(period);
+    const params: unknown[] = [];
+    let where = 'WHERE tool_breakdown IS NOT NULL';
+    if (sinceMs !== null) {
+      where += ' AND started_at >= ?';
+      params.push(Math.floor(sinceMs / 1000));
+    }
+
+    const rows = sqlite.prepare(
+      `SELECT tool_breakdown, repo, started_at FROM sessions ${where}`,
+    ).all(...params) as { tool_breakdown: string; repo: string | null; started_at: number | null }[];
+
+    // Aggregate skill counts + per-skill metadata
+    const skills: Record<string, { count: number; repos: Set<string>; lastUsed: number }> = {};
+    let totalSkillCalls = 0;
+
+    for (const row of rows) {
+      try {
+        const breakdown = JSON.parse(row.tool_breakdown) as Record<string, number>;
+        for (const [key, count] of Object.entries(breakdown)) {
+          if (!key.startsWith('Skill:/')) continue;
+          const skillName = key.slice(6); // remove "Skill:" prefix, keep the "/"
+          totalSkillCalls += count;
+          if (!skills[skillName]) {
+            skills[skillName] = { count: 0, repos: new Set(), lastUsed: 0 };
+          }
+          skills[skillName].count += count;
+          if (row.repo) skills[skillName].repos.add(row.repo);
+          const ts = row.started_at ?? 0;
+          if (ts > skills[skillName].lastUsed) skills[skillName].lastUsed = ts;
+        }
+      } catch { /* skip malformed JSON */ }
+    }
+
+    // Sort alphabetically by skill name
+    const entries = Object.entries(skills)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, data]) => ({
+        name,
+        count: data.count,
+        repos: [...data.repos],
+        lastUsed: data.lastUsed * 1000, // convert to ms for frontend
+      }));
+
+    return c.json({ total: totalSkillCalls, skills: entries });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ error: `Failed to query skill usage: ${message}` }, 500);
+  }
+});
+
 export default cockpitRoutes;
