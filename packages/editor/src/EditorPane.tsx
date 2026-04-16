@@ -331,6 +331,8 @@ export const EditorPane = ({
           scrollBeyondLastLine: false,
           automaticLayout: true,
           readOnly: !worktreeId && !onChange,
+          maxTokenizationLineLength: 20_000,
+          stopRenderingLineAfter: 10_000,
         }}
       />
       {/* Unsaved changes modal */}

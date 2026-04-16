@@ -8,11 +8,10 @@ import {
   Center,
   Group,
   Loader,
-  Paper,
-  ScrollArea,
   Stack,
   Text,
 } from '@mantine/core';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAtomValue } from 'jotai';
 import {
   Bot,
@@ -23,7 +22,7 @@ import {
   User,
   Wrench,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { viewingSessionIdAtom } from '../../atoms/sessionViewer';
 import {
@@ -251,6 +250,28 @@ export const SessionViewer = () => {
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Compute visible messages early so the virtualizer hook (which must be
+  // called unconditionally) always has the correct count.
+  const visibleMessages = [...messages].reverse().filter(isNonEmpty);
+
+  // Virtualizer for chat messages — uses dynamic measurement because chat
+  // bubbles vary in height depending on content length and tool badges.
+  const virtualizer = useVirtualizer({
+    count: visibleMessages.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 80,
+    overscan: 5,
+  });
+
+  const measureElement = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (el) {
+        virtualizer.measureElement(el);
+      }
+    },
+    [virtualizer],
+  );
+
   // Fetch session metadata
   useEffect(() => {
     if (!sessionId) {
@@ -340,8 +361,6 @@ export const SessionViewer = () => {
     );
   }
 
-  const visibleMessages = [...messages].reverse().filter(isNonEmpty);
-
   return (
     <div style={{ height: 'calc(100vh - 150px)', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 'var(--mantine-spacing-md) var(--mantine-spacing-lg)', overflow: 'hidden' }}>
       {/* Laptop frame */}
@@ -388,22 +407,18 @@ export const SessionViewer = () => {
         {/* Metadata bar */}
         <MetadataBar session={session} />
 
-        {/* Chat area */}
-        <ScrollArea
-          style={{ flex: 1, minHeight: 0 }}
-          viewportRef={scrollRef}
-          offsetScrollbars
-          type="auto"
+        {/* Chat area — virtualized for performance with large conversations */}
+        <div
+          ref={scrollRef}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflow: 'auto',
+            // Thin custom scrollbar matching the phantom theme
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'var(--phantom-border-subtle) transparent',
+          }}
         >
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 16,
-              padding: '16px 20px',
-              width: '100%',
-            }}
-          >
           {/* Messages loading */}
           {messagesLoading && (
             <Center py="xl">
@@ -425,12 +440,38 @@ export const SessionViewer = () => {
             </Center>
           )}
 
-          {/* Chat bubbles */}
-          {visibleMessages.map((msg) => (
-            <ChatBubble key={`${msg.timestamp}-${msg.role}`} message={msg} />
-          ))}
-          </div>
-        </ScrollArea>
+          {/* Virtualized chat bubbles */}
+          {visibleMessages.length > 0 && (
+            <div
+              style={{
+                height: virtualizer.getTotalSize(),
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const msg = visibleMessages[virtualRow.index];
+                return (
+                  <div
+                    key={virtualRow.key}
+                    ref={measureElement}
+                    data-index={virtualRow.index}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                      padding: '8px 20px',
+                    }}
+                  >
+                    <ChatBubble message={msg} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* Live indicator */}
         {isActive && (
