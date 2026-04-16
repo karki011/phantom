@@ -29,7 +29,7 @@ const formatCount = (n: number): string => {
 };
 
 export const DailyCostChart = ({ items }: DailyCostChartProps) => {
-  const maxCost = items.length > 0 ? Math.max(...items.map((i) => i.cost)) : 1;
+  const maxCalls = items.length > 0 ? Math.max(...items.map((i) => i.calls)) : 1;
 
   return (
     <Stack gap="sm">
@@ -64,15 +64,15 @@ export const DailyCostChart = ({ items }: DailyCostChartProps) => {
               </Text>
               <Group gap="sm" align="baseline">
                 <Text fz="0.75rem" c="var(--phantom-text-primary)" fw={600}>
-                  {formatCost(item.cost)}
+                  {formatCount(item.calls)} calls
                 </Text>
                 <Text fz="0.65rem" c="var(--phantom-text-muted)">
-                  {formatCount(item.calls)} calls
+                  {item.sessions} sessions
                 </Text>
               </Group>
             </Group>
             <GradientBar
-              value={maxCost > 0 ? item.cost / maxCost : 0}
+              value={maxCalls > 0 ? item.calls / maxCalls : 0}
               height={6}
             />
           </Stack>

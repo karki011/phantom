@@ -158,7 +158,7 @@ export const CockView = () => {
               <BreakdownPanel
                 title="By Project"
                 icon={<FolderGit2 size={14} style={{ color: 'var(--phantom-accent-cyan)' }} />}
-                items={toBreakdownItems(data.projects, 'cost')}
+                items={toBreakdownItems(data.projects, 'count')}
               />
             </PanelWrapper>
           </SimpleGrid>
@@ -172,7 +172,7 @@ export const CockView = () => {
               <BreakdownPanel
                 title="By Model"
                 icon={<Cpu size={14} style={{ color: 'var(--phantom-accent-purple, #a855f7)' }} />}
-                items={toBreakdownItems(data.models, 'cost')}
+                items={toBreakdownItems(data.models, 'count')}
                 barColor="var(--phantom-accent-purple, #a855f7)"
               />
             </PanelWrapper>

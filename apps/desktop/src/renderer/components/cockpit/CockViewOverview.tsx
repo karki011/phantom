@@ -5,7 +5,7 @@
  * @author Subash Karki
  */
 import { SimpleGrid, Stack, Text } from '@mantine/core';
-import { Activity, Database, DollarSign, Zap } from 'lucide-react';
+import { Activity, Database, Hash, Zap } from 'lucide-react';
 import type { CockpitOverview } from '@phantom-os/shared';
 import { CockpitStatCard } from './StatCard';
 
@@ -36,9 +36,9 @@ export const CockViewOverview = ({ data }: CockViewOverviewProps) => {
     <Stack gap="xs">
       <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
         <CockpitStatCard
-          icon={<DollarSign size={16} />}
-          value={formatCost(data.totalCost)}
-          label="Total Cost"
+          icon={<Hash size={16} />}
+          value={formatCount(data.inputTokens + data.outputTokens)}
+          label="Total Tokens"
           color="yellow"
           onClick={() => {}}
         />

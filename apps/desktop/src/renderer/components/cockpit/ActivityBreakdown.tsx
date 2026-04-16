@@ -32,7 +32,7 @@ const formatOneShotRate = (rate: number | null): string => {
 };
 
 export const ActivityBreakdown = ({ items }: ActivityBreakdownProps) => {
-  const maxCost = items.length > 0 ? Math.max(...items.map((i) => i.cost)) : 1;
+  const maxSessions = items.length > 0 ? Math.max(...items.map((i) => i.sessions)) : 1;
 
   return (
     <Stack gap="sm" style={{ flex: 1, overflow: 'hidden' }}>
@@ -83,7 +83,7 @@ export const ActivityBreakdown = ({ items }: ActivityBreakdownProps) => {
                   </Text>
                   <Group gap="sm" align="baseline">
                     <Text fz="0.75rem" c="var(--phantom-text-primary)" fw={600}>
-                      {formatCost(item.cost)}
+                      {item.sessions} sessions
                     </Text>
                     <Text
                       fz="0.7rem"
@@ -95,7 +95,7 @@ export const ActivityBreakdown = ({ items }: ActivityBreakdownProps) => {
                   </Group>
                 </Group>
                 <GradientBar
-                  value={maxCost > 0 ? item.cost / maxCost : 0}
+                  value={maxSessions > 0 ? item.sessions / maxSessions : 0}
                   height={6}
                 />
               </Stack>
