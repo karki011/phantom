@@ -131,6 +131,64 @@ export const runMigrations = (sqlite: Database.Database): void => {
   addColumn('sessions', 'last_input_tokens', 'INTEGER', '0');
   addColumn('sessions', 'context_used_pct', 'INTEGER', 'NULL');
 
+  // Cost recalculation with correct Anthropic pricing (Apr 2025):
+  // Opus 4.5+: $5/$25, Opus 4/4.1: $15/$75, Sonnet: $3/$15, Haiku 4.5: $1/$5
+  // Also fixes double-counting of cache read tokens in input.
+  // Marker: cost_recalc_v3 column. Runs once.
+  try {
+    sqlite.exec(`ALTER TABLE sessions ADD COLUMN cost_recalc_v3 INTEGER DEFAULT 0`);
+    // Column was just added — means this is the first run. Recalculate all costs.
+    const rows = sqlite.prepare(
+      `SELECT id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
+       FROM sessions WHERE input_tokens > 0`,
+    ).all() as { id: string; model: string | null; input_tokens: number; output_tokens: number; cache_read_tokens: number; cache_write_tokens: number }[];
+
+    const pricing: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
+      opus: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+      opusLegacy: { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
+      sonnet: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+      haiku: { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
+      haikuLegacy: { input: 0.8, output: 4, cacheRead: 0.08, cacheWrite: 1 },
+    };
+    const getPricing = (model: string | null) => {
+      if (!model) return pricing.sonnet;
+      const lower = model.toLowerCase();
+      if (lower.includes('opus')) {
+        if (lower.includes('opus-4-0') || lower.includes('opus-4-1') || lower === 'claude-opus-4' || lower.includes('opus-3'))
+          return pricing.opusLegacy;
+        return pricing.opus;
+      }
+      if (lower.includes('haiku')) {
+        if (lower.includes('haiku-3')) return pricing.haikuLegacy;
+        return pricing.haiku;
+      }
+      return pricing.sonnet;
+    };
+
+    const update = sqlite.prepare(`UPDATE sessions SET estimated_cost_micros = ?, cost_recalc_v3 = 1 WHERE id = ?`);
+    const tx = sqlite.transaction(() => {
+      for (const row of rows) {
+        const p = getPricing(row.model);
+        const nonCachedInput = Math.max(0, row.input_tokens - row.cache_read_tokens);
+        const cost = Math.round(
+          nonCachedInput * p.input +
+          row.output_tokens * p.output +
+          row.cache_read_tokens * p.cacheRead +
+          row.cache_write_tokens * p.cacheWrite,
+        );
+        update.run(cost, row.id);
+      }
+    });
+    tx();
+    console.log(`[Migration] Recalculated costs for ${rows.length} sessions (correct Apr 2025 pricing)`);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : '';
+    if (!msg.includes('duplicate column') && !msg.includes('already exists')) {
+      console.error('[Migration] Cost recalc error:', msg);
+    }
+    // Column already exists — recalculation already done
+  }
+
   // Indexes for frequently-queried columns
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_pid ON sessions(pid)`);

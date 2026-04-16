@@ -43,7 +43,6 @@ function FileRow({ file, worktreeId, onStage, onDiscard }: {
   const fileName = file.path.split('/').pop() ?? file.path;
   const dirPath = file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : '';
   const [menuOpened, setMenuOpened] = useState(false);
-  const menuTargetRef = useRef<HTMLDivElement>(null);
 
   const handleClick = useCallback(async () => {
     if (file.status === 'deleted') return;
@@ -66,79 +65,71 @@ function FileRow({ file, worktreeId, onStage, onDiscard }: {
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    if (menuTargetRef.current) {
-      menuTargetRef.current.style.left = `${e.clientX}px`;
-      menuTargetRef.current.style.top = `${e.clientY}px`;
-    }
     setMenuOpened(true);
   }, []);
 
   return (
-    <>
-      <div
-        style={{
-          display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px',
-          cursor: file.status === 'deleted' ? 'default' : 'pointer',
-          borderRadius: 3, transition: 'background-color 100ms ease',
-          backgroundColor: isSelected ? 'var(--phantom-surface-elevated, #2a2a2a)' : undefined,
-          borderLeft: isSelected ? '2px solid var(--phantom-accent-glow)' : '2px solid transparent',
-        }}
-        onMouseEnter={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated, #2a2a2a)'; }}
-        onMouseLeave={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-        onContextMenu={handleContextMenu}
-      >
-        <Icon size={12} style={{ color: config.color, flexShrink: 0 }} />
-        <Text fz="0.73rem" c="var(--phantom-text-primary)" truncate style={{ flex: 1 }} onClick={handleClick}>
-          {fileName}
-        </Text>
-        {dirPath && (
-          <Text fz="0.6rem" c="var(--phantom-text-muted)" truncate style={{ maxWidth: 80 }}>
-            {dirPath}
+    <Menu
+      opened={menuOpened}
+      onChange={(val) => { if (!val) setMenuOpened(false); }}
+      position="bottom-start"
+      shadow="md"
+      withinPortal
+      middlewares={{ shift: true, flip: true }}
+      styles={{
+        dropdown: {
+          backgroundColor: 'var(--phantom-surface-card)',
+          borderColor: 'var(--phantom-border-subtle)',
+        },
+      }}
+    >
+      <Menu.Target>
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px',
+            cursor: file.status === 'deleted' ? 'default' : 'pointer',
+            borderRadius: 3, transition: 'background-color 100ms ease',
+            backgroundColor: isSelected ? 'var(--phantom-surface-elevated, #2a2a2a)' : undefined,
+            borderLeft: isSelected ? '2px solid var(--phantom-accent-glow)' : '2px solid transparent',
+          }}
+          onMouseEnter={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--phantom-surface-elevated, #2a2a2a)'; }}
+          onMouseLeave={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          onContextMenu={handleContextMenu}
+        >
+          <Icon size={12} style={{ color: config.color, flexShrink: 0 }} />
+          <Text fz="0.73rem" c="var(--phantom-text-primary)" truncate style={{ flex: 1 }} onClick={handleClick}>
+            {fileName}
           </Text>
-        )}
-        {onDiscard && (
-          <Tooltip label={file.status === 'untracked' ? 'Delete file' : 'Discard changes'} position="top" withArrow fz="xs">
-            <div
-              onClick={(e) => { e.stopPropagation(); onDiscard(); }}
-              style={{ cursor: 'pointer', padding: 2, borderRadius: 3, display: 'flex', alignItems: 'center' }}
-            >
-              <Undo2 size={12} style={{ color: 'var(--phantom-status-error, #ef4444)' }} />
-            </div>
-          </Tooltip>
-        )}
-        {onStage && (
-          <Tooltip label={file.staged ? 'Unstage file' : 'Stage file'} position="top" withArrow fz="xs">
-            <div
-              onClick={(e) => { e.stopPropagation(); onStage(); }}
-              style={{ cursor: 'pointer', padding: 2, borderRadius: 3, display: 'flex', alignItems: 'center' }}
-            >
-              {file.staged
-                ? <Minus size={12} style={{ color: 'var(--phantom-status-error, #ef4444)' }} />
-                : <Plus size={12} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />}
-            </div>
-          </Tooltip>
-        )}
-      </div>
-
-      {/* Right-click context menu */}
-      <Menu
-        opened={menuOpened}
-        onChange={setMenuOpened}
-        position="bottom-start"
-        shadow="md"
-        withinPortal
-        middlewares={{ shift: true, flip: true }}
-        styles={{
-          dropdown: {
-            backgroundColor: 'var(--phantom-surface-card)',
-            borderColor: 'var(--phantom-border-subtle)',
-          },
-        }}
-      >
-        <Menu.Target>
-          <div ref={menuTargetRef} style={{ position: 'fixed', width: 1, height: 1, pointerEvents: 'none' }} />
-        </Menu.Target>
-        <Menu.Dropdown>
+          {dirPath && (
+            <Text fz="0.6rem" c="var(--phantom-text-muted)" truncate style={{ maxWidth: 80 }}>
+              {dirPath}
+            </Text>
+          )}
+          {onDiscard && (
+            <Tooltip label={file.status === 'untracked' ? 'Delete file' : 'Discard changes'} position="top" withArrow fz="xs">
+              <div
+                onClick={(e) => { e.stopPropagation(); onDiscard(); }}
+                style={{ cursor: 'pointer', padding: 2, borderRadius: 3, display: 'flex', alignItems: 'center' }}
+              >
+                <Undo2 size={12} style={{ color: 'var(--phantom-status-error, #ef4444)' }} />
+              </div>
+            </Tooltip>
+          )}
+          {onStage && (
+            <Tooltip label={file.staged ? 'Unstage file' : 'Stage file'} position="top" withArrow fz="xs">
+              <div
+                onClick={(e) => { e.stopPropagation(); onStage(); }}
+                style={{ cursor: 'pointer', padding: 2, borderRadius: 3, display: 'flex', alignItems: 'center' }}
+              >
+                {file.staged
+                  ? <Minus size={12} style={{ color: 'var(--phantom-status-error, #ef4444)' }} />
+                  : <Plus size={12} style={{ color: 'var(--phantom-status-success, #22c55e)' }} />}
+              </div>
+            </Tooltip>
+          )}
+        </div>
+      </Menu.Target>
+      <Menu.Dropdown>
           {file.status !== 'deleted' && (
             <Menu.Item
               fz="0.8rem"
@@ -179,7 +170,6 @@ function FileRow({ file, worktreeId, onStage, onDiscard }: {
           )}
         </Menu.Dropdown>
       </Menu>
-    </>
   );
 }
 

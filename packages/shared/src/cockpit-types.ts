@@ -63,3 +63,45 @@ export interface CockpitDashboard {
   mcpServers: RankedEntry[];
   shellCommands: RankedEntry[];
 }
+
+// ---------------------------------------------------------------------------
+// Tool Usage Tracker
+// ---------------------------------------------------------------------------
+
+export type ToolCategory = 'all' | 'code' | 'search' | 'agent' | 'terminal' | 'task' | 'git' | 'mcp';
+
+export const TOOL_CATEGORIES: { value: ToolCategory; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'code', label: 'Code' },
+  { value: 'search', label: 'Search' },
+  { value: 'agent', label: 'Agent' },
+  { value: 'mcp', label: 'MCP' },
+  { value: 'terminal', label: 'Terminal' },
+  { value: 'task', label: 'Task' },
+  { value: 'git', label: 'Git' },
+];
+
+export interface ToolUsageEntry {
+  id: number;
+  timestamp: number;
+  type: string;          // Raw tool name (Read, Edit, Skill, Agent, mcp__server__tool)
+  displayName: string;   // Human-friendly name (e.g., "phantom-ai:phantom_graph_context")
+  category: string;      // code, search, agent, mcp, terminal, task, git
+  detail: string;        // Human-readable detail
+  sessionName: string;
+  skill?: string;        // Skill name if type === 'Skill'
+  agentDesc?: string;    // Agent description if type === 'Agent'
+  mcpServer?: string;    // MCP server name if category === 'mcp'
+  mcpTool?: string;      // MCP tool name if category === 'mcp'
+}
+
+export interface ToolUsageStats {
+  total: number;
+  byCategory: Record<string, number>;
+  topTools: { name: string; count: number }[];
+}
+
+export interface ToolUsageResponse {
+  entries: ToolUsageEntry[];
+  stats: ToolUsageStats;
+}

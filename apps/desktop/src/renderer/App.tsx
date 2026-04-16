@@ -83,9 +83,9 @@ const FileOpenListener = () => {
   const store = usePaneStore();
   useEffect(() => {
     const handler = (e: Event) => {
-      const { filePath, title } = (e as CustomEvent).detail ?? {};
+      const { filePath, title, worktreeId } = (e as CustomEvent).detail ?? {};
       if (filePath) {
-        store.addPaneAsTab('editor', { filePath } as Record<string, unknown>, title ?? filePath.split('/').pop() ?? 'Plan');
+        store.addPaneAsTab('editor', { filePath, worktreeId } as Record<string, unknown>, title ?? filePath.split('/').pop() ?? 'Plan');
       }
     };
     window.addEventListener('phantom:open-file-in-editor', handler);

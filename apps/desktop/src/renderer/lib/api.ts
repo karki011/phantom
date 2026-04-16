@@ -132,7 +132,7 @@ const cache = new Map<string, CacheEntry>();
 /** Default TTL per path prefix (ms). More specific prefixes match first. */
 const TTL_MAP: [string, number][] = [
   ['/api/hunter', 30_000],
-  ['/api/projects', 60_000],
+  ['/api/projects', 5_000],   // Branches change frequently — keep short
   ['/api/worktrees', 30_000],
   ['/api/sessions', 10_000],
   ['/api/achievements', 60_000],

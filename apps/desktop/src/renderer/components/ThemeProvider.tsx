@@ -6,10 +6,30 @@
  * @author Subash Karki
  */
 import { useEffect, useMemo } from 'react';
-import { MantineProvider } from '@mantine/core';
+import { MantineProvider, useMantineColorScheme } from '@mantine/core';
 import { useAtomValue } from 'jotai';
 import { themeRegistry, defaultTheme, buildPhantomTheme, buildCssVarsResolver } from '@phantom-os/theme';
 import { themeNameAtom, fontFamilyAtom, FONT_FAMILY_OPTIONS } from '../atoms/system';
+
+/**
+ * Inner component that has access to useMantineColorScheme (must be inside MantineProvider).
+ * Applies --phantom-* CSS custom properties to :root whenever the theme or color scheme changes.
+ */
+const PhantomCssVarsApplicator = ({ tokens, children }: { tokens: typeof defaultTheme; children: React.ReactNode }) => {
+  const { colorScheme } = useMantineColorScheme();
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const vars = colorScheme === 'light'
+      ? tokens.cssVars.light
+      : tokens.cssVars.dark;
+    for (const [prop, value] of Object.entries(vars)) {
+      root.style.setProperty(prop, value);
+    }
+  }, [tokens, colorScheme]);
+
+  return <>{children}</>;
+};
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const themeName = useAtomValue(themeNameAtom);
@@ -25,19 +45,6 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const theme = useMemo(() => buildPhantomTheme(tokensWithFont), [tokensWithFont]);
   const cssVarsResolver = useMemo(() => buildCssVarsResolver(tokensWithFont), [tokensWithFont]);
 
-  // Apply --phantom-* CSS custom properties directly to :root on theme change
-  // so the entire UI updates without unmounting/remounting the component tree
-  useEffect(() => {
-    const root = document.documentElement;
-    const colorScheme = root.getAttribute('data-mantine-color-scheme') ?? 'dark';
-    const vars = colorScheme === 'light'
-      ? tokensWithFont.cssVars.light
-      : tokensWithFont.cssVars.dark;
-    for (const [prop, value] of Object.entries(vars)) {
-      root.style.setProperty(prop, value);
-    }
-  }, [tokensWithFont]);
-
   let defaultColorScheme: 'dark' | 'light' = 'dark';
   try {
     defaultColorScheme = (localStorage.getItem('phantom-theme')?.replace(/"/g, '') as 'dark' | 'light') ?? 'dark';
@@ -49,7 +56,9 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
       defaultColorScheme={defaultColorScheme}
       cssVariablesResolver={cssVarsResolver}
     >
-      {children}
+      <PhantomCssVarsApplicator tokens={tokensWithFont}>
+        {children}
+      </PhantomCssVarsApplicator>
     </MantineProvider>
   );
 };

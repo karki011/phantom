@@ -6,6 +6,7 @@
  * - Tab buttons (click to switch, close button)
  * - "+" button with optional pane type dropdown
  * - Drag-to-reorder tabs (native HTML5 drag)
+ * - Right-click context menu using Mantine Menu
  */
 import {
   type CSSProperties,
@@ -15,6 +16,7 @@ import {
   useEffect,
   useCallback,
 } from 'react';
+import { Menu } from '@mantine/core';
 import { usePaneStore } from './WorkspaceProvider.js';
 
 // ---------------------------------------------------------------------------
@@ -73,40 +75,20 @@ const closeStyle: CSSProperties = {
   padding: 0,
 };
 
-const addStyle: CSSProperties = {
-  background: 'none',
-  border: 'none',
-  color: 'rgba(255,255,255,0.5)',
-  cursor: 'pointer',
-  fontSize: 16,
-  lineHeight: 1,
-  padding: '0 6px',
-  position: 'relative',
-};
-
-const menuBaseStyle: CSSProperties = {
-  position: 'fixed',
-  zIndex: 99999,
-  background: 'var(--pane-header-bg, #1a1a2e)',
-  border: '1px solid var(--pane-border, rgba(255,255,255,0.12))',
-  borderRadius: 6,
-  padding: '4px 0',
-  minWidth: 160,
-  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-};
-
-const menuItemStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  padding: '6px 12px',
-  fontSize: 12,
-  cursor: 'pointer',
-  color: 'rgba(255,255,255,0.8)',
-  background: 'transparent',
-  border: 'none',
-  width: '100%',
-  textAlign: 'left',
+const menuDropdownStyles = {
+  dropdown: {
+    backgroundColor: 'var(--phantom-surface-card, #1a1a2e)',
+    borderColor: 'var(--phantom-border-subtle, rgba(255,255,255,0.12))',
+  },
+  item: {
+    fontSize: '0.8rem',
+    color: 'var(--phantom-text-secondary, rgba(255,255,255,0.8))',
+    padding: '8px 12px',
+    cursor: 'pointer',
+  },
+  separator: {
+    borderColor: 'var(--phantom-border-subtle, rgba(255,255,255,0.12))',
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -136,14 +118,11 @@ export interface TabBarProps {
 export function TabBar({ paneMenu }: TabBarProps) {
   const store = usePaneStore();
   const { tabs, activeTabId } = store;
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   // Tab context menu state
   const [ctxTabId, setCtxTabId] = useState<string | null>(null);
-  const [ctxPos, setCtxPos] = useState({ x: 0, y: 0 });
-  const ctxRef = useRef<HTMLDivElement>(null);
 
   // Inline rename state
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
@@ -175,30 +154,6 @@ export function TabBar({ paneMenu }: TabBarProps) {
     [dirtyPanes],
   );
 
-  // Close menu on outside click
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [menuOpen]);
-
-  // Close tab context menu on outside click
-  useEffect(() => {
-    if (!ctxTabId) return;
-    const handler = (e: MouseEvent) => {
-      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) {
-        setCtxTabId(null);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [ctxTabId]);
-
   // Focus rename input when it appears
   useEffect(() => {
     if (renamingTabId && renameInputRef.current) {
@@ -210,7 +165,6 @@ export function TabBar({ paneMenu }: TabBarProps) {
   const handleTabContextMenu = useCallback(
     (e: React.MouseEvent, tabId: string) => {
       e.preventDefault();
-      setCtxPos({ x: e.clientX, y: e.clientY });
       setCtxTabId(tabId);
     },
     [],
@@ -241,7 +195,7 @@ export function TabBar({ paneMenu }: TabBarProps) {
   const handleOpenPane = useCallback(
     (kind: string) => {
       store.addPane(kind);
-      setMenuOpen(false);
+      setAddMenuOpen(false);
     },
     [store],
   );
@@ -285,226 +239,204 @@ export function TabBar({ paneMenu }: TabBarProps) {
     if (node) node.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
   }, [activeTabId]);
 
+  // Get editor file info for context menu extras
+  const getEditorInfo = useCallback((tabId: string) => {
+    const tab = tabs.find((t) => t.id === tabId);
+    if (!tab) return null;
+    const editorPane = Object.values(tab.panes).find(
+      (p) => p.kind === 'editor' && p.data?.filePath,
+    );
+    if (!editorPane) return null;
+    const filePath = editorPane.data.filePath as string;
+    const repoPath = editorPane.data.repoPath as string | undefined;
+    const absolutePath = repoPath
+      ? `${repoPath.replace(/\/$/, '')}/${filePath.replace(/^\//, '')}`
+      : filePath;
+    return { filePath, absolutePath };
+  }, [tabs]);
+
   return (
     <div style={barStyle}>
       <div style={tabsScrollStyle}>
-      {tabs.map((t, i) => (
-        <div
-          key={t.id}
-          ref={t.id === activeTabId ? activeTabRef : undefined}
-          style={{
-            ...tabStyle(t.id === activeTabId),
-            ...(dragOverIndex === i
-              ? { borderLeft: '2px solid rgba(99,102,241,0.7)' }
-              : {}),
-          }}
-          onClick={() => store.setActiveTab(t.id)}
-          onContextMenu={(e) => handleTabContextMenu(e, t.id)}
-          onDoubleClick={() => startRename(t.id)}
-          draggable={renamingTabId !== t.id}
-          onDragStart={(e) => onTabDragStart(e, i)}
-          onDragOver={(e) => onTabDragOver(e, i)}
-          onDrop={(e) => onTabDrop(e, i)}
-          onDragEnd={onTabDragEnd}
-        >
-          {renamingTabId === t.id ? (
-            <input
-              ref={renameInputRef}
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commitRename();
-                if (e.key === 'Escape') cancelRename();
-              }}
-              onBlur={commitRename}
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                background: 'rgba(255,255,255,0.1)',
-                border: '1px solid rgba(99,102,241,0.5)',
-                borderRadius: 3,
-                color: '#fff',
-                fontSize: 12,
-                padding: '1px 4px',
-                outline: 'none',
-                width: '100%',
-                maxWidth: 140,
-              }}
-            />
-          ) : (
-            <span
-              title={t.label}
-              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}
-            >
-              {isTabDirty(t) && (
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
-                    background: 'var(--phantom-accent-gold, #f59e0b)',
-                    flexShrink: 0,
-                  }}
-                />
-              )}
-              {t.label}
-            </span>
-          )}
-          {!Object.values(t.panes).some((p) => p.kind === 'workspace-home') && (
-            <button
-              type="button"
-              style={closeStyle}
-              onClick={(e) => {
-                e.stopPropagation();
-                store.removeTab(t.id);
-              }}
-              aria-label={`Close tab ${t.label}`}
-            >
-              ×
-            </button>
-          )}
-        </div>
-      ))}
-      </div>
-      <div style={{ flexShrink: 0 }} ref={menuRef}>
-        <button
-          type="button"
-          style={addStyle}
-          onClick={() => (paneMenu ? setMenuOpen(!menuOpen) : store.addTab())}
-          aria-label="Add pane"
-        >
-          +
-        </button>
-        {menuOpen && paneMenu && (
-          <div style={{
-            ...menuBaseStyle,
-            ...((): CSSProperties => {
-              const rect = menuRef.current?.getBoundingClientRect();
-              return rect
-                ? { top: rect.bottom + 4, left: rect.left }
-                : { top: 0, left: 0 };
-            })(),
-          }}>
-            {paneMenu.map((item) => (
-              <button
-                key={item.kind}
-                type="button"
-                style={menuItemStyle}
-                onMouseEnter={(e) => {
-                  (e.target as HTMLElement).style.background =
-                    'rgba(255,255,255,0.08)';
+      {tabs.map((t, i) => {
+        const isCtxTarget = ctxTabId === t.id;
+        const isHome = Object.values(t.panes).some((p) => p.kind === 'workspace-home');
+        const editorInfo = isCtxTarget ? getEditorInfo(t.id) : null;
+
+        return (
+          <Menu
+            key={t.id}
+            opened={isCtxTarget}
+            onChange={(val) => { if (!val) setCtxTabId(null); }}
+            shadow="md"
+            width={180}
+            position="bottom-start"
+            withinPortal
+            middlewares={{ shift: true, flip: true }}
+            styles={menuDropdownStyles}
+          >
+            <Menu.Target>
+              <div
+                ref={t.id === activeTabId ? activeTabRef : undefined}
+                style={{
+                  ...tabStyle(t.id === activeTabId),
+                  ...(dragOverIndex === i
+                    ? { borderLeft: '2px solid rgba(99,102,241,0.7)' }
+                    : {}),
                 }}
-                onMouseLeave={(e) => {
-                  (e.target as HTMLElement).style.background = 'transparent';
-                }}
-                onClick={() => handleOpenPane(item.kind)}
+                onClick={() => store.setActiveTab(t.id)}
+                onContextMenu={(e) => handleTabContextMenu(e, t.id)}
+                onDoubleClick={() => startRename(t.id)}
+                draggable={renamingTabId !== t.id}
+                onDragStart={(e) => onTabDragStart(e, i)}
+                onDragOver={(e) => onTabDragOver(e, i)}
+                onDrop={(e) => onTabDrop(e, i)}
+                onDragEnd={onTabDragEnd}
               >
-                {item.icon && <span>{item.icon}</span>}
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        )}
+                {renamingTabId === t.id ? (
+                  <input
+                    ref={renameInputRef}
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitRename();
+                      if (e.key === 'Escape') cancelRename();
+                    }}
+                    onBlur={commitRename}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      background: 'rgba(255,255,255,0.1)',
+                      border: '1px solid rgba(99,102,241,0.5)',
+                      borderRadius: 3,
+                      color: '#fff',
+                      fontSize: 12,
+                      padding: '1px 4px',
+                      outline: 'none',
+                      width: '100%',
+                      maxWidth: 140,
+                    }}
+                  />
+                ) : (
+                  <span
+                    title={t.label}
+                    style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}
+                  >
+                    {isTabDirty(t) && (
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: 'var(--phantom-accent-gold, #f59e0b)',
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+                    {t.label}
+                  </span>
+                )}
+                {!isHome && (
+                  <button
+                    type="button"
+                    style={closeStyle}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      store.removeTab(t.id);
+                    }}
+                    aria-label={`Close tab ${t.label}`}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item onClick={() => startRename(t.id)}>
+                Rename
+              </Menu.Item>
+              {!isHome && (
+                <Menu.Item
+                  color="red"
+                  onClick={() => { store.removeTab(t.id); setCtxTabId(null); }}
+                >
+                  Close Tab
+                </Menu.Item>
+              )}
+              {tabs.length > 1 && (
+                <Menu.Item
+                  onClick={() => { store.closeOtherTabs(t.id); setCtxTabId(null); }}
+                >
+                  Close Other Tabs
+                </Menu.Item>
+              )}
+              {editorInfo && (
+                <>
+                  <Menu.Divider />
+                  <Menu.Item
+                    onClick={() => { navigator.clipboard.writeText(editorInfo.filePath); setCtxTabId(null); }}
+                  >
+                    Copy Relative Path
+                  </Menu.Item>
+                  <Menu.Item
+                    onClick={() => { navigator.clipboard.writeText(editorInfo.absolutePath); setCtxTabId(null); }}
+                  >
+                    Copy Absolute Path
+                  </Menu.Item>
+                  <Menu.Divider />
+                  <Menu.Item
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('phantom:reveal-file', { detail: { filePath: editorInfo.filePath } }));
+                      setCtxTabId(null);
+                    }}
+                  >
+                    Reveal in Sidebar
+                  </Menu.Item>
+                </>
+              )}
+            </Menu.Dropdown>
+          </Menu>
+        );
+      })}
       </div>
-      {/* Tab context menu */}
-      {ctxTabId && (
-        <div
-          ref={ctxRef}
-          style={{
-            position: 'fixed',
-            left: ctxPos.x,
-            top: ctxPos.y,
-            zIndex: 9999,
-            background: 'var(--pane-header-bg, #1a1a2e)',
-            border: '1px solid var(--pane-border, rgba(255,255,255,0.12))',
-            borderRadius: 6,
-            padding: '4px 0',
-            minWidth: 140,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-          }}
-        >
+      {/* "+" add pane menu */}
+      <Menu
+        opened={addMenuOpen}
+        onChange={setAddMenuOpen}
+        shadow="md"
+        width={160}
+        position="bottom-end"
+        withinPortal
+        styles={menuDropdownStyles}
+      >
+        <Menu.Target>
           <button
             type="button"
-            style={menuItemStyle}
-            onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
-            onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
-            onClick={() => startRename(ctxTabId)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'rgba(255,255,255,0.5)',
+              cursor: 'pointer',
+              fontSize: 16,
+              lineHeight: 1,
+              padding: '0 6px',
+            }}
+            onClick={() => { if (!paneMenu) store.addTab(); }}
+            aria-label="Add pane"
           >
-            Rename
+            +
           </button>
-          {!tabs.find((t) => t.id === ctxTabId && Object.values(t.panes).some((p) => p.kind === 'workspace-home')) && (
-            <button
-              type="button"
-              style={{ ...menuItemStyle, color: 'rgba(255,100,100,0.9)' }}
-              onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
-              onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
-              onClick={() => { store.removeTab(ctxTabId); setCtxTabId(null); }}
-            >
-              Close Tab
-            </button>
-          )}
-          {tabs.length > 1 && (
-            <button
-              type="button"
-              style={menuItemStyle}
-              onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
-              onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
-              onClick={() => { store.closeOtherTabs(ctxTabId); setCtxTabId(null); }}
-            >
-              Close Other Tabs
-            </button>
-          )}
-          {/* Copy path & reveal options for editor tabs */}
-          {(() => {
-            const tab = tabs.find((t) => t.id === ctxTabId);
-            if (!tab) return null;
-            const editorPane = Object.values(tab.panes).find(
-              (p) => p.kind === 'editor' && p.data?.filePath,
-            );
-            if (!editorPane) return null;
-            const filePath = editorPane.data.filePath as string;
-            const repoPath = editorPane.data.repoPath as string | undefined;
-            const absolutePath = repoPath
-              ? `${repoPath.replace(/\/$/, '')}/${filePath.replace(/^\//, '')}`
-              : filePath;
-            return (
-              <>
-                <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
-                <button
-                  type="button"
-                  style={menuItemStyle}
-                  onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
-                  onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
-                  onClick={() => { navigator.clipboard.writeText(filePath); setCtxTabId(null); }}
-                >
-                  Copy Relative Path
-                </button>
-                <button
-                  type="button"
-                  style={menuItemStyle}
-                  onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
-                  onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
-                  onClick={() => { navigator.clipboard.writeText(absolutePath); setCtxTabId(null); }}
-                >
-                  Copy Absolute Path
-                </button>
-                <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
-                <button
-                  type="button"
-                  style={menuItemStyle}
-                  onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
-                  onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
-                  onClick={() => {
-                    window.dispatchEvent(new CustomEvent('phantom:reveal-file', { detail: { filePath } }));
-                    setCtxTabId(null);
-                  }}
-                >
-                  Reveal in Sidebar
-                </button>
-              </>
-            );
-          })()}
-        </div>
-      )}
+        </Menu.Target>
+        {paneMenu && (
+          <Menu.Dropdown>
+            {paneMenu.map((item) => (
+              <Menu.Item key={item.kind} onClick={() => handleOpenPane(item.kind)}>
+                {item.icon && <span>{item.icon}</span>}
+                {item.label}
+              </Menu.Item>
+            ))}
+          </Menu.Dropdown>
+        )}
+      </Menu>
     </div>
   );
 }

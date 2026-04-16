@@ -12,7 +12,7 @@ import { basename, join } from 'node:path';
 import { eq, and } from 'drizzle-orm';
 import { db, sessions } from '@phantom-os/db';
 import { PROJECTS_DIR } from '@phantom-os/shared/constants-node';
-import { COST_PER_TOKEN } from '@phantom-os/shared';
+import { getModelPricing } from '@phantom-os/shared';
 
 type Broadcast = (event: string, data: unknown) => void;
 
@@ -182,13 +182,17 @@ const getMaxContext = (model: string | null): number => {
   return 200_000;
 };
 
-const calculateCostMicros = (acc: TokenAccumulator): number =>
-  Math.round(
-    acc.inputTokens * COST_PER_TOKEN.INPUT +
-    acc.outputTokens * COST_PER_TOKEN.OUTPUT +
-    acc.cacheReadTokens * COST_PER_TOKEN.CACHE_READ +
-    acc.cacheWriteTokens * COST_PER_TOKEN.CACHE_WRITE,
+const calculateCostMicros = (acc: TokenAccumulator): number => {
+  const pricing = getModelPricing(acc.model);
+  // API input_tokens includes cache hits — subtract them to avoid double-counting
+  const nonCachedInput = Math.max(0, acc.inputTokens - acc.cacheReadTokens);
+  return Math.round(
+    nonCachedInput * pricing.input +
+    acc.outputTokens * pricing.output +
+    acc.cacheReadTokens * pricing.cacheRead +
+    acc.cacheWriteTokens * pricing.cacheWrite,
   );
+};
 
 /**
  * Tail-read a JSONL file to get the LAST assistant message's context size.

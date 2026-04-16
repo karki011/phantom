@@ -169,23 +169,28 @@ function getAvailableMemory(): number {
 }
 
 systemMetricsRoutes.get('/system-metrics', (c) => {
-  // Return cached result if still fresh
-  if (metricsCache && Date.now() - metricsCache.timestamp < CACHE_TTL) {
-    return c.json(metricsCache.data);
+  try {
+    // Return cached result if still fresh
+    if (metricsCache && Date.now() - metricsCache.timestamp < CACHE_TTL) {
+      return c.json(metricsCache.data);
+    }
+
+    const total = totalmem();
+    const available = getAvailableMemory();
+    const used = total - available;
+
+    const result = {
+      cpu: { usage: getCpuUsage(), cores: cpus().length },
+      memory: { used, total, usedPercent: Math.round((used / total) * 100) },
+      swap: getSwapUsage(),
+      loadAvg: loadavg(),
+      topProcesses: getTopProcesses(),
+    };
+
+    metricsCache = { data: result, timestamp: Date.now() };
+    return c.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ error: `System metrics failed: ${message}` }, 500);
   }
-
-  const total = totalmem();
-  const available = getAvailableMemory();
-  const used = total - available;
-
-  const result = {
-    cpu: { usage: getCpuUsage(), cores: cpus().length },
-    memory: { used, total, usedPercent: Math.round((used / total) * 100) },
-    swap: getSwapUsage(),
-    loadAvg: loadavg(),
-    topProcesses: getTopProcesses(),
-  };
-
-  metricsCache = { data: result, timestamp: Date.now() };
-  return c.json(result);
 });

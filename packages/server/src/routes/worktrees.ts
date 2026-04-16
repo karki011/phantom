@@ -424,7 +424,7 @@ worktreeRoutes.post('/worktrees/:id/git', async (c) => {
     let cmd: string;
     switch (action) {
       case 'fetch':
-        cmd = 'git fetch origin';
+        cmd = 'git fetch origin --prune';
         break;
       case 'stage': {
         if (!body.paths?.length) return c.json({ error: 'paths required for stage' }, 400);

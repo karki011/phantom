@@ -92,9 +92,9 @@ export function FilesView() {
 
   const store = usePaneStore();
 
-  // Auto-sync sidebar selection when active editor pane changes
+  // Auto-sync sidebar selection when active pane changes (editor or diff)
   const activePane = store.getActivePane();
-  const activeEditorPath = activePane?.kind === 'editor'
+  const activeEditorPath = (activePane?.kind === 'editor' || activePane?.kind === 'diff')
     ? (activePane.data?.filePath as string | undefined) ?? null
     : null;
   const prevEditorPathRef = useRef<string | null>(null);
@@ -120,19 +120,28 @@ export function FilesView() {
       return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
     });
 
-    // Fetch any unfetched parent directories
+    // Fetch any unfetched parent directories so the tree can render the file
+    const fetches: Promise<void>[] = [];
     for (const dirPath of parentPaths) {
       const cacheKey = `${activeWorktree.id}:${dirPath}`;
       if (!fileTree.has(cacheKey)) {
-        fetchDirectory({ worktreeId: activeWorktree.id, path: dirPath });
+        fetches.push(fetchDirectory({ worktreeId: activeWorktree.id, path: dirPath }));
       }
     }
 
-    // Scroll the file into view after the tree renders
-    setTimeout(() => {
-      const el = document.querySelector(`[data-file-path="${CSS.escape(activeEditorPath)}"]`);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 150);
+    // Scroll the file into view — wait for directory fetches to complete first
+    const scrollToFile = () => {
+      requestAnimationFrame(() => {
+        const el = document.querySelector(`[data-file-path="${CSS.escape(activeEditorPath)}"]`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    };
+
+    if (fetches.length > 0) {
+      Promise.all(fetches).then(scrollToFile);
+    } else {
+      scrollToFile();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeEditorPath, activeWorktree?.id]);
 

@@ -30,6 +30,7 @@ import { BreakdownPanel } from './BreakdownPanel';
 import { CockViewOverview } from './CockViewOverview';
 import { DailyCostChart } from './DailyCostChart';
 import { PeriodSwitcher } from './PeriodSwitcher';
+import { ToolUsageCard } from './ToolUsageCard';
 
 const formatCost = (micros: number): string => {
   const dollars = micros / 1_000_000;
@@ -55,11 +56,19 @@ function toBreakdownItems(entries: RankedEntry[], mode: 'cost' | 'count'): Break
   }));
 }
 
-const PanelWrapper = ({ children }: { children: React.ReactNode }) => (
+const PANEL_HEIGHT = 320;
+
+const PanelWrapper = ({ children, fullWidth }: { children: React.ReactNode; fullWidth?: boolean }) => (
   <Paper
     p="sm"
     bg="var(--phantom-surface-card)"
-    style={{ border: '1px solid var(--phantom-border-subtle)' }}
+    style={{
+      border: '1px solid var(--phantom-border-subtle)',
+      height: fullWidth ? undefined : PANEL_HEIGHT,
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+    }}
   >
     {children}
   </Paper>
@@ -136,7 +145,7 @@ export const CockView = () => {
       {data && (
         <Stack gap="md">
           {/* Overview banner */}
-          <PanelWrapper>
+          <PanelWrapper fullWidth>
             <CockViewOverview data={data.overview} />
           </PanelWrapper>
 
@@ -189,9 +198,14 @@ export const CockView = () => {
             </PanelWrapper>
           </SimpleGrid>
 
-          {/* Row 4: Top Shell Commands (full width, conditional) */}
+          {/* Row 4: Tool Usage History (full width) */}
+          <PanelWrapper fullWidth>
+            <ToolUsageCard period={period} />
+          </PanelWrapper>
+
+          {/* Row 5: Top Shell Commands (full width, conditional) */}
           {hasShellData && (
-            <PanelWrapper>
+            <PanelWrapper fullWidth>
               <BreakdownPanel
                 title="Top Shell Commands"
                 icon={<Terminal size={14} style={{ color: 'var(--phantom-text-secondary)' }} />}

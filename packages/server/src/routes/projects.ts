@@ -508,8 +508,8 @@ projectRoutes.get('/projects/:id/branches', (c) => {
     return c.json({ error: 'Repository path does not exist' }, 400);
   }
 
-  // Sync fetch so branch list includes latest remote refs
-  try { execSync('git fetch origin', { cwd: project.repoPath, timeout: 10_000, stdio: 'ignore' }); } catch { /* offline is fine */ }
+  // Sync fetch + prune so branch list includes latest remote refs and removes stale ones
+  try { execSync('git fetch origin --prune', { cwd: project.repoPath, timeout: 10_000, stdio: 'ignore' }); } catch { /* offline is fine */ }
 
   try {
     const output = execSync('git branch -a --no-color', {

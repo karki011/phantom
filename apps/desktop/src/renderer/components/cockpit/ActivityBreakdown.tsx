@@ -4,7 +4,7 @@
  *
  * @author Subash Karki
  */
-import { Badge, Group, Stack, Text } from '@mantine/core';
+import { Badge, Group, ScrollArea, Stack, Text } from '@mantine/core';
 import { Target } from 'lucide-react';
 import type { ActivityEntry } from '@phantom-os/shared';
 import { ACTIVITY_LABELS } from '@phantom-os/shared';
@@ -35,9 +35,9 @@ export const ActivityBreakdown = ({ items }: ActivityBreakdownProps) => {
   const maxCost = items.length > 0 ? Math.max(...items.map((i) => i.cost)) : 1;
 
   return (
-    <Stack gap="sm">
+    <Stack gap="sm" style={{ flex: 1, overflow: 'hidden' }}>
       {/* Header */}
-      <Group justify="space-between" align="center">
+      <Group justify="space-between" align="center" style={{ flexShrink: 0 }}>
         <Group gap="xs" align="center">
           <Target size={14} color="var(--phantom-text-secondary)" />
           <Text
@@ -69,35 +69,39 @@ export const ActivityBreakdown = ({ items }: ActivityBreakdownProps) => {
           No data
         </Text>
       ) : (
-        items.map((item) => (
-          <Stack key={item.category} gap={4}>
-            <Group justify="space-between" align="baseline" wrap="nowrap">
-              <Text
-                fz="0.75rem"
-                c="var(--phantom-text-secondary)"
-                ff="JetBrains Mono, monospace"
-              >
-                {ACTIVITY_LABELS[item.category]}
-              </Text>
-              <Group gap="sm" align="baseline">
-                <Text fz="0.75rem" c="var(--phantom-text-primary)" fw={600}>
-                  {formatCost(item.cost)}
-                </Text>
-                <Text
-                  fz="0.7rem"
-                  fw={600}
-                  style={{ color: getOneShotColor(item.oneShotRate) }}
-                >
-                  {formatOneShotRate(item.oneShotRate)}
-                </Text>
-              </Group>
-            </Group>
-            <GradientBar
-              value={maxCost > 0 ? item.cost / maxCost : 0}
-              height={6}
-            />
+        <ScrollArea style={{ flex: 1 }} scrollbarSize={4}>
+          <Stack gap="sm">
+            {items.map((item) => (
+              <Stack key={item.category} gap={4}>
+                <Group justify="space-between" align="baseline" wrap="nowrap">
+                  <Text
+                    fz="0.75rem"
+                    c="var(--phantom-text-secondary)"
+                    ff="JetBrains Mono, monospace"
+                  >
+                    {ACTIVITY_LABELS[item.category]}
+                  </Text>
+                  <Group gap="sm" align="baseline">
+                    <Text fz="0.75rem" c="var(--phantom-text-primary)" fw={600}>
+                      {formatCost(item.cost)}
+                    </Text>
+                    <Text
+                      fz="0.7rem"
+                      fw={600}
+                      style={{ color: getOneShotColor(item.oneShotRate) }}
+                    >
+                      {formatOneShotRate(item.oneShotRate)}
+                    </Text>
+                  </Group>
+                </Group>
+                <GradientBar
+                  value={maxCost > 0 ? item.cost / maxCost : 0}
+                  height={6}
+                />
+              </Stack>
+            ))}
           </Stack>
-        ))
+        </ScrollArea>
       )}
     </Stack>
   );

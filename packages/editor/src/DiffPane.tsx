@@ -102,7 +102,20 @@ export const DiffPane = ({
         }}
       >
         <span style={{ color: 'var(--phantom-accent-gold, #f59e0b)', fontWeight: 600 }}>±</span>
-        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span
+          style={{
+            flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            cursor: filePath ? 'pointer' : undefined,
+          }}
+          title={filePath ? `Open ${fileName} in editor` : undefined}
+          onClick={() => {
+            if (filePath) {
+              window.dispatchEvent(new CustomEvent('phantom:open-file-in-editor', {
+                detail: { filePath, worktreeId, title: fileName },
+              }));
+            }
+          }}
+        >
           {fileName}
         </span>
         {editable && dirty && (
@@ -122,7 +135,30 @@ export const DiffPane = ({
         modified={modified}
         language={language ?? detectLanguage(filePath)}
         theme="vs-dark"
-        onMount={(editor) => {
+        onMount={(editor, monacoInstance) => {
+          // Suppress diagnostics on diff models — they lack full workspace
+          // context so Monaco flags JSX and imports as errors (false positives).
+          // Clear markers whenever the TS language service re-adds them.
+          const origModel = editor.getOriginalEditor().getModel();
+          const modModel = editor.getModifiedEditor().getModel();
+          const diffUris = new Set(
+            [origModel?.uri.toString(), modModel?.uri.toString()].filter(Boolean),
+          );
+
+          const clearMarkers = () => {
+            for (const model of [origModel, modModel]) {
+              if (model) {
+                monacoInstance.editor.setModelMarkers(model, 'typescript', []);
+                monacoInstance.editor.setModelMarkers(model, 'javascript', []);
+              }
+            }
+          };
+
+          clearMarkers();
+          monacoInstance.editor.onDidChangeMarkers((uris) => {
+            if (uris.some((u) => diffUris.has(u.toString()))) clearMarkers();
+          });
+
           // Track changes on the modified editor
           if (editable) {
             const modifiedEditor = editor.getModifiedEditor();

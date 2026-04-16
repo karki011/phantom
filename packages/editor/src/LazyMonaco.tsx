@@ -16,7 +16,11 @@ import * as monaco from 'monaco-editor';
 // Use local Monaco instead of CDN — avoids CSP script-src issues in Electron
 loader.config({ monaco });
 
-// Default: disable semantic validation until workspace types are loaded
+// Disable semantic validation (red squiggles from type-checking) permanently.
+// Monaco only loads a subset of project types — incomplete type info produces
+// false positives that can't be fixed by ignoring individual error codes.
+// IntelliSense, autocomplete, and go-to-definition still work without this.
+// Real type errors are caught by the project's build toolchain / VS Code.
 monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
   noSemanticValidation: true,
   noSyntaxValidation: false,
@@ -33,12 +37,12 @@ const modelsByWorkspace = new Map<string, Set<string>>();
 let activeWorkspaceRoot: string | null = null;
 
 /** Max models to keep from previous workspaces (LRU) */
-const MAX_STALE_MODELS = 50;
+const MAX_STALE_MODELS = 20;
 
 /**
  * Configure Monaco's TypeScript from a workspace's tsconfig.json and
  * load type definitions from node_modules/@types. Call once per workspace.
- * Re-enables semantic validation after types are loaded.
+ * Types power IntelliSense/autocomplete/go-to-definition (not diagnostics).
  */
 export async function configureMonacoForWorkspace(repoPath: string): Promise<void> {
   if (!window.phantomOS?.isDesktop) return;
@@ -123,39 +127,29 @@ export async function configureMonacoForWorkspace(repoPath: string): Promise<voi
       ts.typescriptDefaults.addExtraLib(content, filePath);
     }
 
-    // Re-enable semantic validation now that types are available
-    // Suppress 2307 (module not found) — Monaco can't resolve workspace packages,
-    // monorepo internal imports, or complex path aliases. These are false positives
-    // in projects that already build. Real import errors are caught by the build toolchain.
-    ts.typescriptDefaults.setDiagnosticsOptions({
-      noSemanticValidation: false,
-      noSyntaxValidation: false,
-      diagnosticCodesToIgnore: [2307],
-    });
-    ts.javascriptDefaults.setDiagnosticsOptions({
-      noSemanticValidation: false,
-      noSyntaxValidation: false,
-      diagnosticCodesToIgnore: [2307],
-    });
+    // Semantic validation stays disabled (set at module level) — types are
+    // loaded for IntelliSense/autocomplete/go-to-definition, not for diagnostics.
   }
 
   // Phase 3: Load project source files as models for Go to Definition
+  // Cap at 100 models to avoid Monaco listener leak (each model registers internal listeners)
+  const MAX_SOURCE_MODELS = 100;
   const sourceFiles = await window.phantomOS.invoke(
     'phantom:scan-source-files', repoPath,
   ) as { path: string; content: string }[] | null;
 
   if (sourceFiles && sourceFiles.length > 0) {
     const workspaceModels = new Set<string>();
-    for (const { path, content } of sourceFiles) {
+    const capped = sourceFiles.slice(0, MAX_SOURCE_MODELS);
+    for (const { path, content } of capped) {
       const uri = monaco.Uri.parse(`file:///${path}`);
-      // Only create model if it doesn't already exist (e.g. already open in editor)
       if (!monaco.editor.getModel(uri)) {
         monaco.editor.createModel(content, undefined, uri);
       }
       workspaceModels.add(uri.toString());
     }
     modelsByWorkspace.set(repoPath, workspaceModels);
-    console.log(`[Monaco] Tracked ${workspaceModels.size} models for workspace ${repoPath}`);
+    console.log(`[Monaco] Loaded ${workspaceModels.size}/${sourceFiles.length} source models (capped at ${MAX_SOURCE_MODELS})`);
   }
 }
 

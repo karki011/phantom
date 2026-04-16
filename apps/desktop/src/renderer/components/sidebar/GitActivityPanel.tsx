@@ -573,13 +573,14 @@ export function GitActivityPanel() {
   const refreshTrigger = useAtomValue(activityRefreshAtom);
   const [initialLoading, setInitialLoading] = useState(true);
 
-  // Clear stale cached data and mark loading on worktree switch
+  // On worktree switch, show loading only if we have no cached data for this worktree.
+  // atomFamily data is keyed by wtId — no need to clear, previous worktree stays warm.
+  const currentPr = useAtomValue(prStatusFamily(wtId));
+  const hasCachedData = currentPr !== null;
+
   useEffect(() => {
-    setPrStatus(null);
-    setCiRuns(null);
-    setCommits([]);
-    setInitialLoading(true);
-  }, [wtId, setPrStatus, setCiRuns, setCommits]);
+    if (!hasCachedData) setInitialLoading(true);
+  }, [wtId, hasCachedData]);
 
   // Adaptive CI polling: 10s when checks in-progress, 30s when settled
   const ciHasPendingRef = useRef(false);

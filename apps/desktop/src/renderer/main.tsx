@@ -43,6 +43,17 @@ const applyFontScale = () => {
 applyFontScale();
 
 // ---------------------------------------------------------------------------
+// Suppress Monaco "Canceled" noise — thrown when a DiffEditor unmounts
+// while an async diff computation is in-flight. Harmless internal cleanup.
+// ---------------------------------------------------------------------------
+
+window.addEventListener('unhandledrejection', (e) => {
+  if (e.reason?.message === 'Canceled' || e.reason?.name === 'Canceled') {
+    e.preventDefault();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Mount
 // ---------------------------------------------------------------------------
 

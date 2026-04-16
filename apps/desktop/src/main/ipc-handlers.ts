@@ -164,7 +164,13 @@ export const registerIpcHandlers = (): void => {
     try {
       const watcher = watch(rootPath, { recursive: true }, (_eventType, filename) => {
         if (!filename) return;
-        // Skip .git internals — they fire constantly during git ops
+        // Detect branch changes (.git/refs/heads/) — emit special event
+        const isGitRef = filename.startsWith('.git/refs/') || filename.startsWith('.git\\refs\\');
+        if (isGitRef) {
+          queueFsChange(rootPath, '.git/refs', filename);
+          return;
+        }
+        // Skip other .git internals — they fire constantly during git ops
         if (filename.startsWith('.git/') || filename.startsWith('.git\\')) return;
         const dir = dirname(filename);
         queueFsChange(rootPath, dir === '.' ? '/' : dir, filename);

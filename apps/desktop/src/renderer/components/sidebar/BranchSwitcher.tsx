@@ -28,7 +28,6 @@ import {
 } from 'lucide-react';
 import {
   type PropsWithChildren,
-  type ReactNode,
   useCallback,
   useEffect,
   useRef,
@@ -72,7 +71,6 @@ export function BranchSwitcher({
 
   // Context menu state
   const [menuOpened, setMenuOpened] = useState(false);
-  const menuTargetRef = useRef<HTMLDivElement>(null);
 
   // Branch picker modal state
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -90,10 +88,6 @@ export function BranchSwitcher({
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (menuTargetRef.current) {
-      menuTargetRef.current.style.left = `${e.clientX}px`;
-      menuTargetRef.current.style.top = `${e.clientY}px`;
-    }
     setMenuOpened(true);
   }, []);
 
@@ -186,13 +180,10 @@ export function BranchSwitcher({
 
   return (
     <>
-      {/* Right-click target */}
-      <div onContextMenu={handleContextMenu}>{children}</div>
-
       {/* Context menu */}
       <Menu
         opened={menuOpened}
-        onChange={setMenuOpened}
+        onChange={(val) => { if (!val) setMenuOpened(false); }}
         shadow="md"
         width={200}
         position="bottom-start"
@@ -215,7 +206,7 @@ export function BranchSwitcher({
         }}
       >
         <Menu.Target>
-          <div ref={menuTargetRef} style={{ position: 'fixed', width: 1, height: 1, pointerEvents: 'none' }} />
+          <div onContextMenu={handleContextMenu}>{children}</div>
         </Menu.Target>
         <Menu.Dropdown>
           <Menu.Item

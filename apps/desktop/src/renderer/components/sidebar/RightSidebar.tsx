@@ -31,7 +31,7 @@ import {
   activePrStatusAtom,
   activeIsCreatingPrAtom,
 } from '../../atoms/activity';
-import { gitFetch } from '../../lib/api';
+import { gitFetch, invalidateCache } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
 import { ResizeHandle } from './ResizeHandle';
 import { FilesView } from './FilesView';
@@ -108,11 +108,17 @@ export function RightSidebar() {
 
     // Listen for batched fs-change events from the main process
     const cleanup = window.phantomOS?.onFsChange?.((data) => {
-      // Only process events for the current worktree
       if (data.rootPath !== wtPath) return;
-      // Invalidate the changed directory in the file tree cache
+
+      // Git ref changes (.git/refs/) = new/deleted branches
+      if (data.dir === '.git/refs') {
+        invalidateCache('/api/projects');
+        queryClient.invalidateQueries({ queryKey: ['git-status', wtId] });
+        return;
+      }
+
+      // File changes — refresh tree + git status
       fetchDirectory({ worktreeId: wtId, path: data.dir || '/' });
-      // File changes likely affect git status — invalidate to refresh
       queryClient.invalidateQueries({ queryKey: ['git-status', wtId] });
     });
 

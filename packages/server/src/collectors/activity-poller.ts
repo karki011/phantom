@@ -7,7 +7,7 @@ import { logger } from '../logger.js';
 import { openSync, readSync, closeSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { eq } from 'drizzle-orm';
-import { db, sessions } from '@phantom-os/db';
+import { db, sessions, activityLog } from '@phantom-os/db';
 import { PROJECTS_DIR } from '@phantom-os/shared/constants-node';
 import { safeReadDir } from '@phantom-os/shared/file-utils';
 
@@ -186,21 +186,61 @@ const extractEvents = (chunk: string, sessionId: string, sessionName: string): A
             }
           }
 
-          if (!toolConfig) continue;
+          // Resolve category/icon for known tools, MCP tools, and unknown tools
+          let category: string;
+          let icon: string;
+          let displayName = toolName;
+          let mcpServer: string | undefined;
+          let mcpTool: string | undefined;
+
+          if (toolConfig) {
+            category = toolConfig.category;
+            icon = toolConfig.icon;
+          } else if (toolName.startsWith('mcp__')) {
+            // MCP tool: mcp__<server>__<tool> → extract server + tool
+            const parts = toolName.split('__');
+            mcpServer = parts[1] ?? 'unknown';
+            mcpTool = parts.slice(2).join('__') || 'unknown';
+            displayName = `${mcpServer}:${mcpTool}`;
+            category = 'mcp';
+            icon = 'plug';
+          } else {
+            category = 'code';
+            icon = 'circle';
+          }
 
           const detail = extractToolDetail(toolName, toolInput);
           events.push({
             id: `act-${sessionId.slice(0, 6)}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             sessionId,
             sessionName,
-            category: toolConfig.category,
-            icon: toolConfig.icon,
-            message: `${toolConfig.prefix} ${detail}`,
+            category,
+            icon,
+            message: toolConfig ? `${toolConfig.prefix} ${detail}` : `${displayName} ${detail}`,
             detail: toolName === 'Read' || toolName === 'Edit' || toolName === 'Write'
               ? (toolInput.file_path as string | undefined) ?? undefined
               : undefined,
             timestamp,
           });
+
+          // Persist to DB for cross-session analytics
+          try {
+            db.insert(activityLog).values({
+              timestamp: new Date(timestamp).getTime(),
+              type: toolName,
+              sessionId,
+              metadata: JSON.stringify({
+                category,
+                detail,
+                sessionName,
+                displayName,
+                skill: toolName === 'Skill' ? (toolInput.skill as string | undefined) : undefined,
+                agentDesc: toolName === 'Agent' ? (toolInput.description as string | undefined) : undefined,
+                mcpServer,
+                mcpTool,
+              }),
+            }).run();
+          } catch { /* non-critical — don't break the poller */ }
         } else if (b.type === 'text') {
           const text = b.text as string | undefined;
           if (!text) continue;
