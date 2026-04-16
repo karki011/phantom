@@ -41,6 +41,11 @@ export class FileWatcher {
   private gitHeadWatcher: FSWatcher | null = null;
   private watching = false;
   private projectId = '';
+  private usePolling = false;
+  private emfileRecoveryTimer: NodeJS.Timeout | null = null;
+  private lastErrorLogAt = 0;
+  private errorCountSinceLog = 0;
+  private errorLogTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private updater: IncrementalUpdater,
@@ -69,6 +74,12 @@ export class FileWatcher {
         ignoreInitial: true,
         persistent: true,
         awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
+        // Polling fallback is activated after an EMFILE is observed — it uses
+        // far fewer file descriptors at the cost of CPU. Suppresses the error
+        // spam during large pulls / new-project adds.
+        usePolling: this.usePolling,
+        interval: 1000,
+        binaryInterval: 2000,
       });
 
       this.watcher.on('add', (path: string) => {
@@ -101,8 +112,7 @@ export class FileWatcher {
       });
 
       this.watcher.on('error', (error: unknown) => {
-        const msg = error instanceof Error ? error.message : String(error);
-        console.warn('[FileWatcher] Watcher error:', msg);
+        this.handleWatcherError(error);
       });
 
       // Watch .git/HEAD for branch switches
@@ -115,10 +125,78 @@ export class FileWatcher {
   }
 
   /**
+   * Handle watcher errors with throttled logging and EMFILE auto-recovery.
+   * EMFILE floods during large git pulls or new-project adds — we log once,
+   * then swap to polling mode which uses 1 FD instead of N.
+   */
+  private handleWatcherError(error: unknown): void {
+    const msg = error instanceof Error ? error.message : String(error);
+    const isEmfile = msg.includes('EMFILE') || msg.includes('ENFILE');
+
+    // Throttle: log at most once per 5s, batch count of suppressed errors
+    this.errorCountSinceLog += 1;
+    const now = Date.now();
+    if (now - this.lastErrorLogAt > 5000) {
+      const suppressed = this.errorCountSinceLog - 1;
+      const suffix = suppressed > 0 ? ` (+${suppressed} more suppressed)` : '';
+      console.warn(`[FileWatcher] Watcher error: ${msg}${suffix}`);
+      this.lastErrorLogAt = now;
+      this.errorCountSinceLog = 0;
+    } else if (!this.errorLogTimer) {
+      // Ensure the final batched count is eventually logged
+      this.errorLogTimer = setTimeout(() => {
+        this.errorLogTimer = null;
+        if (this.errorCountSinceLog > 0) {
+          console.warn(
+            `[FileWatcher] Watcher error batch: ${this.errorCountSinceLog} suppressed in last 5s`,
+          );
+          this.lastErrorLogAt = Date.now();
+          this.errorCountSinceLog = 0;
+        }
+      }, 5000);
+    }
+
+    // On EMFILE, switch to polling — debounced so a burst triggers only one restart
+    if (isEmfile && !this.usePolling && !this.emfileRecoveryTimer) {
+      this.emfileRecoveryTimer = setTimeout(() => {
+        this.emfileRecoveryTimer = null;
+        console.warn(
+          '[FileWatcher] EMFILE detected — switching to polling mode to reduce file descriptor usage',
+        );
+        this.usePolling = true;
+        this.restart();
+      }, 500);
+    }
+  }
+
+  /** Stop and re-start watcher, preserving projectId and config. */
+  private restart(): void {
+    if (this.watcher) {
+      void this.watcher.close();
+      this.watcher = null;
+    }
+    if (this.gitHeadWatcher) {
+      void this.gitHeadWatcher.close();
+      this.gitHeadWatcher = null;
+    }
+    this.watching = false;
+    this.start();
+  }
+
+  /**
    * Stop watching and clean up.
    * No-op if not watching.
    */
   stop(): void {
+    if (this.emfileRecoveryTimer) {
+      clearTimeout(this.emfileRecoveryTimer);
+      this.emfileRecoveryTimer = null;
+    }
+    if (this.errorLogTimer) {
+      clearTimeout(this.errorLogTimer);
+      this.errorLogTimer = null;
+    }
+
     if (!this.watching && !this.watcher && !this.gitHeadWatcher) return;
 
     if (this.watcher) {
