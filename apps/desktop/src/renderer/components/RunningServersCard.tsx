@@ -8,8 +8,6 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import type { RunningServer } from '../lib/api';
 import { getRunningServers, stopServer } from '../lib/api';
 
-const apiBase = (window as any).__PHANTOM_API_BASE ?? '';
-
 const formatUptime = (startedAt: number): string => {
   const ms = Date.now() - startedAt;
   const sec = Math.floor(ms / 1000);
@@ -26,32 +24,30 @@ interface RunningServersCardProps {
 
 export const RunningServersCard = memo(function RunningServersCard({ worktreeId }: RunningServersCardProps) {
   const [servers, setServers] = useState<RunningServer[]>([]);
+  const [, setTick] = useState(0); // trigger re-render for uptime display
 
   const refresh = useCallback(() => {
     getRunningServers(worktreeId).then(setServers).catch(() => {});
   }, [worktreeId]);
 
-  // Poll every 3 seconds + SSE events
+  // Fetch on mount + SSE events for start/stop — no API polling
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, 3000);
 
-    // Listen for SSE server events
-    const eventSource = new EventSource(`${apiBase}/events`);
-    eventSource.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === 'server:start' || msg.type === 'server:stop') {
-          refresh();
-        }
-      } catch { /* ignore */ }
-    };
+    const onServerChange = () => refresh();
+    window.addEventListener('phantom:server-change', onServerChange);
 
     return () => {
-      clearInterval(interval);
-      eventSource.close();
+      window.removeEventListener('phantom:server-change', onServerChange);
     };
   }, [refresh]);
+
+  // Local timer to update uptime display every 10s (no API call)
+  useEffect(() => {
+    if (servers.length === 0) return;
+    const interval = setInterval(() => setTick((t) => t + 1), 10_000);
+    return () => clearInterval(interval);
+  }, [servers.length]);
 
   const handleStop = useCallback(async (termId: string) => {
     await stopServer(termId);

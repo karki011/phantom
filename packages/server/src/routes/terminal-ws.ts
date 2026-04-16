@@ -37,17 +37,48 @@ export function setupTerminalWs(server: HttpServer | HttpsServer): void {
 function handleConnection(ws: WebSocket, termId: string): void {
   let session = getPtySession(termId);
 
-  // Output relay — created once, passed as initialListener to createPty
-  // so it's attached BEFORE the daemon starts sending output.
-  const onData = (data: string) => {
-    // Skip if WebSocket buffer is backed up (>1MB) to prevent memory pressure
+  // Batch terminal output at 12ms intervals (VS Code pattern)
+  // Accumulates PTY chunks and sends a single WebSocket message per interval,
+  // reducing JSON serialization overhead and browser message handling.
+  let outputChunks: string[] = [];
+  let outputLength = 0;
+  let flushTimer: ReturnType<typeof setTimeout> | null = null;
+  const BATCH_INTERVAL_MS = 12;
+
+  const flushOutput = () => {
+    flushTimer = null;
+    if (outputChunks.length === 0) return;
     if (ws.readyState === WebSocket.OPEN && ws.bufferedAmount < 1024 * 1024) {
-      ws.send(JSON.stringify({ type: 'output', data }));
+      ws.send(JSON.stringify({ type: 'output', data: outputChunks.join('') }));
+    }
+    outputChunks = [];
+    outputLength = 0;
+  };
+
+  const onData = (data: string) => {
+    outputChunks.push(data);
+    outputLength += data.length;
+    // If buffer is large (>16KB), flush immediately to avoid visible latency
+    if (outputLength > 16_384) {
+      if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+      flushOutput();
+      return;
+    }
+    // Otherwise batch at 12ms interval
+    if (!flushTimer) {
+      flushTimer = setTimeout(flushOutput, BATCH_INTERVAL_MS);
     }
   };
 
   ws.on('close', (code, reason) => {
     logger.debug('TerminalWS', `ws.close termId=${termId.slice(0,8)} code=${code} reason=${reason?.toString() ?? ''}`);
+    // Clean up batch timer and flush remaining output before detaching
+    if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+    if (outputChunks.length > 0 && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'output', data: outputChunks.join('') }));
+      outputChunks = [];
+      outputLength = 0;
+    }
     if (session) {
       detachPty(termId, onData);
       // Only unregister process if no other listeners remain

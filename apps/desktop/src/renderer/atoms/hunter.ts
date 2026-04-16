@@ -1,48 +1,29 @@
 /**
  * Hunter Jotai Atoms
- * Writable atoms that keep previous data during refetch (no flash)
+ * Now backed by TanStack Query via atoms/queries.ts.
+ * Re-exports for backward compatibility + legacy refresh atom that invalidates queries.
  *
  * @author Subash Karki
  */
 import { atom } from 'jotai';
 
-import { type HunterData, type HunterProfile, type HunterStats, getHunter } from '../lib/api';
+import { queryClient } from '../lib/queryClient';
 
 // ---------------------------------------------------------------------------
-// Data atoms — hold current values, never cleared during refetch
+// Re-exports from TanStack Query atoms
 // ---------------------------------------------------------------------------
 
-const hunterDataAtom = atom<HunterData | null>(null);
-const hunterLoadingAtom = atom(false);
+export {
+  hunterProfileAtom,
+  hunterStatsAtom,
+  hunterLoadingStateAtom,
+  hunterStatusAtom,
+} from './queries';
 
 // ---------------------------------------------------------------------------
-// Refresh action — fetches in background, updates data atom when done
+// Backward-compatible refresh atom (now invalidates TanStack Query cache)
 // ---------------------------------------------------------------------------
 
-export const refreshHunterAtom = atom(null, async (_get, set) => {
-  set(hunterLoadingAtom, true);
-  try {
-    const data = await getHunter();
-    set(hunterDataAtom, data);
-  } catch {
-    // Keep previous data on error
-  } finally {
-    set(hunterLoadingAtom, false);
-  }
+export const refreshHunterAtom = atom(null, () => {
+  queryClient.invalidateQueries({ queryKey: ['hunter'] });
 });
-
-// ---------------------------------------------------------------------------
-// Derived read atoms
-// ---------------------------------------------------------------------------
-
-export const hunterProfileAtom = atom<HunterProfile | null>((get) => {
-  const data = get(hunterDataAtom);
-  return data?.profile ?? null;
-});
-
-export const hunterStatsAtom = atom<HunterStats | null>((get) => {
-  const data = get(hunterDataAtom);
-  return data?.stats ?? null;
-});
-
-export const hunterLoadingStateAtom = atom((get) => get(hunterLoadingAtom));

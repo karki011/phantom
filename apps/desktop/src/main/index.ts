@@ -9,6 +9,7 @@ import { startServer, stopServer } from './server';
 import { createWindow } from './window';
 import { registerLifecycle, allowQuit } from './lifecycle';
 import { registerIpcHandlers } from './ipc-handlers';
+import { shutdownScannerWorker } from './scanner-bridge';
 
 // Set app name immediately — before anything else so macOS dock shows "PhantomOS"
 app.setName('PhantomOS');
@@ -26,6 +27,7 @@ startServer().then(() => {
 app.on('before-quit', () => {
   if (allowQuit()) {
     console.log('[PhantomOS Desktop] Shutting down server...');
+    shutdownScannerWorker();
     stopServer();
     // In dev mode, electron-vite/turbo keep running after Electron exits.
     // Send SIGTERM to parent process (electron-vite) which cascades to turbo.

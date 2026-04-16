@@ -105,7 +105,7 @@ export const TerminalPane = ({
 
   return (
     <div
-      style={{ position: 'relative', width: '100%', height: '100%' }}
+      style={{ position: 'relative', width: '100%', height: '100%', contain: 'strict' }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -174,6 +174,7 @@ export const TerminalPane = ({
           paddingTop: showRestoreBanner ? '40px' : '4px',
           overflow: 'hidden',
           boxSizing: 'border-box',
+          contain: 'layout style paint',
         }}
         data-pane-id={paneId}
         data-cold-restore={coldRestore ? 'true' : undefined}

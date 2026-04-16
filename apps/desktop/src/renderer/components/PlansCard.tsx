@@ -82,10 +82,9 @@ export const PlansCard = memo(function PlansCard({ worktreeId }: { worktreeId: s
       .finally(() => { if (showLoading) setLoading(false); });
   }, [worktreeId]);
 
+  // Fetch on mount — TanStack Query handles background refetch + SSE invalidation
   useEffect(() => {
     refresh(true);
-    const interval = setInterval(() => refresh(), 30_000);
-    return () => clearInterval(interval);
   }, [refresh]);
 
   const total = grouped.branch.length + grouped.project.length;

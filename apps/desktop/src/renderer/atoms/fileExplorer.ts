@@ -17,6 +17,9 @@ import {
 // File tree cache — Map<directoryPath, FileEntry[]>
 // ---------------------------------------------------------------------------
 
+/** Max cached directory listings across all worktrees */
+const MAX_CACHE_ENTRIES = 200;
+
 const fileTreeDataAtom = atom<Map<string, FileEntry[]>>(new Map());
 
 export const fileTreeAtom = atom((get) => get(fileTreeDataAtom));
@@ -98,9 +101,46 @@ export const fetchDirectoryAtom = atom(
 );
 
 // ---------------------------------------------------------------------------
-// Clear file tree (on worktree switch)
+// LRU eviction — trim stale file tree entries
 // ---------------------------------------------------------------------------
 
+/** Evict stale file tree entries when cache exceeds MAX_CACHE_ENTRIES.
+ *  Keeps all entries for the given worktreeId; evicts from others. */
+export const trimFileTreeCacheAtom = atom(
+  null,
+  (get, set, activeWorktreeId: string) => {
+    const tree = get(fileTreeDataAtom);
+    if (tree.size <= MAX_CACHE_ENTRIES) return;
+
+    const next = new Map<string, FileEntry[]>();
+    const overflow: string[] = [];
+
+    // Keep all entries for the active worktree
+    for (const [key, entries] of tree) {
+      if (key.startsWith(`${activeWorktreeId}:`)) {
+        next.set(key, entries);
+      } else {
+        overflow.push(key);
+      }
+    }
+
+    // If still over limit after keeping active, trim from overflow
+    // Keep most recently added (last in Map iteration order)
+    const remaining = MAX_CACHE_ENTRIES - next.size;
+    const toKeep = overflow.slice(-Math.max(0, remaining));
+    for (const key of toKeep) {
+      next.set(key, tree.get(key)!);
+    }
+
+    set(fileTreeDataAtom, next);
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Clear file tree
+// ---------------------------------------------------------------------------
+
+/** @deprecated File tree cache now persists across switches. Kept for manual-refresh scenarios. */
 export const clearFileTreeAtom = atom(null, (_get, set) => {
   set(fileTreeDataAtom, new Map());
   set(expandedFoldersAtom, []);
@@ -117,18 +157,11 @@ export const rightSidebarTabAtom = atomWithStorage<'files' | 'changes' | 'activi
 );
 
 // ---------------------------------------------------------------------------
-// Git status for the active worktree
-// Owned by RightSidebar (always mounted) so the badge stays in sync
-// even when the Changes tab is inactive and ChangesView is unmounted.
+// Git status — now backed by TanStack Query (per-worktree cached)
+// Re-exported here for backwards compatibility with existing consumers.
 // ---------------------------------------------------------------------------
 
-export const gitStatusAtom = atom<import('../lib/api').GitStatusResult | null>(null);
-
-/** Derived count — drives the Changes tab badge */
-export const gitChangesCountAtom = atom((get) => {
-  const status = get(gitStatusAtom);
-  return status?.files.length ?? 0;
-});
+export { gitStatusAtom, gitChangesCountAtom } from './queries';
 
 // ---------------------------------------------------------------------------
 // Root file count (derived from file tree root entries)

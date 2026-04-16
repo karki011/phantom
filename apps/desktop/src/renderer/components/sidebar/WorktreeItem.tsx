@@ -7,7 +7,7 @@
 import { Button, Text, TextInput, Tooltip, UnstyledButton } from '@mantine/core';
 import { AlertTriangle, GitFork } from 'lucide-react';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { GitStatusResult, WorktreeData } from '../../lib/api';
 import { getGitStatus } from '../../lib/api';
 import { deleteWorktreeAtom, updateWorktreeAtom } from '../../atoms/worktrees';
@@ -23,7 +23,7 @@ interface WorktreeItemProps {
   isLast?: boolean;
 }
 
-export function WorktreeItem({
+export const WorktreeItem = React.memo(function WorktreeItem({
   worktree,
   isActive,
   onSelect,
@@ -41,12 +41,9 @@ export function WorktreeItem({
   const isMerged = prStatus?.state === 'MERGED';
   const renameInputRef = useRef<HTMLInputElement>(null);
 
-  // Poll git status every 15s
+  // Fetch git status on mount — TanStack Query handles background refetch + SSE invalidation
   useEffect(() => {
-    const fetch = () => getGitStatus(worktree.id).then(setGitStatus).catch(() => {});
-    fetch();
-    const interval = setInterval(fetch, 15_000);
-    return () => clearInterval(interval);
+    getGitStatus(worktree.id).then(setGitStatus).catch(() => {});
   }, [worktree.id]);
 
   useEffect(() => {
@@ -285,4 +282,4 @@ export function WorktreeItem({
       </Tooltip>
     </WorktreeContextMenu>
   );
-}
+});

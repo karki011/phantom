@@ -17,7 +17,7 @@ import {
   Folder,
   FolderOpen,
 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import type { FileEntry } from '../../lib/api';
 
 interface FileTreeItemProps {
@@ -58,7 +58,7 @@ function getFileIcon(name: string) {
 }
 
 
-export function FileTreeItem({
+export const FileTreeItem = React.memo(function FileTreeItem({
   entry,
   depth,
   isExpanded,
@@ -210,4 +210,4 @@ export function FileTreeItem({
       </Menu.Dropdown>
     </Menu>
   );
-}
+});

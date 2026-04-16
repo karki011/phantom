@@ -66,6 +66,29 @@ export const pushFeedEventAtom = atom(
 );
 
 /**
+ * Batch action atom that prepends multiple events in a single state update.
+ * Deduplicates against existing events and within the incoming batch.
+ */
+export const pushFeedEventsAtom = atom(
+  null,
+  (get, set, events: FeedEvent[]) => {
+    if (events.length === 0) return;
+    const current = get(liveFeedAtom);
+    const existingIds = new Set(current.map((e) => e.id));
+    const newEvents: FeedEvent[] = [];
+    for (const event of events) {
+      if (!existingIds.has(event.id)) {
+        existingIds.add(event.id);
+        newEvents.push(event);
+      }
+    }
+    if (newEvents.length === 0) return;
+    const updated = [...newEvents, ...current].slice(0, MAX_FEED_EVENTS);
+    set(liveFeedAtom, updated);
+  },
+);
+
+/**
  * Derive the category from event type for filtering
  */
 const deriveCategory = (event: FeedEvent): string => {

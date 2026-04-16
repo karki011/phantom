@@ -4,7 +4,7 @@
  * @author Subash Karki
  */
 import type React from 'react';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import {
   ActionIcon,
   Tabs,
@@ -19,23 +19,20 @@ import {
   rightSidebarWidthAtom,
 } from '../../atoms/worktrees';
 import {
-  clearFileTreeAtom,
   expandedFoldersAtom,
   fetchDirectoryAtom,
   rightSidebarTabAtom,
   selectedFileAtom,
   gitChangesCountAtom,
-  gitStatusAtom,
   rootFileCountAtom,
+  trimFileTreeCacheAtom,
 } from '../../atoms/fileExplorer';
 import {
   activePrStatusAtom,
   activeIsCreatingPrAtom,
-  prStatusFamily,
-  ciRunsFamily,
-  commitsFamily,
 } from '../../atoms/activity';
-import { getGitStatus, gitFetch } from '../../lib/api';
+import { gitFetch } from '../../lib/api';
+import { queryClient } from '../../lib/queryClient';
 import { ResizeHandle } from './ResizeHandle';
 import { FilesView } from './FilesView';
 import { ChangesView } from './ChangesView';
@@ -61,75 +58,74 @@ export function RightSidebar() {
   // can't reliably run effects when their tab isn't selected.
   // ------------------------------------------------------------------
   const worktree = useAtomValue(activeWorktreeAtom);
-  const worktreeIdRef = useRef(worktree?.id);
 
-  // --- Changes tab: git status polling ---
-  const setGitStatus = useSetAtom(gitStatusAtom);
-
+  // --- Changes tab: git status via TanStack Query ---
+  // Git status is now a per-worktree query (stale-while-revalidate).
+  // Switching back to a previously visited worktree shows cached data instantly.
+  // Manual refresh events invalidate the query to trigger background refetch.
   useEffect(() => {
-    const wtId = worktree?.id ?? null;
-    worktreeIdRef.current = wtId;
+    if (!worktree?.id) return;
+    const wtId = worktree.id;
 
-    // Immediate reset — badge clears before the fetch resolves
-    setGitStatus(null);
-
-    if (!wtId) return;
-
-    const fetchStatus = () => {
-      getGitStatus(wtId).then((result) => {
-        if (worktreeIdRef.current === wtId) setGitStatus(result);
-      }).catch(() => {
-        if (worktreeIdRef.current === wtId) setGitStatus(null);
-      });
+    const onManualRefresh = () => {
+      queryClient.invalidateQueries({ queryKey: ['git-status', wtId] });
     };
-
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 10_000);
-
-    const onManualRefresh = () => fetchStatus();
     window.addEventListener('phantom:git-refresh', onManualRefresh);
 
     return () => {
-      clearInterval(interval);
       window.removeEventListener('phantom:git-refresh', onManualRefresh);
     };
-  }, [worktree?.id, setGitStatus]);
+  }, [worktree?.id]);
 
-  // --- Files tab: clear stale tree + prefetch root ---
-  const clearFileTree = useSetAtom(clearFileTreeAtom);
+  // --- Files tab: reset UI state + prefetch root ---
+  // File tree cache is keyed by `${worktreeId}:${path}` so data is naturally
+  // per-worktree isolated — no need to clear it on switch. We only reset
+  // UI state (selectedFile, expandedFolders) which is NOT per-worktree keyed.
   const fetchDirectory = useSetAtom(fetchDirectoryAtom);
+  const setSelectedFile = useSetAtom(selectedFileAtom);
+  const setExpandedFolders = useSetAtom(expandedFoldersAtom);
+  const trimFileTreeCache = useSetAtom(trimFileTreeCacheAtom);
 
   useEffect(() => {
-    clearFileTree();
+    // Reset UI state (not per-worktree keyed) but keep file tree cache warm
+    setSelectedFile(null);
+    setExpandedFolders([]);
     if (worktree?.id) {
       fetchDirectory({ worktreeId: worktree.id, path: '/' });
+      trimFileTreeCache(worktree.id);
     }
-  }, [worktree?.id, clearFileTree, fetchDirectory]);
+  }, [worktree?.id, fetchDirectory, setSelectedFile, setExpandedFolders, trimFileTreeCache]);
 
-  // --- Activity tab: invalidate cached atom-family entries ---
-  // Removing the entry causes the atom to return its default (null / [])
-  // next time GitActivityPanel mounts, so no stale cross-worktree data.
-  const prevWorktreeIdRef = useRef<string | null>(null);
-
+  // --- Real-time file watching via main-process fs.watch ---
   useEffect(() => {
-    const prevId = prevWorktreeIdRef.current;
-    const nextId = worktree?.id ?? null;
-    prevWorktreeIdRef.current = nextId;
+    if (!worktree?.worktreePath || !worktree?.id) return;
 
-    // Invalidate BOTH previous and next entries:
-    // - previous: free memory from the worktree we just left
-    // - next: clear any stale cache from an earlier visit
-    if (prevId) {
-      prStatusFamily.remove(prevId);
-      ciRunsFamily.remove(prevId);
-      commitsFamily.remove(prevId);
-    }
-    if (nextId) {
-      prStatusFamily.remove(nextId);
-      ciRunsFamily.remove(nextId);
-      commitsFamily.remove(nextId);
-    }
-  }, [worktree?.id]);
+    const wtPath = worktree.worktreePath;
+    const wtId = worktree.id;
+
+    // Start watching the worktree directory (recursive, uses FSEvents on macOS)
+    window.phantomOS?.watchDirectory?.(wtPath);
+
+    // Listen for batched fs-change events from the main process
+    const cleanup = window.phantomOS?.onFsChange?.((data) => {
+      // Only process events for the current worktree
+      if (data.rootPath !== wtPath) return;
+      // Invalidate the changed directory in the file tree cache
+      fetchDirectory({ worktreeId: wtId, path: data.dir || '/' });
+      // File changes likely affect git status — invalidate to refresh
+      queryClient.invalidateQueries({ queryKey: ['git-status', wtId] });
+    });
+
+    return () => {
+      cleanup?.();
+      window.phantomOS?.unwatchDirectory?.(wtPath);
+    };
+  }, [worktree?.id, worktree?.worktreePath, fetchDirectory]);
+
+  // --- Activity tab: atomFamily data persists across switches ---
+  // prStatusFamily, ciRunsFamily, commitsFamily are keyed by worktreeId,
+  // so data is naturally isolated. Keeping it warm avoids redundant fetches
+  // when switching back. GitActivityPanel fetches fresh data on mount anyway.
 
   // --- Background git fetch every 60s so ahead/behind counts stay fresh ---
   useEffect(() => {
@@ -141,9 +137,6 @@ export function RightSidebar() {
   }, [worktree?.id]);
 
   // --- Reveal file in sidebar (triggered from tab context menu) ---
-  const setSelectedFile = useSetAtom(selectedFileAtom);
-  const setExpandedFolders = useSetAtom(expandedFoldersAtom);
-
   useEffect(() => {
     const handler = (e: CustomEvent<{ filePath: string }>) => {
       const filePath = e.detail?.filePath;
@@ -230,6 +223,8 @@ export function RightSidebar() {
         backgroundColor: 'var(--phantom-surface-card)',
         borderLeft: '1px solid var(--phantom-border-subtle)',
         position: 'relative',
+        contain: 'content',
+        willChange: 'width',
       }}
     >
       <Tabs
@@ -312,13 +307,13 @@ export function RightSidebar() {
         </div>
 
         {/* Content */}
-        <Tabs.Panel value="files" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <Tabs.Panel value="files" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', contain: 'layout style paint' }}>
           <FilesView />
         </Tabs.Panel>
-        <Tabs.Panel value="changes" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <Tabs.Panel value="changes" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', contain: 'layout style paint' }}>
           <ChangesView />
         </Tabs.Panel>
-        <Tabs.Panel value="activity" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <Tabs.Panel value="activity" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', contain: 'layout style paint' }}>
           <GitActivityPanel />
         </Tabs.Panel>
       </Tabs>

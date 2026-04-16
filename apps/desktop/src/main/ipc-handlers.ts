@@ -6,9 +6,11 @@
  */
 import { app, ipcMain, dialog, shell, BrowserWindow } from 'electron';
 import { setAllowQuit } from './lifecycle.js';
+import { workerRequest } from './scanner-bridge.js';
 import { execFile } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { watch } from 'node:fs';
+import type { FSWatcher } from 'node:fs';
+import { dirname } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -82,207 +84,31 @@ export const registerIpcHandlers = (): void => {
     }
   });
 
-  /** Read and parse tsconfig.json from a workspace root */
-  ipcMain.handle('phantom:read-tsconfig', (_e, repoPath: string) => {
+  /** Read and parse tsconfig.json — delegated to utilityProcess worker */
+  ipcMain.handle('phantom:read-tsconfig', async (_e, repoPath: string) => {
     try {
-      const tsconfigPath = join(repoPath, 'tsconfig.json');
-      if (!existsSync(tsconfigPath)) return null;
-      const raw = readFileSync(tsconfigPath, 'utf-8');
-      // Strip comments (tsconfig allows them) before parsing
-      const stripped = raw.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-      const parsed = JSON.parse(stripped);
-      return parsed.compilerOptions ?? null;
+      return await workerRequest('read-tsconfig', { repoPath });
     } catch {
       return null;
     }
   });
 
-  /** Scan node_modules/@types and direct dependency types, return type definitions */
-  ipcMain.handle('phantom:read-types', (_e, repoPath: string) => {
-    const results: { filePath: string; content: string }[] = [];
-    const MAX_FILES = 100;
-    const MAX_FILE_SIZE = 512 * 1024; // 512KB per file
-
-    /** Read a single .d.ts file and push to results. Returns the content or null. */
-    const pushTypeFile = (absPath: string, virtualPath: string): string | null => {
-      if (results.length >= MAX_FILES) return null;
-      try {
-        const content = readFileSync(absPath, 'utf-8');
-        if (content.length <= MAX_FILE_SIZE) {
-          results.push({ filePath: virtualPath, content });
-          return content;
-        }
-      } catch { /* skip unreadable */ }
-      return null;
-    };
-
-    /**
-     * Parse `/// <reference types="pkg" />` directives from a .d.ts file and
-     * load each referenced package's root types (1 level deep only).
-     */
-    const followReferenceDirectives = (content: string): void => {
-      const refRe = /\/\/\/\s*<reference\s+types="([^"]+)"\s*\/>/g;
-      let match: RegExpExecArray | null;
-      while ((match = refRe.exec(content)) !== null) {
-        if (results.length >= MAX_FILES) break;
-        const refPkg = match[1];
-        // Resolve: first check @types/<refPkg>, then node_modules/<refPkg>
-        const candidates: [string, string][] = [
-          [
-            join(repoPath, 'node_modules', '@types', refPkg, 'index.d.ts'),
-            `file:///node_modules/@types/${refPkg}/index.d.ts`,
-          ],
-          [
-            join(repoPath, 'node_modules', refPkg, 'index.d.ts'),
-            `file:///node_modules/${refPkg}/index.d.ts`,
-          ],
-        ];
-        for (const [absPath, virtualPath] of candidates) {
-          // Skip if already loaded
-          if (results.some(r => r.filePath === virtualPath)) break;
-          if (existsSync(absPath)) {
-            pushTypeFile(absPath, virtualPath);
-            break;
-          }
-        }
-      }
-    };
-
-    // 1. Scan node_modules/@types — including scoped dirs like @types/@scope/pkg
-    const typesDir = join(repoPath, 'node_modules', '@types');
-    if (existsSync(typesDir)) {
-      try {
-        for (const entry of readdirSync(typesDir)) {
-          if (results.length >= MAX_FILES) break;
-          const entryPath = join(typesDir, entry);
-
-          if (entry.startsWith('@')) {
-            // Scoped dir under @types (e.g. @types/@testing-library/react)
-            try {
-              for (const scopedPkg of readdirSync(entryPath)) {
-                if (results.length >= MAX_FILES) break;
-                const indexPath = join(entryPath, scopedPkg, 'index.d.ts');
-                if (existsSync(indexPath)) {
-                  const content = pushTypeFile(
-                    indexPath,
-                    `file:///node_modules/@types/${entry}/${scopedPkg}/index.d.ts`,
-                  );
-                  if (content) followReferenceDirectives(content);
-                }
-              }
-            } catch { /* skip unreadable scoped dir */ }
-          } else {
-            // Normal @types/<pkg>
-            const indexPath = join(entryPath, 'index.d.ts');
-            if (existsSync(indexPath)) {
-              const content = pushTypeFile(
-                indexPath,
-                `file:///node_modules/@types/${entry}/index.d.ts`,
-              );
-              if (content) followReferenceDirectives(content);
-            }
-          }
-        }
-      } catch { /* skip if @types dir can't be read */ }
-    }
-
-    // 2. Read package.json dependencies and look for their type roots
+  /** Scan node_modules/@types and dependency types — delegated to utilityProcess worker */
+  ipcMain.handle('phantom:read-types', async (_e, repoPath: string) => {
     try {
-      const pkgPath = join(repoPath, 'package.json');
-      if (existsSync(pkgPath)) {
-        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-        const deps: Record<string, string> = { ...pkg.dependencies, ...pkg.devDependencies };
-        for (const depName of Object.keys(deps)) {
-          if (results.length >= MAX_FILES) break;
-          // Skip @types — already scanned above
-          if (depName.startsWith('@types/')) continue;
-
-          // Resolve module dir — check standard layout and Bun's hoisted layout
-          let depModuleDir = join(repoPath, 'node_modules', depName);
-          if (!existsSync(depModuleDir)) {
-            // Bun hoists to node_modules/.bun/<pkg>@version/node_modules/<pkg>/
-            const bunDir = join(repoPath, 'node_modules', '.bun');
-            if (existsSync(bunDir)) {
-              try {
-                const bunEntry = readdirSync(bunDir).find((d) =>
-                  d.startsWith(`${depName}@`) || d.startsWith(`${depName.replace('/', '+')}@`),
-                );
-                if (bunEntry) {
-                  const candidate = join(bunDir, bunEntry, 'node_modules', depName);
-                  if (existsSync(candidate)) depModuleDir = candidate;
-                }
-              } catch { /* skip */ }
-            }
-          }
-
-          // Resolve the types entry point:
-          // a) Check dep's package.json for "types" / "typings" field first
-          // b) Fall back to dist/index.d.ts, then index.d.ts
-          let typesRelPath: string | null = null;
-          try {
-            const depPkgPath = join(depModuleDir, 'package.json');
-            if (existsSync(depPkgPath)) {
-              const depPkg = JSON.parse(readFileSync(depPkgPath, 'utf-8'));
-              typesRelPath = depPkg.types ?? depPkg.typings ?? null;
-            }
-          } catch { /* ignore malformed package.json */ }
-
-          const candidates: string[] = [];
-          if (typesRelPath) {
-            candidates.push(join(depModuleDir, typesRelPath));
-          }
-          candidates.push(
-            join(depModuleDir, 'dist', 'index.d.ts'),
-            join(depModuleDir, 'index.d.ts'),
-          );
-
-          const virtualBase = `file:///node_modules/${depName}/index.d.ts`;
-          for (const candidate of candidates) {
-            if (existsSync(candidate)) {
-              const content = pushTypeFile(candidate, virtualBase);
-              if (content) followReferenceDirectives(content);
-              break;
-            }
-          }
-        }
-      }
-    } catch { /* skip */ }
-
-    return results;
+      return await workerRequest('read-types', { repoPath });
+    } catch {
+      return [];
+    }
   });
 
-  /** Scan workspace source files for Monaco Go to Definition support */
-  ipcMain.handle('phantom:scan-source-files', (_e, repoPath: string) => {
-    const results: { path: string; content: string }[] = [];
-    const MAX_FILES = 500;
-    const MAX_FILE_SIZE = 200 * 1024; // 200KB per file
-    const SKIP_DIRS = new Set([
-      'node_modules', 'dist', 'build', '.git', '.next',
-      'coverage', '.turbo', '.cache', '.output', '__pycache__',
-    ]);
-    const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx']);
-
-    function walk(dir: string, relBase: string): void {
-      if (results.length >= MAX_FILES) return;
-      let entries: string[];
-      try { entries = readdirSync(dir); } catch { return; }
-      for (const entry of entries) {
-        if (results.length >= MAX_FILES) return;
-        const absPath = join(dir, entry);
-        const relPath = relBase ? `${relBase}/${entry}` : entry;
-        try {
-          const stat = statSync(absPath);
-          if (stat.isDirectory()) {
-            if (!SKIP_DIRS.has(entry)) walk(absPath, relPath);
-          } else if (SOURCE_EXTS.has(extname(entry).toLowerCase()) && stat.size <= MAX_FILE_SIZE) {
-            results.push({ path: relPath, content: readFileSync(absPath, 'utf-8') });
-          }
-        } catch { /* skip unreadable */ }
-      }
+  /** Scan workspace source files for Monaco — delegated to utilityProcess worker */
+  ipcMain.handle('phantom:scan-source-files', async (_e, repoPath: string) => {
+    try {
+      return await workerRequest('scan-source-files', { repoPath });
+    } catch {
+      return [];
     }
-
-    walk(repoPath, '');
-    return results;
   });
 
   /** Set app-wide zoom factor */
@@ -295,6 +121,75 @@ export const registerIpcHandlers = (): void => {
   ipcMain.handle('phantom:set-fullscreen', (_e, enabled: boolean) => {
     const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
     if (win) win.setFullScreen(enabled);
+  });
+
+  // ---------------------------------------------------------------
+  // File watching for real-time file tree invalidation (macOS FSEvents)
+  // ---------------------------------------------------------------
+  const activeWatchers = new Map<string, FSWatcher>();
+
+  // Debounce fs.watch events — batch per directory over 500ms
+  const pendingChanges = new Map<string, Set<string>>();
+  let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function flushPendingChanges(): void {
+    flushTimer = null;
+    const changes = Array.from(pendingChanges.entries());
+    pendingChanges.clear();
+    for (const [compositeKey, files] of changes) {
+      // Key format: rootPath\0dir (NUL separator to avoid ambiguity with colons in paths)
+      const sepIdx = compositeKey.indexOf('\0');
+      const rp = compositeKey.slice(0, sepIdx);
+      const d = compositeKey.slice(sepIdx + 1);
+      for (const wc of BrowserWindow.getAllWindows().map(w => w.webContents)) {
+        wc.send('phantom:fs-change', { rootPath: rp, dir: d, fileCount: files.size });
+      }
+    }
+  }
+
+  function queueFsChange(rootPath: string, dir: string, filename: string): void {
+    const key = `${rootPath}\0${dir}`;
+    if (!pendingChanges.has(key)) pendingChanges.set(key, new Set());
+    pendingChanges.get(key)!.add(filename);
+
+    if (!flushTimer) {
+      flushTimer = setTimeout(flushPendingChanges, 500);
+    }
+  }
+
+  ipcMain.handle('phantom:watch-directory', (_event, rootPath: string) => {
+    // Don't double-watch
+    if (activeWatchers.has(rootPath)) return { ok: true };
+
+    try {
+      const watcher = watch(rootPath, { recursive: true }, (_eventType, filename) => {
+        if (!filename) return;
+        // Skip .git internals — they fire constantly during git ops
+        if (filename.startsWith('.git/') || filename.startsWith('.git\\')) return;
+        const dir = dirname(filename);
+        queueFsChange(rootPath, dir === '.' ? '/' : dir, filename);
+      });
+
+      watcher.on('error', () => {
+        // Silently close on error (e.g. directory deleted)
+        watcher.close();
+        activeWatchers.delete(rootPath);
+      });
+
+      activeWatchers.set(rootPath, watcher);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle('phantom:unwatch-directory', (_event, rootPath: string) => {
+    const watcher = activeWatchers.get(rootPath);
+    if (watcher) {
+      watcher.close();
+      activeWatchers.delete(rootPath);
+    }
+    return { ok: true };
   });
 
   /** Quit the app — called by shutdown ceremony after cleanup completes */

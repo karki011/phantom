@@ -8,6 +8,9 @@ declare global {
       isDesktop: boolean;
       invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
       on: (channel: string, callback: (...args: unknown[]) => void) => void;
+      watchDirectory: (rootPath: string) => Promise<unknown>;
+      unwatchDirectory: (rootPath: string) => Promise<unknown>;
+      onFsChange: (callback: (data: { rootPath: string; dir: string; fileCount: number }) => void) => () => void;
     };
   }
 }

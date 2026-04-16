@@ -12,6 +12,12 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     build: {
       outDir: 'dist/main',
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          'scanner-worker': resolve(__dirname, 'src/main/scanner-worker.ts'),
+        },
+      },
     },
   },
   preload: {

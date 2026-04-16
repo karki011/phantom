@@ -48,3 +48,7 @@ export const rankForLevel = (level: number): { rank: string; title: string } => 
   }
   return { rank: 'E', title: 'Awakened' };
 };
+
+/** Generate a short unique ID with the given prefix (e.g., 'feed', 'act') */
+export const makeId = (prefix: string): string =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

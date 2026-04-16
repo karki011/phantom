@@ -260,6 +260,10 @@ export const startActivityPoller = (broadcast: Broadcast): void => {
     const activeSessions = db.select({ id: sessions.id, name: sessions.name, repo: sessions.repo, cwd: sessions.cwd })
       .from(sessions).where(eq(sessions.status, 'active')).all();
 
+    // Accumulate events across ALL sessions, then emit a single broadcast per poll tick.
+    // Without this, N active sessions can fire N separate SSE messages in one tick.
+    const allEvents: ActivityEvent[] = [];
+
     for (const session of activeSessions) {
       // Find the actively-written JSONL by recent mtime, not by sessionId
       const jsonlPath = findActiveJsonl(session.cwd);
@@ -284,9 +288,12 @@ export const startActivityPoller = (broadcast: Broadcast): void => {
       const sessionName = session.name ?? session.repo ?? session.id.slice(0, 8);
       const events = extractEvents(chunk, session.id, sessionName);
 
-      if (events.length > 0) {
-        broadcast('activity', { events: events.slice(-15) });
-      }
+      allEvents.push(...events);
+    }
+
+    // Single broadcast per poll tick — cap at 100 events (across all sessions)
+    if (allEvents.length > 0) {
+      broadcast('activity', { events: allEvents.slice(-100) });
     }
   };
 

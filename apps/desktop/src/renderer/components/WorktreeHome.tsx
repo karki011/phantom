@@ -246,24 +246,25 @@ export function WorktreeHome() {
       .catch(() => {});
   }, [worktree?.id]);
 
-  // Listen for auto-setup SSE events
+  // Listen for auto-setup SSE events from shared SSE connection (via useSystemEvents)
   useEffect(() => {
     if (!worktree?.id) return;
-    const eventSource = new EventSource(`${apiBase}/events`);
-    eventSource.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === 'worktree:setup-start' && msg.data?.worktreeId === worktree.id) {
-          setSetupStatus('running');
-        }
-        if (msg.type === 'worktree:setup-done' && msg.data?.worktreeId === worktree.id) {
-          setSetupStatus(msg.data.success ? 'done' : 'failed');
-          // Auto-clear after 5 seconds
-          setTimeout(() => setSetupStatus('idle'), 5000);
-        }
-      } catch { /* ignore parse errors */ }
+    const wtId = worktree.id;
+
+    const onSetup = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { type: string; data?: Record<string, unknown> } | undefined;
+      if (!detail?.type || detail.data?.worktreeId !== wtId) return;
+      if (detail.type === 'worktree:setup-start') {
+        setSetupStatus('running');
+      }
+      if (detail.type === 'worktree:setup-done') {
+        setSetupStatus(detail.data?.success ? 'done' : 'failed');
+        setTimeout(() => setSetupStatus('idle'), 5000);
+      }
     };
-    return () => eventSource.close();
+    window.addEventListener('phantom:worktree-setup', onSetup);
+
+    return () => window.removeEventListener('phantom:worktree-setup', onSetup);
   }, [worktree?.id]);
 
   // Fetch git status via IPC

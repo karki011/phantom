@@ -1,20 +1,19 @@
 /**
  * useSessions Hook
- * Provides active sessions, recent sessions with background refresh (no flash)
+ * Provides active sessions, recent sessions with TanStack Query-backed atoms.
+ * No manual initial fetch needed -- atomWithQuery handles it automatically.
  *
  * @author Subash Karki
  */
-import { useAtomValue, useSetAtom } from 'jotai';
-import { useEffect } from 'react';
+import { useAtomValue } from 'jotai';
 
 import {
   activeSessionsAtom,
   recentSessionsAtom,
-  refreshActiveSessionsAtom,
-  refreshRecentSessionsAtom,
-  sessionsLoadingAtom,
-  sessionsErrorAtom,
-} from '../atoms/sessions';
+  activeSessionsStatusAtom,
+  recentSessionsStatusAtom,
+} from '../atoms/queries';
+import { queryClient } from '../lib/queryClient';
 import type { SessionData } from '../lib/api';
 
 interface UseSessionsReturn {
@@ -28,21 +27,14 @@ interface UseSessionsReturn {
 export const useSessions = (): UseSessionsReturn => {
   const active = useAtomValue(activeSessionsAtom);
   const recent = useAtomValue(recentSessionsAtom);
-  const loading = useAtomValue(sessionsLoadingAtom);
-  const error = useAtomValue(sessionsErrorAtom);
-  const refreshActive = useSetAtom(refreshActiveSessionsAtom);
-  const refreshRecent = useSetAtom(refreshRecentSessionsAtom);
+  const activeStatus = useAtomValue(activeSessionsStatusAtom);
+  const recentStatus = useAtomValue(recentSessionsStatusAtom);
 
-  // Initial fetch on mount
-  useEffect(() => {
-    refreshActive();
-    refreshRecent();
-  }, [refreshActive, refreshRecent]);
-
-  const refresh = () => {
-    refreshActive();
-    refreshRecent();
+  return {
+    active,
+    recent,
+    loading: activeStatus.isLoading || recentStatus.isLoading,
+    error: activeStatus.error ?? recentStatus.error ?? null,
+    refresh: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
   };
-
-  return { active, recent, loading, error, refresh };
 };

@@ -7,7 +7,9 @@ import './fonts/fonts.css';
 import '@mantine/core/styles.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { Provider as JotaiProvider } from 'jotai';
+import { queryClientAtom } from 'jotai-tanstack-query';
 import { jotaiStore } from '@phantom-os/panes';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -15,6 +17,10 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ThemeProvider } from './components/ThemeProvider';
+import { queryClient } from './lib/queryClient';
+
+// Hydrate the Jotai queryClientAtom so atomWithQuery uses our configured client
+jotaiStore.set(queryClientAtom, queryClient);
 
 // ---------------------------------------------------------------------------
 // Font scale initialization from localStorage (before React mounts)
@@ -45,6 +51,7 @@ if (!container) throw new Error('Root element not found');
 
 createRoot(container).render(
   <StrictMode>
+    <QueryClientProvider client={queryClient}>
     <JotaiProvider store={jotaiStore}>
       <ThemeProvider>
         <ToastContainer
@@ -69,5 +76,6 @@ createRoot(container).render(
         </ErrorBoundary>
       </ThemeProvider>
     </JotaiProvider>
+    </QueryClientProvider>
   </StrictMode>,
 );

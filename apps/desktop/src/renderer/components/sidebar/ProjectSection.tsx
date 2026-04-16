@@ -14,7 +14,7 @@ import {
   UnstyledButton,
 } from '@mantine/core';
 import { ChevronRight, GitBranch, Plus, RefreshCw, Sparkles, Star } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSetAtom } from 'jotai';
 import type { DiscoveredWorktree, ProjectData, WorktreeData } from '../../lib/api';
 import { detectProjectProfile, getDiscoveredWorktrees, importWorktree, renameProject, toggleProjectStar } from '../../lib/api';
@@ -38,7 +38,7 @@ interface ProjectSectionProps {
 
 const MAX_STARRED = 5;
 
-export function ProjectSection({
+export const ProjectSection = React.memo(function ProjectSection({
   project,
   worktrees,
   isExpanded,
@@ -67,17 +67,15 @@ export function ProjectSection({
     if (isExpanded) refreshDiscovered();
   }, [isExpanded, refreshDiscovered]);
 
-  // Poll for new worktrees every 60s when expanded + on window focus
+  // Refresh discovered worktrees on window focus (no polling — TanStack Query handles intervals)
   useEffect(() => {
     if (!isExpanded) return;
-    const interval = setInterval(refreshDiscovered, 60_000);
-    const onFocus = () => refreshDiscovered();
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') onFocus();
-    });
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshDiscovered();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [isExpanded, refreshDiscovered]);
 
@@ -493,4 +491,4 @@ export function ProjectSection({
       />
     </div>
   );
-}
+});

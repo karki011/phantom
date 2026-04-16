@@ -15,7 +15,7 @@
 import { AppShell, Group, Modal, Stack, Text } from '@mantine/core';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Flame, Trophy } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 
 import { WorkspaceProvider, Workspace, switchWorkspaceAtom, activePaneAtom, usePaneStore } from '@phantom-os/panes';
 import { paneDefinitions, paneMenu } from './panes/registry';
@@ -24,23 +24,26 @@ import { shutdownVisibleAtom } from './atoms/shutdown';
 import { activeTopTabAtom, fontScaleAtom, sseConnectionAtom, zoomPercentAtom, ZOOM_LEVELS, type ZoomLevel } from './atoms/system';
 import { selectedFileAtom } from './atoms/fileExplorer';
 import { activeWorktreeAtom, activeWorktreeIdAtom } from './atoms/worktrees';
-import { Cockpit } from './components/cockpit/Cockpit';
 import { TopTabBar } from './components/layout/TopTabBar';
 import { SystemHeader } from './components/layout/SystemHeader';
 import { WelcomePage } from './components/WelcomePage';
-import { ActiveSessions } from './components/views/ActiveSessions';
-import { QuestHistory } from './components/views/QuestHistory';
-import { TokenAnalytics } from './components/views/TokenAnalytics';
-import { HunterProfile } from './components/views/HunterProfile';
-import { StreakView } from './components/views/StreakView';
-import { TaskHistory } from './components/views/TaskHistory';
-import { AchievementsView } from './components/views/AchievementsView';
-import { DailyQuestsView } from './components/views/DailyQuestsView';
-import { HunterStatsView } from './components/hunter-stats/HunterStatsView';
-import { SessionViewer } from './components/views/SessionViewer';
-import { SystemPlayground } from './components/system/SystemPlayground';
 import { WorktreeSidebar } from './components/sidebar/WorktreeSidebar';
 import { RightSidebar } from './components/sidebar/RightSidebar';
+
+// Lazy-loaded views — behind tab switches or routes, not needed at startup
+const Cockpit = lazy(() => import('./components/cockpit/Cockpit').then(m => ({ default: m.Cockpit })));
+const ActiveSessions = lazy(() => import('./components/views/ActiveSessions').then(m => ({ default: m.ActiveSessions })));
+const QuestHistory = lazy(() => import('./components/views/QuestHistory').then(m => ({ default: m.QuestHistory })));
+const TokenAnalytics = lazy(() => import('./components/views/TokenAnalytics').then(m => ({ default: m.TokenAnalytics })));
+const HunterProfile = lazy(() => import('./components/views/HunterProfile').then(m => ({ default: m.HunterProfile })));
+const StreakView = lazy(() => import('./components/views/StreakView').then(m => ({ default: m.StreakView })));
+const TaskHistory = lazy(() => import('./components/views/TaskHistory').then(m => ({ default: m.TaskHistory })));
+const AchievementsView = lazy(() => import('./components/views/AchievementsView').then(m => ({ default: m.AchievementsView })));
+const DailyQuestsView = lazy(() => import('./components/views/DailyQuestsView').then(m => ({ default: m.DailyQuestsView })));
+const HunterStatsView = lazy(() => import('./components/hunter-stats/HunterStatsView').then(m => ({ default: m.HunterStatsView })));
+const SessionViewer = lazy(() => import('./components/views/SessionViewer').then(m => ({ default: m.SessionViewer })));
+const SystemPlayground = lazy(() => import('./components/system/SystemPlayground').then(m => ({ default: m.SystemPlayground })));
+const SettingsPage = lazy(() => import('./components/SettingsPage').then(m => ({ default: m.SettingsPage })));
 import { useHunter } from './hooks/useHunter';
 import { type Route, useRouter } from './hooks/useRouter';
 import { useSessions } from './hooks/useSessions';
@@ -49,7 +52,6 @@ import { useSystemEvents } from './hooks/useSystemEvents';
 import { SplashScreen } from './components/brand/SplashScreen';
 import { ShutdownCeremony } from './components/brand/ShutdownCeremony';
 import { settingsVisibleAtom } from './atoms/settings';
-import { SettingsPage } from './components/SettingsPage';
 import { usePreferences } from './hooks/usePreferences';
 import { OnboardingFlow } from './components/onboarding/OnboardingFlow';
 import { useCeremonySounds } from './hooks/useCeremonySounds';
@@ -92,35 +94,46 @@ const FileOpenListener = () => {
   return null;
 };
 
+/** Suspense fallback for lazy-loaded views */
+const LazyFallback = () => (
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--phantom-text-muted)' }}>
+    Loading...
+  </div>
+);
+
 /** Render cockpit sub-route content (sessions, tokens, profile, etc.) */
-const ViewContent = ({ route }: { route: Route }) => {
-  switch (route) {
-    case 'sessions':
-      return <ActiveSessions />;
-    case 'history':
-      return <QuestHistory />;
-    case 'tokens':
-      return <TokenAnalytics />;
-    case 'profile':
-      return <HunterProfile />;
-    case 'streak':
-      return <StreakView />;
-    case 'tasks':
-      return <TaskHistory />;
-    case 'achievements':
-      return <AchievementsView />;
-    case 'quests':
-      return <DailyQuestsView />;
-    case 'hunter-stats':
-      return <HunterStatsView />;
-    case 'session-viewer':
-      return <SessionViewer />;
-    case 'system':
-      return <SystemPlayground />;
-    default:
-      return null;
-  }
-};
+const ViewContent = ({ route }: { route: Route }) => (
+  <Suspense fallback={<LazyFallback />}>
+    {(() => {
+      switch (route) {
+        case 'sessions':
+          return <ActiveSessions />;
+        case 'history':
+          return <QuestHistory />;
+        case 'tokens':
+          return <TokenAnalytics />;
+        case 'profile':
+          return <HunterProfile />;
+        case 'streak':
+          return <StreakView />;
+        case 'tasks':
+          return <TaskHistory />;
+        case 'achievements':
+          return <AchievementsView />;
+        case 'quests':
+          return <DailyQuestsView />;
+        case 'hunter-stats':
+          return <HunterStatsView />;
+        case 'session-viewer':
+          return <SessionViewer />;
+        case 'system':
+          return <SystemPlayground />;
+        default:
+          return null;
+      }
+    })()}
+  </Suspense>
+);
 
 export const App = () => {
   // ── All hooks MUST be declared before any conditional return ──
@@ -403,7 +416,9 @@ export const App = () => {
         body: { flex: 1, padding: 0, overflow: 'hidden' },
       }}
     >
-      <SettingsPage />
+      <Suspense fallback={<LazyFallback />}>
+        <SettingsPage />
+      </Suspense>
     </Modal>
 
     {shutdownVisible && (
@@ -470,17 +485,19 @@ export const App = () => {
                   <ViewContent route={route} />
                 </Stack>
               ) : (
-                <Stack p="md" gap="lg">
-                  <Cockpit />
-                </Stack>
+                <Suspense fallback={<LazyFallback />}>
+                  <Stack p="md" gap="lg">
+                    <Cockpit />
+                  </Stack>
+                </Suspense>
               )}
             </div>
           ) : (
             /* ── Worktree tab: sidebars + pane worktree or welcome page ── */
-            <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', height: '100%', overflow: 'hidden', contain: 'layout style' }}>
               <WorktreeSidebar />
 
-              <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+              <div style={{ flex: 1, overflow: 'hidden', minWidth: 0, contain: 'content' }}>
                 {activeWorktree ? (
                   <Workspace
                     paneMenu={paneMenu}

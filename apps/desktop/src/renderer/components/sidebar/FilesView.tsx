@@ -1,11 +1,16 @@
 /**
- * FilesView — file tree for the active worktree
+ * FilesView — virtualized file tree for the active worktree
+ *
+ * Uses @tanstack/react-virtual to only render ~30 visible rows instead of
+ * the entire tree. The recursive tree is flattened into a list first, then
+ * the virtualizer renders only the visible items.
  *
  * @author Subash Karki
  */
-import { ScrollArea, Skeleton, Text, TextInput } from '@mantine/core';
+import { Skeleton, Text, TextInput } from '@mantine/core';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
 import { Search, X } from 'lucide-react';
 
@@ -21,16 +26,66 @@ import { activeWorktreeAtom } from '../../atoms/worktrees';
 import type { FileEntry } from '../../lib/api';
 import { FileTreeItem } from './FileTreeItem';
 
+// ---------------------------------------------------------------------------
+// Tree flattening for virtualization
+// ---------------------------------------------------------------------------
+
+interface FlatTreeItem {
+  entry: FileEntry;
+  depth: number;
+  /** Cache key for this entry's children if it's a directory */
+  cacheKey: string;
+}
+
+/**
+ * Walk the tree following expanded folders and produce a flat list suitable
+ * for virtual scrolling. Directories sort before files, then alphabetical.
+ */
+function flattenTree(
+  entries: FileEntry[],
+  depth: number,
+  worktreeId: string,
+  fileTree: Map<string, FileEntry[]>,
+  expandedFolders: string[],
+): FlatTreeItem[] {
+  const result: FlatTreeItem[] = [];
+  const sorted = [...entries].sort((a, b) => {
+    if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  for (const entry of sorted) {
+    const cacheKey = `${worktreeId}:${entry.relativePath}`;
+    result.push({ entry, depth, cacheKey });
+
+    if (entry.isDirectory && expandedFolders.includes(entry.relativePath)) {
+      const children = fileTree.get(cacheKey);
+      if (children) {
+        result.push(
+          ...flattenTree(children, depth + 1, worktreeId, fileTree, expandedFolders),
+        );
+      }
+    }
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+
 export function FilesView() {
   const activeWorktree = useAtomValue(activeWorktreeAtom);
   const fileTree = useAtomValue(fileTreeAtom);
+  const deferredFileTree = useDeferredValue(fileTree);
   const [expandedFolders, setExpandedFolders] = useAtom(expandedFoldersAtom);
   const isDirLoading = useAtomValue(isDirLoadingAtom);
   const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FileEntry[] | null>(null);
+  const deferredSearchResults = useDeferredValue(searchResults);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
+
+  const isStale = deferredFileTree !== fileTree || deferredSearchResults !== searchResults;
 
   const fetchDirectory = useSetAtom(fetchDirectoryAtom);
   const toggleFolder = useSetAtom(toggleFolderAtom);
@@ -130,6 +185,30 @@ export function FilesView() {
     [activeWorktree, setSelectedFile, store],
   );
 
+  // Compute root entries (safe when activeWorktree is null)
+  const rootKey = activeWorktree ? `${activeWorktree.id}:/` : '';
+  const rootEntries = rootKey ? deferredFileTree.get(rootKey) : undefined;
+
+  // Flatten the tree for virtualization — runs only when expanded state or
+  // tree data changes. Returns an empty list when there are no root entries.
+  const flatItems = useMemo(
+    () =>
+      rootEntries && activeWorktree
+        ? flattenTree(rootEntries, 0, activeWorktree.id, deferredFileTree, expandedFolders)
+        : [],
+    [rootEntries, activeWorktree, deferredFileTree, expandedFolders],
+  );
+
+  // Ref for the scrollable container (plain div, not Mantine ScrollArea)
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: flatItems.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => 28,
+    overscan: 10,
+  });
+
   if (!activeWorktree) {
     return (
       <Text
@@ -151,9 +230,6 @@ export function FilesView() {
       </Text>
     );
   }
-
-  const rootKey = `${activeWorktree.id}:/`;
-  const rootEntries = fileTree.get(rootKey);
 
   if (!rootEntries) {
     return (
@@ -198,16 +274,24 @@ export function FilesView() {
         />
       </div>
 
-      <ScrollArea style={{ flex: 1 }} scrollbarSize={6}>
-        <div style={{ padding: '4px 0' }}>
+      <div
+        ref={scrollContainerRef}
+        style={{
+          flex: 1,
+          overflow: 'auto',
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'var(--phantom-border-subtle) transparent',
+        }}
+      >
+        <div style={{ padding: '4px 0', opacity: isStale ? 0.7 : 1, transition: 'opacity 150ms' }}>
           {searching ? (
             <Text fz="0.72rem" c="var(--phantom-text-muted)" ta="center" py="md">
               Searching...
             </Text>
-          ) : searchResults ? (
-            // Flat search results
-            searchResults.length > 0 ? (
-              searchResults.map((entry) => (
+          ) : deferredSearchResults ? (
+            // Flat search results (not virtualized — typically a small list)
+            deferredSearchResults.length > 0 ? (
+              deferredSearchResults.map((entry) => (
                 <FileTreeItem
                   key={entry.relativePath}
                   entry={entry}
@@ -230,117 +314,49 @@ export function FilesView() {
               </Text>
             )
           ) : (
-            // Normal tree view
-            <FileTreeRecursive
-              entries={rootEntries}
-              depth={0}
-              worktreeId={activeWorktree.id}
-              fileTree={fileTree}
-              expandedFolders={expandedFolders}
-              selectedFile={selectedFile}
-              isDirLoading={isDirLoading}
-              onToggleFolder={handleToggleFolder}
-              onFileClick={handleFileClick}
-              basePath={activeWorktree.worktreePath}
-            />
+            // Virtualized tree view
+            <div
+              style={{
+                height: virtualizer.getTotalSize(),
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const item = flatItems[virtualRow.index];
+                const isExpanded = expandedFolders.includes(item.entry.relativePath);
+                const loading = isDirLoading(item.cacheKey);
+
+                return (
+                  <div
+                    key={item.entry.relativePath}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: virtualRow.size,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <FileTreeItem
+                      entry={item.entry}
+                      depth={item.depth}
+                      isExpanded={isExpanded}
+                      isSelected={selectedFile === item.entry.relativePath}
+                      isLoading={loading}
+                      onToggle={() => handleToggleFolder(item.entry.relativePath)}
+                      onClick={() => handleFileClick(item.entry)}
+                      basePath={activeWorktree.worktreePath}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Recursive tree renderer
-// ---------------------------------------------------------------------------
-
-interface FileTreeRecursiveProps {
-  entries: FileEntry[];
-  depth: number;
-  worktreeId: string;
-  fileTree: Map<string, FileEntry[]>;
-  expandedFolders: string[];
-  selectedFile: string | null;
-  isDirLoading: (path: string) => boolean;
-  onToggleFolder: (path: string) => void;
-  onFileClick: (entry: FileEntry) => void;
-  basePath: string;
-}
-
-function FileTreeRecursive({
-  entries,
-  depth,
-  worktreeId,
-  fileTree,
-  expandedFolders,
-  selectedFile,
-  isDirLoading,
-  onToggleFolder,
-  onFileClick,
-  basePath,
-}: FileTreeRecursiveProps) {
-  // Sort: directories first, then alphabetical
-  const sorted = [...entries].sort((a, b) => {
-    if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
-
-  return (
-    <>
-      {sorted.map((entry) => {
-        const isExpanded = expandedFolders.includes(entry.relativePath);
-        const cacheKey = `${worktreeId}:${entry.relativePath}`;
-        const childEntries = fileTree.get(cacheKey);
-        const loading = isDirLoading(cacheKey);
-
-        return (
-          <div key={entry.relativePath}>
-            <FileTreeItem
-              entry={entry}
-              depth={depth}
-              isExpanded={isExpanded}
-              isSelected={selectedFile === entry.relativePath}
-              isLoading={loading}
-              onToggle={() => onToggleFolder(entry.relativePath)}
-              onClick={() => onFileClick(entry)}
-              basePath={basePath}
-            />
-            {entry.isDirectory && isExpanded && childEntries && (
-              <div style={{ position: 'relative' }}>
-                {/* Continuous indent guide line spanning all children */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: depth * 20 + 14,
-                    top: 0,
-                    bottom: 0,
-                    width: 1,
-                    backgroundColor: 'var(--phantom-border-subtle)',
-                    opacity: 0.4,
-                  }}
-                />
-                <FileTreeRecursive
-                  entries={childEntries}
-                  depth={depth + 1}
-                  worktreeId={worktreeId}
-                  fileTree={fileTree}
-                  expandedFolders={expandedFolders}
-                  selectedFile={selectedFile}
-                  isDirLoading={isDirLoading}
-                  onToggleFolder={onToggleFolder}
-                  onFileClick={onFileClick}
-                  basePath={basePath}
-                />
-              </div>
-            )}
-            {entry.isDirectory && isExpanded && !childEntries && loading && (
-              <div style={{ paddingLeft: (depth + 1) * 20 + 4, padding: '2px 0' }}>
-                <Skeleton height={14} width="60%" />
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </>
-  );
-}

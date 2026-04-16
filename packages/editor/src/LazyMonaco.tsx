@@ -26,6 +26,15 @@ monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
   noSyntaxValidation: false,
 });
 
+/** Track which workspace root owns each model URI, for disposal on switch */
+const modelsByWorkspace = new Map<string, Set<string>>();
+
+/** Currently active workspace root */
+let activeWorkspaceRoot: string | null = null;
+
+/** Max models to keep from previous workspaces (LRU) */
+const MAX_STALE_MODELS = 50;
+
 /**
  * Configure Monaco's TypeScript from a workspace's tsconfig.json and
  * load type definitions from node_modules/@types. Call once per workspace.
@@ -33,6 +42,26 @@ monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
  */
 export async function configureMonacoForWorkspace(repoPath: string): Promise<void> {
   if (!window.phantomOS?.isDesktop) return;
+
+  // Dispose models from previous workspace, keeping LRU of recent files
+  if (activeWorkspaceRoot && activeWorkspaceRoot !== repoPath) {
+    const prevModels = modelsByWorkspace.get(activeWorkspaceRoot);
+    if (prevModels) {
+      const allModels = monaco.editor.getModels();
+      // Dispose models owned by the previous workspace
+      // Keep up to MAX_STALE_MODELS most recently created models (rough LRU)
+      const toDispose = allModels.filter(m => prevModels.has(m.uri.toString()));
+      // Keep the most recent ones (last in array = most recently created)
+      const disposable = toDispose.slice(0, Math.max(0, toDispose.length - MAX_STALE_MODELS));
+      for (const model of disposable) {
+        model.dispose();
+      }
+      const kept = toDispose.length - disposable.length;
+      console.log(`[Monaco] Disposed ${disposable.length} models from prev workspace, kept ${kept} LRU`);
+      modelsByWorkspace.delete(activeWorkspaceRoot);
+    }
+  }
+  activeWorkspaceRoot = repoPath;
 
   const ts = monaco.languages.typescript;
 
@@ -116,13 +145,17 @@ export async function configureMonacoForWorkspace(repoPath: string): Promise<voi
   ) as { path: string; content: string }[] | null;
 
   if (sourceFiles && sourceFiles.length > 0) {
+    const workspaceModels = new Set<string>();
     for (const { path, content } of sourceFiles) {
       const uri = monaco.Uri.parse(`file:///${path}`);
       // Only create model if it doesn't already exist (e.g. already open in editor)
       if (!monaco.editor.getModel(uri)) {
         monaco.editor.createModel(content, undefined, uri);
       }
+      workspaceModels.add(uri.toString());
     }
+    modelsByWorkspace.set(repoPath, workspaceModels);
+    console.log(`[Monaco] Tracked ${workspaceModels.size} models for workspace ${repoPath}`);
   }
 }
 

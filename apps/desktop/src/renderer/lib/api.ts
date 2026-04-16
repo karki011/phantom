@@ -113,6 +113,63 @@ export const API_BASE = window.location.protocol === 'file:' ? 'http://localhost
 const BASE_URL = API_BASE;
 
 // ---------------------------------------------------------------------------
+// Request dedup + TTL cache
+// Only applies to GET requests (or requests with no body).
+// POST/PUT/DELETE always go through fresh.
+// ---------------------------------------------------------------------------
+
+interface CacheEntry {
+  data: unknown;
+  expiresAt: number;
+}
+
+/** In-flight GET request map — deduplicates concurrent requests to the same URL */
+const inflight = new Map<string, Promise<unknown>>();
+
+/** TTL cache for GET responses — avoids redundant requests within the cache window */
+const cache = new Map<string, CacheEntry>();
+
+/** Default TTL per path prefix (ms). More specific prefixes match first. */
+const TTL_MAP: [string, number][] = [
+  ['/api/hunter', 30_000],
+  ['/api/projects', 60_000],
+  ['/api/worktrees', 30_000],
+  ['/api/sessions', 10_000],
+  ['/api/achievements', 60_000],
+  ['/api/quests', 30_000],
+];
+
+/** Default TTL for paths not in the map */
+const DEFAULT_TTL = 5_000;
+
+function getTTL(path: string): number {
+  for (const [prefix, ttl] of TTL_MAP) {
+    if (path.startsWith(prefix)) return ttl;
+  }
+  return DEFAULT_TTL;
+}
+
+/** Invalidate cached responses for paths matching the given prefix */
+export const invalidateCache = (pathPrefix?: string): void => {
+  if (!pathPrefix) {
+    cache.clear();
+    return;
+  }
+  const prefix = `${BASE_URL}${pathPrefix}`;
+  for (const key of cache.keys()) {
+    if (key.startsWith(prefix)) cache.delete(key);
+  }
+};
+
+// Sweep expired cache entries every 60s to prevent unbounded Map growth
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of cache) {
+    if (entry.expiresAt < now) cache.delete(key);
+  }
+}, 60_000);
+
+// ---------------------------------------------------------------------------
 // Generic fetch wrapper
 // ---------------------------------------------------------------------------
 
@@ -121,21 +178,63 @@ export const fetchApi = async <T>(
   options?: RequestInit,
 ): Promise<T> => {
   const url = `${BASE_URL}${path}`;
-  const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-    ...options,
-  });
+  const method = (options?.method ?? 'GET').toUpperCase();
+  const isGet = method === 'GET' && !options?.body;
 
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    const detail = body?.error || response.statusText;
-    throw new Error(detail);
+  // Check TTL cache for GET requests
+  if (isGet) {
+    const cached = cache.get(url);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data as T;
+    }
+
+    // Deduplicate in-flight GET requests
+    const existing = inflight.get(url);
+    if (existing) {
+      return existing as Promise<T>;
+    }
   }
 
-  return response.json() as Promise<T>;
+  const request = (async () => {
+    const response = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+      ...options,
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      const detail = body?.error || response.statusText;
+      throw new Error(detail);
+    }
+
+    const data = await response.json();
+
+    // Cache GET responses
+    if (isGet) {
+      cache.set(url, { data, expiresAt: Date.now() + getTTL(path) });
+    }
+
+    // Invalidate related cache entries after mutations
+    if (!isGet) {
+      const parts = path.split('/');
+      // Assumes all API resources are at the 3rd path segment (e.g., /api/worktrees)
+      const basePath = parts.slice(0, 3).join('/');
+      invalidateCache(basePath);
+    }
+
+    return data as T;
+  })();
+
+  // Track in-flight GET requests
+  if (isGet) {
+    inflight.set(url, request);
+    request.finally(() => inflight.delete(url));
+  }
+
+  return request;
 };
 
 // ---------------------------------------------------------------------------

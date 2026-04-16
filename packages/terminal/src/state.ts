@@ -241,7 +241,7 @@ export const attachSession = async (
     fontSize: 12,
     cursorBlink: true,
     cursorStyle: 'bar',
-    scrollback: 10_000,
+    scrollback: 500,
     fastScrollModifier: 'alt',
   });
 

@@ -1,89 +1,61 @@
 /**
  * Sessions Jotai Atoms
- * Writable atoms that refetch in the background without clearing current data
+ * Now backed by TanStack Query via atoms/queries.ts.
+ * Re-exports for backward compatibility + legacy refresh atoms that invalidate queries.
  *
  * @author Subash Karki
  */
 import { atom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
 
+import { type TaskData, getSessionTasks } from '../lib/api';
+import { queryClient } from '../lib/queryClient';
 import {
-  type SessionData,
-  type TaskData,
-  getActiveSessions,
-  getSessions,
-  getSessionTasks,
-} from '../lib/api';
+  activeSessionsStatusAtom,
+  recentSessionsStatusAtom,
+} from './queries';
 
 // ---------------------------------------------------------------------------
-// Active sessions — keeps previous data while refetching (no flash)
+// Re-exports from TanStack Query atoms
 // ---------------------------------------------------------------------------
 
-const activeSessionsDataAtom = atom<SessionData[]>([]);
-const activeSessionsLoadingAtom = atom(false);
-const activeSessionsErrorAtom = atom<unknown>(null);
+export {
+  activeSessionsAtom,
+  recentSessionsAtom,
+  activeSessionsStatusAtom,
+  recentSessionsStatusAtom,
+} from './queries';
 
-export const activeSessionsAtom = atom((get) => get(activeSessionsDataAtom));
+// ---------------------------------------------------------------------------
+// Backward-compatible refresh atoms (now invalidate TanStack Query cache)
+// ---------------------------------------------------------------------------
 
-export const refreshActiveSessionsAtom = atom(null, async (_get, set) => {
-  set(activeSessionsLoadingAtom, true);
-  try {
-    const data = await getActiveSessions();
-    set(activeSessionsDataAtom, data);
-    set(activeSessionsErrorAtom, null);
-  } catch (err) {
-    set(activeSessionsErrorAtom, err);
-  } finally {
-    set(activeSessionsLoadingAtom, false);
-  }
+export const refreshActiveSessionsAtom = atom(null, () => {
+  queryClient.invalidateQueries({ queryKey: ['sessions', 'active'] });
 });
 
-// Initial fetch on first read
-const activeInitAtom = atom(false);
-export const activeSessionsInitAtom = atom(async (get) => {
-  if (!get(activeInitAtom)) {
-    // Trigger initial fetch
-  }
-  return get(activeSessionsDataAtom);
+export const refreshRecentSessionsAtom = atom(null, () => {
+  queryClient.invalidateQueries({ queryKey: ['sessions', 'recent'] });
 });
 
 // ---------------------------------------------------------------------------
-// Recent sessions — same pattern
+// Combined loading/error derived from query status atoms
 // ---------------------------------------------------------------------------
 
-const recentSessionsDataAtom = atom<SessionData[]>([]);
-const recentSessionsLoadingAtom = atom(false);
-const recentSessionsErrorAtom = atom<unknown>(null);
+export const sessionsLoadingAtom = atom((get) => {
+  const activeStatus = get(activeSessionsStatusAtom);
+  const recentStatus = get(recentSessionsStatusAtom);
+  return activeStatus.isLoading || recentStatus.isLoading;
+});
 
-export const recentSessionsAtom = atom((get) => get(recentSessionsDataAtom));
-
-export const refreshRecentSessionsAtom = atom(null, async (_get, set) => {
-  set(recentSessionsLoadingAtom, true);
-  try {
-    const data = await getSessions({ limit: 50 });
-    set(recentSessionsDataAtom, data);
-    set(recentSessionsErrorAtom, null);
-  } catch (err) {
-    set(recentSessionsErrorAtom, err);
-  } finally {
-    set(recentSessionsLoadingAtom, false);
-  }
+export const sessionsErrorAtom = atom((get) => {
+  const activeStatus = get(activeSessionsStatusAtom);
+  const recentStatus = get(recentSessionsStatusAtom);
+  return activeStatus.error ?? recentStatus.error ?? null;
 });
 
 // ---------------------------------------------------------------------------
-// Combined loading/error for the hook
-// ---------------------------------------------------------------------------
-
-export const sessionsLoadingAtom = atom(
-  (get) => get(activeSessionsLoadingAtom) || get(recentSessionsLoadingAtom),
-);
-
-export const sessionsErrorAtom = atom(
-  (get) => get(activeSessionsErrorAtom) ?? get(recentSessionsErrorAtom),
-);
-
-// ---------------------------------------------------------------------------
-// Session tasks — atom family keyed by sessionId
+// Session tasks — atom family keyed by sessionId (unchanged — not migrated)
 // ---------------------------------------------------------------------------
 
 export const sessionTasksAtomFamily = atomFamily((sessionId: string) => {

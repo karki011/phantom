@@ -89,12 +89,10 @@ export function WorktreeSidebar() {
   // Track which project should show inline worktree input from header "+"
   const [inlineInputProjectId, setInlineInputProjectId] = useState<string | null>(null);
 
-  // Fetch on mount + poll every 30s so external branch changes are picked up
+  // Fetch on mount — TanStack Query handles background refetch + SSE invalidation
   useEffect(() => {
     refreshProjects();
     refreshWorktrees();
-    const id = setInterval(() => refreshWorktrees(true /* silent */), 30_000);
-    return () => clearInterval(id);
   }, [refreshProjects, refreshWorktrees]);
 
   // Auto-expand the project containing the active worktree (once on startup)
@@ -220,11 +218,13 @@ export function WorktreeSidebar() {
         borderRight: '1px solid var(--phantom-border-subtle)',
         position: 'relative',
         overflow: 'hidden',
+        contain: 'content',
         outline: isDragOver
           ? '2px solid var(--phantom-accent-purple)'
           : 'none',
         outlineOffset: -2,
         transition: 'width 200ms ease, min-width 200ms ease, max-width 200ms ease, outline 150ms ease',
+        willChange: 'width',
       }}
     >
       {collapsed ? (
