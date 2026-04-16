@@ -8,7 +8,24 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
+import { WebglAddon } from '@xterm/addon-webgl';
 import { getTerminalTheme } from './theme.js';
+
+/** Log scroll state for debugging — shows both xterm internal and DOM viewport positions */
+function logScroll(label: string, term: Terminal, paneId?: string): void {
+  const buf = term.buffer.active;
+  const viewport = term.element?.querySelector('.xterm-viewport') as HTMLElement | null;
+  const id = paneId ? paneId.slice(0, 8) : '?';
+  console.log(
+    `[TermScroll] ${label} pane=${id}`,
+    `viewportY=${buf.viewportY}`,
+    `baseY=${buf.baseY}`,
+    `lines=${buf.length}`,
+    `rows=${term.rows}`,
+    `atBottom=${buf.viewportY >= buf.baseY}`,
+    viewport ? `DOM:scrollTop=${Math.round(viewport.scrollTop)} scrollHeight=${viewport.scrollHeight} clientHeight=${viewport.clientHeight}` : 'DOM:no-viewport',
+  );
+}
 
 /**
  * Force xterm to recalculate viewport scroll dimensions.
@@ -16,12 +33,16 @@ import { getTerminalTheme } from './theme.js';
  * scrolling appears broken until text selection triggers a recalc.
  * Reading then writing scrollTop forces a reflow of the scroll geometry.
  */
-function syncViewport(term: Terminal): void {
+function syncViewport(term: Terminal, label?: string): void {
   const viewport = term.element?.querySelector('.xterm-viewport') as HTMLElement | null;
   if (!viewport) return;
-  const { scrollTop } = viewport;
+  const before = viewport.scrollTop;
   // eslint-disable-next-line no-self-assign -- intentional reflow trigger
-  viewport.scrollTop = scrollTop;
+  viewport.scrollTop = before;
+  const after = viewport.scrollTop;
+  if (label && before !== after) {
+    console.log(`[TermScroll] syncViewport(${label}) scrollTop changed: ${Math.round(before)} → ${Math.round(after)}`);
+  }
 }
 
 const apiBase = (window as any).__PHANTOM_API_BASE ?? '';
@@ -40,6 +61,8 @@ export interface TerminalSession {
   coldRestore: boolean;
   /** True if the restore banner should show */
   showRestoreBanner: boolean;
+  /** Flag to prevent ResizeObserver from interfering during reattach scroll restoration */
+  _restoringScroll?: boolean;
   /** Saved viewport scroll position — restored on reattach */
   savedViewportY?: number;
   /** Whether the user was scrolled to the bottom when detached */
@@ -62,6 +85,21 @@ export interface AttachOptions {
 
 /** Active terminal sessions — survives React unmount/remount */
 export const sessions = new Map<string, TerminalSession>();
+
+/**
+ * Offscreen container — keeps detached terminal wrappers in the DOM
+ * so xterm.js viewport scroll state stays valid across worktree switches.
+ * Mirrors VS Code's pattern of keeping hidden terminals in the DOM.
+ */
+const offscreen = typeof document !== 'undefined' ? (() => {
+  const el = document.createElement('div');
+  el.id = 'phantom-terminal-offscreen';
+  // Real dimensions (not 0×0) so xterm viewport scroll geometry stays valid.
+  // Off-screen via fixed positioning — no visibility:hidden (which skips paint).
+  el.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:800px;height:400px;overflow:hidden;pointer-events:none;';
+  document.body.appendChild(el);
+  return el;
+})() : null;
 
 /** Check if a session exists in the registry */
 export const hasSession = (paneId: string): boolean => sessions.has(paneId);
@@ -106,14 +144,25 @@ export const attachSession = async (
     existing.savedViewportY = undefined;
     existing.wasAtBottom = undefined;
 
-    // Defer fit() until after browser layout — calling it synchronously
-    // after appendChild measures the container before it has real dimensions,
-    // which collapses the PTY to ~8 cols.
-    requestAnimationFrame(() => {
-      existing.fit.fit();
-      syncViewport(existing.term);
+    logScroll('REATTACH:before-move', existing.term, paneId);
+    console.log(`[TermScroll] REATTACH saved: wasAtBottom=${restoreWasAtBottom} viewportY=${restoreViewportY}`);
 
-      // Repaint canvas — renderer skips frames while wrapper is detached
+    // Block ResizeObserver from interfering during scroll restoration
+    existing._restoringScroll = true;
+
+    // Single rAF — wrapper was kept in the DOM (offscreen container) so
+    // xterm viewport dimensions are still valid. Just need to re-fit
+    // to the new container size and restore scroll.
+    requestAnimationFrame(() => {
+      logScroll('REATTACH:rAF-before-fit', existing.term, paneId);
+
+      existing.fit.fit();
+      logScroll('REATTACH:after-fit', existing.term, paneId);
+
+      syncViewport(existing.term, 'reattach-post-fit');
+      logScroll('REATTACH:after-syncViewport', existing.term, paneId);
+
+      // Repaint canvas — renderer skips frames while wrapper was offscreen
       existing.term.refresh(0, existing.term.rows - 1);
 
       // Send resize so server/PTY knows current dimensions
@@ -124,38 +173,39 @@ export const attachSession = async (
         }
       }
 
-      // Defer scroll restoration to a SECOND frame — the first rAF
-      // repaints the canvas and recalculates the scrollbar height.
-      // Scrolling in the same frame uses stale scroll dimensions,
-      // causing the viewport to jump to line 0 on the first user scroll.
-      requestAnimationFrame(() => {
-        const applyScroll = () => {
-          const buf = existing.term.buffer.active;
-          if (restoreWasAtBottom) {
-            existing.term.scrollToBottom();
-          } else if (restoreViewportY != null) {
-            const target = Math.min(restoreViewportY, buf.baseY);
-            existing.term.scrollToLine(target);
-          } else {
-            // No saved position (e.g. output arrived while detached) — go to bottom
-            existing.term.scrollToBottom();
-          }
-        };
+      // Restore scroll — viewport geometry is valid since wrapper stayed in DOM
+      const buf = existing.term.buffer.active;
+      if (restoreWasAtBottom) {
+        console.log(`[TermScroll] REATTACH:scrollToBottom`);
+        existing.term.scrollToBottom();
+      } else if (restoreViewportY != null) {
+        const target = Math.min(restoreViewportY, buf.baseY);
+        console.log(`[TermScroll] REATTACH:scrollToLine target=${target} (saved=${restoreViewportY} baseY=${buf.baseY})`);
+        existing.term.scrollToLine(target);
+      } else {
+        console.log(`[TermScroll] REATTACH:scrollToBottom (no saved position)`);
+        existing.term.scrollToBottom();
+      }
+      logScroll('REATTACH:after-scroll-restore', existing.term, paneId);
 
-        applyScroll();
+      // Force DOM scrollTop to match xterm's internal viewportY —
+      // scrollToBottom()/scrollToLine() update xterm's buffer state but do NOT
+      // set DOM scrollTop when the element was reparented between containers.
+      // Without this, the DOM stays at scrollTop=0 and the first user scroll
+      // starts from the top instead of the restored position.
+      const viewport = existing.term.element?.querySelector('.xterm-viewport') as HTMLElement | null;
+      if (viewport && buf.baseY > 0) {
+        viewport.scrollTop = (buf.viewportY / buf.baseY) * (viewport.scrollHeight - viewport.clientHeight);
+      } else if (viewport) {
+        viewport.scrollTop = viewport.scrollHeight - viewport.clientHeight;
+      }
+      logScroll('REATTACH:after-DOM-scrollTop-fix', existing.term, paneId);
 
-        // Re-apply scroll after the ResizeObserver's debounced fit()
-        // fires (~100ms). That fit() can trigger a terminal resize which
-        // resets the viewport position, undoing the restore above.
-        // The 150ms delay ensures we run AFTER the observer settles.
-        setTimeout(applyScroll, 150);
-
-        // Resume ResizeObserver AFTER scroll is restored — creating it
-        // earlier causes its debounced fit() to fire mid-restoration
-        // and reset the viewport to line 0.
-        existing.observer?.disconnect();
-        existing.observer = createResizeObserver(paneId, container);
-      });
+      // Clear the flag and resume ResizeObserver AFTER scroll is restored
+      existing._restoringScroll = false;
+      existing.observer?.disconnect();
+      existing.observer = createResizeObserver(paneId, container);
+      console.log(`[TermScroll] REATTACH:complete — ResizeObserver resumed`);
     });
 
     // Check WebSocket health — if it died while detached, the terminal
@@ -192,6 +242,7 @@ export const attachSession = async (
     cursorBlink: true,
     cursorStyle: 'bar',
     scrollback: 10_000,
+    fastScrollModifier: 'alt',
   });
 
   const fit = new FitAddon();
@@ -214,6 +265,16 @@ export const attachSession = async (
   // Open xterm into the persistent wrapper (done ONCE)
   container.appendChild(wrapper);
   term.open(wrapper);
+
+  // Load WebGL renderer for GPU-accelerated rendering — falls back to canvas on error
+  try {
+    const webgl = new WebglAddon();
+    webgl.onContextLoss(() => { webgl.dispose(); });
+    term.loadAddon(webgl);
+  } catch {
+    // WebGL not available — canvas renderer is the automatic fallback
+  }
+
   // Double-rAF: first frame completes browser layout, second measures stable
   // dimensions.  Prevents xterm viewport getting 0-height on mount (which
   // breaks mouse-wheel scroll until a text-selection forces a recalc).
@@ -274,10 +335,27 @@ export const attachSession = async (
     ws.onopen = () => {
       session.connected = true;
       reconnectAttempts = 0;
-      // Re-fit to ensure accurate dimensions — the deferred rAF fit may
-      // not have fired yet if the WebSocket connected very quickly.
+      // Preserve scroll position across fit() — reconnection should not
+      // reset the viewport (mirrors VS Code's pattern).
+      logScroll('ws.onopen:before-fit', term, paneId);
+      const buf = term.buffer.active;
+      const wasBottom = buf.viewportY >= buf.baseY;
+      const savedY = buf.viewportY;
       fit.fit();
-      syncViewport(term);
+      syncViewport(term, 'ws.onopen');
+      if (wasBottom) {
+        term.scrollToBottom();
+      } else {
+        term.scrollToLine(Math.min(savedY, buf.baseY));
+      }
+      // Force DOM scrollTop to match xterm's internal viewportY
+      const vp = term.element?.querySelector('.xterm-viewport') as HTMLElement | null;
+      if (vp && buf.baseY > 0) {
+        vp.scrollTop = (buf.viewportY / buf.baseY) * (vp.scrollHeight - vp.clientHeight);
+      } else if (vp) {
+        vp.scrollTop = vp.scrollHeight - vp.clientHeight;
+      }
+      logScroll('ws.onopen:after-restore', term, paneId);
       const dims = fit.proposeDimensions();
       const md = options?.metadata;
       ws.send(JSON.stringify({
@@ -358,6 +436,12 @@ export const attachSession = async (
   });
   (session as any)._onDataDisposable = onDataDisposable;
 
+  // Debug: monitor xterm scroll events to catch unexpected scrolling
+  term.onScroll((newY) => {
+    const buf = term.buffer.active;
+    console.log(`[TermScroll] xterm.onScroll pane=${paneId.slice(0,8)} newViewportY=${newY} baseY=${buf.baseY} atBottom=${newY >= buf.baseY}`);
+  });
+
   // Forward OSC title changes (e.g. from peon-ping) to update pane tab labels
   term.onTitleChange((title) => {
     window.dispatchEvent(new CustomEvent('phantom:terminal-title', {
@@ -365,6 +449,15 @@ export const attachSession = async (
     }));
   });
   (session as any)._focusHandler = resetReconnectOnFocus;
+
+  // Debug: monitor DOM viewport scroll events — catches browser-initiated scrolls
+  const xtermViewport = term.element?.querySelector('.xterm-viewport') as HTMLElement | null;
+  if (xtermViewport) {
+    xtermViewport.addEventListener('scroll', () => {
+      const buf = term.buffer.active;
+      console.log(`[TermScroll] DOM:scroll pane=${paneId.slice(0,8)} scrollTop=${Math.round(xtermViewport.scrollTop)} scrollHeight=${xtermViewport.scrollHeight} clientHeight=${xtermViewport.clientHeight} viewportY=${buf.viewportY} baseY=${buf.baseY}`);
+    }, { passive: true });
+  }
 
   // Set up ResizeObserver
   session.observer = createResizeObserver(paneId, container);
@@ -377,26 +470,34 @@ export const attachSession = async (
 
 /**
  * Detach a terminal session from its DOM container.
- * Just removes the wrapper from the DOM — xterm + WebSocket stay alive.
- * Matches Superset's detachFromContainer exactly.
+ * Moves the wrapper to an offscreen container (not removed from DOM) so
+ * xterm.js viewport scroll state stays valid. Mirrors VS Code's pattern.
+ * WebSocket stays alive — PTY output continues flowing to the xterm buffer.
  */
 export const detachSession = (paneId: string): void => {
   const session = sessions.get(paneId);
   if (!session) return;
 
-  console.log(`[TermReg] DETACH ${paneId.slice(0,8)} — wrapper stays alive, ws stays open`);
+  logScroll('DETACH:before-save', session.term, paneId);
+  console.log(`[TermReg] DETACH ${paneId.slice(0,8)} — wrapper moves offscreen, ws stays open`);
 
-  // Save viewport scroll position BEFORE removing from DOM
+  // Save viewport scroll position before moving offscreen
   const buf = session.term.buffer.active;
   session.savedViewportY = buf.viewportY;
   session.wasAtBottom = buf.viewportY >= buf.baseY;
+  console.log(`[TermScroll] DETACH saved: viewportY=${buf.viewportY} wasAtBottom=${session.wasAtBottom}`);
 
   // Disconnect ResizeObserver
   session.observer?.disconnect();
   session.observer = null;
 
-  // Remove wrapper from DOM but keep it in memory
-  session.wrapper.remove();
+  // Move wrapper to offscreen container — keeps xterm viewport alive in the DOM
+  // so scroll state, scrollHeight, and internal tracking stay valid.
+  if (offscreen) {
+    offscreen.appendChild(session.wrapper);
+  } else {
+    session.wrapper.remove();
+  }
   session.container = null;
 
   // WebSocket stays open — PTY output continues to be written to xterm buffer.
@@ -410,6 +511,12 @@ export const detachSession = (paneId: string): void => {
 export const disposeSession = (paneId: string): void => {
   const session = sessions.get(paneId);
   if (!session) return;
+
+  // Guard: skip dispose if session is mid-reattach (workspace switch race)
+  if (attaching.has(paneId)) {
+    console.warn(`[TermReg] DISPOSE BLOCKED ${paneId.slice(0,8)} — session is being reattached`);
+    return;
+  }
 
   console.log(`[TermReg] DISPOSE ${paneId.slice(0,8)} — killing PTY + closing ws`);
 
@@ -463,15 +570,49 @@ function createResizeObserver(paneId: string, container: HTMLDivElement): Resize
     if (resizeTimer) clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       const session = sessions.get(paneId);
-      // Skip if session was disposed or detached (wrapper not in DOM)
+      // Skip if session was disposed, detached, or mid-reattach scroll restoration
       if (!session || !session.container) return;
+      if (session._restoringScroll) {
+        console.log(`[TermScroll] ResizeObserver:SKIPPED (restoring) pane=${paneId.slice(0,8)}`);
+        return;
+      }
+      // Skip if container is not visible (e.g. hidden tab)
+      if (container.offsetParent === null || container.clientHeight === 0) {
+        console.log(`[TermScroll] ResizeObserver:SKIPPED (hidden) pane=${paneId.slice(0,8)}`);
+        return;
+      }
+
+      logScroll('ResizeObserver:before-fit', session.term, paneId);
+
+      // Preserve scroll position across fit()
+      const buf = session.term.buffer.active;
+      const wasAtBottom = buf.viewportY >= buf.baseY;
+      const savedY = buf.viewportY;
+
       session.fit.fit();
-      syncViewport(session.term);
+      syncViewport(session.term, 'resize-observer');
+
+      // Restore scroll position after fit
+      if (wasAtBottom) {
+        session.term.scrollToBottom();
+      } else {
+        session.term.scrollToLine(Math.min(savedY, buf.baseY));
+      }
+
+      // Force DOM scrollTop to match xterm's internal viewportY
+      const vp = session.term.element?.querySelector('.xterm-viewport') as HTMLElement | null;
+      if (vp && buf.baseY > 0) {
+        vp.scrollTop = (buf.viewportY / buf.baseY) * (vp.scrollHeight - vp.clientHeight);
+      } else if (vp) {
+        vp.scrollTop = vp.scrollHeight - vp.clientHeight;
+      }
+      logScroll('ResizeObserver:after-restore', session.term, paneId);
+
       const dims = session.fit.proposeDimensions();
       if (dims && session.ws && session.ws.readyState === WebSocket.OPEN) {
         session.ws.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
       }
-    }, 100);
+    }, 250);
   });
   observer.observe(container);
   return observer;

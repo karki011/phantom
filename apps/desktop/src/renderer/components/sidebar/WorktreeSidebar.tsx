@@ -205,6 +205,7 @@ export function WorktreeSidebar() {
 
   return (
     <div
+      data-tour="sidebar"
       onDragOver={collapsed ? undefined : handleDragOver}
       onDragLeave={collapsed ? undefined : handleDragLeave}
       onDrop={collapsed ? undefined : handleDrop}
@@ -512,6 +513,7 @@ export function WorktreeSidebar() {
 
           {/* Footer */}
           <div
+            data-tour="add-project"
             style={{
               borderTop: '1px solid var(--phantom-border-subtle)',
               padding: '6px 8px',

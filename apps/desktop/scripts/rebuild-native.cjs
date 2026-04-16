@@ -39,14 +39,21 @@ function findSourceModule(name, projectDir) {
 function rebuildModule(modulePath, srcPath, electronVersion) {
   const name = path.basename(modulePath);
 
-  // Copy build files from source if missing in unpacked
-  if (!fs.existsSync(path.join(modulePath, 'binding.gyp')) && srcPath) {
-    console.log(`[rebuild-native] Copying build files for ${name}...`);
-    for (const item of ['binding.gyp', 'deps', 'src']) {
+  // Copy build files from source (bun cache) if missing in unpacked.
+  // Use rsync to deep-merge — the unpacked dir may have partial files
+  // (e.g. src/ with .ts files but missing C++ subdirectories like src/unix/).
+  if (srcPath) {
+    console.log(`[rebuild-native] Syncing build files for ${name} from source...`);
+    for (const item of ['binding.gyp', 'deps', 'src', 'node-addon-api']) {
       const src = path.join(srcPath, item);
       const dst = path.join(modulePath, item);
-      if (fs.existsSync(src) && !fs.existsSync(dst)) {
-        execSync(`cp -R "${src}" "${dst}"`);
+      if (fs.existsSync(src)) {
+        // For files, copy if missing. For dirs, rsync to merge contents.
+        if (fs.statSync(src).isDirectory()) {
+          execSync(`rsync -a "${src}/" "${dst}/"`);
+        } else if (!fs.existsSync(dst)) {
+          execSync(`cp "${src}" "${dst}"`);
+        }
       }
     }
   }
@@ -83,24 +90,9 @@ module.exports = async function afterPack(context) {
   // Use electron-rebuild for all native modules at once — it handles
   // different build systems (node-gyp, cmake, etc.) correctly.
   // Falls back to per-module node-gyp if electron-rebuild isn't available.
-  try {
-    console.log(`[rebuild-native] Running electron-rebuild for Electron ${electronVersion}...`);
-    // Create a minimal package.json so electron-rebuild can find modules
-    const tmpPkg = path.join(unpackedDir, '..', 'package.json');
-    const hadPkg = fs.existsSync(tmpPkg);
-    if (!hadPkg) {
-      fs.writeFileSync(tmpPkg, JSON.stringify({ name: 'phantom-rebuild', private: true }));
-    }
-    execSync(
-      `npx --yes electron-rebuild --version ${electronVersion} --module-dir "${path.join(unpackedDir, '..')}" --force`,
-      { stdio: 'inherit', timeout: 300000 }
-    );
-    if (!hadPkg) fs.unlinkSync(tmpPkg);
-    console.log('[rebuild-native] All native modules rebuilt successfully');
-    return;
-  } catch (err) {
-    console.warn('[rebuild-native] electron-rebuild failed, falling back to per-module rebuild:', err.message);
-  }
+  // Rebuild each native module individually with node-gyp targeting Electron's ABI.
+  // electron-rebuild's --version flag is unreliable with bun workspaces — it often
+  // rebuilds against the system Node ABI instead of Electron's.
 
   // Fallback: rebuild individually with node-gyp
   for (const name of NATIVE_MODULES) {

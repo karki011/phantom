@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { desc, eq, like, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db, sessions, tasks } from '@phantom-os/db';
-import { safeReadDir } from '@phantom-os/shared';
+import { safeReadDir } from '@phantom-os/shared/file-utils';
 
 export const sessionRoutes = new Hono();
 

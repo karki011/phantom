@@ -5,7 +5,7 @@
  */
 import { ScrollArea, Skeleton, Text, TextInput } from '@mantine/core';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePaneStore } from '@phantom-os/panes';
 import { Search, X } from 'lucide-react';
 
@@ -24,7 +24,7 @@ import { FileTreeItem } from './FileTreeItem';
 export function FilesView() {
   const activeWorktree = useAtomValue(activeWorktreeAtom);
   const fileTree = useAtomValue(fileTreeAtom);
-  const expandedFolders = useAtomValue(expandedFoldersAtom);
+  const [expandedFolders, setExpandedFolders] = useAtom(expandedFoldersAtom);
   const isDirLoading = useAtomValue(isDirLoadingAtom);
   const [selectedFile, setSelectedFile] = useAtom(selectedFileAtom);
   const [searchQuery, setSearchQuery] = useState('');
@@ -36,6 +36,50 @@ export function FilesView() {
   const toggleFolder = useSetAtom(toggleFolderAtom);
 
   const store = usePaneStore();
+
+  // Auto-sync sidebar selection when active editor pane changes
+  const activePane = store.getActivePane();
+  const activeEditorPath = activePane?.kind === 'editor'
+    ? (activePane.data?.filePath as string | undefined) ?? null
+    : null;
+  const prevEditorPathRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!activeEditorPath || !activeWorktree) return;
+    // Skip if same file (avoid unnecessary updates)
+    if (activeEditorPath === prevEditorPathRef.current) return;
+    prevEditorPathRef.current = activeEditorPath;
+
+    setSelectedFile(activeEditorPath);
+
+    // Expand parent directories so the file is visible in the tree
+    const normalized = activeEditorPath.replace(/^\//, '');
+    const parts = normalized.split('/');
+    const parentPaths: string[] = [];
+    for (let i = 1; i < parts.length; i++) {
+      parentPaths.push(parts.slice(0, i).join('/'));
+    }
+
+    setExpandedFolders((prev) => {
+      const toAdd = parentPaths.filter((p) => !prev.includes(p));
+      return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+    });
+
+    // Fetch any unfetched parent directories
+    for (const dirPath of parentPaths) {
+      const cacheKey = `${activeWorktree.id}:${dirPath}`;
+      if (!fileTree.has(cacheKey)) {
+        fetchDirectory({ worktreeId: activeWorktree.id, path: dirPath });
+      }
+    }
+
+    // Scroll the file into view after the tree renders
+    setTimeout(() => {
+      const el = document.querySelector(`[data-file-path="${CSS.escape(activeEditorPath)}"]`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 150);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeEditorPath, activeWorktree?.id]);
 
   // Debounced server-side file search
   useEffect(() => {

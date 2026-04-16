@@ -8,7 +8,8 @@ import { basename, dirname, join } from 'node:path';
 import { watch } from 'chokidar';
 import { eq, sql } from 'drizzle-orm';
 import { db, sessions, tasks } from '@phantom-os/db';
-import { TASKS_DIR, parseCrew, safeReadJson } from '@phantom-os/shared';
+import { TASKS_DIR } from '@phantom-os/shared/constants-node';
+import { parseCrew, safeReadJson } from '@phantom-os/shared/file-utils';
 
 interface TaskFile {
   id?: string;

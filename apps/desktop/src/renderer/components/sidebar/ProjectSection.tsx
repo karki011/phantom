@@ -154,6 +154,7 @@ export function ProjectSection({
   return (
     <div>
       <ProjectContextMenu
+        repoPath={project.repoPath}
         isStarred={!!project.starred}
         onToggleStar={handleToggleStar}
         onAddWorktree={handleAddWorktree}

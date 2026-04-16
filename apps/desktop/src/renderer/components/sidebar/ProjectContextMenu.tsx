@@ -5,11 +5,12 @@
  * @author Subash Karki
  */
 import { Menu } from '@mantine/core';
-import { Edit3, FolderPlus, RefreshCw, Search, Star, Trash2 } from 'lucide-react';
+import { Copy, Edit3, FolderPlus, RefreshCw, Search, Star, Trash2 } from 'lucide-react';
 import { type ReactNode, useCallback, useRef, useState } from 'react';
 
 interface ProjectContextMenuProps {
   children: ReactNode;
+  repoPath: string;
   isStarred: boolean;
   onToggleStar: () => void;
   onAddWorktree: () => void;
@@ -21,6 +22,7 @@ interface ProjectContextMenuProps {
 
 export function ProjectContextMenu({
   children,
+  repoPath,
   isStarred,
   onToggleStar,
   onAddWorktree,
@@ -95,6 +97,12 @@ export function ProjectContextMenu({
             onClick={onRename}
           >
             Rename Project
+          </Menu.Item>
+          <Menu.Item
+            leftSection={<Copy size={14} />}
+            onClick={() => navigator.clipboard.writeText(repoPath)}
+          >
+            Copy Absolute Path
           </Menu.Item>
           <Menu.Item
             leftSection={<Search size={14} />}

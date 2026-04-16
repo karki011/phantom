@@ -20,8 +20,10 @@ import {
 } from '../../atoms/worktrees';
 import {
   clearFileTreeAtom,
+  expandedFoldersAtom,
   fetchDirectoryAtom,
   rightSidebarTabAtom,
+  selectedFileAtom,
   gitChangesCountAtom,
   gitStatusAtom,
   rootFileCountAtom,
@@ -138,6 +140,48 @@ export function RightSidebar() {
     return () => clearInterval(interval);
   }, [worktree?.id]);
 
+  // --- Reveal file in sidebar (triggered from tab context menu) ---
+  const setSelectedFile = useSetAtom(selectedFileAtom);
+  const setExpandedFolders = useSetAtom(expandedFoldersAtom);
+
+  useEffect(() => {
+    const handler = (e: CustomEvent<{ filePath: string }>) => {
+      const filePath = e.detail?.filePath;
+      if (!filePath || !worktree) return;
+
+      // Switch to Files tab so the tree is visible
+      setActiveTab('files');
+      setSelectedFile(filePath);
+
+      // Expand parent directories
+      const normalized = filePath.replace(/^\//, '');
+      const parts = normalized.split('/');
+      const parentPaths: string[] = [];
+      for (let i = 1; i < parts.length; i++) {
+        parentPaths.push(parts.slice(0, i).join('/'));
+      }
+
+      setExpandedFolders((prev: string[]) => {
+        const toAdd = parentPaths.filter((p) => !prev.includes(p));
+        return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+      });
+
+      // Fetch any unfetched parent directories
+      for (const dirPath of parentPaths) {
+        fetchDirectory({ worktreeId: worktree.id, path: dirPath });
+      }
+
+      // Scroll the file into view after the tree renders
+      setTimeout(() => {
+        const el = document.querySelector(`[data-file-path="${CSS.escape(filePath)}"]`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 250);
+    };
+
+    window.addEventListener('phantom:reveal-file' as any, handler);
+    return () => window.removeEventListener('phantom:reveal-file' as any, handler);
+  }, [worktree?.id, setActiveTab, setSelectedFile, setExpandedFolders, fetchDirectory]);
+
   if (collapsed) {
     return (
       <div
@@ -175,6 +219,7 @@ export function RightSidebar() {
 
   return (
     <div
+      data-tour="right-sidebar"
       style={{
         width,
         minWidth: 180,

@@ -8,7 +8,8 @@ import { openSync, readSync, closeSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { db, sessions } from '@phantom-os/db';
-import { PROJECTS_DIR, safeReadDir } from '@phantom-os/shared';
+import { PROJECTS_DIR } from '@phantom-os/shared/constants-node';
+import { safeReadDir } from '@phantom-os/shared/file-utils';
 
 type Broadcast = (event: string, data: unknown) => void;
 

@@ -11,6 +11,7 @@ import type { PaneDefinition, Pane } from '@phantom-os/panes';
 import { jotaiStore } from '@phantom-os/panes';
 import { TerminalPane } from '@phantom-os/terminal';
 import { activeWorktreeIdAtom } from '../atoms/worktrees';
+import { PhantomLoader } from '../components/brand/PhantomLoader';
 
 // Lazy-load heavy pane types (terminal has its own loading overlay)
 const EditorPane = lazy(() =>
@@ -29,20 +30,7 @@ const JournalPane = lazy(() =>
   import('../components/JournalPane').then((m) => ({ default: m.JournalPane })),
 );
 
-const Loading = () =>
-  createElement(
-    'div',
-    {
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100%',
-        color: 'var(--phantom-text-muted)',
-      },
-    },
-    'Loading...',
-  );
+const Loading = () => createElement(PhantomLoader);
 
 // ---------------------------------------------------------------------------
 // Pane definitions

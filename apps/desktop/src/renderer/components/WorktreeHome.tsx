@@ -38,6 +38,7 @@ import { PlansCard } from './PlansCard';
 import { RecipeFormModal } from './RecipeFormModal';
 import { RunningServersCard } from './RunningServersCard';
 import { TasksCard } from './TasksCard';
+import { PhantomLoader } from './brand/PhantomLoader';
 
 const apiBase = (window as any).__PHANTOM_API_BASE ?? '';
 
@@ -132,7 +133,7 @@ function InlineGitStatus({ state }: { state: GitStatusState }) {
   if (state === 'loading' || state === 'unavailable' || state === 'error') {
     const message =
       state === 'loading'
-        ? 'Loading...'
+        ? undefined
         : state === 'unavailable'
           ? 'No git repository'
           : 'Git status unavailable';
@@ -142,7 +143,10 @@ function InlineGitStatus({ state }: { state: GitStatusState }) {
           <GitBranch size={14} style={{ color: 'var(--phantom-text-muted)' }} />
           <Text fz="xs" fw={600} c="var(--phantom-text-secondary)">Git Status</Text>
         </Group>
-        <Text fz="xs" c="var(--phantom-text-muted)">{message}</Text>
+        {state === 'loading'
+          ? <PhantomLoader label="Scanning git" compact />
+          : <Text fz="xs" c="var(--phantom-text-muted)">{message}</Text>
+        }
       </Stack>
     );
   }

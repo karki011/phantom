@@ -15,6 +15,7 @@ import {
   generateEndOfDay,
   updateJournalNotes,
 } from '../lib/api';
+import { PhantomLoader } from './brand/PhantomLoader';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -304,11 +305,7 @@ export const JournalPane = () => {
   }, [date]);
 
   if (loading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--phantom-text-muted)' }}>
-        Loading...
-      </div>
-    );
+    return <PhantomLoader label="Loading journal" />;
   }
 
   return (

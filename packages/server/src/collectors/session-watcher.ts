@@ -10,7 +10,8 @@ import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { watch } from 'chokidar';
 import { eq } from 'drizzle-orm';
 import { db, sessions } from '@phantom-os/db';
-import { SESSIONS_DIR, PROJECTS_DIR, extractRepoName, isProcessAlive, safeReadJson } from '@phantom-os/shared';
+import { SESSIONS_DIR, PROJECTS_DIR } from '@phantom-os/shared/constants-node';
+import { extractRepoName, isProcessAlive, safeReadJson } from '@phantom-os/shared/file-utils';
 
 interface SessionFile {
   sessionId?: string;

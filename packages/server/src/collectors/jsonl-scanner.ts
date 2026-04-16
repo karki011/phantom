@@ -11,7 +11,8 @@ import { createInterface } from 'node:readline';
 import { basename, join } from 'node:path';
 import { eq, and } from 'drizzle-orm';
 import { db, sessions } from '@phantom-os/db';
-import { PROJECTS_DIR, COST_PER_TOKEN } from '@phantom-os/shared';
+import { PROJECTS_DIR } from '@phantom-os/shared/constants-node';
+import { COST_PER_TOKEN } from '@phantom-os/shared';
 
 type Broadcast = (event: string, data: unknown) => void;
 

@@ -56,6 +56,7 @@ import { useCeremonySounds } from './hooks/useCeremonySounds';
 import { QuickOpen } from './components/QuickOpen';
 import { RecipeQuickLaunch } from './components/RecipeQuickLaunch';
 import { fetchApi, generateMorningBrief, type JournalEntry } from './lib/api';
+import { useTour } from './hooks/useTour';
 
 /** Listen for terminal title changes (OSC sequences) and update pane tab labels */
 const TerminalTitleListener = () => {
@@ -132,6 +133,7 @@ export const App = () => {
 
   const { isEnabled, loaded: prefsLoaded, prefs } = usePreferences();
   const [onboardingDone, setOnboardingDone] = useState(false);
+  const { startTour, tourCompleted } = useTour();
 
   // Ceremony sounds (Web Audio API — zero deps, gated by preferences)
   const soundEventPrefs = Object.fromEntries(
@@ -343,6 +345,15 @@ export const App = () => {
     setSelectedFile(activePaneFilePath);
   }, [activePaneFilePath, setSelectedFile]);
 
+  // Auto-start guided tour after splash for first-time users
+  // Only when: splash done, onboarding done, shutdown NOT showing, tour not yet completed
+  useEffect(() => {
+    if (splashDone && !shutdownVisible && !tourCompleted && prefs.onboarding_completed) {
+      const timer = setTimeout(() => startTour(), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [splashDone, shutdownVisible, tourCompleted, prefs.onboarding_completed, startTour]);
+
   // ── All hooks declared above — conditional returns safe below this line ──
 
   // Gate: show onboarding if not completed
@@ -491,7 +502,7 @@ export const App = () => {
       </AppShell.Main>
 
       {/* Footer */}
-      <AppShell.Footer bg="var(--phantom-surface-card)" p="xs">
+      <AppShell.Footer bg="var(--phantom-surface-card)" p="xs" data-tour="footer">
         <Group justify="space-between" px="md" h="100%">
           <Group gap="xs">
             <Trophy

@@ -389,7 +389,76 @@ const CiSection = memo(function CiSection({ worktreeId }: { worktreeId: string }
 // ---------------------------------------------------------------------------
 
 const CommitsSection = memo(function CommitsSection({ worktreeId }: { worktreeId: string }) {
-  const commits = useAtomValue(commitsFamily(worktreeId));
+  const atomCommits = useAtomValue(commitsFamily(worktreeId));
+  const [scoped, setScoped] = useState(true);
+  const [localCommits, setLocalCommits] = useState<typeof atomCommits | null>(null);
+
+  // When scoped changes, fetch commits with the right scope
+  useEffect(() => {
+    let cancelled = false;
+    gitRecentCommits(worktreeId, scoped)
+      .then((commits) => { if (!cancelled) setLocalCommits(commits); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [worktreeId, scoped]);
+
+  // Sync atom commits into local state when they update (from the parent poll)
+  useEffect(() => {
+    if (scoped) {
+      // When scoped, atom commits are from the unscoped parent fetch — re-fetch scoped
+      gitRecentCommits(worktreeId, true)
+        .then((commits) => setLocalCommits(commits))
+        .catch(() => {});
+    } else {
+      setLocalCommits(atomCommits);
+    }
+  }, [atomCommits, worktreeId, scoped]);
+
+  const commits = localCommits ?? atomCommits;
+
+  if (commits.length === 0 && scoped) {
+    // Show section with toggle even when no branch commits, so user can switch to "All"
+    return (
+      <div style={{ padding: '6px 8px' }}>
+        <div style={{ ...sectionHeaderStyle, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <GitCommit size={11} />
+          Recent Commits
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>
+            <span
+              onClick={() => setScoped(true)}
+              style={{
+                fontSize: '0.58rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                color: 'var(--phantom-accent-cyan, #06b6d4)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.03em',
+              }}
+            >
+              Branch
+            </span>
+            <span style={{ fontSize: '0.55rem', color: 'var(--phantom-text-muted)' }}>|</span>
+            <span
+              onClick={() => setScoped(false)}
+              style={{
+                fontSize: '0.58rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                color: 'var(--phantom-text-muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.03em',
+              }}
+            >
+              All
+            </span>
+          </div>
+        </div>
+        <Text fz="0.73rem" c="var(--phantom-text-muted)" py={4}>
+          No commits on this branch yet
+        </Text>
+      </div>
+    );
+  }
 
   if (commits.length === 0) return null;
 
@@ -398,6 +467,39 @@ const CommitsSection = memo(function CommitsSection({ worktreeId }: { worktreeId
       <div style={{ ...sectionHeaderStyle, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
         <GitCommit size={11} />
         Recent Commits
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>
+          <span
+            onClick={() => setScoped(true)}
+            style={{
+              fontSize: '0.58rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              color: scoped
+                ? 'var(--phantom-accent-cyan, #06b6d4)'
+                : 'var(--phantom-text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.03em',
+            }}
+          >
+            Branch
+          </span>
+          <span style={{ fontSize: '0.55rem', color: 'var(--phantom-text-muted)' }}>|</span>
+          <span
+            onClick={() => setScoped(false)}
+            style={{
+              fontSize: '0.58rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              color: !scoped
+                ? 'var(--phantom-accent-cyan, #06b6d4)'
+                : 'var(--phantom-text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.03em',
+            }}
+          >
+            All
+          </span>
+        </div>
       </div>
 
       <div>

@@ -10,7 +10,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { AI_ENGINE_DIR } from '@phantom-os/shared';
+import { AI_ENGINE_DIR } from '@phantom-os/shared/constants-node';
 
 // ---------------------------------------------------------------------------
 // KnowledgeDB

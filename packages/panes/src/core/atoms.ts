@@ -838,6 +838,8 @@ export const switchWorkspaceAtom = atom(
   async (get, set, workspaceId: string) => {
     // Prevent concurrent loads (StrictMode double-execution)
     if (switchingWorkspace) return;
+    // Skip no-op reload of the same workspace (StrictMode re-runs effects)
+    if (activeWorkspaceId === workspaceId && !coldBoot) return;
     switchingWorkspace = true;
     try {
       // Save current workspace state

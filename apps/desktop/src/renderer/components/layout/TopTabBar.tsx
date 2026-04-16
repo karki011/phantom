@@ -52,6 +52,7 @@ export function TopTabBar() {
         return (
           <UnstyledButton
             key={tab.id}
+            data-tour={`tab-${tab.id}`}
             onClick={() => handleTabClick(tab.id)}
             style={{
               display: 'flex',

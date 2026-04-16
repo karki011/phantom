@@ -6,11 +6,12 @@
  */
 import { Button, Text, TextInput, Tooltip, UnstyledButton } from '@mantine/core';
 import { AlertTriangle, GitFork } from 'lucide-react';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GitStatusResult, WorktreeData } from '../../lib/api';
 import { getGitStatus } from '../../lib/api';
 import { deleteWorktreeAtom, updateWorktreeAtom } from '../../atoms/worktrees';
+import { prStatusFamily } from '../../atoms/activity';
 import { showSystemNotification } from '../notifications/SystemToast';
 import { WorktreeContextMenu } from './WorktreeContextMenu';
 import { PrBadge } from './PrBadge';
@@ -36,6 +37,8 @@ export function WorktreeItem({
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null);
+  const prStatus = useAtomValue(prStatusFamily(worktree.id));
+  const isMerged = prStatus?.state === 'MERGED';
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   // Poll git status every 15s
@@ -231,7 +234,7 @@ export function WorktreeItem({
           <GitFork
             size={12}
             style={{
-              color: worktree.color || 'var(--phantom-accent-purple)',
+              color: isMerged ? '#a855f7' : 'var(--phantom-accent-cyan)',
               flexShrink: 0,
             }}
           />

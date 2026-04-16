@@ -411,6 +411,7 @@ worktreeRoutes.post('/worktrees/:id/git', async (c) => {
     action: string;
     paths?: string[];
     message?: string;
+    scoped?: boolean;
   }>();
   const { action } = body;
 
@@ -677,8 +678,22 @@ Rules:
       }
       case 'recent-commits': {
         try {
+          const scoped = body.scoped !== false; // default true
+          let logCmd = 'git log --oneline -10 --format="%H|%h|%s|%an|%ar"';
+
+          if (scoped) {
+            // Resolve base branch: worktree.baseBranch → project.defaultBranch → 'main'
+            let base = worktree.baseBranch;
+            if (!base) {
+              const project = db.select().from(projects).where(eq(projects.id, worktree.projectId)).get();
+              base = project?.defaultBranch ?? 'main';
+            }
+            const safeBase = base.replace(/"/g, '\\"');
+            logCmd = `git log "${safeBase}..HEAD" --oneline -20 --format="%H|%h|%s|%an|%ar"`;
+          }
+
           const logOutput = execSync(
-            'git log --oneline -10 --format="%H|%h|%s|%an|%ar"',
+            logCmd,
             { cwd: repoPath, encoding: 'utf-8', timeout: 5_000, stdio: 'pipe' },
           ).trim();
 

@@ -6,7 +6,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { DB_PATH } from '@phantom-os/shared';
+import { DB_PATH } from '@phantom-os/shared/constants-node';
 import * as schema from './schema.js';
 
 mkdirSync(dirname(DB_PATH), { recursive: true });

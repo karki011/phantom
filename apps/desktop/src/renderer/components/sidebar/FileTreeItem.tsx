@@ -120,6 +120,7 @@ export function FileTreeItem({
         <UnstyledButton
           onClick={handleClick}
           onContextMenu={handleContextMenu}
+          data-file-path={entry.relativePath}
           draggable
           onDragStart={(e) => {
             e.dataTransfer.setData('text/plain', absolutePath);

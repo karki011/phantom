@@ -16,7 +16,7 @@ import {
   useMantineColorScheme,
 } from '@mantine/core';
 import { useAtom, useSetAtom } from 'jotai';
-import { ArrowLeft, Circle, Cpu, HelpCircle, MemoryStick, Moon, Palette, Power, Settings, Sun } from 'lucide-react';
+import { ArrowLeft, Circle, Compass, Cpu, HelpCircle, MemoryStick, Moon, Palette, Power, Settings, Sun } from 'lucide-react';
 import { themeRegistry } from '@phantom-os/theme';
 
 import { themeNameAtom } from '../../atoms/system';
@@ -24,6 +24,7 @@ import { settingsVisibleAtom } from '../../atoms/settings';
 import { shutdownVisibleAtom } from '../../atoms/shutdown';
 import { usePreferences } from '../../hooks/usePreferences';
 import { useRouter } from '../../hooks/useRouter';
+import { useTour } from '../../hooks/useTour';
 import { useSystemMetrics } from '../../hooks/useSystemMetrics';
 
 interface SystemHeaderProps {
@@ -56,6 +57,7 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
   const [themeName, setThemeName] = useAtom(themeNameAtom);
   const { isHome, navigate } = useRouter();
   const { isEnabled } = usePreferences();
+  const { startTour } = useTour();
   const metrics = useSystemMetrics();
   const setSettingsVisible = useSetAtom(settingsVisibleAtom);
   const setShutdownVisible = useSetAtom(shutdownVisibleAtom);
@@ -69,6 +71,7 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
       h="100%"
       px="md"
       justify="space-between"
+      data-tour="header"
       style={{
         // Make header draggable as a window titlebar in Electron
         WebkitAppRegion: navigator.userAgent.includes('Electron') ? 'drag' : undefined,
@@ -267,9 +270,30 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
             }}
           >
             <Stack gap="xs">
-              <Text fw={700} fz="sm" c="var(--phantom-text-primary)">
-                PhantomOS Features
-              </Text>
+              <Group justify="space-between" align="center">
+                <Text fw={700} fz="sm" c="var(--phantom-text-primary)">
+                  PhantomOS Features
+                </Text>
+                <div
+                  onClick={startTour}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '3px 10px',
+                    borderRadius: 4,
+                    border: '1px solid var(--phantom-accent-cyan, #00d4ff)',
+                    color: 'var(--phantom-accent-cyan, #00d4ff)',
+                    fontSize: '0.65rem',
+                    fontFamily: 'var(--phantom-font-mono, monospace)',
+                    cursor: 'pointer',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  <Compass size={11} />
+                  Take Tour
+                </div>
+              </Group>
 
               {/* Core Concepts */}
               <Text fw={700} fz="0.65rem" tt="uppercase" c="var(--phantom-text-muted)" style={{ letterSpacing: '0.05em', marginTop: 4 }}>
@@ -502,7 +526,7 @@ export const SystemHeader = ({ activeSessions, isConnected: isBackendConnected }
 
         {/* Settings */}
         <Tooltip label="Settings" position="bottom" withArrow fz="xs">
-          <ActionIcon variant="subtle" size="lg" onClick={() => setSettingsVisible(true)} aria-label="Open settings" className="phantom-header-icon">
+          <ActionIcon variant="subtle" size="lg" onClick={() => setSettingsVisible(true)} aria-label="Open settings" className="phantom-header-icon" data-tour="settings">
             <Settings size={18} />
           </ActionIcon>
         </Tooltip>

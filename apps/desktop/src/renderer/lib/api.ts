@@ -706,10 +706,10 @@ export const gitCiRuns = async (worktreeId: string): Promise<CiRun[] | null> => 
   return res.runs;
 };
 
-export const gitRecentCommits = async (worktreeId: string): Promise<CommitInfo[]> => {
+export const gitRecentCommits = async (worktreeId: string, scoped?: boolean): Promise<CommitInfo[]> => {
   const res = await fetchApi<{ ok: boolean; commits: CommitInfo[] }>(`/api/worktrees/${worktreeId}/git`, {
     method: 'POST',
-    body: JSON.stringify({ action: 'recent-commits' }),
+    body: JSON.stringify({ action: 'recent-commits', scoped }),
   });
   return res.commits;
 };

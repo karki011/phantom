@@ -453,6 +453,56 @@ export function TabBar({ paneMenu }: TabBarProps) {
               Close Other Tabs
             </button>
           )}
+          {/* Copy path & reveal options for editor tabs */}
+          {(() => {
+            const tab = tabs.find((t) => t.id === ctxTabId);
+            if (!tab) return null;
+            const editorPane = Object.values(tab.panes).find(
+              (p) => p.kind === 'editor' && p.data?.filePath,
+            );
+            if (!editorPane) return null;
+            const filePath = editorPane.data.filePath as string;
+            const repoPath = editorPane.data.repoPath as string | undefined;
+            const absolutePath = repoPath
+              ? `${repoPath.replace(/\/$/, '')}/${filePath.replace(/^\//, '')}`
+              : filePath;
+            return (
+              <>
+                <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+                <button
+                  type="button"
+                  style={menuItemStyle}
+                  onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
+                  onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
+                  onClick={() => { navigator.clipboard.writeText(filePath); setCtxTabId(null); }}
+                >
+                  Copy Relative Path
+                </button>
+                <button
+                  type="button"
+                  style={menuItemStyle}
+                  onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
+                  onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
+                  onClick={() => { navigator.clipboard.writeText(absolutePath); setCtxTabId(null); }}
+                >
+                  Copy Absolute Path
+                </button>
+                <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+                <button
+                  type="button"
+                  style={menuItemStyle}
+                  onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
+                  onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'transparent'; }}
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent('phantom:reveal-file', { detail: { filePath } }));
+                    setCtxTabId(null);
+                  }}
+                >
+                  Reveal in Sidebar
+                </button>
+              </>
+            );
+          })()}
         </div>
       )}
     </div>

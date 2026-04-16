@@ -120,7 +120,7 @@ function ToggleRow({
 export function NeuralLinkPhase({ claudeDetected, onComplete }: Props) {
   const [mcpEnabled, setMcpEnabled] = useState(true);
   const [instructionsEnabled, setInstructionsEnabled] = useState(true);
-  const [hooksEnabled, setHooksEnabled] = useState(false);
+  const [hooksEnabled, setHooksEnabled] = useState(true);
 
   const monoFont = 'var(--phantom-font-mono, monospace)';
   const cyan = 'var(--phantom-accent-cyan, #00d4ff)';
