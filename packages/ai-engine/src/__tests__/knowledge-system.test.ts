@@ -15,22 +15,20 @@ import type { GraphEvent } from '../types/events.js';
 // ---------------------------------------------------------------------------
 // Mock @phantom-os/shared so KnowledgeDB writes to a temp dir.
 // vi.mock is hoisted above all imports. The factory must NOT reference any
-// module-scoped variables — so we inline the temp-dir creation.
-// We stash the path on globalThis so the test body can read it back.
+// module-scoped variables — so we inline the temp-dir creation and let the
+// test read it back by importing AI_ENGINE_DIR from the (mocked) module.
 // ---------------------------------------------------------------------------
 
-vi.mock('@phantom-os/shared', async () => {
+vi.mock('@phantom-os/shared/constants-node', async () => {
   const { mkdtempSync } = await import('node:fs');
   const { join } = await import('node:path');
   const { tmpdir } = await import('node:os');
   const dir = mkdtempSync(join(tmpdir(), 'phantom-ai-test-'));
-  (globalThis as Record<string, unknown>).__PHANTOM_AI_TEST_DIR = dir;
   return { AI_ENGINE_DIR: dir };
 });
 
-let tempDir: string;
-
 // Imports must come after vi.mock so the mock is applied
+import { AI_ENGINE_DIR as tempDir } from '@phantom-os/shared/constants-node';
 import { KnowledgeDB } from '../knowledge/knowledge-db.js';
 import { KnowledgeWriter } from '../orchestrator/knowledge-writer.js';
 import { Compactor } from '../orchestrator/compactor.js';
@@ -177,8 +175,6 @@ let knowledgeDb: KnowledgeDB;
 let eventBus: EventBus;
 
 beforeEach(() => {
-  // Read temp dir from globalThis (set by vi.mock factory)
-  tempDir = (globalThis as Record<string, unknown>).__PHANTOM_AI_TEST_DIR as string;
   knowledgeDb = new KnowledgeDB(PROJECT_ID);
   eventBus = new EventBus();
 });

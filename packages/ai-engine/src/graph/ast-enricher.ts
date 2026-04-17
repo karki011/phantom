@@ -183,7 +183,7 @@ export class ASTEnricher {
     const ext = extname(filePath);
     if (!AST_EXTENSIONS.has(ext)) return;
 
-    const fileNode = this.graph.getFileByPath(relPath);
+    const fileNode = this.graph.getFileByPathInProject(projectId, relPath);
     if (!fileNode) return;
 
     try {

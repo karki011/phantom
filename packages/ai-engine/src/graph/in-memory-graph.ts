@@ -28,11 +28,38 @@ export class InMemoryGraph {
   /** Edge lookup by ID */
   private edges = new Map<string, GraphEdge>();
 
-  /** File path → node ID for fast file lookups */
+  /**
+   * File path → node ID index, keyed as `${projectId}:${path}` to prevent
+   * cross-project collisions when two projects share the same relative path.
+   */
   private filesByPath = new Map<string, string>();
 
   /** Module name → node ID */
   private modulesByName = new Map<string, string>();
+
+  /**
+   * Project ID → Set of node IDs. Maintained incrementally in addNode/removeNode.
+   * Enables O(1) `getNodesByProject` without full scans.
+   */
+  private nodesByProject = new Map<string, Set<string>>();
+
+  /**
+   * `${projectId}:${type}` → Set of node IDs. Enables fast typed queries
+   * scoped to a project (e.g. "all file nodes in project X").
+   */
+  private nodesByProjectAndType = new Map<string, Set<string>>();
+
+  // ---------------------------------------------------------------------------
+  // Private index helpers
+  // ---------------------------------------------------------------------------
+
+  private filePathKey(projectId: string, path: string): string {
+    return `${projectId}:${path}`;
+  }
+
+  private projectTypeKey(projectId: string, type: NodeType): string {
+    return `${projectId}:${type}`;
+  }
 
   // ---------------------------------------------------------------------------
   // Mutations
@@ -49,9 +76,27 @@ export class InMemoryGraph {
       this.reverseAdjacency.set(node.id, new Set());
     }
 
-    // Index shortcuts
+    // Project index
+    let projectSet = this.nodesByProject.get(node.projectId);
+    if (!projectSet) {
+      projectSet = new Set();
+      this.nodesByProject.set(node.projectId, projectSet);
+    }
+    projectSet.add(node.id);
+
+    // Project + type index
+    const ptKey = this.projectTypeKey(node.projectId, node.type);
+    let ptSet = this.nodesByProjectAndType.get(ptKey);
+    if (!ptSet) {
+      ptSet = new Set();
+      this.nodesByProjectAndType.set(ptKey, ptSet);
+    }
+    ptSet.add(node.id);
+
+    // Shortcut indexes
     if (node.type === 'file') {
-      this.filesByPath.set((node as FileNode).path, node.id);
+      const key = this.filePathKey(node.projectId, (node as FileNode).path);
+      this.filesByPath.set(key, node.id);
     }
     if (node.type === 'module') {
       this.modulesByName.set((node as ModuleNode).name, node.id);
@@ -96,12 +141,28 @@ export class InMemoryGraph {
       }
     }
 
-    // Remove index entries
+    // Remove shortcut index entries
     if (node.type === 'file') {
-      this.filesByPath.delete((node as FileNode).path);
+      const key = this.filePathKey(node.projectId, (node as FileNode).path);
+      this.filesByPath.delete(key);
     }
     if (node.type === 'module') {
       this.modulesByName.delete((node as ModuleNode).name);
+    }
+
+    // Remove from project index
+    const projectSet = this.nodesByProject.get(node.projectId);
+    if (projectSet) {
+      projectSet.delete(id);
+      if (projectSet.size === 0) this.nodesByProject.delete(node.projectId);
+    }
+
+    // Remove from project + type index
+    const ptKey = this.projectTypeKey(node.projectId, node.type);
+    const ptSet = this.nodesByProjectAndType.get(ptKey);
+    if (ptSet) {
+      ptSet.delete(id);
+      if (ptSet.size === 0) this.nodesByProjectAndType.delete(ptKey);
     }
 
     this.adjacency.delete(id);
@@ -125,11 +186,59 @@ export class InMemoryGraph {
     return this.edges.get(id);
   }
 
-  getFileByPath(path: string): FileNode | undefined {
-    const nodeId = this.filesByPath.get(path);
+  /**
+   * Scoped O(1) file lookup by project and path.
+   * Preferred over `getFileByPath` in multi-project graphs.
+   */
+  getFileByPathInProject(projectId: string, path: string): FileNode | undefined {
+    const key = this.filePathKey(projectId, path);
+    const nodeId = this.filesByPath.get(key);
     if (!nodeId) return undefined;
     return this.nodes.get(nodeId) as FileNode | undefined;
   }
+
+  /**
+   * Legacy single-project lookup — searches all projects for a matching path.
+   * Works correctly when only one project is loaded.
+   * In multi-project graphs, returns the first match (non-deterministic) and
+   * logs a one-time warning if multiple projects are present.
+   *
+   * @deprecated Prefer `getFileByPathInProject(projectId, path)` in new callers.
+   */
+  getFileByPath(path: string): FileNode | undefined {
+    // Fast path: single project
+    if (this.nodesByProject.size <= 1) {
+      for (const [key, nodeId] of this.filesByPath) {
+        if (key.endsWith(`:${path}`)) {
+          return this.nodes.get(nodeId) as FileNode | undefined;
+        }
+      }
+      return undefined;
+    }
+
+    // Multi-project: warn once, return first match
+    if (!InMemoryGraph._multiProjectWarned) {
+      InMemoryGraph._multiProjectWarned = true;
+      console.warn(
+        '[InMemoryGraph] getFileByPath() called on a multi-project graph. ' +
+          'Use getFileByPathInProject(projectId, path) to avoid cross-project collisions.',
+      );
+    }
+
+    for (const [key, nodeId] of this.filesByPath) {
+      if (key.endsWith(`:${path}`)) {
+        return this.nodes.get(nodeId) as FileNode | undefined;
+      }
+    }
+    return undefined;
+  }
+
+  /** Reset the multi-project warning (useful in tests). */
+  static resetWarnings(): void {
+    InMemoryGraph._multiProjectWarned = false;
+  }
+
+  private static _multiProjectWarned = false;
 
   getModuleByName(name: string): ModuleNode | undefined {
     const nodeId = this.modulesByName.get(name);
@@ -233,10 +342,33 @@ export class InMemoryGraph {
     return result;
   }
 
+  /**
+   * O(k) project lookup via the incremental index (k = nodes in the project).
+   * No longer performs a full scan of all nodes.
+   */
   getNodesByProject(projectId: string): GraphNode[] {
+    const idSet = this.nodesByProject.get(projectId);
+    if (!idSet) return [];
     const result: GraphNode[] = [];
-    for (const node of this.nodes.values()) {
-      if (node.projectId === projectId) result.push(node);
+    for (const id of idSet) {
+      const node = this.nodes.get(id);
+      if (node) result.push(node);
+    }
+    return result;
+  }
+
+  /**
+   * O(k) typed project lookup (k = nodes of that type in the project).
+   * Equivalent to `getNodesByProject(pid).filter(n => n.type === type)` but O(k) instead of O(n).
+   */
+  getNodesByProjectAndType(projectId: string, type: NodeType): GraphNode[] {
+    const key = this.projectTypeKey(projectId, type);
+    const idSet = this.nodesByProjectAndType.get(key);
+    if (!idSet) return [];
+    const result: GraphNode[] = [];
+    for (const id of idSet) {
+      const node = this.nodes.get(id);
+      if (node) result.push(node);
     }
     return result;
   }
@@ -260,6 +392,8 @@ export class InMemoryGraph {
     this.edges.clear();
     this.filesByPath.clear();
     this.modulesByName.clear();
+    this.nodesByProject.clear();
+    this.nodesByProjectAndType.clear();
   }
 
   // ---------------------------------------------------------------------------

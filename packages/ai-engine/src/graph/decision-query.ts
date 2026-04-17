@@ -8,6 +8,7 @@
  * @author Subash Karki
  */
 import type { KnowledgeDB } from '../knowledge/knowledge-db.js';
+import { DecisionRepository } from '../knowledge/repositories/decision-repository.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,7 +54,11 @@ export interface PriorSuccess {
 // ---------------------------------------------------------------------------
 
 export class DecisionQuery {
-  constructor(private knowledgeDb: KnowledgeDB) {}
+  private decisionRepo: DecisionRepository;
+
+  constructor(private knowledgeDb: KnowledgeDB) {
+    this.decisionRepo = new DecisionRepository(knowledgeDb);
+  }
 
   /**
    * Find past decisions with similar goals.
@@ -62,23 +67,7 @@ export class DecisionQuery {
    */
   findSimilarDecisions(goal: string, minSimilarity = 0.3, limit = 10): PriorDecision[] {
     // Load recent decisions (last 30 days only — older ones are compacted)
-    const rows = this.knowledgeDb.db.prepare(`
-      SELECT id, goal, strategy_id, strategy_name, confidence, complexity, risk, duration_ms, created_at
-      FROM decisions
-      WHERE project_id = ?
-      ORDER BY created_at DESC
-      LIMIT 100
-    `).all(this.knowledgeDb.projectId) as Array<{
-      id: string;
-      goal: string;
-      strategy_id: string;
-      strategy_name: string;
-      confidence: number;
-      complexity: string;
-      risk: string;
-      duration_ms: number;
-      created_at: number;
-    }>;
+    const rows = this.decisionRepo.findRecent(100);
 
     const goalTokens = this.tokenize(goal);
     const results: Array<PriorDecision & { similarity: number }> = [];
@@ -89,13 +78,13 @@ export class DecisionQuery {
         results.push({
           id: row.id,
           goal: row.goal,
-          strategyId: row.strategy_id,
-          strategyName: row.strategy_name,
+          strategyId: row.strategyId,
+          strategyName: row.strategyName,
           confidence: row.confidence,
           complexity: row.complexity,
           risk: row.risk,
-          durationMs: row.duration_ms,
-          createdAt: row.created_at,
+          durationMs: row.durationMs,
+          createdAt: row.createdAt,
           similarity,
         });
       }
@@ -110,29 +99,16 @@ export class DecisionQuery {
    * Get outcomes for a list of decision IDs.
    */
   getOutcomes(decisionIds: string[]): Map<string, PriorOutcome> {
-    if (decisionIds.length === 0) return new Map();
-
-    const placeholders = decisionIds.map(() => '?').join(',');
-    const rows = this.knowledgeDb.db.prepare(`
-      SELECT decision_id, success, evaluation_score, recommendation, failure_reason
-      FROM outcomes
-      WHERE decision_id IN (${placeholders})
-    `).all(...decisionIds) as Array<{
-      decision_id: string;
-      success: number;
-      evaluation_score: number;
-      recommendation: string;
-      failure_reason: string | null;
-    }>;
-
+    const repoResults = this.decisionRepo.findOutcomes(decisionIds);
+    // Re-map to the PriorOutcome shape expected by callers
     const map = new Map<string, PriorOutcome>();
-    for (const row of rows) {
-      map.set(row.decision_id, {
-        decisionId: row.decision_id,
-        success: row.success === 1,
-        evaluationScore: row.evaluation_score,
-        recommendation: row.recommendation,
-        failureReason: row.failure_reason,
+    for (const [id, rec] of repoResults) {
+      map.set(id, {
+        decisionId: rec.decisionId,
+        success: rec.success,
+        evaluationScore: rec.evaluationScore,
+        recommendation: rec.recommendation,
+        failureReason: rec.failureReason,
       });
     }
     return map;

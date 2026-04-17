@@ -206,6 +206,61 @@ describe('IncrementalUpdater', () => {
     });
   });
 
+  describe('concurrency', () => {
+    it('serializes concurrent flushes — no interleaved update events', async () => {
+      graph.addNode(makeFile('src/index.ts'));
+      graph.addNode(makeFile('src/utils.ts'));
+      writeFileSync(join(tmpDir, 'src/index.ts'), 'export const a = 1;');
+      writeFileSync(join(tmpDir, 'src/utils.ts'), 'export const b = 2;');
+
+      updater.queueChange({ path: join(tmpDir, 'src/index.ts'), type: 'change' });
+      const first = updater.flush();
+
+      updater.queueChange({ path: join(tmpDir, 'src/utils.ts'), type: 'change' });
+      const second = updater.flush();
+
+      await Promise.all([first, second]);
+
+      const updateEvents = events.filter(
+        (e) => e.type === 'graph:update:start' || e.type === 'graph:update:complete',
+      );
+
+      let inFlight = 0;
+      for (const e of updateEvents) {
+        if (e.type === 'graph:update:start') inFlight++;
+        else inFlight--;
+        expect(inFlight).toBeLessThanOrEqual(1);
+        expect(inFlight).toBeGreaterThanOrEqual(0);
+      }
+      expect(inFlight).toBe(0);
+    });
+
+    it('branch switch does not race with in-flight debounced flush', async () => {
+      graph.addNode(makeFile('src/index.ts'));
+      graph.addNode(makeFile('src/utils.ts'));
+      writeFileSync(join(tmpDir, 'src/index.ts'), 'export const branch = true;');
+      writeFileSync(join(tmpDir, 'src/utils.ts'), 'export const other = true;');
+
+      updater.queueChange({ path: join(tmpDir, 'src/index.ts'), type: 'change' });
+      const debounced = updater.flush();
+      const switched = updater.handleBranchSwitch(['src/utils.ts']);
+
+      await Promise.all([debounced, switched]);
+
+      const updateEvents = events.filter(
+        (e) => e.type === 'graph:update:start' || e.type === 'graph:update:complete',
+      );
+
+      let inFlight = 0;
+      for (const e of updateEvents) {
+        if (e.type === 'graph:update:start') inFlight++;
+        else inFlight--;
+        expect(inFlight).toBeLessThanOrEqual(1);
+      }
+      expect(inFlight).toBe(0);
+    });
+  });
+
   describe('destroy', () => {
     it('cleans up timers and pending changes', () => {
       updater.queueChange({ path: join(tmpDir, 'src/index.ts'), type: 'change' });

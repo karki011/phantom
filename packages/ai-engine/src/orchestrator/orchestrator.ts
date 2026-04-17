@@ -13,19 +13,92 @@ import type { StrategyInput, StrategyOutput } from '../types/strategy.js';
 import type { GoalInput, OrchestratorResult } from './types.js';
 import type { KnowledgeWriter } from './knowledge-writer.js';
 import type { Compactor } from './compactor.js';
-import type { DecisionQuery } from '../graph/decision-query.js';
+import type { DecisionQuery, PriorDecision } from '../graph/decision-query.js';
 import { TaskAssessor } from './assessor.js';
 import { Evaluator } from './evaluator.js';
+import { MultiPerspectiveEvaluator } from './multi-evaluator.js';
 
 const SELF_REFINE_STRATEGY_ID = 'self-refine';
 const ADVISOR_STRATEGY_ID = 'advisor';
 
+/**
+ * Per-request cache for findSimilarDecisions results.
+ * Wraps a DecisionQuery and memoizes results within a single process() call.
+ * Cleared at the start of each new request so data is always fresh.
+ *
+ * Cache key: `${goal}|${minSimilarity}|${limit}`
+ */
+class RequestScopedDecisionQuery {
+  private cache = new Map<string, PriorDecision[]>();
+
+  constructor(private inner: DecisionQuery) {}
+
+  findSimilarDecisions(goal: string, minSimilarity = 0.3, limit = 10): PriorDecision[] {
+    const key = `${goal}|${minSimilarity}|${limit}`;
+    const cached = this.cache.get(key);
+    if (cached) return cached;
+    const result = this.inner.findSimilarDecisions(goal, minSimilarity, limit);
+    this.cache.set(key, result);
+    return result;
+  }
+
+  getFailedApproaches(goal: string): ReturnType<DecisionQuery['getFailedApproaches']> {
+    // Use cached findSimilarDecisions so assessor and evaluator share results
+    const similar = this.findSimilarDecisions(goal);
+    if (similar.length === 0) return [];
+    const outcomes = this.inner.getOutcomes(similar.map((d) => d.id));
+    return similar
+      .filter((d) => {
+        const o = outcomes.get(d.id);
+        return o && !o.success;
+      })
+      .map((d) => {
+        const o = outcomes.get(d.id)!;
+        return {
+          strategyId: d.strategyId,
+          strategyName: d.strategyName,
+          failureReason: o.failureReason,
+          confidence: d.confidence,
+          createdAt: d.createdAt,
+        };
+      });
+  }
+
+  getSuccessfulApproaches(goal: string): ReturnType<DecisionQuery['getSuccessfulApproaches']> {
+    // Use cached findSimilarDecisions so assessor and evaluator share results
+    const similar = this.findSimilarDecisions(goal);
+    if (similar.length === 0) return [];
+    const outcomes = this.inner.getOutcomes(similar.map((d) => d.id));
+    return similar
+      .filter((d) => {
+        const o = outcomes.get(d.id);
+        return o && o.success;
+      })
+      .map((d) => ({
+        strategyId: d.strategyId,
+        strategyName: d.strategyName,
+        confidence: d.confidence,
+        createdAt: d.createdAt,
+      }));
+  }
+
+  getOutcomes(decisionIds: string[]): ReturnType<DecisionQuery['getOutcomes']> {
+    return this.inner.getOutcomes(decisionIds);
+  }
+
+  /** Clear the cache — called at the start of each process() call. */
+  clear(): void {
+    this.cache.clear();
+  }
+}
+
 export class Orchestrator {
   private assessor = new TaskAssessor();
-  private evaluator = new Evaluator();
+  private evaluator: Evaluator;
   private knowledgeWriter: KnowledgeWriter | null = null;
   private compactor: Compactor | null = null;
   private compactionDone = false;
+  private requestDecisionQuery: RequestScopedDecisionQuery | null = null;
 
   constructor(
     private graphQuery: GraphQuery,
@@ -35,8 +108,15 @@ export class Orchestrator {
   ) {
     this.knowledgeWriter = options?.knowledgeWriter ?? null;
     this.compactor = options?.compactor ?? null;
+
     if (options?.decisionQuery) {
-      this.assessor.setDecisionQuery(options.decisionQuery);
+      this.requestDecisionQuery = new RequestScopedDecisionQuery(options.decisionQuery);
+      // Wire assessor and evaluator to the cached query proxy so all similarity
+      // lookups within a single process() call share one DB read.
+      this.assessor.setDecisionQuery(this.requestDecisionQuery as unknown as DecisionQuery);
+      this.evaluator = new MultiPerspectiveEvaluator(this.requestDecisionQuery as unknown as DecisionQuery);
+    } else {
+      this.evaluator = new Evaluator();
     }
   }
 
@@ -51,6 +131,9 @@ export class Orchestrator {
    */
   async process(input: GoalInput): Promise<OrchestratorResult> {
     const pipelineStart = Date.now();
+
+    // Clear per-request cache — ensures each process() call gets fresh data
+    this.requestDecisionQuery?.clear();
 
     // Lazy compaction: run once on first process() call
     if (this.compactor && !this.compactionDone) {
@@ -87,8 +170,13 @@ export class Orchestrator {
     const strategyInput = this.buildStrategyInput(taskContext, graphContext);
     let output = await selectedStrategy.execute(strategyInput);
 
-    // Step 8: Evaluate
-    let evaluation = this.evaluator.evaluate(output, taskContext);
+    // Step 8: Evaluate (use history-aware evaluation when decisionQuery is wired)
+    const doEvaluate = (o: StrategyOutput) =>
+      this.evaluator instanceof MultiPerspectiveEvaluator
+        ? this.evaluator.evaluateWithHistory(o, taskContext)
+        : this.evaluator.evaluate(o, taskContext);
+
+    let evaluation = doEvaluate(output);
 
     // Step 9: Auto-refine — if evaluator recommends 'refine', try one self-refine iteration
     if (
@@ -110,7 +198,7 @@ export class Orchestrator {
           previousOutputs: [output],
         };
         output = await refineEntry.strategy.execute(refineInput);
-        evaluation = this.evaluator.evaluate(output, taskContext);
+        evaluation = doEvaluate(output);
       }
     }
 
@@ -165,7 +253,9 @@ export class Orchestrator {
     let retries = 0;
 
     while (retries < maxRetries) {
-      const evaluation = this.evaluator.evaluate(result.output, result.taskContext);
+      const evaluation = this.evaluator instanceof MultiPerspectiveEvaluator
+        ? this.evaluator.evaluateWithHistory(result.output, result.taskContext)
+        : this.evaluator.evaluate(result.output, result.taskContext);
       if (evaluation.recommendation !== 'escalate') break;
 
       // Escalate: force advisor hints and retry

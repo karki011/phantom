@@ -5,6 +5,7 @@
  * @author Subash Karki
  */
 import type { KnowledgeDB } from '../knowledge/knowledge-db.js';
+import { PerformanceRepository } from '../knowledge/repositories/performance-repository.js';
 
 // ---
 
@@ -20,40 +21,17 @@ export interface PerformanceRecord {
 // ---
 
 export class StrategyPerformanceStore {
-  constructor(private knowledgeDb: KnowledgeDB) {}
+  private performanceRepo: PerformanceRepository;
+
+  constructor(private knowledgeDb: KnowledgeDB) {
+    this.performanceRepo = new PerformanceRepository(knowledgeDb);
+  }
 
   /**
    * Get aggregated performance for a strategy, optionally filtered by complexity.
    */
   getPerformance(strategyId: string, complexity?: string): PerformanceRecord | null {
-    const complexityClause = complexity ? ' AND complexity = ?' : '';
-    const params = complexity ? [strategyId, complexity] : [strategyId];
-
-    // Query for total runs
-    const totalRow = this.knowledgeDb.db.prepare(
-      `SELECT COUNT(*) as total FROM strategy_performance WHERE strategy_id = ?${complexityClause}`
-    ).get(...params) as { total: number } | undefined;
-
-    if (!totalRow || totalRow.total === 0) return null;
-
-    // Query for success count (evaluation = 'accept')
-    const successRow = this.knowledgeDb.db.prepare(
-      `SELECT COUNT(*) as cnt FROM strategy_performance WHERE strategy_id = ? AND evaluation = 'accept'${complexityClause}`
-    ).get(...params) as { cnt: number };
-
-    // Query for averages
-    const avgRow = this.knowledgeDb.db.prepare(
-      `SELECT AVG(confidence) as avg_conf, AVG(duration_ms) as avg_dur FROM strategy_performance WHERE strategy_id = ?${complexityClause}`
-    ).get(...params) as { avg_conf: number | null; avg_dur: number | null };
-
-    return {
-      strategyId,
-      totalRuns: totalRow.total,
-      successCount: successRow.cnt,
-      successRate: successRow.cnt / totalRow.total,
-      avgConfidence: avgRow.avg_conf ?? 0,
-      avgDurationMs: avgRow.avg_dur ?? 0,
-    };
+    return this.performanceRepo.getPerformance(strategyId, complexity);
   }
 
   // ---
@@ -63,20 +41,7 @@ export class StrategyPerformanceStore {
    * Returns null if no historical data exists.
    */
   getBestStrategy(complexity: string, risk: string): { strategyId: string; successRate: number } | null {
-    const row = this.knowledgeDb.db.prepare(`
-      SELECT strategy_id,
-             COUNT(*) as total,
-             SUM(CASE WHEN evaluation = 'accept' THEN 1 ELSE 0 END) as successes
-      FROM strategy_performance
-      WHERE complexity = ? AND risk = ?
-      GROUP BY strategy_id
-      HAVING total >= 3
-      ORDER BY (CAST(successes AS REAL) / total) DESC
-      LIMIT 1
-    `).get(complexity, risk) as { strategy_id: string; total: number; successes: number } | undefined;
-
-    if (!row) return null;
-    return { strategyId: row.strategy_id, successRate: row.successes / row.total };
+    return this.performanceRepo.getBestStrategy(complexity, risk);
   }
 
   // ---

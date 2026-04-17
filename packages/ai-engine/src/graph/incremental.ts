@@ -22,6 +22,7 @@ export class IncrementalUpdater {
   private pendingChanges: FileChange[] = [];
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly debounceMs: number;
+  private flushing: Promise<void> = Promise.resolve();
 
   constructor(
     private graph: InMemoryGraph,
@@ -47,8 +48,16 @@ export class IncrementalUpdater {
 
   /**
    * Process all pending changes immediately.
+   * Serialized via a tail promise so concurrent callers never mutate the graph simultaneously.
    */
   async flush(): Promise<void> {
+    const tail = this.flushing;
+    const next = tail.then(() => this.doFlush(), () => this.doFlush());
+    this.flushing = next.catch(() => undefined);
+    return next;
+  }
+
+  private async doFlush(): Promise<void> {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
@@ -93,7 +102,7 @@ export class IncrementalUpdater {
           await this.builder.buildFile(this.projectId, this.rootDir, change.path);
           updatedNodes++;
           // Count new edges roughly from the graph
-          const fileNode = this.graph.getFileByPath(relPath);
+          const fileNode = this.graph.getFileByPathInProject(this.projectId, relPath);
           if (fileNode) {
             updatedEdges += this.graph.getOutgoingEdges(fileNode.id).length;
           }
@@ -115,7 +124,7 @@ export class IncrementalUpdater {
    * Check if a file has changed by comparing content hash.
    */
   private async hasFileChanged(relPath: string): Promise<boolean> {
-    const existing = this.graph.getFileByPath(relPath) as FileNode | undefined;
+    const existing = this.graph.getFileByPathInProject(this.projectId, relPath) as FileNode | undefined;
     if (!existing) return true;
 
     try {
@@ -134,7 +143,7 @@ export class IncrementalUpdater {
    * Returns counts of removed items.
    */
   private removeFile(relPath: string): { removedNodes: number; removedEdges: number } {
-    const existing = this.graph.getFileByPath(relPath);
+    const existing = this.graph.getFileByPathInProject(this.projectId, relPath);
     if (!existing) return { removedNodes: 0, removedEdges: 0 };
 
     const outgoing = this.graph.getOutgoingEdges(existing.id);

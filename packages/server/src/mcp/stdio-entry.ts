@@ -10,6 +10,10 @@
  * This allows phantom-ai to be registered globally in ~/.mcp.json (no per-project
  * .mcp.json needed) because Claude spawns MCP servers with cwd = the project dir.
  *
+ * Graph warm-up: immediately after spawn, a non-blocking buildProject is fired for
+ * the detected project so the graph is ready before the first tool call arrives.
+ * The MCP server connects and accepts tool calls during warm-up — no blocking.
+ *
  * Internal to PhantomOS — not intended for external use.
  *
  * @author Subash Karki
@@ -62,6 +66,35 @@ const projectId = process.env.PHANTOM_PROJECT_ID || autoDetectProjectId();
 // Initialize graph engine with a no-op broadcast (no SSE clients in standalone mode)
 graphEngine.init(() => {});
 orchestratorEngine.init(() => {});
+
+// ---------------------------------------------------------------------------
+// Graph warm-up — fire-and-forget before the first tool call arrives.
+//
+// Strategy: kick off buildProject immediately on spawn so the 45–120s build
+// runs concurrently with MCP transport setup and any early tool calls.
+// The server remains fully responsive during warm-up. If a query tool is
+// called before warm-up completes, the existing handlers return a "Project
+// graph not found. Build the graph first." error — this is acceptable since
+// the build will finish shortly and the caller can retry. We chose this
+// over blocking the first query because it matches the existing non-blocking
+// `handleBuild` pattern and avoids MCP timeout risk on slow repos.
+// ---------------------------------------------------------------------------
+
+if (projectId) {
+  const project = db.select({ repoPath: projects.repoPath })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .get();
+
+  if (project?.repoPath) {
+    process.stderr.write(`[MCP] Warming graph for ${project.repoPath}...\n`);
+    void graphEngine.buildProject(projectId, project.repoPath);
+  } else {
+    process.stderr.write(`[MCP] Project ${projectId} not found in DB — skipping graph warm-up\n`);
+  }
+} else {
+  process.stderr.write('[MCP] No project detected — skipping graph warm-up\n');
+}
 
 // Create and connect MCP server, scoped to project if specified
 const server = createMcpServer(graphEngine, projectId, orchestratorEngine);

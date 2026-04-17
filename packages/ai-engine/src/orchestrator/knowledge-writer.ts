@@ -12,16 +12,24 @@ import type { KnowledgeDB } from '../knowledge/knowledge-db.js';
 import type { EventBus } from '../events/event-bus.js';
 import type { OrchestratorResult, EvaluationResult } from './types.js';
 import { randomUUID } from 'node:crypto';
+import { DecisionRepository } from '../knowledge/repositories/decision-repository.js';
+import { PerformanceRepository } from '../knowledge/repositories/performance-repository.js';
 
 // ---------------------------------------------------------------------------
 // KnowledgeWriter
 // ---------------------------------------------------------------------------
 
 export class KnowledgeWriter {
+  private decisionRepo: DecisionRepository;
+  private performanceRepo: PerformanceRepository;
+
   constructor(
     private knowledgeDb: KnowledgeDB,
     private eventBus: EventBus,
-  ) {}
+  ) {
+    this.decisionRepo = new DecisionRepository(knowledgeDb);
+    this.performanceRepo = new PerformanceRepository(knowledgeDb);
+  }
 
   // -------------------------------------------------------------------------
   // Public API
@@ -44,73 +52,61 @@ export class KnowledgeWriter {
       const decisionId = randomUUID();
       const now = Date.now();
       const projectId = this.knowledgeDb.projectId;
+      const success = evaluation.recommendation === 'accept';
 
       // -------------------------------------------------------------------
       // 1. Insert decision
       // -------------------------------------------------------------------
-      const decisionStmt = this.knowledgeDb.db.prepare(`
-        INSERT INTO decisions (id, project_id, goal, strategy_id, strategy_name, confidence, complexity, risk, files_involved, duration_ms, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      decisionStmt.run(
-        decisionId,
+      this.decisionRepo.insertDecision({
+        id: decisionId,
         projectId,
-        result.taskContext.goal,
-        result.strategy.id,
-        result.strategy.name,
-        result.output.confidence,
-        result.taskContext.complexity,
-        result.taskContext.risk,
-        JSON.stringify(result.context.files.map((f) => f.path)),
-        result.totalDurationMs,
-        now,
-      );
+        goal: result.taskContext.goal,
+        strategyId: result.strategy.id,
+        strategyName: result.strategy.name,
+        confidence: result.output.confidence,
+        complexity: result.taskContext.complexity,
+        risk: result.taskContext.risk,
+        filesInvolved: JSON.stringify(result.context.files.map((f) => f.path)),
+        durationMs: result.totalDurationMs,
+        createdAt: now,
+      });
 
       // -------------------------------------------------------------------
       // 2. Insert outcome
       // -------------------------------------------------------------------
-      const outcomeStmt = this.knowledgeDb.db.prepare(`
-        INSERT INTO outcomes (id, decision_id, success, evaluation_score, recommendation, failure_reason, refinement_count, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      const success = evaluation.recommendation === 'accept';
-      outcomeStmt.run(
-        randomUUID(),
+      this.decisionRepo.insertOutcome({
+        id: randomUUID(),
         decisionId,
-        success ? 1 : 0,
-        evaluation.confidence,
-        evaluation.recommendation,
-        success
+        success,
+        evaluationScore: evaluation.confidence,
+        recommendation: evaluation.recommendation,
+        failureReason: success
           ? null
           : evaluation.checks
               .filter((c) => !c.passed)
               .map((c) => c.detail)
               .join('; '),
-        0, // refinementCount tracked by orchestrator if it auto-refined
-        now,
-      );
+        refinementCount: 0, // refinementCount tracked by orchestrator if it auto-refined
+        createdAt: now,
+      });
 
       // -------------------------------------------------------------------
       // 3. Record strategy performance
       // -------------------------------------------------------------------
-      const perfStmt = this.knowledgeDb.db.prepare(`
-        INSERT INTO strategy_performance (id, project_id, strategy_id, goal, complexity, risk, is_ambiguous, blast_radius, confidence, evaluation, duration_ms, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      perfStmt.run(
-        randomUUID(),
+      this.performanceRepo.insertPerformance({
+        id: randomUUID(),
         projectId,
-        result.strategy.id,
-        result.taskContext.goal,
-        result.taskContext.complexity,
-        result.taskContext.risk,
-        result.taskContext.isAmbiguous ? 1 : 0,
-        result.taskContext.blastRadius,
-        result.output.confidence,
-        evaluation.recommendation,
-        result.totalDurationMs,
-        now,
-      );
+        strategyId: result.strategy.id,
+        goal: result.taskContext.goal,
+        complexity: result.taskContext.complexity,
+        risk: result.taskContext.risk,
+        isAmbiguous: result.taskContext.isAmbiguous,
+        blastRadius: result.taskContext.blastRadius,
+        confidence: result.output.confidence,
+        evaluation: evaluation.recommendation,
+        durationMs: result.totalDurationMs,
+        createdAt: now,
+      });
 
       // -------------------------------------------------------------------
       // 4. Emit event

@@ -6,6 +6,9 @@
  */
 import type { KnowledgeDB } from '../knowledge/knowledge-db.js';
 import type { EventBus } from '../events/event-bus.js';
+import { DecisionRepository } from '../knowledge/repositories/decision-repository.js';
+import { PatternRepository } from '../knowledge/repositories/pattern-repository.js';
+import { PerformanceRepository } from '../knowledge/repositories/performance-repository.js';
 
 // ---
 
@@ -15,10 +18,18 @@ const MIN_DECISIONS_FOR_PATTERN = 5;
 // ---
 
 export class Compactor {
+  private decisionRepo: DecisionRepository;
+  private patternRepo: PatternRepository;
+  private performanceRepo: PerformanceRepository;
+
   constructor(
     private knowledgeDb: KnowledgeDB,
     private eventBus: EventBus,
-  ) {}
+  ) {
+    this.decisionRepo = new DecisionRepository(knowledgeDb);
+    this.patternRepo = new PatternRepository(knowledgeDb);
+    this.performanceRepo = new PerformanceRepository(knowledgeDb);
+  }
 
   /**
    * Run compaction: synthesize patterns from old decisions, then prune.
@@ -55,52 +66,27 @@ export class Compactor {
   // ---
 
   private synthesizePatterns(projectId: string): number {
-    // Find strategies with enough data to extract patterns
-    const rows = this.knowledgeDb.db.prepare(`
-      SELECT strategy_id, complexity, risk,
-             COUNT(*) as total,
-             SUM(CASE WHEN evaluation = 'accept' THEN 1 ELSE 0 END) as successes,
-             AVG(confidence) as avg_confidence
-      FROM strategy_performance
-      WHERE project_id = ?
-      GROUP BY strategy_id, complexity, risk
-      HAVING total >= ?
-    `).all(projectId, MIN_DECISIONS_FOR_PATTERN) as Array<{
-      strategy_id: string;
-      complexity: string;
-      risk: string;
-      total: number;
-      successes: number;
-      avg_confidence: number;
-    }>;
+    const groups = this.patternRepo.findPerformanceGroups(projectId, MIN_DECISIONS_FOR_PATTERN);
 
     let created = 0;
     const now = Date.now();
 
-    for (const row of rows) {
-      const successRate = row.successes / row.total;
-      const patternName = `${row.strategy_id}:${row.complexity}:${row.risk}`;
+    for (const group of groups) {
+      const successRate = group.successes / group.total;
+      const patternName = `${group.strategyId}:${group.complexity}:${group.risk}`;
 
-      // Upsert pattern
-      this.knowledgeDb.db.prepare(`
-        INSERT INTO patterns (id, project_id, name, description, frequency, success_rate, applicable_complexities, applicable_risks, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          frequency = excluded.frequency,
-          success_rate = excluded.success_rate,
-          updated_at = excluded.updated_at
-      `).run(
-        patternName,  // Use composite key as ID for dedup
+      this.patternRepo.upsertPattern({
+        id: patternName,  // Use composite key as ID for dedup
         projectId,
-        patternName,
-        `Strategy ${row.strategy_id} for ${row.complexity}/${row.risk} tasks: ${(successRate * 100).toFixed(0)}% success over ${row.total} runs`,
-        row.total,
+        name: patternName,
+        description: `Strategy ${group.strategyId} for ${group.complexity}/${group.risk} tasks: ${(successRate * 100).toFixed(0)}% success over ${group.total} runs`,
+        frequency: group.total,
         successRate,
-        JSON.stringify([row.complexity]),
-        JSON.stringify([row.risk]),
-        now,
-        now,
-      );
+        applicableComplexities: JSON.stringify([group.complexity]),
+        applicableRisks: JSON.stringify([group.risk]),
+        createdAt: now,
+        updatedAt: now,
+      });
 
       created++;
 
@@ -109,7 +95,7 @@ export class Compactor {
           type: 'knowledge:pattern:discovered',
           projectId,
           patternName,
-          frequency: row.total,
+          frequency: group.total,
           successRate,
           timestamp: now,
         });
@@ -123,24 +109,13 @@ export class Compactor {
 
   private pruneOldDecisions(cutoff: number): number {
     // Delete outcomes for old decisions first (FK constraint)
-    this.knowledgeDb.db.prepare(`
-      DELETE FROM outcomes WHERE decision_id IN (
-        SELECT id FROM decisions WHERE created_at < ?
-      )
-    `).run(cutoff);
-
-    const result = this.knowledgeDb.db.prepare(
-      'DELETE FROM decisions WHERE created_at < ?'
-    ).run(cutoff);
-
-    return result.changes;
+    this.decisionRepo.deleteOutcomesForOldDecisions(cutoff);
+    return this.decisionRepo.deleteOldDecisions(cutoff);
   }
 
   // ---
 
   private pruneOldPerformance(cutoff: number): void {
-    this.knowledgeDb.db.prepare(
-      'DELETE FROM strategy_performance WHERE created_at < ?'
-    ).run(cutoff);
+    this.performanceRepo.deleteOldPerformance(cutoff);
   }
 }

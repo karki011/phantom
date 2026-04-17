@@ -365,6 +365,92 @@ describe('InMemoryGraph', () => {
       expect(projANodes).toHaveLength(2);
       expect(projANodes.every(n => n.projectId === 'proj-a')).toBe(true);
     });
+
+    it('should not scan unrelated project nodes (correctness in mixed graph)', () => {
+      // proj-a has 3 nodes, proj-b has 2 nodes
+      graph.addNode(makeFileNode('a1', 'src/a.ts', 'proj-a'));
+      graph.addNode(makeFileNode('a2', 'src/b.ts', 'proj-a'));
+      graph.addNode(makeModuleNode('am1', 'lodash', 'proj-a'));
+      graph.addNode(makeFileNode('b1', 'src/a.ts', 'proj-b'));
+      graph.addNode(makeFileNode('b2', 'src/c.ts', 'proj-b'));
+
+      const projA = graph.getNodesByProject('proj-a');
+      const projB = graph.getNodesByProject('proj-b');
+
+      expect(projA).toHaveLength(3);
+      expect(projA.every(n => n.projectId === 'proj-a')).toBe(true);
+      expect(projB).toHaveLength(2);
+      expect(projB.every(n => n.projectId === 'proj-b')).toBe(true);
+    });
+
+    it('should return empty array for unknown project', () => {
+      graph.addNode(makeFileNode('f1', 'a.ts', 'proj-a'));
+      expect(graph.getNodesByProject('proj-unknown')).toHaveLength(0);
+    });
+
+    it('should update correctly after removeNode', () => {
+      graph.addNode(makeFileNode('f1', 'a.ts', 'proj-a'));
+      graph.addNode(makeFileNode('f2', 'b.ts', 'proj-a'));
+      graph.removeNode('f1');
+      const nodes = graph.getNodesByProject('proj-a');
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0]!.id).toBe('f2');
+    });
+  });
+
+  describe('getFileByPathInProject', () => {
+    it('should find a file node by project and path', () => {
+      const node = makeFileNode('f1', 'src/utils.ts', 'proj-a');
+      graph.addNode(node);
+      expect(graph.getFileByPathInProject('proj-a', 'src/utils.ts')).toBe(node);
+    });
+
+    it('should not collide when two projects share the same path', () => {
+      const nodeA = makeFileNode('a1', 'src/index.ts', 'proj-a');
+      const nodeB = makeFileNode('b1', 'src/index.ts', 'proj-b');
+      graph.addNode(nodeA);
+      graph.addNode(nodeB);
+
+      expect(graph.getFileByPathInProject('proj-a', 'src/index.ts')).toBe(nodeA);
+      expect(graph.getFileByPathInProject('proj-b', 'src/index.ts')).toBe(nodeB);
+      // Verify they are distinct nodes
+      expect(graph.getFileByPathInProject('proj-a', 'src/index.ts')?.id).toBe('a1');
+      expect(graph.getFileByPathInProject('proj-b', 'src/index.ts')?.id).toBe('b1');
+    });
+
+    it('should return undefined for wrong projectId', () => {
+      graph.addNode(makeFileNode('f1', 'src/utils.ts', 'proj-a'));
+      expect(graph.getFileByPathInProject('proj-b', 'src/utils.ts')).toBeUndefined();
+    });
+
+    it('should be undefined after the node is removed', () => {
+      graph.addNode(makeFileNode('f1', 'src/utils.ts', 'proj-a'));
+      graph.removeNode('f1');
+      expect(graph.getFileByPathInProject('proj-a', 'src/utils.ts')).toBeUndefined();
+    });
+  });
+
+  describe('getNodesByProjectAndType', () => {
+    it('should return only nodes of the given type in the given project', () => {
+      graph.addNode(makeFileNode('f1', 'a.ts', 'proj-a'));
+      graph.addNode(makeFileNode('f2', 'b.ts', 'proj-a'));
+      graph.addNode(makeModuleNode('m1', 'react', 'proj-a'));
+      graph.addNode(makeFileNode('f3', 'c.ts', 'proj-b'));
+
+      const projAFiles = graph.getNodesByProjectAndType('proj-a', 'file');
+      expect(projAFiles).toHaveLength(2);
+      expect(projAFiles.every(n => n.projectId === 'proj-a' && n.type === 'file')).toBe(true);
+
+      const projAModules = graph.getNodesByProjectAndType('proj-a', 'module');
+      expect(projAModules).toHaveLength(1);
+      expect(projAModules[0]!.id).toBe('m1');
+    });
+
+    it('should return empty array for unknown project or type combination', () => {
+      graph.addNode(makeFileNode('f1', 'a.ts', 'proj-a'));
+      expect(graph.getNodesByProjectAndType('proj-b', 'file')).toHaveLength(0);
+      expect(graph.getNodesByProjectAndType('proj-a', 'module')).toHaveLength(0);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -409,7 +495,7 @@ describe('InMemoryGraph', () => {
       expect(graph.stats).toEqual({ nodes: 0, edges: 0, files: 0, modules: 0 });
       expect(graph.getAllNodes()).toHaveLength(0);
       expect(graph.getAllEdges()).toHaveLength(0);
-      expect(graph.getFileByPath('a.ts')).toBeUndefined();
+      expect(graph.getFileByPathInProject('p1', 'a.ts')).toBeUndefined();
     });
   });
 });

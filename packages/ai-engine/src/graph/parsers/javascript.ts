@@ -5,25 +5,33 @@
  */
 import type { LanguageParser, ParseResult, ParsedImport, ParsedExport } from './types.js';
 
-/** import ... from '...' / import '...' */
-const IMPORT_FROM_RE = /import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]/g;
+/** import ... from '...' / import '...' — line-anchored so matches don't fire inside string literals */
+const IMPORT_FROM_RE = /^\s*import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]/gm;
 
-/** export ... from '...' */
-const EXPORT_FROM_RE = /export\s+(?:[\s\S]*?\s+from\s+)['"]([^'"]+)['"]/g;
+/** export ... from '...' — line-anchored */
+const EXPORT_FROM_RE = /^\s*export\s+(?:[\s\S]*?\s+from\s+)['"]([^'"]+)['"]/gm;
 
-/** require('...') */
+/** require('...') — legitimately appears mid-expression, no anchor */
 const REQUIRE_RE = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
 
-/** Detect exported declarations */
-const EXPORT_DECL_RE = /export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var|interface|type|enum)\s+(\w+)/g;
+/** Detect exported declarations — line-anchored */
+const EXPORT_DECL_RE = /^\s*export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var|interface|type|enum)\s+(\w+)/gm;
+
+/** Strip block + line comments before scanning for imports/exports */
+function stripComments(content: string): string {
+  return content
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '');
+}
 
 export class JavaScriptParser implements LanguageParser {
   readonly id = 'javascript';
   readonly extensions = ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs'];
 
   parse(content: string, _filePath: string): ParseResult {
-    const imports = this.parseImports(content);
-    const exports = this.parseExports(content);
+    const clean = stripComments(content);
+    const imports = this.parseImports(clean);
+    const exports = this.parseExports(clean);
     return { imports, exports };
   }
 

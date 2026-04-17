@@ -153,7 +153,7 @@ export class GraphBuilder {
     const relPath = relative(absRoot, absPath);
 
     // Remove existing node + edges for this file if present
-    const existingNode = this.graph.getFileByPath(relPath);
+    const existingNode = this.graph.getFileByPathInProject(projectId, relPath);
     if (existingNode) {
       this.graph.removeNode(existingNode.id);
     }
@@ -259,7 +259,7 @@ export class GraphBuilder {
     languageId: string = 'javascript',
   ): void {
     const sourceDir = dirname(sourceAbsPath);
-    const resolved = this.resolveRelativeImport(absRoot, sourceDir, specifier, languageId);
+    const resolved = this.resolveRelativeImport(projectId, absRoot, sourceDir, specifier, languageId);
     if (!resolved) return;
 
     const targetRelPath = resolved;
@@ -344,6 +344,7 @@ export class GraphBuilder {
    * Returns the relative path (from absRoot) if found in the graph, else undefined.
    */
   private resolveRelativeImport(
+    projectId: string,
     absRoot: string,
     sourceDir: string,
     specifier: string,
@@ -360,12 +361,21 @@ export class GraphBuilder {
       // Convert Java package path (com.foo.Bar) to file path (com/foo/Bar)
       cleanSpec = specifier.replace(/\./g, '/');
     } else if (languageId === 'rust') {
-      // Convert Rust path separators (crate::foo::bar → foo/bar, self::foo → foo, super::parent → ../parent)
-      cleanSpec = specifier
-        .replace(/^crate::/, '')
-        .replace(/^self::/, './')
-        .replace(/^super::/, '../')
-        .replace(/::/g, '/');
+      // super::super::x must step up twice, not once. Count chained super:: prefixes.
+      let stripped = specifier;
+      let superDepth = 0;
+      while (stripped.startsWith('super::')) {
+        superDepth++;
+        stripped = stripped.slice(7);
+      }
+      if (superDepth > 0) {
+        cleanSpec = '../'.repeat(superDepth) + stripped.replace(/::/g, '/');
+      } else {
+        cleanSpec = stripped
+          .replace(/^crate::/, '')
+          .replace(/^self::/, './')
+          .replace(/::/g, '/');
+      }
     }
 
     const base = resolve(sourceDir, cleanSpec);
@@ -374,18 +384,18 @@ export class GraphBuilder {
     // 1. Try exact extensions
     for (const ext of strategy.exts) {
       const candidate = relBase + ext;
-      if (this.graph.getFileByPath(candidate)) return candidate;
+      if (this.graph.getFileByPathInProject(projectId, candidate)) return candidate;
     }
 
     // 2. Try index/module files (directory import)
     for (const idx of strategy.indexFiles) {
       const candidate = relBase + idx;
-      if (this.graph.getFileByPath(candidate)) return candidate;
+      if (this.graph.getFileByPathInProject(projectId, candidate)) return candidate;
     }
 
     // 3. Maybe the original specifier already has a resolvable extension
     const rawRel = relative(absRoot, resolve(sourceDir, specifier));
-    if (this.graph.getFileByPath(rawRel)) return rawRel;
+    if (this.graph.getFileByPathInProject(projectId, rawRel)) return rawRel;
 
     return undefined;
   }

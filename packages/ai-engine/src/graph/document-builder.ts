@@ -102,7 +102,7 @@ export class DocumentBuilder {
     // Create edges to code files referenced in the document
     const referencedPaths = this.extractFileReferences(content);
     for (const refPath of referencedPaths) {
-      const fileNode = this.graph.getFileByPath(refPath);
+      const fileNode = this.graph.getFileByPathInProject(projectId, refPath);
       if (fileNode) {
         const edgeId = `edge:${docId}:${fileNode.id}:documents`;
         const edge: GraphEdge = {

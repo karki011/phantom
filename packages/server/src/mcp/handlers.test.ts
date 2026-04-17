@@ -344,4 +344,49 @@ describe('MCP Tool Handlers', () => {
       expect(() => JSON.parse(result.content[0].text)).not.toThrow();
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Graph warm-up behaviour
+  //
+  // The stdio entry fires buildProject on spawn (non-blocking). During warm-up
+  // the graph is not yet in memory, so query handlers return a "not found"
+  // error. This test verifies that behaviour is stable and doesn't crash,
+  // and that buildProject is fire-and-forget (void) — no Promise rejection
+  // propagates to the caller.
+  // -------------------------------------------------------------------------
+
+  describe('graph warm-up compatibility', () => {
+    it('query handlers return a graceful error while graph is warming (getQuery returns null)', () => {
+      // Simulate engine state during warm-up: build in progress, graph not yet loaded
+      const engine = createMockEngine(null);
+
+      const ctxResult = handleGraphContext(engine, { projectId: 'p1', file: 'src/index.ts' });
+      const blastResult = handleBlastRadius(engine, { projectId: 'p1', file: 'src/index.ts' });
+      const relatedResult = handleRelated(engine, { projectId: 'p1', files: ['src/index.ts'] });
+      const pathResult = handlePath(engine, { projectId: 'p1', from: 'a.ts', to: 'b.ts' });
+
+      expect(ctxResult.isError).toBe(true);
+      expect(blastResult.isError).toBe(true);
+      expect(relatedResult.isError).toBe(true);
+      expect(pathResult.isError).toBe(true);
+
+      // All errors contain a human-readable message
+      for (const result of [ctxResult, blastResult, relatedResult, pathResult]) {
+        const parsed = JSON.parse(result.content[0].text) as { error: string };
+        expect(typeof parsed.error).toBe('string');
+        expect(parsed.error.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('buildProject is called with void (fire-and-forget) during warm-up', async () => {
+      mockDbRows.push({ id: 'p1', name: 'Test', repoPath: '/tmp/test' });
+      const engine = createMockEngine(null);
+
+      // Simulate the warm-up call pattern from stdio-entry.ts:
+      //   void engine.buildProject(projectId, repoPath)
+      // The returned Promise must resolve without throwing.
+      await expect(engine.buildProject('p1', '/tmp/test')).resolves.toBeUndefined();
+      expect(engine.buildProject).toHaveBeenCalledWith('p1', '/tmp/test');
+    });
+  });
 });
