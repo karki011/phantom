@@ -589,7 +589,7 @@ describe('Orchestrator', () => {
       eventBus = new EventBus();
       // Simple context: 2 files, low blast radius -> direct strategy
       const gq = mockGraphQuery({ contextFileCount: 2, blastDirect: 1, blastTransitive: 0 });
-      orchestrator = new Orchestrator(gq, registry, eventBus);
+      orchestrator = new Orchestrator(gq, registry);
     });
 
     it('should select direct strategy for simple goal', async () => {
@@ -663,7 +663,7 @@ describe('Orchestrator', () => {
       eventBus = new EventBus();
       // Complex context: 15 files, high blast radius -> advisor strategy
       const gq = mockGraphQuery({ contextFileCount: 15, blastDirect: 8, blastTransitive: 7 });
-      orchestrator = new Orchestrator(gq, registry, eventBus);
+      orchestrator = new Orchestrator(gq, registry);
     });
 
     it('should select advisor strategy for complex high-risk goal', async () => {
@@ -681,7 +681,7 @@ describe('Orchestrator', () => {
       registry = mockStrategyRegistry();
       eventBus = new EventBus();
       const gq = mockGraphQuery({ contextFileCount: 0 });
-      orchestrator = new Orchestrator(gq, registry, eventBus);
+      orchestrator = new Orchestrator(gq, registry);
     });
 
     it('should handle missing active files gracefully', async () => {
@@ -737,7 +737,7 @@ describe('Orchestrator', () => {
       });
 
       const gq = mockGraphQuery({ contextFileCount: 2, blastDirect: 1 });
-      const orchestrator = new Orchestrator(gq, registry, eventBus);
+      const orchestrator = new Orchestrator(gq, registry);
 
       const result = await orchestrator.process(makeGoalInput());
 
@@ -769,7 +769,7 @@ describe('Orchestrator', () => {
       });
 
       const gq = mockGraphQuery({ contextFileCount: 2 });
-      const orchestrator = new Orchestrator(gq, registry, eventBus);
+      const orchestrator = new Orchestrator(gq, registry);
 
       const result = await orchestrator.process(makeGoalInput());
 
@@ -784,7 +784,7 @@ describe('Orchestrator', () => {
       registry = mockStrategyRegistry();
       eventBus = new EventBus();
       const gq = mockGraphQuery({ contextFileCount: 2 });
-      orchestrator = new Orchestrator(gq, registry, eventBus);
+      orchestrator = new Orchestrator(gq, registry);
 
       const result = await orchestrator.processWithRetry(makeGoalInput());
 
@@ -841,7 +841,7 @@ describe('Orchestrator', () => {
       });
 
       const gq = mockGraphQuery({ contextFileCount: 2 });
-      const orchestrator = new Orchestrator(gq, registry, eventBus);
+      const orchestrator = new Orchestrator(gq, registry);
 
       const result = await orchestrator.processWithRetry(makeGoalInput(), 2);
 
@@ -877,7 +877,7 @@ describe('Orchestrator', () => {
       });
 
       const gq = mockGraphQuery({ contextFileCount: 2 });
-      const orchestrator = new Orchestrator(gq, registry, eventBus);
+      const orchestrator = new Orchestrator(gq, registry);
 
       const result = await orchestrator.processWithRetry(makeGoalInput(), 3);
 

@@ -7,7 +7,6 @@
  */
 import type { GraphQuery } from '../graph/query.js';
 import type { StrategyRegistry } from '../strategies/registry.js';
-import type { EventBus } from '../events/event-bus.js';
 import type { BlastRadiusResult, ContextResult } from '../types/graph.js';
 import type { StrategyInput, StrategyOutput } from '../types/strategy.js';
 import type { GoalInput, OrchestratorResult } from './types.js';
@@ -103,7 +102,6 @@ export class Orchestrator {
   constructor(
     private graphQuery: GraphQuery,
     private strategyRegistry: StrategyRegistry,
-    private eventBus: EventBus,
     options?: { knowledgeWriter?: KnowledgeWriter; compactor?: Compactor; decisionQuery?: DecisionQuery },
   ) {
     this.knowledgeWriter = options?.knowledgeWriter ?? null;

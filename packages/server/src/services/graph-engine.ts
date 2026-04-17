@@ -340,7 +340,7 @@ class GraphEngineService {
 
     const graph = new InMemoryGraph();
     const builder = new GraphBuilder(graph, this.eventBus);
-    const query = new GraphQuery(graph);
+    const query = new GraphQuery(graph, projectId);
     const updater = new IncrementalUpdater(graph, builder, this.eventBus, projectId, repoPath);
     const watcher = new FileWatcher(updater, repoPath, this.eventBus);
     watcher.setProjectId(projectId);

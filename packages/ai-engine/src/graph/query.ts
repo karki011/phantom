@@ -17,14 +17,17 @@ import type {
 } from '../types/graph.js';
 
 export class GraphQuery {
-  constructor(private graph: InMemoryGraph) {}
+  constructor(
+    private graph: InMemoryGraph,
+    private projectId: string,
+  ) {}
 
   /**
    * Get relevant context for a given file path.
    * Returns the file, its direct dependencies, and their connections.
    */
   getContext(filePath: string, depth = 2): ContextResult {
-    const root = this.graph.getFileByPath(filePath);
+    const root = this.graph.getFileByPathInProject(this.projectId,filePath);
     if (!root) {
       return { files: [], edges: [], modules: [], documents: [], scores: new Map() };
     }
@@ -87,7 +90,7 @@ export class GraphQuery {
    * Transitive: files that transitively depend on this file.
    */
   getBlastRadius(filePath: string): BlastRadiusResult {
-    const root = this.graph.getFileByPath(filePath);
+    const root = this.graph.getFileByPathInProject(this.projectId,filePath);
     if (!root) {
       return { direct: [], transitive: [], impactScore: 0 };
     }
@@ -142,13 +145,13 @@ export class GraphQuery {
     const result: FileNode[] = [];
 
     for (const fp of filePaths) {
-      const root = this.graph.getFileByPath(fp);
+      const root = this.graph.getFileByPathInProject(this.projectId,fp);
       if (!root) continue;
       seen.add(root.id);
     }
 
     for (const fp of filePaths) {
-      const root = this.graph.getFileByPath(fp);
+      const root = this.graph.getFileByPathInProject(this.projectId,fp);
       if (!root) continue;
 
       const neighbors = this.graph.getNeighbors(root.id, depth);
@@ -193,8 +196,8 @@ export class GraphQuery {
    * Returns the file nodes along the path, or empty if no path exists.
    */
   findPath(fromPath: string, toPath: string): FileNode[] {
-    const from = this.graph.getFileByPath(fromPath);
-    const to = this.graph.getFileByPath(toPath);
+    const from = this.graph.getFileByPathInProject(this.projectId,fromPath);
+    const to = this.graph.getFileByPathInProject(this.projectId,toPath);
     if (!from || !to) return [];
     if (from.id === to.id) return [from];
 

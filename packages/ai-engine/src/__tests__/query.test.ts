@@ -69,7 +69,7 @@ describe('GraphQuery', () => {
   //   app.tsx -> react (module)
   beforeEach(() => {
     graph = new InMemoryGraph();
-    query = new GraphQuery(graph);
+    query = new GraphQuery(graph, PROJECT);
 
     const indexFile = makeFile('src/index.ts');
     const utilsFile = makeFile('src/utils.ts');

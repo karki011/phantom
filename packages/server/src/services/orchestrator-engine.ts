@@ -178,7 +178,7 @@ class OrchestratorEngineService {
     registry.register(new GraphOfThoughtStrategy(), 1);
 
     // Build orchestrator
-    const orchestrator = new Orchestrator(graphQuery, registry, eventBus, {
+    const orchestrator = new Orchestrator(graphQuery, registry, {
       knowledgeWriter,
       compactor,
       decisionQuery,
