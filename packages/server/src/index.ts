@@ -11,6 +11,7 @@ import { streamSSE } from 'hono/streaming';
 import { db, sqlite, runMigrations, seedDatabase, userPreferences } from '@phantom-os/db';
 import { startSessionWatcher } from './collectors/session-watcher.js';
 import { startTaskWatcher } from './collectors/task-watcher.js';
+import { startTodoWatcher } from './collectors/todo-watcher.js';
 import {
   checkAchievements,
   onSessionEnd,
@@ -233,6 +234,7 @@ const handleSessionEnd = (sessionId: string): void => {
 
 startSessionWatcher(broadcast, handleSessionStart, handleSessionEnd);
 startTaskWatcher(broadcast, handleTaskComplete);
+startTodoWatcher(broadcast, handleTaskComplete);
 
 // Scan JSONL sessions async (don't block boot)
 import { scanJsonlSessions, startActiveContextPoller, startPeriodicRescan } from './collectors/jsonl-scanner.js';

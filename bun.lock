@@ -38,6 +38,8 @@
         "@phantom-os/terminal": "workspace:*",
         "@phantom-os/theme": "workspace:*",
         "better-sqlite3": "^12.8.0",
+        "bindings": "^1.5.0",
+        "file-uri-to-path": "^1.0.0",
         "jotai": "^2.19.0",
         "lucide-react": "^1.7.0",
         "react": "^19.2.4",

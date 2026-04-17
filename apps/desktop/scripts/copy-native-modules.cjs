@@ -19,6 +19,12 @@ const { execSync } = require('child_process');
 
 const NATIVE_MODULES = ['better-sqlite3', 'node-pty'];
 
+// Runtime deps that bun keeps in its store but electron-builder needs in node_modules
+const HIDDEN_DEPS = ['bindings', 'file-uri-to-path'];
+
+// Install-time-only deps to strip from package.json so electron-builder doesn't chase them
+const STRIP_DEPS = ['prebuild-install'];
+
 /** apps/desktop */
 const PROJECT_DIR = path.resolve(__dirname, '..');
 
@@ -145,11 +151,22 @@ function main() {
         sourceDir = realPath;
       } else {
         log(`${name}: already a real directory at ${targetPath}`);
-        // Already a real dir — verify .node files and continue
         const nodeFileCount = countNodeFiles(targetPath);
         log(`${name}: ${nodeFileCount} .node file(s) found`);
         if (nodeFileCount === 0) {
           warn(`${name}: no .node files found in existing directory — may be incomplete`);
+        }
+        // Still strip install-time deps even for existing dirs
+        const pkgJsonPath2 = path.join(targetPath, 'package.json');
+        if (fs.existsSync(pkgJsonPath2) && STRIP_DEPS.length > 0) {
+          const pkg = JSON.parse(fs.readFileSync(pkgJsonPath2, 'utf8'));
+          for (const dep of STRIP_DEPS) {
+            if (pkg.dependencies && pkg.dependencies[dep]) {
+              delete pkg.dependencies[dep];
+              log(`${name}: stripped install-time dep "${dep}" from package.json`);
+              fs.writeFileSync(pkgJsonPath2, JSON.stringify(pkg, null, 2) + '\n');
+            }
+          }
         }
         continue;
       }
@@ -177,7 +194,51 @@ function main() {
       warn(`${name}: no .node files found after copy — native bindings may be missing`);
     }
 
+    // ── Step 5: Strip install-time-only deps from package.json ───────────
+    const pkgJsonPath = path.join(targetPath, 'package.json');
+    if (fs.existsSync(pkgJsonPath) && STRIP_DEPS.length > 0) {
+      const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+      let stripped = false;
+      for (const dep of STRIP_DEPS) {
+        if (pkg.dependencies && pkg.dependencies[dep]) {
+          delete pkg.dependencies[dep];
+          log(`${name}: stripped install-time dep "${dep}" from package.json`);
+          stripped = true;
+        }
+      }
+      if (stripped) {
+        fs.writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2) + '\n');
+      }
+    }
+
     log('─────────────────────────────────────────────');
+  }
+
+  // ── Copy hidden deps that bun doesn't hoist ──────────────────────────────
+  log('─────────────────────────────────────────────');
+  log('Ensuring hidden dependencies are resolvable...');
+
+  const rootNodeModules = path.join(ROOT_DIR, 'node_modules');
+
+  for (const dep of HIDDEN_DEPS) {
+    const destPath = path.join(rootNodeModules, dep);
+    if (fs.existsSync(destPath) && !fs.lstatSync(destPath).isSymbolicLink()) {
+      log(`${dep}: already present at ${destPath}`);
+      continue;
+    }
+
+    const storeDir = findInBunStore(dep);
+    if (!storeDir) {
+      warn(`${dep}: not found in bun store — electron-builder may fail`);
+      continue;
+    }
+
+    if (fs.existsSync(destPath)) {
+      fs.rmSync(destPath, { recursive: true, force: true });
+    }
+    log(`${dep}: copying from bun store → ${destPath}`);
+    copyDir(storeDir, destPath);
+    log(`${dep}: done`);
   }
 
   if (exitCode !== 0) {

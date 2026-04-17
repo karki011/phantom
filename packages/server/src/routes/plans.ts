@@ -7,9 +7,9 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { db, projects, worktrees } from '@phantom-os/db';
+import { db, projects, worktrees, sessions } from '@phantom-os/db';
 
 const PLANS_DIR = join(homedir(), '.claude', 'plans');
 const CACHE_TTL = 10_000; // 10s cache
@@ -125,6 +125,26 @@ plansRoutes.get('/plans/by-cwd', async (c) => {
       branchPlans.push(toClientPlan(plan));
     } else if (matchesTerm(content, projectTerms)) {
       projectPlans.push(toClientPlan(plan));
+    }
+  }
+
+  if (branchPlans.length === 0 && projectPlans.length === 0) {
+    const activeSessions = db
+      .select({ startedAt: sessions.startedAt })
+      .from(sessions)
+      .where(and(eq(sessions.cwd, cwd), eq(sessions.status, 'active')))
+      .all();
+
+    if (activeSessions.length > 0) {
+      const earliestStart = Math.min(...activeSessions.map((s) => s.startedAt ?? 0));
+      for (const plan of allPlans) {
+        const alreadyMatched =
+          branchPlans.some((p) => p.filename === plan.filename) ||
+          projectPlans.some((p) => p.filename === plan.filename);
+        if (!alreadyMatched && plan.modifiedAt >= earliestStart) {
+          projectPlans.push(toClientPlan(plan));
+        }
+      }
     }
   }
 
