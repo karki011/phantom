@@ -65,7 +65,7 @@ function rebuildModule(modulePath, srcPath, electronVersion) {
 
   console.log(`[rebuild-native] Rebuilding ${name} for Electron ${electronVersion}...`);
   execSync(
-    `npx --yes node-gyp rebuild --target=${electronVersion} --arch=arm64 --dist-url=https://electronjs.org/headers --runtime=electron`,
+    `npx --yes node-gyp rebuild --target=${electronVersion} --arch=${process.arch} --dist-url=https://electronjs.org/headers --runtime=electron`,
     { cwd: modulePath, stdio: 'inherit', timeout: 180000 }
   );
   console.log(`[rebuild-native] ${name} rebuilt successfully`);

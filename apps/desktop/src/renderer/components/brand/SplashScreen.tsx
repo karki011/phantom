@@ -4,6 +4,7 @@
  *
  * @author Subash Karki
  */
+import type { ReactNode } from 'react';
 import { CeremonyOverlay } from './CeremonyOverlay';
 import type { CeremonyStep } from './CeremonyOverlay';
 
@@ -13,9 +14,10 @@ interface SplashScreenProps {
   visible: boolean;
   status: string;
   steps?: BootStep[];
+  footer?: ReactNode;
 }
 
-export const SplashScreen = ({ visible, status, steps }: SplashScreenProps) => {
+export const SplashScreen = ({ visible, status, steps, footer }: SplashScreenProps) => {
   const allDone = steps?.every((s) => s.status === 'done' || s.status === 'error');
 
   return (
@@ -25,6 +27,7 @@ export const SplashScreen = ({ visible, status, steps }: SplashScreenProps) => {
       subtitleColor={allDone ? 'var(--phantom-status-success, #22c55e)' : undefined}
       steps={steps}
       showProgress={false}
+      footer={footer}
     />
   );
 };

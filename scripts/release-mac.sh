@@ -57,7 +57,11 @@ bash "$REPO_ROOT/scripts/verify-bundle.sh"
 
 echo
 echo "[release] verifying signature"
-APP="$REPO_ROOT/apps/desktop/release/mac-arm64/PhantomOS.app"
+APP=""
+for d in "$REPO_ROOT/apps/desktop/release/mac-universal" "$REPO_ROOT/apps/desktop/release/mac-arm64" "$REPO_ROOT/apps/desktop/release/mac"; do
+  if [[ -d "$d/PhantomOS.app" ]]; then APP="$d/PhantomOS.app"; break; fi
+done
+if [[ -z "$APP" ]]; then echo "[release] error: no .app found" >&2; exit 4; fi
 codesign --verify --deep --strict --verbose=2 "$APP" 2>&1 | tail -5
 
 if [[ -f "$ENV_FILE" ]]; then

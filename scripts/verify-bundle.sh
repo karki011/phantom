@@ -8,7 +8,13 @@
 
 set -u
 
-APP="apps/desktop/release/mac-arm64/PhantomOS.app"
+APP=""
+for d in apps/desktop/release/mac-universal apps/desktop/release/mac-arm64 apps/desktop/release/mac; do
+  if [[ -d "$d/PhantomOS.app" ]]; then APP="$d/PhantomOS.app"; break; fi
+done
+if [[ -z "$APP" ]]; then
+  echo "error: no PhantomOS.app found in release dirs" >&2; exit 2
+fi
 PORT=3849
 BASE="http://127.0.0.1:${PORT}/api"
 

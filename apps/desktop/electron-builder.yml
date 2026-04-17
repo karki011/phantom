@@ -23,10 +23,10 @@ mac:
   target:
     - target: dmg
       arch:
-        - arm64
+        - universal
     - target: zip
       arch:
-        - arm64
+        - universal
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.inherit.plist

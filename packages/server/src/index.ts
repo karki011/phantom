@@ -53,6 +53,7 @@ import { registerPhantomMcpGlobal } from './services/mcp-config.js';
 import { applyClaudeIntegration } from './services/claude-integration.js';
 import { eq } from 'drizzle-orm';
 import { destroyAllPtys, initDaemonClient, disconnectDaemon } from './terminal-manager.js';
+import { writeManifest, removeManifest } from './manifest.js';
 import { startHistoryWriter, stopHistoryWriter, markAllExited } from './terminal-history.js';
 
 // ---------------------------------------------------------------------------
@@ -252,6 +253,7 @@ startActivityPoller(broadcast);
 // ---------------------------------------------------------------------------
 
 const shutdown = () => {
+  removeManifest();
   logger.info('PhantomOS', 'Shutting down gracefully...');
   void stopMcpServer().catch(() => {});
   graphEngine.destroy();
@@ -282,6 +284,7 @@ const server = serve({ fetch: app.fetch, port: API_PORT }, (info) => {
     '================================================',
     '',
   );
+  writeManifest(info.port, '1.0.0');
 });
 
 setupTerminalWs(server as unknown as Server);

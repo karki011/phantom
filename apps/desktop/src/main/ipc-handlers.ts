@@ -137,7 +137,6 @@ export const registerIpcHandlers = (): void => {
     const changes = Array.from(pendingChanges.entries());
     pendingChanges.clear();
     for (const [compositeKey, files] of changes) {
-      // Key format: rootPath\0dir (NUL separator to avoid ambiguity with colons in paths)
       const sepIdx = compositeKey.indexOf('\0');
       const rp = compositeKey.slice(0, sepIdx);
       const d = compositeKey.slice(sepIdx + 1);
@@ -158,26 +157,22 @@ export const registerIpcHandlers = (): void => {
   }
 
   ipcMain.handle('phantom:watch-directory', (_event, rootPath: string) => {
-    // Don't double-watch
     if (activeWatchers.has(rootPath)) return { ok: true };
 
     try {
       const watcher = watch(rootPath, { recursive: true }, (_eventType, filename) => {
         if (!filename) return;
-        // Detect branch changes (.git/refs/heads/) — emit special event
         const isGitRef = filename.startsWith('.git/refs/') || filename.startsWith('.git\\refs\\');
         if (isGitRef) {
           queueFsChange(rootPath, '.git/refs', filename);
           return;
         }
-        // Skip other .git internals — they fire constantly during git ops
         if (filename.startsWith('.git/') || filename.startsWith('.git\\')) return;
         const dir = dirname(filename);
         queueFsChange(rootPath, dir === '.' ? '/' : dir, filename);
       });
 
       watcher.on('error', () => {
-        // Silently close on error (e.g. directory deleted)
         watcher.close();
         activeWatchers.delete(rootPath);
       });
@@ -196,6 +191,59 @@ export const registerIpcHandlers = (): void => {
       activeWatchers.delete(rootPath);
     }
     return { ok: true };
+  });
+
+  /** Read server logs — returns the last N lines of ~/.phantom-os/logs/server.log */
+  ipcMain.handle('phantom:get-server-logs', (_e, maxLines = 200) => {
+    try {
+      const logPath = join(app.getPath('home'), '.phantom-os', 'logs', 'server.log');
+      if (!existsSync(logPath)) return { lines: [], path: logPath };
+      const content = readFileSync(logPath, 'utf-8');
+      const allLines = content.split('\n').filter(Boolean);
+      const lines = allLines.slice(-maxLines);
+      return { lines, path: logPath };
+    } catch {
+      return { lines: [], path: '' };
+    }
+  });
+
+  /** Read structured crash reports */
+  ipcMain.handle('phantom:get-crash-reports', () => {
+    try {
+      const crashDir = join(app.getPath('home'), '.phantom-os', 'logs', 'crashes');
+      if (!existsSync(crashDir)) return [];
+      return readdirSync(crashDir)
+        .filter(f => f.endsWith('.json'))
+        .sort()
+        .reverse()
+        .slice(0, 10)
+        .map(f => {
+          try {
+            return JSON.parse(readFileSync(join(crashDir, f), 'utf-8'));
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
+  });
+
+  /** Clear all crash reports */
+  ipcMain.handle('phantom:clear-crash-reports', () => {
+    try {
+      const crashDir = join(app.getPath('home'), '.phantom-os', 'logs', 'crashes');
+      if (!existsSync(crashDir)) return { cleared: 0 };
+      const { rmSync } = require('fs');
+      const files = readdirSync(crashDir).filter(f => f.endsWith('.json'));
+      for (const f of files) {
+        try { rmSync(join(crashDir, f)); } catch {}
+      }
+      return { cleared: files.length };
+    } catch {
+      return { cleared: 0 };
+    }
   });
 
   /** Quit the app — called by shutdown ceremony after cleanup completes */

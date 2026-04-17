@@ -63,6 +63,7 @@ import { FloatingClaudeComposer } from './components/chat/FloatingClaudeComposer
 import { TerminalFocusTracker } from './components/TerminalFocusTracker';
 import { fetchApi, generateMorningBrief, type JournalEntry } from './lib/api';
 import { useTour } from './hooks/useTour';
+import { ServerLogModal } from './components/ServerLogModal';
 
 /** Listen for terminal title changes (OSC sequences) and update pane tab labels */
 const TerminalTitleListener = () => {
@@ -170,6 +171,8 @@ export const App = () => {
   // Splash screen state
   const [splashDone, setSplashDone] = useState(false);
   const [splashStatus, setSplashStatus] = useState('Initializing The System...');
+  const [serverLogOpen, setServerLogOpen] = useState(false);
+  const [showLogButton, setShowLogButton] = useState(false);
   const [bootSteps, setBootSteps] = useState<import('./components/brand/SplashScreen').BootStep[]>([
     { id: 'server', label: 'Starting server...', doneLabel: 'Server connected', status: 'running' },
     { id: 'workspace', label: 'Loading workspace...', doneLabel: 'Workspace loaded', status: 'pending' },
@@ -284,9 +287,16 @@ export const App = () => {
     const t2 = setTimeout(() => {
       if (!isConnected) setSplashStatus('Almost ready...');
     }, 4000);
+    const t3 = setTimeout(() => {
+      if (!isConnected) {
+        setSplashStatus('Server is taking longer than expected...');
+        setShowLogButton(true);
+      }
+    }, 8000);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
+      clearTimeout(t3);
     };
   }, [isConnected, splashDone]);
 
@@ -437,8 +447,28 @@ export const App = () => {
       />
     )}
     {!splashDone && (
-      <SplashScreen visible={!splashDone} status={splashStatus} steps={bootSteps} />
+      <SplashScreen
+        visible={!splashDone}
+        status={splashStatus}
+        steps={bootSteps}
+        footer={showLogButton ? (
+          <Text
+            size="sm"
+            style={{
+              color: 'var(--phantom-accent-cyan, #00d4ff)',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              marginTop: 12,
+              opacity: 0.8,
+            }}
+            onClick={() => setServerLogOpen(true)}
+          >
+            Show server logs
+          </Text>
+        ) : undefined}
+      />
     )}
+    <ServerLogModal opened={serverLogOpen} onClose={() => setServerLogOpen(false)} />
     <AppShell
       header={{ height: '3.5rem' }}
       footer={{ height: '2.5rem' }}

@@ -21,6 +21,7 @@ release/
 .env
 .env.local
 .env.*.local
+.env.notarize
 
 # OS
 .DS_Store
