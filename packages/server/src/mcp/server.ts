@@ -35,6 +35,7 @@ import {
   handleOrchestratorProcess,
   handleOrchestratorStrategies,
   handleOrchestratorHistory,
+  handleTaskStatus,
 } from './handlers.js';
 import type { GraphEngineAdapter, OrchestratorEngineAdapter } from './handlers.js';
 
@@ -191,6 +192,16 @@ function registerTools(server: McpServer, engine: GraphEngineAdapter, orchestrat
     },
     async (args: z.infer<typeof ProjectIdInput>) =>
       handleBuild(engine, { projectId: pid(args) }),
+  );
+
+  reg(
+    'phantom_task_status',
+    {
+      description: 'Poll the build lifecycle status of a project graph. Use after phantom_graph_build to know when the graph is ready to query. Returns { projectId, status: "idle"|"building"|"ready"|"error", startedAt?, finishedAt?, durationMs?, error? }.',
+      inputSchema: schema(ProjectIdInput),
+    },
+    async (args: z.infer<typeof ProjectIdInput>) =>
+      handleTaskStatus(engine, { projectId: pid(args) }),
   );
 
   reg(

@@ -17,8 +17,10 @@ import { TaskAssessor } from './assessor.js';
 import { Evaluator } from './evaluator.js';
 import { MultiPerspectiveEvaluator } from './multi-evaluator.js';
 
-const SELF_REFINE_STRATEGY_ID = 'self-refine';
-const ADVISOR_STRATEGY_ID = 'advisor';
+// Keep constants for back-compat (external code may reference them) but the
+// orchestrator no longer uses them as lookup keys — role tags are used instead.
+export const SELF_REFINE_STRATEGY_ID = 'self-refine';
+export const ADVISOR_STRATEGY_ID = 'advisor';
 
 /**
  * Per-request cache for findSimilarDecisions results.
@@ -176,13 +178,14 @@ export class Orchestrator {
 
     let evaluation = doEvaluate(output);
 
-    // Step 9: Auto-refine — if evaluator recommends 'refine', try one self-refine iteration
+    // Step 9: Auto-refine — if evaluator recommends 'refine', try one self-refine iteration.
+    // Look up by role tag ('refiner') so renaming the strategy ID doesn't silently break this.
     if (
       evaluation.recommendation === 'refine' &&
-      selectedStrategy.id !== SELF_REFINE_STRATEGY_ID
+      selectedStrategy.role !== 'refiner'
     ) {
-      const refineEntry = this.strategyRegistry.get(SELF_REFINE_STRATEGY_ID);
-      if (refineEntry?.enabled) {
+      const refineEntry = this.strategyRegistry.getByRole('refiner');
+      if (refineEntry) {
         const refineInput: StrategyInput = {
           ...strategyInput,
           context: {

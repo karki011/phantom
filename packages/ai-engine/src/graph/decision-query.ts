@@ -61,12 +61,10 @@ export class DecisionQuery {
   }
 
   /**
-   * Find past decisions with similar goals.
-   * Uses token overlap similarity — tokenizes both goals into words,
-   * calculates Jaccard similarity, returns decisions above threshold.
+   * Find past decisions with similar goals. Scans the 100 most recent decisions
+   * and returns any above `minSimilarity` by Jaccard token overlap on the goal text.
    */
   findSimilarDecisions(goal: string, minSimilarity = 0.3, limit = 10): PriorDecision[] {
-    // Load recent decisions (last 30 days only — older ones are compacted)
     const rows = this.decisionRepo.findRecent(100);
 
     const goalTokens = this.tokenize(goal);

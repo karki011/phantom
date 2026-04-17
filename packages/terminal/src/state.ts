@@ -266,13 +266,26 @@ export const attachSession = async (
   container.appendChild(wrapper);
   term.open(wrapper);
 
-  // Load WebGL renderer for GPU-accelerated rendering — falls back to canvas on error
-  try {
-    const webgl = new WebglAddon();
-    webgl.onContextLoss(() => { webgl.dispose(); });
-    term.loadAddon(webgl);
-  } catch {
-    // WebGL not available — canvas renderer is the automatic fallback
+  // Load WebGL renderer — deferred until fonts are ready so the glyph atlas
+  // builds against correct metrics (falls back to canvas on error).
+  const loadWebgl = () => {
+    try {
+      const webgl = new WebglAddon();
+      webgl.onContextLoss(() => { webgl.dispose(); });
+      term.loadAddon(webgl);
+    } catch {
+      // WebGL not available — canvas renderer is the automatic fallback
+    }
+  };
+  if (typeof document !== 'undefined' && document.fonts?.ready) {
+    document.fonts.ready
+      .then(() => {
+        if (!sessions.has(paneId)) return;
+        loadWebgl();
+      })
+      .catch(() => loadWebgl());
+  } else {
+    loadWebgl();
   }
 
   // Double-rAF: first frame completes browser layout, second measures stable
@@ -285,6 +298,39 @@ export const attachSession = async (
     });
   });
 
+  // Also re-fit once custom web fonts are loaded. Without this, fit() on a
+  // fresh page measures cell dimensions against the fallback system font
+  // (wrong glyph width/height → wrong row count). When the real font later
+  // arrives, xterm does NOT auto-remeasure; the pty stays sized to the
+  // fallback dimensions and subsequent output lands outside the visible
+  // area, producing a "blank terminal until I tab away and back" bug.
+  if (typeof document !== 'undefined' && document.fonts?.ready) {
+    const beforeRows = term.rows;
+    document.fonts.ready.then(() => {
+      if (!sessions.has(paneId)) return;
+      const prevRows = term.rows;
+      try { fit.fit(); } catch { /* 0×0 — ResizeObserver will retry */ }
+      syncViewport(term, 'fonts-ready:refit');
+      term.refresh(0, term.rows - 1);
+      const afterRows = term.rows;
+      console.log(
+        `[TermReg] FONTS-READY ${paneId.slice(0,8)} — rows: ${beforeRows}→${prevRows}→${afterRows}`,
+      );
+      // Propagate the corrected size to the pty so shell redraws at the real
+      // row count. Only send if dims actually changed to avoid spurious
+      // SIGWINCH churn on the shell side.
+      if (session.ws?.readyState === WebSocket.OPEN && afterRows !== prevRows) {
+        const dims = fit.proposeDimensions();
+        if (dims?.cols && dims?.rows) {
+          session.ws.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
+          console.log(
+            `[TermReg] FONTS-READY ${paneId.slice(0,8)} — sent resize ${dims.cols}x${dims.rows}`,
+          );
+        }
+      }
+    }).catch(() => { /* font load failures are non-fatal */ });
+  }
+
   // If cold restore, fetch and write scrollback BEFORE connecting WebSocket
   if (options?.coldRestore) {
     try {
@@ -294,6 +340,17 @@ export const attachSession = async (
         if (scrollback) {
           term.write(scrollback);
           session.showRestoreBanner = true;
+          // Force a fit + repaint after the restored write. Without this the
+          // scrollback lands on a canvas sized from an earlier (possibly 0×0)
+          // layout pass — the buffer is correct but the pixels aren't painted
+          // until a later ResizeObserver tick (which is what happened when
+          // users switched tabs to "fix" a blank terminal on refresh).
+          requestAnimationFrame(() => {
+            try { fit.fit(); } catch { /* 0×0 — ResizeObserver will retry */ }
+            syncViewport(term, 'cold-restore:after-write');
+            term.refresh(0, term.rows - 1);
+            term.scrollToBottom();
+          });
         }
       }
     } catch {
@@ -356,6 +413,10 @@ export const attachSession = async (
         vp.scrollTop = vp.scrollHeight - vp.clientHeight;
       }
       logScroll('ws.onopen:after-restore', term, paneId);
+      // Symmetric with the REATTACH branch — force a repaint on first connect
+      // so any content written before ws.onopen (cold-restore scrollback) is
+      // guaranteed to be on screen.
+      term.refresh(0, term.rows - 1);
       const dims = fit.proposeDimensions();
       const md = options?.metadata;
       ws.send(JSON.stringify({

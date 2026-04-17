@@ -6,7 +6,7 @@
  */
 import Database from 'better-sqlite3';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { GraphPersistence } from '../graph/persistence.js';
+import { GraphPersistence, safeStringify } from '../graph/persistence.js';
 import type { GraphNode, GraphEdge, GraphStats } from '../types/graph.js';
 import type { FileNode, ModuleNode } from '../types/graph.js';
 
@@ -316,6 +316,65 @@ describe('GraphPersistence', () => {
     it('should return null for unknown project', () => {
       const loaded = persistence.loadMeta('nonexistent-project');
       expect(loaded).toBeNull();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // safeStringify — circular reference and depth guard
+  // -----------------------------------------------------------------------
+
+  describe('safeStringify', () => {
+    it('serializes a plain object to valid JSON', () => {
+      const obj = { a: 1, b: 'hello', c: true, d: null };
+      const result = safeStringify(obj);
+      expect(() => JSON.parse(result)).not.toThrow();
+      expect(JSON.parse(result)).toEqual(obj);
+    });
+
+    it('replaces circular references with "[Circular]" and produces valid JSON', () => {
+      const obj: Record<string, unknown> = { name: 'cycle' };
+      obj['self'] = obj; // circular ref
+
+      const result = safeStringify(obj);
+      expect(() => JSON.parse(result)).not.toThrow();
+      const parsed = JSON.parse(result) as Record<string, unknown>;
+      expect(parsed['name']).toBe('cycle');
+      expect(parsed['self']).toBe('[Circular]');
+    });
+
+    it('handles deeper circular chains', () => {
+      const a: Record<string, unknown> = { label: 'a' };
+      const b: Record<string, unknown> = { label: 'b', parent: a };
+      a['child'] = b; // a → b → a
+
+      const result = safeStringify(a);
+      expect(() => JSON.parse(result)).not.toThrow();
+      expect(result).toContain('[Circular]');
+    });
+
+    it('replaces values beyond maxDepth with "[MaxDepth]"', () => {
+      // Build an object nested 15 levels deep
+      let deep: Record<string, unknown> = { value: 'leaf' };
+      for (let i = 0; i < 14; i++) {
+        deep = { nested: deep };
+      }
+
+      const result = safeStringify(deep, 5);
+      expect(() => JSON.parse(result)).not.toThrow();
+      expect(result).toContain('[MaxDepth]');
+    });
+
+    it('saveNodes succeeds when a node contains a circular metadata ref', () => {
+      const node = makeFileNode('f-circ', 'src/circ.ts');
+      // Inject a circular reference into the metadata field
+      const meta: Record<string, unknown> = { label: 'test' };
+      meta['self'] = meta;
+      (node as { metadata: unknown }).metadata = meta;
+
+      expect(() => persistence.saveNodes([node as unknown as GraphNode])).not.toThrow();
+      const loaded = persistence.loadNodes(PROJECT_ID);
+      expect(loaded).toHaveLength(1);
+      expect(loaded[0].id).toBe('f-circ');
     });
   });
 

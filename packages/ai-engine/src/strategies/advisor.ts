@@ -9,6 +9,7 @@ import type {
   ReasoningStrategy,
   StrategyInput,
   StrategyOutput,
+  StrategyRole,
   TaskContext,
 } from '../types/strategy.js';
 import { applyPriorFailurePenalty } from './prior-penalty.js';
@@ -19,6 +20,7 @@ export class AdvisorStrategy implements ReasoningStrategy {
   readonly version = '1.0.0';
   readonly description =
     'Escalates complex or high-risk tasks to a stronger model for deeper reasoning.';
+  readonly role: StrategyRole = 'escalator';
 
   shouldActivate(context: TaskContext): ActivationScore {
     const { complexity, risk, isAmbiguous, blastRadius } = context;

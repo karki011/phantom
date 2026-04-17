@@ -7,6 +7,58 @@
 import type Database from 'better-sqlite3';
 import type { GraphNode, GraphEdge, GraphStats } from '../types/graph.js';
 
+/**
+ * JSON.stringify replacement that handles circular references and caps traversal depth.
+ *
+ * Circular references are replaced with the string `"[Circular]"`.
+ * Values deeper than `maxDepth` are replaced with `"[MaxDepth]"`.
+ *
+ * The result is always valid JSON and is round-trip parseable.
+ *
+ * @author Subash Karki
+ */
+export function safeStringify(value: unknown, maxDepth = 10): string {
+  // JSON.stringify's replacer can't see recursion depth and naive WeakSet
+  // can't distinguish shared refs from cycles (siblings must be allowed),
+  // so a custom serialiser with scoped seen + depth cap is the cleanest fit.
+  const seen = new WeakSet<object>();
+
+  const serialize = (val: unknown, depth: number): string => {
+    if (depth > maxDepth) return JSON.stringify('[MaxDepth]');
+
+    if (val === null) return 'null';
+    if (typeof val === 'undefined') return 'null';
+    if (typeof val === 'boolean' || typeof val === 'number') {
+      return isFinite(val as number) ? String(val) : 'null';
+    }
+    if (typeof val === 'string') return JSON.stringify(val);
+    if (typeof val === 'bigint') return JSON.stringify(val.toString());
+    if (typeof val === 'function' || typeof val === 'symbol') return 'null';
+
+    if (Array.isArray(val)) {
+      if (seen.has(val)) return '"[Circular]"';
+      seen.add(val);
+      const items = val.map((item) => serialize(item, depth + 1));
+      seen.delete(val);
+      return '[' + items.join(',') + ']';
+    }
+
+    if (typeof val === 'object') {
+      if (seen.has(val as object)) return '"[Circular]"';
+      seen.add(val as object);
+      const entries = Object.entries(val as Record<string, unknown>)
+        .filter(([, v]) => typeof v !== 'undefined' && typeof v !== 'function')
+        .map(([k, v]) => JSON.stringify(k) + ':' + serialize(v, depth + 1));
+      seen.delete(val as object);
+      return '{' + entries.join(',') + '}';
+    }
+
+    return 'null';
+  };
+
+  return serialize(value, 0);
+}
+
 export class GraphPersistence {
   private readonly sqlite: Database.Database;
 
@@ -43,7 +95,7 @@ export class GraphPersistence {
           'path' in node ? (node as { path: string }).path : null,
           'name' in node ? (node as { name: string }).name : null,
           'contentHash' in node ? (node as { contentHash: string }).contentHash : null,
-          JSON.stringify(node),  // Store the FULL node so Layer 2 fields survive round-trip
+          safeStringify(node),
           node.createdAt,
           node.updatedAt,
         );

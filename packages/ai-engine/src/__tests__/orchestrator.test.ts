@@ -694,6 +694,63 @@ describe('Orchestrator', () => {
     });
   });
 
+  describe('role-tag decoupling', () => {
+    it('should auto-refine using role tag even when strategy ID is renamed', async () => {
+      // Prove decoupling: the refiner strategy is registered under a *different* ID
+      // but carries role = 'refiner'. Auto-refine must find it by role, not by the
+      // legacy string constant 'self-refine'.
+      const registry = new StrategyRegistry();
+
+      // Primary strategy: returns confidence 0.65 -> triggers 'refine'
+      registry.register({
+        id: 'direct',
+        name: 'Direct Execution',
+        version: '1.0.0',
+        description: 'Direct',
+        shouldActivate: () => ({ score: 0.9, reason: 'default' }),
+        execute: async (input: StrategyInput): Promise<StrategyOutput> => ({
+          strategyId: 'direct',
+          result: JSON.stringify({ type: 'direct', goal: input.context.goal }),
+          confidence: 0.65,
+          tokensUsed: 50,
+          durationMs: 5,
+          artifacts: {},
+        }),
+      });
+
+      // Refiner registered under a renamed ID ('quality-refiner') but role = 'refiner'
+      registry.register({
+        id: 'quality-refiner',      // NOT 'self-refine' — proves decoupling
+        name: 'Quality Refiner',
+        version: '2.0.0',
+        description: 'Renamed refiner strategy',
+        role: 'refiner',
+        shouldActivate: () => ({ score: 0.1, reason: 'n/a' }),
+        execute: async (input: StrategyInput): Promise<StrategyOutput> => {
+          const prev = input.previousOutputs?.[input.previousOutputs.length - 1];
+          return {
+            strategyId: 'quality-refiner',
+            result: JSON.stringify({ type: 'quality-refiner', refined: true }),
+            confidence: Math.min(0.95, (prev?.confidence ?? 0) + 0.2),
+            tokensUsed: 100,
+            durationMs: 10,
+            artifacts: { refined: true, renamedStrategy: true },
+          };
+        },
+      } as import('../types/strategy.js').ReasoningStrategy);
+
+      const gq = mockGraphQuery({ contextFileCount: 2, blastDirect: 1 });
+      const orchestrator = new Orchestrator(gq, registry);
+
+      const result = await orchestrator.process(makeGoalInput());
+
+      // Auto-refine should have fired via role lookup, NOT by string ID
+      expect(result.output.strategyId).toBe('quality-refiner');
+      expect(result.output.confidence).toBeCloseTo(0.85);
+      expect(result.output.artifacts.renamedStrategy).toBe(true);
+    });
+  });
+
   describe('auto-refine', () => {
     it('should trigger auto-refine when evaluator recommends refine', async () => {
       const registry = new StrategyRegistry();
@@ -716,12 +773,14 @@ describe('Orchestrator', () => {
         }),
       });
 
-      // Self-refine that boosts confidence
+      // Self-refine that boosts confidence — must carry role='refiner' for the
+      // orchestrator's role-based lookup to find it
       registry.register({
         id: 'self-refine',
         name: 'Self-Refine',
         version: '1.0.0',
         description: 'Refine',
+        role: 'refiner',
         shouldActivate: () => ({ score: 0.1, reason: 'n/a' }),
         execute: async (input: StrategyInput): Promise<StrategyOutput> => {
           const prev = input.previousOutputs?.[input.previousOutputs.length - 1];
@@ -734,7 +793,7 @@ describe('Orchestrator', () => {
             artifacts: { refined: true },
           };
         },
-      });
+      } as import('../types/strategy.js').ReasoningStrategy);
 
       const gq = mockGraphQuery({ contextFileCount: 2, blastDirect: 1 });
       const orchestrator = new Orchestrator(gq, registry);

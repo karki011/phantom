@@ -20,6 +20,18 @@ import { logger } from '../logger.js';
 
 type BroadcastFn = (event: string, data: unknown) => void;
 
+/** Build lifecycle status for a single project. */
+export type BuildStatusState = 'idle' | 'building' | 'ready' | 'error';
+
+export interface BuildStatus {
+  projectId: string;
+  status: BuildStatusState;
+  startedAt?: number;
+  finishedAt?: number;
+  durationMs?: number;
+  error?: string;
+}
+
 interface ProjectGraphContext {
   graph: InMemoryGraph;
   builder: GraphBuilder;
@@ -40,8 +52,9 @@ class GraphEngineService {
   private persistence = new GraphPersistence(sqlite);
   private broadcast: BroadcastFn = () => {};
   private unsubscribe: (() => void) | null = null;
-  private building = new Set<string>();
   private enriching = new Set<string>();
+  /** Per-project build lifecycle status. Also acts as the in-flight guard (status === 'building'). */
+  private buildStatuses = new Map<string, BuildStatus>();
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -79,13 +92,14 @@ class GraphEngineService {
   // ---------------------------------------------------------------------------
 
   async buildProject(projectId: string, repoPath: string): Promise<void> {
-    if (this.building.has(projectId)) {
+    if (this.buildStatuses.get(projectId)?.status === 'building') {
       logger.info('GraphEngine', `Build already in progress for ${projectId} — skipping`);
       return;
     }
-    this.building.add(projectId);
 
     const startTime = Date.now();
+    this.buildStatuses.set(projectId, { projectId, status: 'building', startedAt: startTime });
+
     logger.info('GraphEngine', `Building graph for project ${projectId} at ${repoPath}`);
 
     const ctx = this.ensureContext(projectId, repoPath);
@@ -115,6 +129,15 @@ class GraphEngineService {
         `Graph built for ${projectId}: ${stats.fileCount} files, ${stats.totalEdges} edges in ${durationMs}ms`,
       );
 
+      // Record successful build finish
+      this.buildStatuses.set(projectId, {
+        projectId,
+        status: 'ready',
+        startedAt: startTime,
+        finishedAt: Date.now(),
+        durationMs,
+      });
+
       // Only start file watcher if this project is within the LRU limit
       // to avoid EMFILE errors from too many concurrent watchers
       if (!ctx.watcher.isWatching() && this.lru.indexOf(projectId) >= this.lru.length - MAX_IN_MEMORY) {
@@ -123,10 +146,23 @@ class GraphEngineService {
 
       void this.enrichProject(projectId, repoPath, ctx);
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       logger.error('GraphEngine', `Graph build failed for project ${projectId}:`, err);
-    } finally {
-      this.building.delete(projectId);
+      // Record error status
+      this.buildStatuses.set(projectId, {
+        projectId,
+        status: 'error',
+        startedAt: startTime,
+        finishedAt: Date.now(),
+        durationMs: Date.now() - startTime,
+        error: errMsg,
+      });
     }
+  }
+
+  /** Return the current build lifecycle status for a project (idle if never built). */
+  getBuildStatus(projectId: string): BuildStatus {
+    return this.buildStatuses.get(projectId) ?? { projectId, status: 'idle' };
   }
 
   getQuery(projectId: string): GraphQuery | null {
@@ -169,6 +205,8 @@ class GraphEngineService {
       this.instances.delete(projectId);
       this.lru = this.lru.filter((id) => id !== projectId);
     }
+
+    this.buildStatuses.delete(projectId);
 
     try {
       this.persistence.deleteProject(projectId);

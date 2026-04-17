@@ -2,13 +2,14 @@
  * Tests for GraphBuilder — Layer 1 file-level dependency graph builder
  * @author Subash Karki
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { InMemoryGraph } from '../graph/in-memory-graph.js';
 import { GraphBuilder } from '../graph/builder.js';
 import { EventBus } from '../events/event-bus.js';
+import { ParserRegistry } from '../graph/parsers/registry.js';
 import type { GraphEvent } from '../types/events.js';
 
 // ---------------------------------------------------------------------------
@@ -367,6 +368,87 @@ describe('GraphBuilder', () => {
       expect(graph.getFileByPath('src/good.ts')).toBeDefined();
 
       rmSync(smallDir, { recursive: true, force: true });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Symlink cycle guard
+  // -------------------------------------------------------------------------
+
+  describe('symlink cycle guard', () => {
+    it('should complete without stack overflow when a directory symlink creates a cycle', async () => {
+      // Build a tmp dir with one real source file and a self-referencing symlink:
+      //   cycleDir/src/real.ts      (real source file)
+      //   cycleDir/src/loop -> cycleDir/src  (symlink pointing back to parent)
+      const cycleDir = mkdtempSync(join(tmpdir(), 'builder-cycle-'));
+      mkdirSync(join(cycleDir, 'src'), { recursive: true });
+      writeFileSync(join(cycleDir, 'src', 'real.ts'), 'export const x = 1;');
+
+      // Create a symlink that points back to its containing directory → cycle
+      try {
+        symlinkSync(join(cycleDir, 'src'), join(cycleDir, 'src', 'loop'));
+      } catch {
+        // If symlinkSync is not supported (e.g., Windows without privileges), skip
+        rmSync(cycleDir, { recursive: true, force: true });
+        return;
+      }
+
+      const cycleGraph = new InMemoryGraph();
+      const cycleBuilder = new GraphBuilder(cycleGraph, new EventBus());
+
+      // Must resolve without throwing a stack overflow or hanging
+      await expect(cycleBuilder.buildProject('cycle-test', cycleDir)).resolves.toBeUndefined();
+
+      // The real source file should still be indexed
+      const fileNodes = cycleGraph.getNodesByType('file');
+      const paths = fileNodes.map((f) => (f as any).path);
+      expect(paths).toContain('src/real.ts');
+
+      rmSync(cycleDir, { recursive: true, force: true });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Parse cache — single-parse-per-file guarantee
+  // -------------------------------------------------------------------------
+
+  describe('parse cache', () => {
+    it('should call parser.parse exactly once per file per buildProject call', async () => {
+      // Create a dedicated registry and spy directly on the JavaScriptParser instance
+      // (which handles both .ts and .tsx), then pass it into a fresh GraphBuilder.
+      // We can't inject a registry into GraphBuilder directly, so we patch the prototype
+      // getParser to track how many times parse() is invoked on each unique parser object.
+
+      let totalParseCalls = 0;
+      const wrappedParsers = new WeakSet<object>();
+
+      const originalGetParser = ParserRegistry.prototype.getParser;
+
+      ParserRegistry.prototype.getParser = function (extension: string) {
+        const parser = originalGetParser.call(this, extension);
+        if (!parser || wrappedParsers.has(parser)) return parser;
+
+        // Wrap the parse method on this parser instance exactly once.
+        wrappedParsers.add(parser);
+        const originalParse = parser.parse.bind(parser);
+        parser.parse = (content: string, filePath: string) => {
+          totalParseCalls++;
+          return originalParse(content, filePath);
+        };
+
+        return parser;
+      };
+
+      try {
+        await builder.buildProject('cache-test', tmpDir);
+      } finally {
+        ParserRegistry.prototype.getParser = originalGetParser;
+      }
+
+      // The tmp project has 5 source files (3× .ts, 2× .tsx), all handled by the
+      // JavaScriptParser. With the parse cache each file is parsed exactly once
+      // across both passes — total must equal 5, not 10.
+      expect(totalParseCalls).toBe(5);
     });
   });
 });

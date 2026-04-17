@@ -8,6 +8,7 @@ import type {
   ActivationScore,
   ReasoningStrategy,
   StrategyRegistryEntry,
+  StrategyRole,
   TaskContext,
 } from '../types/strategy.js';
 import type { StrategyPerformanceStore } from './performance-store.js';
@@ -91,6 +92,18 @@ export class StrategyRegistry {
   /** Lookup a single strategy entry by id. */
   get(id: string): StrategyRegistryEntry | undefined {
     return this.entries.get(id);
+  }
+
+  /**
+   * Find the first enabled strategy entry that carries the given role tag.
+   * Used by the Orchestrator to locate refiner/escalator strategies without
+   * coupling to hard-coded strategy IDs.
+   */
+  getByRole(role: StrategyRole): StrategyRegistryEntry | undefined {
+    for (const entry of this.entries.values()) {
+      if (entry.enabled && entry.strategy.role === role) return entry;
+    }
+    return undefined;
   }
 
   // ---------------------------------------------------------------------------

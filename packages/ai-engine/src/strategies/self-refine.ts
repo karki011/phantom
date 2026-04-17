@@ -9,6 +9,7 @@ import type {
   ReasoningStrategy,
   StrategyInput,
   StrategyOutput,
+  StrategyRole,
   TaskContext,
 } from '../types/strategy.js';
 
@@ -18,6 +19,7 @@ export class SelfRefineStrategy implements ReasoningStrategy {
   readonly version = '1.0.0';
   readonly description =
     'Iterative refinement strategy for improving near-final outputs to higher quality.';
+  readonly role: StrategyRole = 'refiner';
 
   shouldActivate(context: TaskContext): ActivationScore {
     const { complexity, isAmbiguous } = context;

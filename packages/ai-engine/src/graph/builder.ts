@@ -5,9 +5,10 @@
  *
  * @author Subash Karki
  */
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { resolve, relative, dirname, extname, join } from 'node:path';
+import type { ParseResult } from './parsers/types.js';
 import type { FileNode, ModuleNode, GraphEdge } from '../types/graph.js';
 import type { EventBus } from '../events/event-bus.js';
 import type { InMemoryGraph } from './in-memory-graph.js';
@@ -82,11 +83,13 @@ export class GraphBuilder {
       timestamp: Date.now(),
     });
 
+    const parseCache = new Map<string, ParseResult>();
+
     // Pass 1: Create all FileNodes (no edges yet) so cross-references resolve
     const fileContents = new Map<string, string>();
     for (const absPath of filePaths) {
       try {
-        const content = await this.createFileNode(projectId, absRoot, absPath);
+        const content = await this.createFileNode(projectId, absRoot, absPath, parseCache);
         fileContents.set(absPath, content);
       } catch (err) {
         this.eventBus.emit({
@@ -106,7 +109,7 @@ export class GraphBuilder {
       const content = fileContents.get(absPath);
       if (content !== undefined) {
         try {
-          this.createEdgesForFile(projectId, absRoot, absPath, content);
+          this.createEdgesForFile(projectId, absRoot, absPath, content, parseCache);
         } catch (err) {
           this.eventBus.emit({
             type: 'graph:build:error',
@@ -158,8 +161,9 @@ export class GraphBuilder {
       this.graph.removeNode(existingNode.id);
     }
 
-    const content = await this.createFileNode(projectId, absRoot, absPath);
-    this.createEdgesForFile(projectId, absRoot, absPath, content);
+    const parseCache = new Map<string, ParseResult>();
+    const content = await this.createFileNode(projectId, absRoot, absPath, parseCache);
+    this.createEdgesForFile(projectId, absRoot, absPath, content, parseCache);
   }
 
   // ---------------------------------------------------------------------------
@@ -168,11 +172,13 @@ export class GraphBuilder {
 
   /**
    * Pass 1: Read file, create FileNode with metadata. Returns file content.
+   * Populates parseCache so Pass 2 can reuse the parse result.
    */
   private async createFileNode(
     projectId: string,
     absRoot: string,
     absPath: string,
+    parseCache: Map<string, ParseResult>,
   ): Promise<string> {
     const relPath = relative(absRoot, absPath);
     const ext = extname(absPath);
@@ -202,7 +208,11 @@ export class GraphBuilder {
     if (ext !== '.json') {
       const parser = this.parserRegistry.getParser(ext.replace(/^\./, ''));
       if (parser) {
-        const result = parser.parse(content, relPath);
+        let result = parseCache.get(absPath);
+        if (!result) {
+          result = parser.parse(content, relPath);
+          parseCache.set(absPath, result);
+        }
         if (result.exports.length > 0) {
           fileNode.metadata.exports = result.exports.map((e) => e.name);
         }
@@ -214,14 +224,15 @@ export class GraphBuilder {
   }
 
   /**
-   * Pass 2: Parse imports from cached content and create edges.
-   * All FileNodes must already exist in the graph for cross-reference resolution.
+   * Pass 2: Resolve imports and create edges. Reuses parseCache from Pass 1
+   * so each file is parsed exactly once per build.
    */
   private createEdgesForFile(
     projectId: string,
     absRoot: string,
     absPath: string,
     content: string,
+    parseCache: Map<string, ParseResult>,
   ): void {
     const relPath = relative(absRoot, absPath);
     const ext = extname(absPath);
@@ -232,7 +243,11 @@ export class GraphBuilder {
     const parser = this.parserRegistry.getParser(ext.replace(/^\./, ''));
     if (!parser) return;
 
-    const result = parser.parse(content, relPath);
+    let result = parseCache.get(absPath);
+    if (!result) {
+      result = parser.parse(content, relPath);
+      parseCache.set(absPath, result);
+    }
 
     for (const imp of result.imports) {
       if (imp.isRelative) {
@@ -406,15 +421,67 @@ export class GraphBuilder {
 
   /**
    * Recursively walk a directory and return absolute paths of source files.
+   * Guards against symlink cycles by tracking visited real paths.
    */
-  private async walkSourceFiles(dir: string): Promise<string[]> {
+  private async walkSourceFiles(
+    dir: string,
+    visitedRealPaths: Set<string> = new Set(),
+  ): Promise<string[]> {
+    // Resolve the real path to detect symlink cycles.
+    let realDir: string;
+    try {
+      realDir = await realpath(dir);
+    } catch {
+      // Broken symlink or permission error — skip this entry gracefully.
+      return [];
+    }
+
+    if (visitedRealPaths.has(realDir)) {
+      // Cycle detected — already walked this real directory.
+      return [];
+    }
+    visitedRealPaths.add(realDir);
+
     const files: string[] = [];
     const entries = await readdir(dir, { withFileTypes: true });
 
     for (const entry of entries) {
-      if (entry.isDirectory()) {
+      if (entry.isDirectory() || entry.isSymbolicLink()) {
+        const entryPath = join(dir, entry.name);
+
+        // For plain directories check the skip list immediately.
+        if (entry.isDirectory() && SKIP_DIRS.has(entry.name)) continue;
+
+        // Resolve real path of the child to detect cycles / skip dirs reached via symlink.
+        let realEntry: string;
+        try {
+          realEntry = await realpath(entryPath);
+        } catch {
+          // Broken symlink or inaccessible path — skip.
+          continue;
+        }
+
+        // Check if the resolved target is actually a directory we should recurse into.
+        let entryStat: Awaited<ReturnType<typeof stat>>;
+        try {
+          entryStat = await stat(entryPath);
+        } catch {
+          continue;
+        }
+
+        if (!entryStat.isDirectory()) {
+          // Symlink that resolves to a file — treat it as a regular file entry below.
+          const ext = extname(entry.name);
+          if (SOURCE_EXTENSIONS.has(ext) && !visitedRealPaths.has(realEntry)) {
+            files.push(entryPath);
+          }
+          continue;
+        }
+
+        // Skip named skip-dirs even when reached through a symlink.
         if (SKIP_DIRS.has(entry.name)) continue;
-        const subFiles = await this.walkSourceFiles(join(dir, entry.name));
+
+        const subFiles = await this.walkSourceFiles(entryPath, visitedRealPaths);
         files.push(...subFiles);
       } else if (entry.isFile()) {
         const ext = extname(entry.name);

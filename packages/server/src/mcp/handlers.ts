@@ -6,16 +6,20 @@
 import { db, projects } from '@phantom-os/db';
 import { eq } from 'drizzle-orm';
 import type { GraphQuery, GoalInput } from '@phantom-os/ai-engine';
+import type { BuildStatus } from '../services/graph-engine.js';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+export type TaskStatusResult = BuildStatus;
 
 /** Minimal interface for the graph engine — allows mocking in tests */
 export interface GraphEngineAdapter {
   getQuery(projectId: string): GraphQuery | null;
   getStats(projectId: string): { projectId: string; fileCount: number; totalEdges: number; moduleCount: number; coverage: number; lastBuiltAt: number } | null;
   buildProject(projectId: string, repoPath: string): Promise<void>;
+  getBuildStatus(projectId: string): TaskStatusResult;
 }
 
 /** Minimal interface for the orchestrator engine — allows mocking in tests */
@@ -201,4 +205,23 @@ export function handleOrchestratorHistory(
 ): McpTextContent {
   const history = orchestrator.getHistory(params.projectId, params.limit ?? 20);
   return textResult({ decisions: history, count: history.length });
+}
+
+// ---------------------------------------------------------------------------
+// Task Status Handler
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the build lifecycle status for a project.
+ * Clients use this to poll after a fire-and-forget phantom_graph_build call.
+ *
+ * Response shape: { projectId, status: 'idle'|'building'|'ready'|'error',
+ *                   startedAt?, finishedAt?, durationMs?, error? }
+ */
+export function handleTaskStatus(
+  engine: GraphEngineAdapter,
+  params: { projectId: string },
+): McpTextContent {
+  const status = engine.getBuildStatus(params.projectId);
+  return textResult(status);
 }

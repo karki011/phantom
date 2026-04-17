@@ -727,9 +727,18 @@ function restoreOrStripTerminals(state: WorkspaceState, _worktreeId?: string): W
     return { tabs: [home], activeTabId: home.id };
   }
 
-  const activeTabId = validTabs.some((t) => t.id === state.activeTabId)
-    ? state.activeTabId
-    : validTabs[0].id;
+  // On cold load we prefer landing on a Home tab (one containing a
+  // workspace-home pane) so users don't see a "still-loading" terminal that
+  // flashes blank while xterm re-measures after fonts load. If no Home tab
+  // exists, fall back to the first tab; otherwise the originally-active tab
+  // is skipped in favor of Home.
+  const homeTab = validTabs.find((t) =>
+    Object.values(t.panes).some((p) => p.kind === 'workspace-home'),
+  );
+  const activeTabId = homeTab?.id
+    ?? (validTabs.some((t) => t.id === state.activeTabId)
+      ? state.activeTabId
+      : validTabs[0].id);
 
   return { tabs: validTabs, activeTabId };
 }

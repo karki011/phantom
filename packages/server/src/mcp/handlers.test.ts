@@ -11,8 +11,9 @@ import {
   handlePath,
   handleBuild,
   handleListProjects,
+  handleTaskStatus,
 } from './handlers.js';
-import type { GraphEngineAdapter } from './handlers.js';
+import type { GraphEngineAdapter, TaskStatusResult } from './handlers.js';
 import type { GraphQuery } from '@phantom-os/ai-engine';
 
 // ---------------------------------------------------------------------------
@@ -88,7 +89,11 @@ function createMockQuery(): GraphQuery {
 // Mock GraphEngineAdapter
 // ---------------------------------------------------------------------------
 
-function createMockEngine(query: GraphQuery | null = null): GraphEngineAdapter {
+function createMockEngine(
+  query: GraphQuery | null = null,
+  buildStatus?: TaskStatusResult,
+): GraphEngineAdapter {
+  const defaultStatus: TaskStatusResult = buildStatus ?? { projectId: 'p1', status: 'idle' };
   return {
     getQuery: vi.fn().mockReturnValue(query),
     getStats: vi.fn().mockReturnValue(
@@ -104,6 +109,7 @@ function createMockEngine(query: GraphQuery | null = null): GraphEngineAdapter {
         : null,
     ),
     buildProject: vi.fn().mockResolvedValue(undefined),
+    getBuildStatus: vi.fn().mockReturnValue(defaultStatus),
   };
 }
 
@@ -323,6 +329,78 @@ describe('MCP Tool Handlers', () => {
       const data = parseContent(result) as { projects: unknown[] };
 
       expect(data.projects).toEqual([]);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // phantom_task_status
+  // -------------------------------------------------------------------------
+
+  describe('handleTaskStatus', () => {
+    it('should return idle status before any build is triggered', () => {
+      const engine = createMockEngine(null, { projectId: 'p1', status: 'idle' });
+
+      const result = handleTaskStatus(engine, { projectId: 'p1' });
+      const data = parseContent(result) as TaskStatusResult;
+
+      expect(result.isError).toBeFalsy();
+      expect(data.status).toBe('idle');
+      expect(data.projectId).toBe('p1');
+      expect(data.startedAt).toBeUndefined();
+      expect(data.finishedAt).toBeUndefined();
+    });
+
+    it('should return building status while graph is being built', () => {
+      const now = Date.now();
+      const engine = createMockEngine(null, {
+        projectId: 'p1',
+        status: 'building',
+        startedAt: now,
+      });
+
+      const result = handleTaskStatus(engine, { projectId: 'p1' });
+      const data = parseContent(result) as TaskStatusResult;
+
+      expect(data.status).toBe('building');
+      expect(data.startedAt).toBe(now);
+      expect(data.finishedAt).toBeUndefined();
+    });
+
+    it('should return ready status with timing after a successful build', () => {
+      const startedAt = Date.now() - 5000;
+      const finishedAt = Date.now();
+      const engine = createMockEngine(null, {
+        projectId: 'p1',
+        status: 'ready',
+        startedAt,
+        finishedAt,
+        durationMs: 5000,
+      });
+
+      const result = handleTaskStatus(engine, { projectId: 'p1' });
+      const data = parseContent(result) as TaskStatusResult;
+
+      expect(data.status).toBe('ready');
+      expect(data.startedAt).toBe(startedAt);
+      expect(data.finishedAt).toBe(finishedAt);
+      expect(data.durationMs).toBe(5000);
+    });
+
+    it('should return error status with message after a failed build', () => {
+      const engine = createMockEngine(null, {
+        projectId: 'p1',
+        status: 'error',
+        startedAt: Date.now() - 1000,
+        finishedAt: Date.now(),
+        durationMs: 1000,
+        error: 'EACCES: permission denied',
+      });
+
+      const result = handleTaskStatus(engine, { projectId: 'p1' });
+      const data = parseContent(result) as TaskStatusResult;
+
+      expect(data.status).toBe('error');
+      expect(data.error).toContain('EACCES');
     });
   });
 

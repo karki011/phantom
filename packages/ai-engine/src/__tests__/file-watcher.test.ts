@@ -9,11 +9,12 @@ import {
   mkdirSync,
   unlinkSync,
   rmSync,
+  rmdirSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { FileWatcher } from '../graph/file-watcher.js';
+import { FileWatcher, resolveGitHeadPath } from '../graph/file-watcher.js';
 import { EventBus } from '../events/event-bus.js';
 import type { IncrementalUpdater, FileChange } from '../graph/incremental.js';
 
@@ -206,5 +207,66 @@ describe('FileWatcher', () => {
       );
       expect(readyEvent).toBeDefined();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveGitHeadPath unit tests
+// ---------------------------------------------------------------------------
+
+describe('resolveGitHeadPath', () => {
+  let tmp: string;
+
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'phantom-git-head-'));
+  });
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('returns HEAD path for a plain .git directory (standard repo)', () => {
+    const gitDir = join(tmp, '.git');
+    mkdirSync(gitDir);
+    writeFileSync(join(gitDir, 'HEAD'), 'ref: refs/heads/main\n');
+
+    const result = resolveGitHeadPath(tmp);
+    expect(result).toBe(join(gitDir, 'HEAD'));
+  });
+
+  it('returns real HEAD path for a git worktree .git FILE', () => {
+    // Simulate a real git dir elsewhere
+    const realGitDir = join(tmp, 'real-git-dir');
+    mkdirSync(realGitDir);
+    writeFileSync(join(realGitDir, 'HEAD'), 'ref: refs/heads/feature\n');
+
+    // Worktree root has a .git FILE pointing to the real git dir
+    writeFileSync(join(tmp, '.git'), `gitdir: ${realGitDir}\n`);
+
+    const result = resolveGitHeadPath(tmp);
+    expect(result).toBe(join(realGitDir, 'HEAD'));
+  });
+
+  it('returns null when there is no .git entry at all', () => {
+    // tmp dir with no .git
+    const result = resolveGitHeadPath(tmp);
+    expect(result).toBeNull();
+  });
+
+  it('watcher degrades gracefully when .git is absent (no throw)', () => {
+    // No .git — watcher.start() must not throw
+    const eb = new EventBus();
+    const upd = {
+      queueChange: vi.fn(),
+      flush: vi.fn().mockResolvedValue(undefined),
+      handleBranchSwitch: vi.fn().mockResolvedValue(undefined),
+      checkStaleness: vi.fn().mockResolvedValue([]),
+      destroy: vi.fn(),
+    } as unknown as IncrementalUpdater;
+
+    const fw = new FileWatcher(upd, tmp, eb);
+    fw.setProjectId('test-no-git');
+    expect(() => fw.start()).not.toThrow();
+    fw.stop();
   });
 });

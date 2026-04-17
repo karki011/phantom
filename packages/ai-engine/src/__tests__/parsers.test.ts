@@ -165,6 +165,30 @@ describe('PythonParser', () => {
     expect(result.imports).toContainEqual({ specifier: 'numpy', isRelative: false });
   });
 
+  it('should parse multi-module bare import (import a, b, c)', () => {
+    const content = `import os, sys, json`;
+    const result = parser.parse(content, 'main.py');
+    expect(result.imports).toContainEqual({ specifier: 'os', isRelative: false });
+    expect(result.imports).toContainEqual({ specifier: 'sys', isRelative: false });
+    expect(result.imports).toContainEqual({ specifier: 'json', isRelative: false });
+    expect(result.imports).toHaveLength(3);
+  });
+
+  it('should parse multi-module bare import with aliases (import a as x, b)', () => {
+    const content = `import os as _os, sys`;
+    const result = parser.parse(content, 'main.py');
+    expect(result.imports).toContainEqual({ specifier: 'os', isRelative: false });
+    expect(result.imports).toContainEqual({ specifier: 'sys', isRelative: false });
+    expect(result.imports).toHaveLength(2);
+  });
+
+  it('should not regress from-import — from x import y still works', () => {
+    const content = `from pathlib import Path`;
+    const result = parser.parse(content, 'main.py');
+    expect(result.imports).toContainEqual({ specifier: 'pathlib', isRelative: false });
+    expect(result.imports).toHaveLength(1);
+  });
+
   it('should handle multiple imports in one file', () => {
     const content = [
       `import os`,

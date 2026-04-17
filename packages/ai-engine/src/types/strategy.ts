@@ -83,11 +83,26 @@ export interface StrategyOutput {
   artifacts: Record<string, unknown>;
 }
 
+/**
+ * Functional role of a strategy in the pipeline.
+ * - 'refiner': iterative quality-improvement (e.g. SelfRefineStrategy)
+ * - 'escalator': escalate to a stronger model (e.g. AdvisorStrategy)
+ * Omitting the field means the strategy has no special pipeline role.
+ */
+export type StrategyRole = 'refiner' | 'escalator';
+
 export interface ReasoningStrategy {
   id: string;
   name: string;
   version: string;
   description: string;
+  /**
+   * Optional role tag for pipeline-level lookups.
+   * The orchestrator uses this instead of hard-coded string IDs so that
+   * strategy IDs can be renamed without silently breaking auto-refine /
+   * auto-escalation.
+   */
+  readonly role?: StrategyRole;
 
   /** Determine if this strategy should activate for the given context */
   shouldActivate(context: TaskContext): ActivationScore;

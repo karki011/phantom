@@ -6,6 +6,8 @@
  */
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
+import { statSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { watch, type FSWatcher } from 'chokidar';
 
@@ -34,6 +36,53 @@ const IGNORED_DIR_NAMES = new Set([
 function isIgnoredPath(filePath: string): boolean {
   const segments = filePath.split(/[/\\]/);
   return segments.some((seg) => IGNORED_DIR_NAMES.has(seg));
+}
+
+/**
+ * Resolve the path to the git HEAD file for a given root directory.
+ *
+ * Handles three cases:
+ *  1. Plain `.git` directory  → `<rootDir>/.git/HEAD`
+ *  2. Git worktree `.git` file containing `gitdir: <realGitDir>` → `<realGitDir>/HEAD`
+ *  3. No `.git` entry at all  → `null` (caller should degrade gracefully)
+ *
+ * Uses `path.join` throughout so it is correct on Windows and POSIX alike.
+ *
+ * @author Subash Karki
+ */
+export function resolveGitHeadPath(rootDir: string): string | null {
+  const dotGit = join(rootDir, '.git');
+
+  let stat: ReturnType<typeof statSync> | null = null;
+  try {
+    stat = statSync(dotGit);
+  } catch {
+    // .git entry does not exist — not a git repo
+    return null;
+  }
+
+  if (stat.isDirectory()) {
+    // Standard git repository
+    return join(dotGit, 'HEAD');
+  }
+
+  if (stat.isFile()) {
+    // Git worktree: .git is a file with content like "gitdir: /path/to/real/.git"
+    try {
+      const contents = readFileSync(dotGit, 'utf8').trim();
+      const match = contents.match(/^gitdir:\s*(.+)$/);
+      if (match) {
+        const realGitDir = match[1].trim();
+        return join(realGitDir, 'HEAD');
+      }
+    } catch {
+      // Unable to read the file — treat as missing
+    }
+    return null;
+  }
+
+  // Unexpected entry type (symlink, etc.) — fall back to null
+  return null;
 }
 
 export class FileWatcher {
@@ -222,7 +271,12 @@ export class FileWatcher {
   // ---------------------------------------------------------------------------
 
   private startGitHeadWatcher(): void {
-    const gitHeadPath = `${this.rootDir}/.git/HEAD`;
+    const gitHeadPath = resolveGitHeadPath(this.rootDir);
+
+    if (!gitHeadPath) {
+      // Not a git repo or .git is inaccessible — branch-switch detection disabled
+      return;
+    }
 
     try {
       this.gitHeadWatcher = watch(gitHeadPath, {
@@ -235,10 +289,10 @@ export class FileWatcher {
       });
 
       this.gitHeadWatcher.on('error', () => {
-        // .git/HEAD may not exist (not a git repo) — silently ignore
+        // HEAD file may not exist yet — silently ignore
       });
     } catch {
-      // Not a git repo or .git/HEAD inaccessible — skip
+      // Not a git repo or HEAD inaccessible — skip
     }
   }
 
