@@ -11,7 +11,7 @@ import { Skeleton, Text, TextInput } from '@mantine/core';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { usePaneStore } from '@phantom-os/panes';
+import { usePaneStore, activeTabIdAtom } from '@phantom-os/panes';
 import { Search, X } from 'lucide-react';
 
 import {
@@ -22,7 +22,12 @@ import {
   selectedFileAtom,
   toggleFolderAtom,
 } from '../../atoms/fileExplorer';
-import { activeWorktreeAtom } from '../../atoms/worktrees';
+import {
+  activeWorktreeAtom,
+  activeWorktreeIdAtom,
+  worktreesAtom,
+  worktreesLoadingStateAtom,
+} from '../../atoms/worktrees';
 import type { FileEntry } from '../../lib/api';
 import { FileTreeItem } from './FileTreeItem';
 
@@ -74,6 +79,9 @@ function flattenTree(
 
 export function FilesView() {
   const activeWorktree = useAtomValue(activeWorktreeAtom);
+  const [activeWorktreeId, setActiveWorktreeId] = useAtom(activeWorktreeIdAtom);
+  const worktrees = useAtomValue(worktreesAtom);
+  const worktreesLoading = useAtomValue(worktreesLoadingStateAtom);
   const fileTree = useAtomValue(fileTreeAtom);
   const deferredFileTree = useDeferredValue(fileTree);
   const [expandedFolders, setExpandedFolders] = useAtom(expandedFoldersAtom);
@@ -91,28 +99,38 @@ export function FilesView() {
   const toggleFolder = useSetAtom(toggleFolderAtom);
 
   const store = usePaneStore();
+  // Direct atom subscription — changes on every tab switch, so Effect A fires
+  // even when activePaneId happens to stay stable (e.g. single-pane tabs).
+  const activeTabId = useAtomValue(activeTabIdAtom);
 
   // Auto-sync sidebar selection when active pane changes (editor or diff)
   const activePane = store.getActivePane();
+  const activePaneId = activePane?.id ?? null;
   const activeEditorPath = (activePane?.kind === 'editor' || activePane?.kind === 'diff')
     ? (activePane.data?.filePath as string | undefined) ?? null
     : null;
   const prevEditorPathRef = useRef<string | null>(null);
 
+  // Effect A — reveal the active file. Runs on path change, tab switch, AND
+  // pane-focus change, so re-focusing a tab whose folder was manually
+  // collapsed re-expands it. All state mutations are idempotent (Jotai set
+  // with equal value, filter+add on arrays of ancestors) so no-op re-runs
+  // are cheap.
   useEffect(() => {
     if (!activeEditorPath || !activeWorktree) return;
-    // Skip if same file (avoid unnecessary updates)
-    if (activeEditorPath === prevEditorPathRef.current) return;
-    prevEditorPathRef.current = activeEditorPath;
 
     setSelectedFile(activeEditorPath);
 
-    // Expand parent directories so the file is visible in the tree
-    const normalized = activeEditorPath.replace(/^\//, '');
+    // Folders are stored in expandedFolders with a leading slash (matching
+    // the server's entry.relativePath format). Preserve the leading slash
+    // on ancestor paths so the IDs match — this is the difference between
+    // "/apps/desktop" (what the tree knows) and "apps/desktop" (what the
+    // raw join would produce). Mismatched IDs silently do nothing.
+    const normalized = activeEditorPath.replace(/^\/+/, '');
     const parts = normalized.split('/');
     const parentPaths: string[] = [];
     for (let i = 1; i < parts.length; i++) {
-      parentPaths.push(parts.slice(0, i).join('/'));
+      parentPaths.push(`/${parts.slice(0, i).join('/')}`);
     }
 
     setExpandedFolders((prev) => {
@@ -120,16 +138,37 @@ export function FilesView() {
       return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
     });
 
-    // Fetch any unfetched parent directories so the tree can render the file
-    const fetches: Promise<void>[] = [];
     for (const dirPath of parentPaths) {
       const cacheKey = `${activeWorktree.id}:${dirPath}`;
       if (!fileTree.has(cacheKey)) {
-        fetches.push(fetchDirectory({ worktreeId: activeWorktree.id, path: dirPath }));
+        void fetchDirectory({ worktreeId: activeWorktree.id, path: dirPath });
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeEditorPath, activePaneId, activeTabId, activeWorktree?.id]);
+
+  // Effect B — scroll into view only when the path genuinely changes, so
+  // returning focus to the same tab doesn't yank scroll position.
+  useEffect(() => {
+    if (!activeEditorPath || !activeWorktree) return;
+    if (activeEditorPath === prevEditorPathRef.current) return;
+    prevEditorPathRef.current = activeEditorPath;
+
+    const normalized = activeEditorPath.replace(/^\/+/, '');
+    const parts = normalized.split('/');
+    const parentPaths: string[] = [];
+    for (let i = 1; i < parts.length; i++) {
+      parentPaths.push(`/${parts.slice(0, i).join('/')}`);
+    }
+
+    const pendingFetches: Promise<void>[] = [];
+    for (const dirPath of parentPaths) {
+      const cacheKey = `${activeWorktree.id}:${dirPath}`;
+      if (!fileTree.has(cacheKey)) {
+        pendingFetches.push(fetchDirectory({ worktreeId: activeWorktree.id, path: dirPath }));
       }
     }
 
-    // Scroll the file into view — wait for directory fetches to complete first
     const scrollToFile = () => {
       requestAnimationFrame(() => {
         const el = document.querySelector(`[data-file-path="${CSS.escape(activeEditorPath)}"]`);
@@ -137,8 +176,8 @@ export function FilesView() {
       });
     };
 
-    if (fetches.length > 0) {
-      Promise.all(fetches).then(scrollToFile);
+    if (pendingFetches.length > 0) {
+      void Promise.all(pendingFetches).then(scrollToFile);
     } else {
       scrollToFile();
     }
@@ -219,6 +258,25 @@ export function FilesView() {
   });
 
   if (!activeWorktree) {
+    // Distinguish three empty states:
+    //   1. Worktrees still loading — show skeleton
+    //   2. Stale persisted id points to a worktree that no longer exists —
+    //      auto-clear the id so the sidebar drops back to the clean state
+    //   3. User truly hasn't selected anything
+    if (worktreesLoading) {
+      return (
+        <div style={{ padding: '8px 12px' }}>
+          <Skeleton height={16} mb={6} />
+          <Skeleton height={16} mb={6} />
+          <Skeleton height={16} mb={6} />
+          <Skeleton height={16} mb={6} />
+        </div>
+      );
+    }
+    if (activeWorktreeId && worktrees.length > 0) {
+      // Persisted id no longer matches — clear it silently on next tick
+      queueMicrotask(() => setActiveWorktreeId(null));
+    }
     return (
       <Text
         fz="0.75rem"
@@ -227,7 +285,9 @@ export function FilesView() {
         py="xl"
         px="sm"
       >
-        Select a worktree to explore files.
+        {worktrees.length === 0
+          ? 'No worktrees yet. Create one to browse files.'
+          : 'Select a worktree to explore files.'}
       </Text>
     );
   }

@@ -105,7 +105,7 @@ export const CockView = () => {
             c="var(--phantom-text-primary)"
             style={{ letterSpacing: '0.05em' }}
           >
-            CockView
+            Activity Overview
           </Text>
         </Group>
         <PeriodSwitcher value={period} onChange={setPeriod} />

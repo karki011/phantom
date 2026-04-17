@@ -157,7 +157,7 @@ const czBrand: MantineColorsTuple = [
 
 export const czDarkTokens: ThemeTokens = {
   name: 'cz-dark',
-  label: 'Dark',
+  label: 'Default',
 
   colors: {
     gray: czGray,
@@ -217,11 +217,15 @@ export const czDarkTokens: ThemeTokens = {
 
   cssVars: {
     light: {
-      '--phantom-surface-bg': '#fafafa',
-      '--phantom-surface-card': '#ffffff',
-      '--phantom-surface-elevated': '#f4f4f5',
-      '--phantom-surface-hover': '#e4e4e7',
-      '--phantom-border-subtle': '#d4d4d8',
+      // Softer, warmer greyscale — pure white (#ffffff) and near-white
+      // (#fafafa) previously read as harsh/glare. These values match the
+      // visual weight of GitHub's light canvas and VSCode's soft light
+      // theme while keeping AA contrast against text-primary (#18181b).
+      '--phantom-surface-bg': '#f1f1f4',
+      '--phantom-surface-card': '#f7f7f9',
+      '--phantom-surface-elevated': '#ebebef',
+      '--phantom-surface-hover': '#dcdce1',
+      '--phantom-border-subtle': '#c9c9cf',
       '--phantom-text-primary': '#18181b',
       '--phantom-text-secondary': '#3f3f46',
       '--phantom-text-muted': '#71717a',

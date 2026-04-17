@@ -10,6 +10,8 @@ import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db, worktrees } from '@phantom-os/db';
 
+import { getMatcher } from '../services/gitignore-matcher.js';
+
 export const worktreeFileRoutes = new Hono();
 
 // ---------------------------------------------------------------------------
@@ -62,6 +64,7 @@ worktreeFileRoutes.get('/worktrees/:id/files', (c) => {
 
   try {
     const entries = readdirSync(target, { withFileTypes: true });
+    const matcher = getMatcher(root);
     const items = entries
       .filter((e) => !e.name.startsWith('.git') || e.name === '.gitignore')
       .map((entry) => {
@@ -75,12 +78,21 @@ worktreeFileRoutes.get('/worktrees/:id/files', (c) => {
           mtime = stat.mtimeMs;
         } catch { /* skip stat errors */ }
 
+        const entryRelative = join(relativePath, entry.name);
+        // ignore package expects paths relative to the repo root with a
+        // trailing slash for directories to match `foo/` style rules.
+        const forMatcher = isDirectory
+          ? `${entryRelative.replace(/^\/+/, '')}/`
+          : entryRelative.replace(/^\/+/, '');
+        const gitignored = matcher.isIgnored(forMatcher);
+
         return {
           name: entry.name,
-          relativePath: join(relativePath, entry.name),
+          relativePath: entryRelative,
           isDirectory,
           size,
           mtime,
+          gitignored,
         };
       })
       // Directories first, then alphabetical

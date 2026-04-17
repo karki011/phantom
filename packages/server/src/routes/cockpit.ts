@@ -221,9 +221,13 @@ cockpitRoutes.get('/skill-usage', (c) => {
       } catch { /* skip malformed JSON */ }
     }
 
-    // Sort alphabetically by skill name
+    // Sort by usage count descending — most-used skills surface first.
+    // Tie-break by most-recently-used so the freshest wins among equals.
     const entries = Object.entries(skills)
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([, a], [, b]) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return b.lastUsed - a.lastUsed;
+      })
       .map(([name, data]) => ({
         name,
         count: data.count,

@@ -47,7 +47,7 @@ export const useChat = (cwd?: string, worktreeId?: string | null, projectContext
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const [model, setModel] = useState('sonnet');
+  const [model, setModel] = useState('opus');
   const abortRef = useRef<AbortController | null>(null);
   const skipNextLoadRef = useRef(false);
 

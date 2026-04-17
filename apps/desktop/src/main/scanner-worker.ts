@@ -179,7 +179,9 @@ function readTypes(repoPath: string): TypeFileResult[] {
 // ── scan-source-files implementation ───────────────────────────────────────
 function scanSourceFiles(repoPath: string): SourceFileResult[] {
   const results: SourceFileResult[] = [];
-  const MAX_FILES = 500;
+  // Align with Monaco's MAX_SOURCE_MODELS (500) in LazyMonaco.tsx so TS
+  // Go-to-Definition has the maximum coverage the editor will accept.
+  const MAX_FILES = 1500;
   const MAX_FILE_SIZE = 200 * 1024; // 200KB per file
   const SKIP_DIRS = new Set([
     'node_modules', 'dist', 'build', '.git', '.next',

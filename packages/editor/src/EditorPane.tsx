@@ -5,6 +5,7 @@
  */
 import { useEffect, useRef, useState, useCallback, type CSSProperties } from 'react';
 import { LazyEditor, configureMonacoForWorkspace } from './LazyMonaco.js';
+import { useColorScheme } from './use-color-scheme.js';
 
 interface EditorPaneProps {
   paneId: string;
@@ -50,6 +51,7 @@ export const EditorPane = ({
   const [content, setContent] = useState<string>(initialValue ?? '');
   const [loading, setLoading] = useState(!!filePath);
   const [editorFontSize, setEditorFontSize] = useState(12);
+  const colorScheme = useColorScheme();
 
   // Configure Monaco with workspace tsconfig + types (once per workspace root)
   useEffect(() => {
@@ -319,20 +321,44 @@ export const EditorPane = ({
       <LazyEditor
         height="100%"
         language={language ?? detectLanguage(filePath)}
-        path={filePath}
+        // Normalize the leading slash so Monaco's model URI matches the URIs
+        // used for extra source models loaded via configureMonacoForWorkspace
+        // (the scanner emits paths without a leading slash). Matching URIs
+        // let the TypeScript worker resolve Cmd+Click Go-to-Definition across
+        // the project.
+        path={filePath?.replace(/^\/+/, '')}
         value={content}
         onChange={handleChange}
-        theme="vs-dark"
+        theme={colorScheme === 'light' ? 'vs' : 'vs-dark'}
         options={{
-          minimap: { enabled: false },
+          // Minimap: subtle scroll guide, no character rendering for a clean
+          // neon-edge look. Users can still click it to jump.
+          minimap: { enabled: true, renderCharacters: false, size: 'proportional', maxColumn: 80 },
           fontSize: editorFontSize,
           fontFamily: 'JetBrains Mono, monospace',
+          fontLigatures: true, // JetBrains Mono renders => !== -> etc.
           lineNumbers: 'on',
           scrollBeyondLastLine: false,
           automaticLayout: true,
           readOnly: !worktreeId && !onChange,
+          largeFileOptimizations: true,
           maxTokenizationLineLength: 20_000,
           stopRenderingLineAfter: 10_000,
+          // VSCode-style quality-of-life polish
+          bracketPairColorization: { enabled: true, independentColorPoolPerBracketType: true },
+          stickyScroll: { enabled: true, maxLineCount: 5 },
+          smoothScrolling: true,
+          cursorSmoothCaretAnimation: 'on',
+          cursorBlinking: 'smooth',
+          guides: {
+            indentation: true,
+            bracketPairs: true,
+            bracketPairsHorizontal: 'active',
+            highlightActiveIndentation: true,
+          },
+          renderWhitespace: 'selection', // show dots only when text is selected
+          renderLineHighlight: 'all',
+          padding: { top: 8, bottom: 8 },
         }}
       />
       {/* Unsaved changes modal */}

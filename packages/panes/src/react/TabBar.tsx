@@ -27,8 +27,11 @@ const barStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   height: 32,
-  background: 'var(--tab-bar-bg, rgba(0,0,0,0.3))',
-  borderBottom: '1px solid var(--pane-border, rgba(255,255,255,0.08))',
+  // Theme-aware fallbacks so the bar reads correctly in both light and dark.
+  // The hardcoded rgba(0,0,0,0.3) previously produced a semi-translucent
+  // grey wash over white in light mode — fine in dark, muddy in light.
+  background: 'var(--tab-bar-bg, var(--phantom-surface-card))',
+  borderBottom: '1px solid var(--pane-border, var(--phantom-border-subtle))',
   overflow: 'visible',
   userSelect: 'none',
   padding: '0 4px',
@@ -57,9 +60,23 @@ const tabStyle = (active: boolean): CSSProperties => ({
   borderRadius: 4,
   cursor: 'pointer',
   flexShrink: 0,
-  background: active ? 'rgba(255,255,255,0.08)' : 'transparent',
-  color: active ? '#fff' : 'rgba(255,255,255,0.55)',
-  border: 'none',
+  // Active tab: subtle cyan wash + cyan bottom border for the accent,
+  // but the LABEL uses the theme-aware primary text color so it reads on
+  // both light and dark surfaces. Inactive tabs use the theme's muted
+  // token (previously hardcoded white-alpha, which was invisible on light
+  // backgrounds).
+  background: active
+    ? 'color-mix(in srgb, var(--phantom-accent-cyan, #00d4ff) 18%, transparent)'
+    : 'transparent',
+  color: active
+    ? 'var(--phantom-text-primary)'
+    : 'var(--phantom-text-muted)',
+  borderBottom: active
+    ? '1.5px solid var(--phantom-accent-cyan, #00d4ff)'
+    : '1.5px solid transparent',
+  borderTop: 'none',
+  borderLeft: 'none',
+  borderRight: 'none',
   whiteSpace: 'nowrap',
   maxWidth: 160,
 });

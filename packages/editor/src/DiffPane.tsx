@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LazyDiffEditor } from './LazyMonaco.js';
+import { useColorScheme } from './use-color-scheme.js';
 
 const API_BASE = typeof window !== 'undefined' ? (window as any).__PHANTOM_API_BASE ?? '' : '';
 
@@ -47,6 +48,7 @@ export const DiffPane = ({
   const [saving, setSaving] = useState(false);
   const contentRef = useRef(modified);
   const editable = !readOnly && !!worktreeId && !!filePath;
+  const colorScheme = useColorScheme();
 
   const handleModifiedChange = useCallback((value: string | undefined) => {
     if (!editable) return;
@@ -134,7 +136,7 @@ export const DiffPane = ({
         original={original}
         modified={modified}
         language={language ?? detectLanguage(filePath)}
-        theme="vs-dark"
+        theme={colorScheme === 'light' ? 'vs' : 'vs-dark'}
         onMount={(editor, monacoInstance) => {
           // Suppress diagnostics on diff models — they lack full workspace
           // context so Monaco flags JSX and imports as errors (false positives).
@@ -170,13 +172,25 @@ export const DiffPane = ({
         }}
         options={{
           renderSideBySide: !inline,
-          minimap: { enabled: false },
+          minimap: { enabled: false }, // kept off in diff view to avoid clutter
           fontSize: 13,
           fontFamily: 'JetBrains Mono, monospace',
+          fontLigatures: true,
           readOnly: !editable,
           originalEditable: false,
           automaticLayout: true,
           scrollBeyondLastLine: false,
+          smoothScrolling: true,
+          cursorSmoothCaretAnimation: 'on',
+          cursorBlinking: 'smooth',
+          bracketPairColorization: { enabled: true, independentColorPoolPerBracketType: true },
+          guides: {
+            indentation: true,
+            bracketPairs: true,
+            bracketPairsHorizontal: 'active',
+            highlightActiveIndentation: true,
+          },
+          renderWhitespace: 'selection',
           // Fold unchanged regions to focus on changes
           hideUnchangedRegions: {
             enabled: true,

@@ -106,7 +106,10 @@
         "@types/react": "^19.2.14",
       },
       "peerDependencies": {
+        "@mantine/core": ">=9",
+        "@mantine/hooks": ">=9",
         "react": ">=19",
+        "react-dom": ">=19",
       },
     },
     "packages/server": {
@@ -123,6 +126,7 @@
         "chokidar": "^5.0.0",
         "drizzle-orm": "^0.45.2",
         "hono": "^4.12.12",
+        "ignore": "^7.0.5",
         "node-pty": "^1.1.0",
         "ws": "^8.20.0",
         "zod": "^3.25.0",
@@ -764,6 +768,8 @@
     "iconv-lite": ["iconv-lite@0.7.2", "", { "dependencies": { "safer-buffer": ">= 2.1.2 < 3.0.0" } }, "sha512-im9DjEDQ55s9fL4EYzOAv0yMqmMBSZp6G0VvFyTMPKWxiSBHUj9NW/qqLmXUwXrrM7AvqSlTCfvqRb0cM8yYqw=="],
 
     "ieee754": ["ieee754@1.2.1", "", {}, "sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA=="],
+
+    "ignore": ["ignore@7.0.5", "", {}, "sha512-Hs59xBNfUIunMFgWAbGX5cq6893IbWg4KnrjbYwX3tx0ztorVgTDA6B2sxf8ejHJ4wz8BqGUMYlnzNBer5NvGg=="],
 
     "immer": ["immer@10.2.0", "", {}, "sha512-d/+XTN3zfODyjr89gM3mPq1WNX2B8pYsu7eORitdwyA2sBubnTl3laYlBk4sXY5FUa5qTZGBDPJICVbvqzjlbw=="],
 

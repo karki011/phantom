@@ -135,10 +135,17 @@ export const FileTreeItem = React.memo(function FileTreeItem({
             paddingRight: 4,
             paddingLeft: depth * 20 + 4,
             borderRadius: 4,
+            // Subtle cyan wash on the active row + a thin cyan left border
+            // (VSCode-style focused row affordance). Opacity 18% reads well
+            // on both dark and light surfaces since `color-mix` blends with
+            // the container's actual background (not a fixed surface token).
             backgroundColor: isSelected
-              ? 'var(--phantom-surface-hover)'
+              ? 'color-mix(in srgb, var(--phantom-accent-cyan, #00d4ff) 18%, transparent)'
               : 'transparent',
-            transition: 'background-color 100ms ease',
+            borderLeft: isSelected
+              ? '2px solid var(--phantom-accent-cyan, #00d4ff)'
+              : '2px solid transparent',
+            transition: 'background-color 100ms ease, border-color 100ms ease',
           }}
           onMouseEnter={(e) => {
             if (!isSelected)
@@ -167,13 +174,17 @@ export const FileTreeItem = React.memo(function FileTreeItem({
             {!entry.isDirectory && <div style={{ width: 12 }} />}
             <Icon
               size={14}
-              style={{ color: iconColor, flexShrink: 0 }}
+              style={{
+                color: iconColor,
+                flexShrink: 0,
+                opacity: entry.gitignored ? 0.5 : 1,
+              }}
             />
             <Text
               fz="0.78rem"
-              c="var(--phantom-text-secondary)"
+              c={entry.gitignored ? 'var(--phantom-text-muted)' : 'var(--phantom-text-secondary)'}
               truncate
-              style={{ flex: 1 }}
+              style={{ flex: 1, opacity: entry.gitignored ? 0.6 : 1 }}
             >
               {entry.name}
             </Text>
@@ -188,6 +199,13 @@ export const FileTreeItem = React.memo(function FileTreeItem({
             <Menu.Divider />
           </>
         )}
+        <Menu.Item
+          fz="0.8rem"
+          leftSection={<ClipboardCopy size={14} />}
+          onClick={() => navigator.clipboard.writeText(entry.name)}
+        >
+          Copy File Name
+        </Menu.Item>
         <Menu.Item
           fz="0.8rem"
           leftSection={<ClipboardCopy size={14} />}

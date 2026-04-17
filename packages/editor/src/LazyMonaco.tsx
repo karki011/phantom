@@ -30,6 +30,11 @@ monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
   noSyntaxValidation: false,
 });
 
+// Opt 4: defer TS worker model sync — worker fetches models on demand instead
+// of eagerly syncing every model on load. Matches VSCode behavior, cuts startup CPU.
+monaco.languages.typescript.typescriptDefaults.setEagerModelSync(false);
+monaco.languages.typescript.javascriptDefaults.setEagerModelSync(false);
+
 /** Track which workspace root owns each model URI, for disposal on switch */
 const modelsByWorkspace = new Map<string, Set<string>>();
 
@@ -38,6 +43,22 @@ let activeWorkspaceRoot: string | null = null;
 
 /** Max models to keep from previous workspaces (LRU) */
 const MAX_STALE_MODELS = 20;
+
+// Opt 1: extension → languageId map used when creating source models.
+// Covers the TS/JS/JSON set that benefits most from explicit language routing;
+// everything else falls through to Monaco's own detection.
+const EXT_LANGUAGE_MAP: Record<string, string> = {
+  ts: 'typescript', tsx: 'typescript', mts: 'typescript', cts: 'typescript',
+  js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript',
+  json: 'json',
+};
+
+// Opt 3: per-model last-accessed timestamps for idle eviction within the active workspace.
+const modelLastAccessed = new Map<string, number>();
+/** Guard — only one idle-eviction interval may run at a time */
+let idleEvictionStarted = false;
+/** Evict models idle for longer than this (10 min) */
+const IDLE_EVICTION_MS = 10 * 60 * 1000;
 
 /**
  * Configure Monaco's TypeScript from a workspace's tsconfig.json and
@@ -131,25 +152,73 @@ export async function configureMonacoForWorkspace(repoPath: string): Promise<voi
     // loaded for IntelliSense/autocomplete/go-to-definition, not for diagnostics.
   }
 
-  // Phase 3: Load project source files as models for Go to Definition
-  // Cap at 100 models to avoid Monaco listener leak (each model registers internal listeners)
-  const MAX_SOURCE_MODELS = 100;
+  // Phase 3: Load project source files as models for Go to Definition.
+  // Caps balance two concerns:
+  //   - Monaco registers internal listeners per model (too many → jank)
+  //   - TS Go-to-Def only works if the target file is loaded as a model
+  // 500 covers most medium monorepos; we also bail at 40 MB of loaded text
+  // to keep memory bounded regardless of file count.
+  const MAX_SOURCE_MODELS = 500;
+  const MAX_TOTAL_BYTES = 40 * 1024 * 1024;
+
   const sourceFiles = await window.phantomOS.invoke(
     'phantom:scan-source-files', repoPath,
   ) as { path: string; content: string }[] | null;
 
   if (sourceFiles && sourceFiles.length > 0) {
     const workspaceModels = new Set<string>();
-    const capped = sourceFiles.slice(0, MAX_SOURCE_MODELS);
-    for (const { path, content } of capped) {
+    let totalBytes = 0;
+    let loaded = 0;
+    for (const { path, content } of sourceFiles) {
+      if (loaded >= MAX_SOURCE_MODELS) break;
+      if (totalBytes + content.length > MAX_TOTAL_BYTES) break;
       const uri = monaco.Uri.parse(`file:///${path}`);
+      const uriStr = uri.toString();
       if (!monaco.editor.getModel(uri)) {
-        monaco.editor.createModel(content, undefined, uri);
+        // Opt 1: pass explicit languageId to skip Monaco's sync extension detection
+        const ext = path.split('.').pop()?.toLowerCase() ?? '';
+        const langId: string | undefined = EXT_LANGUAGE_MAP[ext];
+        monaco.editor.createModel(content, langId, uri);
       }
-      workspaceModels.add(uri.toString());
+      // Opt 3: stamp access time when the model is first loaded
+      modelLastAccessed.set(uriStr, Date.now());
+      workspaceModels.add(uriStr);
+      totalBytes += content.length;
+      loaded += 1;
     }
     modelsByWorkspace.set(repoPath, workspaceModels);
-    console.log(`[Monaco] Loaded ${workspaceModels.size}/${sourceFiles.length} source models (capped at ${MAX_SOURCE_MODELS})`);
+    const dropped = sourceFiles.length - loaded;
+    console.log(
+      `[Monaco] Loaded ${loaded}/${sourceFiles.length} source models (${(totalBytes / 1024 / 1024).toFixed(1)} MB)` +
+      (dropped > 0 ? ` — ${dropped} files dropped (cap: ${MAX_SOURCE_MODELS} files / ${MAX_TOTAL_BYTES / 1024 / 1024} MB)` : ''),
+    );
+  }
+
+  // Opt 3: start the idle-eviction interval once — never more than one instance.
+  if (!idleEvictionStarted) {
+    idleEvictionStarted = true;
+    setInterval(() => {
+      if (!activeWorkspaceRoot) return;
+      const wsModels = modelsByWorkspace.get(activeWorkspaceRoot);
+      if (!wsModels) return;
+      const now = Date.now();
+      const openModelUris = new Set(
+        monaco.editor.getEditors().map(e => e.getModel()?.uri.toString()).filter(Boolean),
+      );
+      for (const uriStr of wsModels) {
+        // Never evict models currently open in a visible editor
+        if (openModelUris.has(uriStr)) continue;
+        const last = modelLastAccessed.get(uriStr) ?? 0;
+        if (now - last > IDLE_EVICTION_MS) {
+          const model = monaco.editor.getModels().find(m => m.uri.toString() === uriStr);
+          if (model) {
+            model.dispose();
+            wsModels.delete(uriStr);
+            modelLastAccessed.delete(uriStr);
+          }
+        }
+      }
+    }, 60_000);
   }
 }
 

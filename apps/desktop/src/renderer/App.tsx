@@ -57,6 +57,10 @@ import { OnboardingFlow } from './components/onboarding/OnboardingFlow';
 import { useCeremonySounds } from './hooks/useCeremonySounds';
 import { QuickOpen } from './components/QuickOpen';
 import { RecipeQuickLaunch } from './components/RecipeQuickLaunch';
+import { CommandPalette } from './components/CommandPalette';
+import { GlobalShortcuts } from './components/GlobalShortcuts';
+import { FloatingClaudeComposer } from './components/chat/FloatingClaudeComposer';
+import { TerminalFocusTracker } from './components/TerminalFocusTracker';
 import { fetchApi, generateMorningBrief, type JournalEntry } from './lib/api';
 import { useTour } from './hooks/useTour';
 
@@ -393,6 +397,10 @@ export const App = () => {
     <TerminalTitleListener />
     <QuickOpen />
     <RecipeQuickLaunch />
+    <CommandPalette />
+    <GlobalShortcuts />
+    <FloatingClaudeComposer />
+    <TerminalFocusTracker />
     {/* Settings modal */}
     <Modal
       opened={settingsVisible}

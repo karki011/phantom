@@ -334,6 +334,7 @@ export interface FileEntry {
   isDirectory: boolean;
   size: number;
   mtime: number;
+  gitignored?: boolean;
 }
 
 export interface DirectoryListing {
