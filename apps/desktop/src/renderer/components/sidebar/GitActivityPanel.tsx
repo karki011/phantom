@@ -642,7 +642,7 @@ export function GitActivityPanel() {
       clearInterval(prInterval);
       if (ciTimerRef.current) clearTimeout(ciTimerRef.current);
     };
-  }, [wtId, refreshTrigger, setPrStatus, setCiRuns, setCommits]);
+  }, [wtId, worktree?.branch, refreshTrigger, setPrStatus, setCiRuns, setCommits]);
 
   if (!worktree) {
     return (

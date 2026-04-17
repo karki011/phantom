@@ -15,6 +15,7 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { useEffect } from 'react';
 import { gitPrStatus } from '../../lib/api';
 import { prStatusFamily } from '../../atoms/activity';
+import { worktreesAtom } from '../../atoms/worktrees';
 
 interface PrBadgeProps {
   worktreeId: string;
@@ -23,13 +24,15 @@ interface PrBadgeProps {
 export function PrBadge({ worktreeId }: PrBadgeProps) {
   const setPrStatus = useSetAtom(prStatusFamily(worktreeId));
   const prStatus = useAtomValue(prStatusFamily(worktreeId));
+  const worktrees = useAtomValue(worktreesAtom);
+  const branch = worktrees.find((w) => w.id === worktreeId)?.branch;
 
   useEffect(() => {
     const fetchPr = () => gitPrStatus(worktreeId).then(setPrStatus).catch(() => {});
     fetchPr();
     const interval = setInterval(fetchPr, 60_000);
     return () => clearInterval(interval);
-  }, [worktreeId, setPrStatus]);
+  }, [worktreeId, branch, setPrStatus]);
 
   if (!prStatus) return null;
 
