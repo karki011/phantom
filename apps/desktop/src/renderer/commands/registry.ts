@@ -8,7 +8,7 @@
 import type { PaneStoreCompat } from '@phantom-os/panes';
 import { jotaiStore } from '@phantom-os/panes';
 import { composerOpenAtom } from '../atoms/chatDraft';
-import type { WorktreeData } from '../lib/api';
+import { API_BASE, type WorktreeData } from '../lib/api';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -255,7 +255,7 @@ export const COMMANDS: Command[] = [
     run: async (ctx) => {
       if (!requireWorktree(ctx)) return;
       try {
-        await fetch(`/api/worktrees/${ctx.worktree.id}/git`, {
+        await fetch(`${API_BASE}/api/worktrees/${ctx.worktree.id}/git`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'create-pr' }),

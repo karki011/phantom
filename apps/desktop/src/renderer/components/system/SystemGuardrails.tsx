@@ -15,6 +15,8 @@ import {
   XCircle,
 } from 'lucide-react';
 
+import { API_BASE } from '../../lib/api';
+
 interface TestResult {
   passed: boolean;
   detail: string;
@@ -35,7 +37,7 @@ const GUARDRAIL_TESTS: GuardrailTest[] = [
       const start = Date.now();
       try {
         const res = await fetch(
-          `/api/graph/${encodeURIComponent(projectId)}/context?file=${encodeURIComponent('this/does/not/exist.ts')}`,
+          `${API_BASE}/api/graph/${encodeURIComponent(projectId)}/context?file=${encodeURIComponent('this/does/not/exist.ts')}`,
         );
         if (!res.ok) {
           return { passed: true, detail: `API returned ${res.status} for nonexistent file`, durationMs: Date.now() - start };
@@ -63,7 +65,7 @@ const GUARDRAIL_TESTS: GuardrailTest[] = [
       const start = Date.now();
       try {
         // First get stats to find a known file
-        const statsRes = await fetch(`/api/graph/${encodeURIComponent(projectId)}/stats`);
+        const statsRes = await fetch(`${API_BASE}/api/graph/${encodeURIComponent(projectId)}/stats`);
         if (!statsRes.ok) {
           return { passed: false, detail: `Stats API returned ${statsRes.status}`, durationMs: Date.now() - start };
         }
@@ -74,7 +76,7 @@ const GUARDRAIL_TESTS: GuardrailTest[] = [
 
         // Use a generic query — the API should handle it
         const res = await fetch(
-          `/api/graph/${encodeURIComponent(projectId)}/context?file=${encodeURIComponent('src/index.ts')}`,
+          `${API_BASE}/api/graph/${encodeURIComponent(projectId)}/context?file=${encodeURIComponent('src/index.ts')}`,
         );
         if (!res.ok) {
           return { passed: true, detail: `Context API returned ${res.status}`, durationMs: Date.now() - start };
@@ -103,7 +105,7 @@ const GUARDRAIL_TESTS: GuardrailTest[] = [
       const start = Date.now();
       try {
         const res = await fetch(
-          `/api/graph/${encodeURIComponent(projectId)}/blast-radius?file=${encodeURIComponent('src/index.ts')}`,
+          `${API_BASE}/api/graph/${encodeURIComponent(projectId)}/blast-radius?file=${encodeURIComponent('src/index.ts')}`,
         );
         if (!res.ok) {
           return { passed: true, detail: `Blast API returned ${res.status}`, durationMs: Date.now() - start };
@@ -134,7 +136,7 @@ const GUARDRAIL_TESTS: GuardrailTest[] = [
       const start = Date.now();
       try {
         const fakeId = `nonexistent-project-${Date.now()}`;
-        const res = await fetch(`/api/graph/${encodeURIComponent(fakeId)}/stats`);
+        const res = await fetch(`${API_BASE}/api/graph/${encodeURIComponent(fakeId)}/stats`);
         return {
           passed: !res.ok,
           detail: `Got status ${res.status} for fake project`,

@@ -10,6 +10,7 @@ import { Wand } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CockpitPeriod } from '@phantom-os/shared';
 import { GradientBar } from './GradientBar';
+import { API_BASE } from '../../lib/api';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,7 +45,7 @@ export const SkillUsageCard = ({ period }: SkillUsageCardProps) => {
     setLoading(true);
     setError(null);
 
-    fetch(`/api/cockpit/skill-usage?period=${period}`)
+    fetch(`${API_BASE}/api/cockpit/skill-usage?period=${period}`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json() as Promise<SkillUsageData>;

@@ -16,6 +16,7 @@ import {
 
 import { computeStrategyScores } from './strategyScoring';
 import type { Complexity, Risk } from './strategyScoring';
+import { API_BASE } from '../../lib/api';
 
 type StepStatus = 'pending' | 'running' | 'complete' | 'error';
 
@@ -87,7 +88,7 @@ export const SystemPipeline = ({ projectId }: Props) => {
     try {
       if (primaryFile) {
         const res = await fetch(
-          `/api/graph/${encodeURIComponent(projectId)}/context?file=${encodeURIComponent(primaryFile)}`,
+          `${API_BASE}/api/graph/${encodeURIComponent(projectId)}/context?file=${encodeURIComponent(primaryFile)}`,
         );
         if (res.ok) {
           const data = await res.json();
@@ -116,7 +117,7 @@ export const SystemPipeline = ({ projectId }: Props) => {
     try {
       if (primaryFile) {
         const res = await fetch(
-          `/api/graph/${encodeURIComponent(projectId)}/blast-radius?file=${encodeURIComponent(primaryFile)}`,
+          `${API_BASE}/api/graph/${encodeURIComponent(projectId)}/blast-radius?file=${encodeURIComponent(primaryFile)}`,
         );
         if (res.ok) {
           const data = await res.json();

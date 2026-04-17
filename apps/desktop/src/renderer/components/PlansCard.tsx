@@ -8,6 +8,8 @@ import { usePaneStore } from '@phantom-os/panes';
 import { FileText, GitBranch, FolderGit2, RefreshCw } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
+import { API_BASE } from '../lib/api';
+
 interface PlanFile {
   filename: string;
   title: string;
@@ -62,7 +64,7 @@ export const PlansCard = memo(function PlansCard({ worktreeId }: { worktreeId: s
 
   const refresh = useCallback((showLoading = false) => {
     if (showLoading) setLoading(true);
-    fetch(`/api/plans?worktreeId=${worktreeId}`)
+    fetch(`${API_BASE}/api/plans?worktreeId=${worktreeId}`)
       .then(r => r.json())
       .then((data: GroupedPlans | null) => {
         const safeData = data ?? { branch: [], project: [] };

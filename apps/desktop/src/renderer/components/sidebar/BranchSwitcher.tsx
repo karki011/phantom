@@ -35,7 +35,7 @@ import {
 } from 'react';
 import { useSetAtom } from 'jotai';
 
-import { type BranchesData, getProjectBranches } from '../../lib/api';
+import { API_BASE, type BranchesData, getProjectBranches } from '../../lib/api';
 import { checkoutBranchAtom, createBranchAtom } from '../../atoms/worktrees';
 import { showSystemNotification } from '../notifications/SystemToast';
 import { PhantomModal } from '../PhantomModal';
@@ -94,7 +94,7 @@ export function BranchSwitcher({
   const handleGitAction = useCallback(
     async (action: string, label: string) => {
       try {
-        const res = await fetch(`/api/worktrees/${worktreeId}/git`, {
+        const res = await fetch(`${API_BASE}/api/worktrees/${worktreeId}/git`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action }),

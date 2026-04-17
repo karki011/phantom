@@ -19,5 +19,10 @@
 - SSE events handled in `useSystemEvents.ts` hook, updating Jotai atoms
 - Per-worktree state isolation via `atomFamily` (see `atoms/activity.ts`, `atoms/aiCommit.ts`)
 
+## Packaging / Distribution
+- DMG builds, install, and packaging diagnostics → use the `build-dmg` skill (`.claude/skills/build-dmg/SKILL.md`) or delegate to the `dmg-builder` agent (`.claude/agents/dmg-builder.md`).
+- Full background + architecture: `.claude/BUILD.md`.
+- One-shot build: `bun run dist:mac`. Always follow with `bash scripts/verify-bundle.sh` before claiming success.
+
 ## Author
 - For author or credit: Subash Karki

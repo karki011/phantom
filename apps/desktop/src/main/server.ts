@@ -5,11 +5,11 @@
  * Production: uses utilityProcess.fork() for Electron Node ABI + PTY compat.
  * @author Subash Karki
  */
-import { type ChildProcess } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
-import { app, utilityProcess, type UtilityProcess } from 'electron';
+import { app } from 'electron';
 
-let serverProcess: ChildProcess | UtilityProcess | null = null;
+let serverProcess: ChildProcess | null = null;
 
 /** Poll the health endpoint until the server responds */
 const waitForServer = (port: number, maxWaitMs = 15000): Promise<void> =>
@@ -75,20 +75,28 @@ export const startServer = async (): Promise<void> => {
     return;
   }
 
-  // PRODUCTION: wait for app ready (utilityProcess requires it)
   await app.whenReady();
 
   // Use the preload wrapper that hooks Module._resolveFilename for native
-  // modules BEFORE the bundled server code runs. Electron's utilityProcess
-  // ignores NODE_PATH, so the preload intercepts require('better-sqlite3')
+  // modules BEFORE the bundled server code runs. Electron ignores NODE_PATH
+  // in forked processes, so the preload intercepts require('better-sqlite3')
   // and redirects to app.asar.unpacked/node_modules/.
   const entry = join(process.resourcesPath, 'server-preload.cjs');
 
   console.log(`[PhantomOS Desktop] Starting API server: ${entry}`);
 
-  serverProcess = utilityProcess.fork(entry, [], {
+  // Run via the Electron binary as Node (ELECTRON_RUN_AS_NODE) rather than
+  // utilityProcess.fork. utilityProcess spawns a sandboxed child where
+  // posix_spawn (used by node-pty's spawn-helper) is blocked — terminals
+  // fail with "posix_spawnp failed". A plain child_process keeps Electron's
+  // Node ABI (so better-sqlite3/node-pty load) without the sandbox.
+  serverProcess = spawn(process.execPath, [entry], {
     cwd: app.getPath('home'),
-    stdio: 'pipe',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+    },
   });
 
   serverProcess.stdout?.on('data', (chunk: Buffer) => {

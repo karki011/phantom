@@ -106,4 +106,44 @@ module.exports = async function afterPack(context) {
       console.warn(`[rebuild-native] Failed to rebuild ${name} (non-fatal):`, err.message);
     }
   }
+
+  // node-pty's spawn-helper is a standalone executable Electron launches via
+  // posix_spawn. Without an embedded signature, macOS blocks it with
+  // "posix_spawnp failed". electron-builder ad-hoc signs the .app bundle but
+  // not unpacked binaries — sign it ourselves.
+  const spawnHelper = path.join(unpackedDir, 'node-pty', 'build', 'Release', 'spawn-helper');
+  if (fs.existsSync(spawnHelper)) {
+    try {
+      execSync(`codesign --force --sign - "${spawnHelper}"`, { stdio: 'inherit' });
+      console.log('[rebuild-native] spawn-helper ad-hoc signed');
+    } catch (err) {
+      console.warn('[rebuild-native] Failed to sign spawn-helper:', err.message);
+    }
+  }
+
+  // node-pty's unixTerminal.js unconditionally does
+  //   helperPath = helperPath.replace('app.asar', 'app.asar.unpacked')
+  // Our server-preload.cjs already resolves node-pty from app.asar.unpacked,
+  // so the path starts out .../app.asar.unpacked/... and this rewrite turns
+  // it into .../app.asar.unpacked.unpacked/... — spawn-helper then fails to
+  // exec with ENOENT and terminals die with "posix_spawnp failed".
+  // Make the two replace() calls idempotent.
+  const uxTerm = path.join(unpackedDir, 'node-pty', 'lib', 'unixTerminal.js');
+  if (fs.existsSync(uxTerm)) {
+    try {
+      let src = fs.readFileSync(uxTerm, 'utf8');
+      src = src.replace(
+        "helperPath = helperPath.replace('app.asar', 'app.asar.unpacked');",
+        "helperPath = helperPath.replace(/app\\.asar(?!\\.unpacked)/, 'app.asar.unpacked');"
+      );
+      src = src.replace(
+        "helperPath = helperPath.replace('node_modules.asar', 'node_modules.asar.unpacked');",
+        "helperPath = helperPath.replace(/node_modules\\.asar(?!\\.unpacked)/, 'node_modules.asar.unpacked');"
+      );
+      fs.writeFileSync(uxTerm, src);
+      console.log('[rebuild-native] patched unixTerminal.js asar-unpacked rewrite');
+    } catch (err) {
+      console.warn('[rebuild-native] Failed to patch unixTerminal.js:', err.message);
+    }
+  }
 };

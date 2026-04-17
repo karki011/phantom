@@ -18,6 +18,7 @@ import {
 import { useEffect, useState } from 'react';
 import type { CockpitPeriod, ToolCategory, ToolUsageEntry, ToolUsageResponse } from '@phantom-os/shared';
 import { TOOL_CATEGORIES } from '@phantom-os/shared';
+import { API_BASE } from '../../lib/api';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -159,7 +160,7 @@ export const ToolUsageCard = ({ period }: ToolUsageCardProps) => {
     const params = new URLSearchParams({ period });
     if (activeCategory !== 'all') params.set('category', activeCategory);
 
-    fetch(`/api/cockpit/tool-usage?${params}`)
+    fetch(`${API_BASE}/api/cockpit/tool-usage?${params}`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json() as Promise<ToolUsageResponse>;

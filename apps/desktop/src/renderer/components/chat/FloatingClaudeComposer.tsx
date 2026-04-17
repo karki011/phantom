@@ -20,6 +20,7 @@ import { getSession } from '@phantom-os/terminal';
 
 import { CLAUDE_SLASH_COMMANDS, type ClaudeSlashCommand } from '../../commands/claudeSlashCommands';
 import { lastTerminalPaneIdAtom } from '../../atoms/chatDraft';
+import { API_BASE } from '../../lib/api';
 
 interface DiscoveredCommand {
   name: string;
@@ -118,7 +119,7 @@ export const FloatingClaudeComposer = () => {
 
     // Fetch skills + custom commands from the server. Server caches for 30s.
     const wt = worktree?.id ?? '';
-    fetch(`/api/claude/slash-commands?worktreeId=${encodeURIComponent(wt)}`)
+    fetch(`${API_BASE}/api/claude/slash-commands?worktreeId=${encodeURIComponent(wt)}`)
       .then((r) => (r.ok ? r.json() : { commands: [] }))
       .then((j: { commands: DiscoveredCommand[] }) => {
         setDiscovered(Array.isArray(j.commands) ? j.commands : []);

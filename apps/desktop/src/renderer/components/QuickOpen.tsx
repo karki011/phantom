@@ -9,7 +9,7 @@ import { File, Search } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { usePaneStore } from '@phantom-os/panes';
-import type { FileEntry } from '../lib/api';
+import { API_BASE, type FileEntry } from '../lib/api';
 import { activeWorktreeAtom } from '../atoms/worktrees';
 
 export const QuickOpen = () => {
@@ -64,7 +64,7 @@ const QuickOpenInner = ({ onClose }: { onClose: () => void }) => {
     setLoading(true);
     const timer = setTimeout(() => {
       fetch(
-        `/api/worktrees/${worktree.id}/files/search?q=${encodeURIComponent(query.trim())}`,
+        `${API_BASE}/api/worktrees/${worktree.id}/files/search?q=${encodeURIComponent(query.trim())}`,
       )
         .then((r) => r.json())
         .then((data: { entries: FileEntry[] }) => {

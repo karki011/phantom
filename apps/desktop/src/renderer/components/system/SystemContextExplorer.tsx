@@ -10,6 +10,7 @@ import { FileSearch, Loader2, Search } from 'lucide-react';
 import { useAtomValue } from 'jotai';
 import { usePaneStore } from '@phantom-os/panes';
 import { activeWorktreeAtom } from '../../atoms/worktrees';
+import { API_BASE } from '../../lib/api';
 
 interface ContextFile {
   id: string;
@@ -221,7 +222,7 @@ export const SystemContextExplorer = ({ projectId }: Props) => {
   useEffect(() => {
     if (!projectId) return;
     let cancelled = false;
-    fetch(`/api/graph/${encodeURIComponent(projectId)}/files`)
+    fetch(`${API_BASE}/api/graph/${encodeURIComponent(projectId)}/files`)
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => {
         if (cancelled || !Array.isArray(data)) return;
@@ -239,7 +240,7 @@ export const SystemContextExplorer = ({ projectId }: Props) => {
 
     try {
       const res = await fetch(
-        `/api/graph/${encodeURIComponent(projectId)}/context?file=${encodeURIComponent(filePath.trim())}`,
+        `${API_BASE}/api/graph/${encodeURIComponent(projectId)}/context?file=${encodeURIComponent(filePath.trim())}`,
       );
       if (!res.ok) {
         throw new Error(`API returned ${res.status}: ${res.statusText}`);

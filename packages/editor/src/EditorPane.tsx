@@ -7,6 +7,8 @@ import { useEffect, useRef, useState, useCallback, type CSSProperties } from 're
 import { LazyEditor, configureMonacoForWorkspace } from './LazyMonaco.js';
 import { useColorScheme } from './use-color-scheme.js';
 
+const API_BASE = typeof window !== 'undefined' ? (window as any).__PHANTOM_API_BASE ?? '' : '';
+
 interface EditorPaneProps {
   paneId: string;
   filePath?: string;
@@ -91,8 +93,8 @@ export const EditorPane = ({
     setLoading(true);
 
     const url = worktreeId
-      ? `/api/worktrees/${worktreeId}/file?path=${encodeURIComponent(filePath)}`
-      : `/api/file-read?path=${encodeURIComponent(filePath)}`;
+      ? `${API_BASE}/api/worktrees/${worktreeId}/file?path=${encodeURIComponent(filePath)}`
+      : `${API_BASE}/api/file-read?path=${encodeURIComponent(filePath)}`;
 
     fetch(url)
       .then((r) => {
@@ -127,8 +129,8 @@ export const EditorPane = ({
     setSaving(true);
     try {
       const url = worktreeId
-        ? `/api/worktrees/${worktreeId}/file`
-        : '/api/file-write';
+        ? `${API_BASE}/api/worktrees/${worktreeId}/file`
+        : `${API_BASE}/api/file-write`;
       const res = await fetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

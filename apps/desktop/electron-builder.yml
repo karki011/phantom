@@ -30,6 +30,11 @@ mac:
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.inherit.plist
+  # Signing: electron-builder auto-picks "Developer ID Application" from the
+  # login Keychain when the cert is installed. Falls back to ad-hoc if no cert
+  # is present — build log prints "falling back to ad-hoc signature".
+  # Notarization: runs automatically when APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD,
+  # and APPLE_TEAM_ID env vars are all set. Otherwise skipped.
 
 dmg:
   title: "PhantomOS ${version}"

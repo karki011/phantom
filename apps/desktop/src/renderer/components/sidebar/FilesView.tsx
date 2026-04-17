@@ -28,7 +28,7 @@ import {
   worktreesAtom,
   worktreesLoadingStateAtom,
 } from '../../atoms/worktrees';
-import type { FileEntry } from '../../lib/api';
+import { API_BASE, type FileEntry } from '../../lib/api';
 import { FileTreeItem } from './FileTreeItem';
 
 // ---------------------------------------------------------------------------
@@ -194,7 +194,7 @@ export function FilesView() {
     setSearching(true);
     setSearchError(false);
     const timer = setTimeout(() => {
-      fetch(`/api/worktrees/${activeWorktree.id}/files/search?q=${encodeURIComponent(searchQuery.trim())}`)
+      fetch(`${API_BASE}/api/worktrees/${activeWorktree.id}/files/search?q=${encodeURIComponent(searchQuery.trim())}`)
         .then((r) => r.json())
         .then((data: { entries: FileEntry[] }) => setSearchResults(data.entries))
         .catch(() => { setSearchResults([]); setSearchError(true); })

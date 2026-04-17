@@ -8,6 +8,8 @@ import { Autocomplete, Badge, Button, Group, Paper, Progress, Stack, Text } from
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Loader2, Search, Zap } from 'lucide-react';
 
+import { API_BASE } from '../../lib/api';
+
 interface BlastFile {
   path: string;
   type: 'direct' | 'transitive';
@@ -36,7 +38,7 @@ export const SystemBlastRadius = ({ projectId }: Props) => {
   useEffect(() => {
     if (!projectId) return;
     let cancelled = false;
-    fetch(`/api/graph/${encodeURIComponent(projectId)}/files`)
+    fetch(`${API_BASE}/api/graph/${encodeURIComponent(projectId)}/files`)
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => {
         if (cancelled || !Array.isArray(data)) return;
@@ -54,7 +56,7 @@ export const SystemBlastRadius = ({ projectId }: Props) => {
 
     try {
       const res = await fetch(
-        `/api/graph/${encodeURIComponent(projectId)}/blast-radius?file=${encodeURIComponent(filePath.trim())}`,
+        `${API_BASE}/api/graph/${encodeURIComponent(projectId)}/blast-radius?file=${encodeURIComponent(filePath.trim())}`,
       );
       if (!res.ok) {
         throw new Error(`API returned ${res.status}: ${res.statusText}`);

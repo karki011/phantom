@@ -28,6 +28,7 @@ import { useRouter } from '../../hooks/useRouter';
 import { useSessions } from '../../hooks/useSessions';
 import { LiveFeed } from './LiveFeed';
 import { CockView } from './CockView';
+import { API_BASE } from '../../lib/api';
 
 const formatTokens = (count: number): string => {
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
@@ -56,7 +57,7 @@ export const Cockpit = () => {
   const [projectGraphStats, setProjectGraphStats] = useState<Record<string, { fileCount: number; totalEdges: number } | null>>({});
   const fetchAllGraphStats = useCallback(async () => {
     try {
-      const res = await fetch('/api/graph/stats/all');
+      const res = await fetch(`${API_BASE}/api/graph/stats/all`);
       if (res.ok) {
         const data: Record<string, { fileCount: number; totalEdges: number }> = await res.json();
         setProjectGraphStats(data);
@@ -296,7 +297,7 @@ export const Cockpit = () => {
                               style={{ cursor: 'pointer', textDecoration: 'underline' }}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                fetch(`/api/graph/${encodeURIComponent(p.id)}/build`, { method: 'POST' }).catch(() => {});
+                                fetch(`${API_BASE}/api/graph/${encodeURIComponent(p.id)}/build`, { method: 'POST' }).catch(() => {});
                               }}
                             >
                               {hasGraph ? 'Rebuild' : 'Build Graph'}
