@@ -34,3 +34,55 @@ Thumbs.db
 npm-debug.log*
 pnpm-debug.log*
 .env.notarize
+
+# macOS extras
+._*
+.AppleDouble
+.LSOverride
+Icon?
+
+# Editor / IDE
+.vscode/
+.idea/
+.fleet/
+.cursor/
+.zed/
+*.swp
+*.swo
+
+# Build / distribution artifacts
+*.zip
+*.pkg
+*.asar
+*.asar.unpacked/
+*.tgz
+*.tar.gz
+*.mobileprovision
+
+# Signing / secrets
+*.pem
+*.key
+*.p12
+*.cer
+*.certSigningRequest
+
+# Test output
+.nyc_output/
+playwright-report/
+test-results/
+
+# Caches
+.cache/
+.parcel-cache/
+.swc/
+.eslintcache
+.stylelintcache
+.npm/
+.bun/
+
+# Tool scratch / graph outputs
+.code-review-graph/
+.phantom/
+
+# Planning scratch (ephemeral)
+.planning/
