@@ -39,9 +39,6 @@ dmg:
   title: "PhantomOS ${version}"
   artifactName: "PhantomOS-${version}-${arch}.dmg"
 
-zip:
-  artifactName: "PhantomOS-${version}-${arch}-mac.zip"
-
 asar: true
 asarUnpack:
   - "node_modules/**"
