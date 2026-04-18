@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PhantomOS — Developer Desktop Environment</title>
+  <meta name="description" content="PhantomOS is a developer desktop environment built with Electron. Manage git worktrees, terminal sessions, AI-powered code assistance, and project orchestration in one unified workspace.">
+  <meta name="theme-color" content="#0a0a0f">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👻</text></svg>">
+  <style>
+    /* ── Reset & Base ──────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --bg-surface: #12121a;
+      --bg-elevated: #1a1a26;
+      --accent-cyan: #00d4ff;
+      --accent-cyan-dim: rgba(0, 212, 255, 0.15);
+      --accent-gold: #f59e0b;
+      --accent-gold-dim: rgba(245, 158, 11, 0.15);
+      --text-primary: #f0f0f5;
+      --text-secondary: #8a8a9a;
+      --text-muted: #5a5a6a;
+      --border: #2a2a3a;
+      --success: #22c55e;
+      --error: #ef4444;
+      --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', Menlo, Monaco, Consolas, monospace;
+      --font-body: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      --radius: 10px;
+      --radius-lg: 16px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow-x: hidden;
+    }
+
+    /* ── Animations ────────────────────────────────────────── */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    @keyframes glow {
+      0%, 100% { box-shadow: 0 0 20px rgba(0, 212, 255, 0.3), 0 0 60px rgba(0, 212, 255, 0.1); }
+      50%      { box-shadow: 0 0 30px rgba(0, 212, 255, 0.5), 0 0 80px rgba(0, 212, 255, 0.2); }
+    }
+
+    @keyframes subtleFloat {
+      0%, 100% { transform: translateY(0); }
+      50%      { transform: translateY(-6px); }
+    }
+
+    @keyframes gradientShift {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    @keyframes pulseRing {
+      0%   { transform: scale(1); opacity: 0.4; }
+      100% { transform: scale(1.5); opacity: 0; }
+    }
+
+    .animate-in {
+      animation: fadeInUp 0.7s ease-out both;
+    }
+
+    .animate-in-delay-1 { animation-delay: 0.1s; }
+    .animate-in-delay-2 { animation-delay: 0.2s; }
+    .animate-in-delay-3 { animation-delay: 0.3s; }
+    .animate-in-delay-4 { animation-delay: 0.4s; }
+    .animate-in-delay-5 { animation-delay: 0.5s; }
+
+    /* ── Layout ────────────────────────────────────────────── */
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    section {
+      padding: 80px 0;
+    }
+
+    /* ── Background Effects ────────────────────────────────── */
+    .bg-grid {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image:
+        linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .bg-radial {
+      position: fixed;
+      top: -40%; left: 50%;
+      transform: translateX(-50%);
+      width: 120%;
+      height: 80%;
+      background: radial-gradient(ellipse at center, rgba(0, 212, 255, 0.06) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    main { position: relative; z-index: 1; }
+
+    /* ── Nav ───────────────────────────────────────────────── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 16px 0;
+      background: rgba(10, 10, 15, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(42, 42, 58, 0.5);
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text-primary);
+    }
+
+    .nav-brand-icon {
+      font-size: 24px;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent-cyan-dim);
+      border: 1px solid rgba(0, 212, 255, 0.25);
+      border-radius: 8px;
+    }
+
+    .nav-brand-text {
+      font-family: var(--font-mono);
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .nav-brand-text span {
+      color: var(--accent-cyan);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 28px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--text-primary); }
+
+    /* ── Hero ──────────────────────────────────────────────── */
+    .hero {
+      padding: 160px 0 80px;
+      text-align: center;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: var(--accent-cyan-dim);
+      border: 1px solid rgba(0, 212, 255, 0.2);
+      border-radius: 100px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--accent-cyan);
+      margin-bottom: 32px;
+    }
+
+    .hero-badge-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent-cyan);
+      border-radius: 50%;
+      position: relative;
+    }
+
+    .hero-badge-dot::after {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      background: var(--accent-cyan);
+      border-radius: 50%;
+      animation: pulseRing 2s ease-out infinite;
+    }
+
+    .hero h1 {
+      font-family: var(--font-mono);
+      font-size: clamp(40px, 6vw, 64px);
+      font-weight: 800;
+      letter-spacing: -2px;
+      line-height: 1.1;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 .gradient-text {
+      background: linear-gradient(135deg, var(--accent-cyan), #7c3aed, var(--accent-gold));
+      background-size: 200% 200%;
+      animation: gradientShift 6s ease infinite;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-subtitle {
+      font-size: clamp(16px, 2.2vw, 20px);
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* ── Buttons ───────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 28px;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.25s ease;
+      border: none;
+      cursor: pointer;
+      font-family: var(--font-body);
+    }
+
+    .btn-primary {
+      background: var(--accent-cyan);
+      color: #0a0a0f;
+      animation: glow 3s ease-in-out infinite;
+    }
+
+    .btn-primary:hover {
+      background: #33ddff;
+      transform: translateY(-2px);
+    }
+
+    .btn-primary svg { stroke: #0a0a0f; }
+
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-surface);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+      transform: translateY(-2px);
+    }
+
+    /* ── Features Grid ─────────────────────────────────────── */
+    .features { padding-top: 40px; }
+
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--accent-cyan);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 700;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+
+    .section-desc {
+      color: var(--text-secondary);
+      font-size: 17px;
+      max-width: 560px;
+      margin-bottom: 48px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .feature-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .feature-card:hover {
+      border-color: rgba(0, 212, 255, 0.3);
+      transform: translateY(-4px);
+    }
+
+    .feature-card:hover::before { opacity: 1; }
+
+    .feature-icon {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      margin-bottom: 16px;
+      font-size: 20px;
+    }
+
+    .feature-icon.cyan    { background: var(--accent-cyan-dim); }
+    .feature-icon.gold    { background: var(--accent-gold-dim); }
+    .feature-icon.green   { background: rgba(34, 197, 94, 0.15); }
+    .feature-icon.purple  { background: rgba(124, 58, 237, 0.15); }
+
+    .feature-card h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ── Download Section ──────────────────────────────────── */
+    .download {
+      text-align: center;
+    }
+
+    .download-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 48px 40px;
+      max-width: 560px;
+      margin: 0 auto;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .download-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-gold));
+    }
+
+    .download-icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+      animation: subtleFloat 4s ease-in-out infinite;
+      display: inline-block;
+    }
+
+    .download-card h2 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .download-card .version-info {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+    }
+
+    #download-primary {
+      width: 100%;
+      justify-content: center;
+      font-size: 16px;
+      padding: 16px 28px;
+      margin-bottom: 12px;
+    }
+
+    #arch-status {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 28px;
+      min-height: 20px;
+    }
+
+    .arch-label {
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    .download-divider {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .download-divider::before,
+    .download-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .manual-downloads {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .manual-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .manual-link:hover {
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+    }
+
+    .manual-link .chip {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 2px 8px;
+      background: rgba(0, 212, 255, 0.1);
+      color: var(--accent-cyan);
+      border-radius: 4px;
+    }
+
+    .platform-note {
+      margin-top: 24px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .platform-note a {
+      color: var(--text-secondary);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    /* ── Install Steps ─────────────────────────────────────── */
+    .install {
+      padding-top: 40px;
+    }
+
+    .install-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      margin-top: 40px;
+    }
+
+    .install-step {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      text-align: center;
+      position: relative;
+    }
+
+    .step-number {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--accent-cyan);
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .step-icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+    }
+
+    .install-step h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .install-step p {
+      color: var(--text-secondary);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .install-step code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: var(--bg-elevated);
+      padding: 2px 8px;
+      border-radius: 4px;
+      color: var(--accent-gold);
+    }
+
+    /* ── Footer ────────────────────────────────────────────── */
+    footer {
+      padding: 40px 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+
+    footer p {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    footer a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    footer a:hover { color: var(--accent-cyan); }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    /* ── Responsive ────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      section { padding: 60px 0; }
+      .hero { padding: 120px 0 60px; }
+      .nav-links { display: none; }
+      .download-card { padding: 32px 20px; }
+      .manual-downloads { flex-direction: column; align-items: center; }
+      .hero-actions { flex-direction: column; align-items: center; }
+      .btn { width: 100%; justify-content: center; max-width: 300px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-radial"></div>
+
+  <!-- Nav -->
+  <nav>
+    <div class="container">
+      <a href="#" class="nav-brand">
+        <div class="nav-brand-icon">👻</div>
+        <div class="nav-brand-text">Phantom<span>OS</span></div>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#download">Download</a></li>
+        <li><a href="#install">Install</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container">
+        <div class="hero-badge animate-in">
+          <div class="hero-badge-dot"></div>
+          macOS desktop app
+        </div>
+        <h1 class="animate-in animate-in-delay-1">
+          Your dev environment,<br><span class="gradient-text">reimagined.</span>
+        </h1>
+        <p class="hero-subtitle animate-in animate-in-delay-2">
+          PhantomOS is a developer desktop environment built with Electron.
+          Manage git worktrees, terminal sessions, AI-powered code assistance,
+          and project orchestration — all in one unified workspace.
+        </p>
+        <div class="hero-actions animate-in animate-in-delay-3">
+          <a href="#download" class="btn btn-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download for macOS
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features" id="features">
+      <div class="container">
+        <div class="section-label animate-in">Capabilities</div>
+        <h2 class="section-title animate-in animate-in-delay-1">Everything you need, nothing you don't.</h2>
+        <p class="section-desc animate-in animate-in-delay-2">
+          A focused set of tools designed around how developers actually work.
+        </p>
+        <div class="features-grid">
+          <div class="feature-card animate-in animate-in-delay-2">
+            <div class="feature-icon cyan">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/></svg>
+            </div>
+            <h3>Multi-Worktree Management</h3>
+            <p>Work across multiple git worktrees simultaneously. Switch contexts without stashing — each worktree is an independent workspace.</p>
+          </div>
+          <div class="feature-card animate-in animate-in-delay-3">
+            <div class="feature-icon gold">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            </div>
+            <h3>Integrated Terminal</h3>
+            <p>Full-featured terminal sessions embedded in your workspace. Run commands, watch logs, and manage processes without leaving the app.</p>
+          </div>
+          <div class="feature-card animate-in animate-in-delay-4">
+            <div class="feature-icon purple">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7 7 0 0 1 14 22h-4a7 7 0 0 1-6.73-3H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/><circle cx="9.5" cy="15.5" r="1"/><circle cx="14.5" cy="15.5" r="1"/></svg>
+            </div>
+            <h3>AI Chat with Claude</h3>
+            <p>Built-in AI assistance powered by Claude. Get help with code, generate commits, review changes, and accelerate your development workflow.</p>
+          </div>
+          <div class="feature-card animate-in animate-in-delay-3">
+            <div class="feature-icon green">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/></svg>
+            </div>
+            <h3>Developer Journal</h3>
+            <p>Track your development sessions with an integrated journal. Capture thoughts, decisions, and progress as you work.</p>
+          </div>
+          <div class="feature-card animate-in animate-in-delay-4">
+            <div class="feature-icon cyan">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+            </div>
+            <h3>Achievement System</h3>
+            <p>Earn achievements as you hit development milestones. A gamified layer that makes shipping code even more satisfying.</p>
+          </div>
+          <div class="feature-card animate-in animate-in-delay-5">
+            <div class="feature-icon gold">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+            </div>
+            <h3>Project Orchestration</h3>
+            <p>Session tracking, CI/CD status, PR management, and branch activity — all surfaced in real-time through a unified dashboard.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Download -->
+    <section class="download" id="download">
+      <div class="container">
+        <div class="download-card animate-in">
+          <div class="download-icon">👻</div>
+          <h2>Download PhantomOS</h2>
+          <p class="version-info">macOS 12+ required</p>
+
+          <a id="download-primary" href="#" class="btn btn-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span id="download-label">Download for macOS</span>
+          </a>
+          <div id="arch-status"></div>
+
+          <div class="download-divider">or download manually</div>
+
+          <div class="manual-downloads">
+            <a href="https://github.com/karki011/Phantom-OS/releases/latest/download/PhantomOS-arm64.dmg" class="manual-link">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Apple Silicon
+              <span class="chip">arm64</span>
+            </a>
+            <a href="https://github.com/karki011/Phantom-OS/releases/latest/download/PhantomOS-x64.dmg" class="manual-link">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Intel Mac
+              <span class="chip">x64</span>
+            </a>
+          </div>
+
+          <p class="platform-note" id="platform-note">
+            Currently available for macOS only.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section class="install" id="install">
+      <div class="container">
+        <div class="section-label animate-in">Getting Started</div>
+        <h2 class="section-title animate-in animate-in-delay-1">Up and running in 30 seconds.</h2>
+        <div class="install-steps">
+          <div class="install-step animate-in animate-in-delay-2">
+            <div class="step-number">01</div>
+            <div class="step-icon">📦</div>
+            <h3>Open the DMG</h3>
+            <p>Double-click the downloaded <code>.dmg</code> file to mount it.</p>
+          </div>
+          <div class="install-step animate-in animate-in-delay-3">
+            <div class="step-number">02</div>
+            <div class="step-icon">📁</div>
+            <h3>Drag to Applications</h3>
+            <p>Drag <strong>PhantomOS</strong> into your <code>Applications</code> folder.</p>
+          </div>
+          <div class="install-step animate-in animate-in-delay-4">
+            <div class="step-number">03</div>
+            <div class="step-icon">🚀</div>
+            <h3>Launch</h3>
+            <p>Open PhantomOS. If macOS shows a security prompt, right-click and select <strong>"Open"</strong>.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>Built by Subash Karki</p>
+    </div>
+  </footer>
+
+  <script>
+    /* ── Platform Detection & Download Link ───────────────── */
+    (function () {
+      const BASE = 'https://github.com/karki011/Phantom-OS/releases/latest/download';
+      const primaryBtn = document.getElementById('download-primary');
+      const label = document.getElementById('download-label');
+      const archStatus = document.getElementById('arch-status');
+      const platformNote = document.getElementById('platform-note');
+
+      const isMac = /Mac|Macintosh/.test(navigator.userAgent);
+
+      if (!isMac) {
+        label.textContent = 'Download for macOS';
+        primaryBtn.href = BASE + '/PhantomOS-arm64.dmg';
+        platformNote.innerHTML =
+          'It looks like you\'re not on macOS. PhantomOS is currently macOS-only.<br>' +
+          'You can still download to transfer to a Mac.';
+        return;
+      }
+
+      /* Try the modern high-entropy API first */
+      if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+        navigator.userAgentData
+          .getHighEntropyValues(['architecture'])
+          .then(function (values) {
+            var arch = values.architecture;
+            if (arch === 'arm') {
+              setArch('arm64', 'Apple Silicon (arm64) detected');
+            } else if (arch === 'x86') {
+              setArch('x64', 'Intel (x64) detected');
+            } else {
+              fallbackDetect();
+            }
+          })
+          .catch(function () {
+            fallbackDetect();
+          });
+      } else {
+        fallbackDetect();
+      }
+
+      function fallbackDetect() {
+        /* Use WebGL renderer as a heuristic */
+        try {
+          var canvas = document.createElement('canvas');
+          var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+          if (gl) {
+            var dbg = gl.getExtension('WEBGL_debug_renderer_info');
+            if (dbg) {
+              var renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '';
+              if (/Apple/.test(renderer) && !/Intel/.test(renderer)) {
+                setArch('arm64', 'Apple Silicon detected');
+                return;
+              } else if (/Intel/.test(renderer)) {
+                setArch('x64', 'Intel Mac detected');
+                return;
+              }
+            }
+          }
+        } catch (e) { /* ignore */ }
+
+        /* Final fallback: default to arm64 since most new Macs are Apple Silicon */
+        setArch('arm64', 'Architecture auto-detected — verify below if unsure');
+      }
+
+      function setArch(arch, statusText) {
+        var file = arch === 'arm64' ? 'PhantomOS-arm64.dmg' : 'PhantomOS-x64.dmg';
+        primaryBtn.href = BASE + '/' + file;
+        label.textContent = 'Download for macOS (' + arch + ')';
+        archStatus.innerHTML = '<span class="arch-label">' + statusText + '</span>';
+      }
+    })();
+
+    /* ── Scroll-based fade-in (Intersection Observer) ─────── */
+    (function () {
+      var observer = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              entry.target.style.animationPlayState = 'running';
+              observer.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.1 }
+      );
+
+      document.querySelectorAll('.animate-in').forEach(function (el) {
+        el.style.animationPlayState = 'paused';
+        observer.observe(el);
+      });
+
+      /* Immediately un-pause hero elements that are already visible */
+      document.querySelectorAll('.hero .animate-in').forEach(function (el) {
+        el.style.animationPlayState = 'running';
+      });
+    })();
+  </script>
+</body>
+</html>

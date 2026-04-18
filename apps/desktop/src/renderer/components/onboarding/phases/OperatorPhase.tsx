@@ -30,6 +30,8 @@ function firstNameFrom(fullName: string): string {
 export function OperatorPhase({ onComplete }: Props) {
   const [gitName, setGitName] = useState<string | null>(null);
   const [gitEmail, setGitEmail] = useState<string | null>(null);
+  const [editableName, setEditableName] = useState('');
+  const [editableEmail, setEditableEmail] = useState('');
   const [handle, setHandle] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -45,13 +47,15 @@ export function OperatorPhase({ onComplete }: Props) {
   /* Don't render until git identity is loaded */
   if (gitName === null) return null;
 
+  const gitMissing = gitName === '' && gitEmail === '';
+
   const handleSubmit = () => {
     const trimmed = handle.trim();
     if (!trimmed) return;
     onComplete({
       operatorName: trimmed,
-      gitName: gitName,
-      gitEmail: gitEmail ?? '',
+      gitName: gitMissing ? editableName.trim() : gitName,
+      gitEmail: gitMissing ? editableEmail.trim() : (gitEmail ?? ''),
     });
   };
 
@@ -67,6 +71,21 @@ export function OperatorPhase({ onComplete }: Props) {
   const cyan = 'var(--phantom-accent-cyan, #00d4ff)';
   const gold = 'var(--phantom-accent-gold, #f59e0b)';
   const dimText = 'rgba(255,255,255,0.45)';
+
+  const monoInputStyles = {
+    input: {
+      fontFamily: monoFont,
+      background: 'rgba(0,0,0,0.4)',
+      border: `1px solid ${cyan}`,
+      color: '#ffffff',
+      caretColor: cyan,
+      '&:focus': {
+        borderColor: cyan,
+        boxShadow: `0 0 0 1px ${cyan}`,
+      },
+    },
+    wrapper: { marginTop: 4 },
+  };
 
   return (
     <Stack
@@ -91,7 +110,7 @@ export function OperatorPhase({ onComplete }: Props) {
       </Text>
 
       {/* Git identity read-only block */}
-      {(gitName || gitEmail) && (
+      {!gitMissing && (gitName || gitEmail) && (
         <Stack gap={4}>
           <Text
             size="xs"
@@ -130,6 +149,36 @@ export function OperatorPhase({ onComplete }: Props) {
         </Stack>
       )}
 
+      {/* Editable git identity when git is not configured */}
+      {gitMissing && (
+        <Stack gap="xs">
+          <Text
+            size="xs"
+            style={{
+              fontFamily: monoFont,
+              color: gold,
+              opacity: 0.7,
+              letterSpacing: '0.06em',
+            }}
+          >
+            git not configured — enter your identity:
+          </Text>
+          <TextInput
+            value={editableName}
+            onChange={(e) => setEditableName(e.currentTarget.value)}
+            placeholder="Your Name"
+            styles={monoInputStyles}
+          />
+          <TextInput
+            value={editableEmail}
+            onChange={(e) => setEditableEmail(e.currentTarget.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="you@example.com"
+            styles={monoInputStyles}
+          />
+        </Stack>
+      )}
+
       {/* Operator handle input */}
       <TextInput
         ref={inputRef}
@@ -164,22 +213,7 @@ export function OperatorPhase({ onComplete }: Props) {
           </Text>
         }
         placeholder="e.g. Subash"
-        styles={{
-          input: {
-            fontFamily: monoFont,
-            background: 'rgba(0,0,0,0.4)',
-            border: `1px solid ${cyan}`,
-            color: '#ffffff',
-            caretColor: cyan,
-            '&:focus': {
-              borderColor: cyan,
-              boxShadow: `0 0 0 1px ${cyan}`,
-            },
-          },
-          wrapper: {
-            marginTop: 4,
-          },
-        }}
+        styles={monoInputStyles}
       />
 
       {/* Submit button */}

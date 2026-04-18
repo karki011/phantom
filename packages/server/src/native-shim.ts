@@ -8,6 +8,14 @@
 import { join, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
 
+declare global {
+  namespace NodeJS {
+    interface Process {
+      resourcesPath?: string;
+    }
+  }
+}
+
 /**
  * Get the absolute path to a native .node binary.
  * Returns undefined in dev (let the module find it normally).

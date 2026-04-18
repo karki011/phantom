@@ -6,9 +6,9 @@ import { exec, execSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { db, projects, worktrees, paneStates, chatConversations, chatMessages, terminalSessions } from '@phantom-os/db';
+import { db, projects, worktrees, paneStates, chatConversations, chatMessages, terminalSessions, userPreferences } from '@phantom-os/db';
 import {
   createWorktree,
   removeWorktree,
@@ -447,7 +447,26 @@ worktreeRoutes.post('/worktrees/:id/git', async (c) => {
         if (!body.message?.trim()) return c.json({ error: 'message required for commit' }, 400);
         clearStaleLock(repoPath);
         const safeMsg = body.message.replace(/"/g, '\\"');
-        cmd = `git commit -m "${safeMsg}"`;
+
+        let gitIdentityFlags = '';
+        try {
+          const localName = execSync('git config user.name', { cwd: repoPath, encoding: 'utf8' }).trim();
+          const localEmail = execSync('git config user.email', { cwd: repoPath, encoding: 'utf8' }).trim();
+          if (!localName || !localEmail) throw new Error('missing');
+        } catch {
+          const prefs = db.select().from(userPreferences)
+            .where(inArray(userPreferences.key, ['operator_git_name', 'operator_git_email']))
+            .all();
+          const savedName = prefs.find(p => p.key === 'operator_git_name')?.value;
+          const savedEmail = prefs.find(p => p.key === 'operator_git_email')?.value;
+          if (savedName && savedEmail) {
+            const safeName = savedName.replace(/"/g, '\\"');
+            const safeEmail = savedEmail.replace(/"/g, '\\"');
+            gitIdentityFlags = `-c user.name="${safeName}" -c user.email="${safeEmail}" `;
+          }
+        }
+
+        cmd = `git ${gitIdentityFlags}commit -m "${safeMsg}"`;
         break;
       }
       case 'discard': {

@@ -13,6 +13,19 @@ const fs = require('fs');
 
 const NATIVE_MODULES = ['better-sqlite3', 'node-pty'];
 
+// electron-builder Arch enum → Node arch string
+const ARCH_MAP = { 0: 'ia32', 1: 'x64', 2: 'armv7l', 3: 'arm64', 4: 'universal' };
+
+function findNodeFiles(dir) {
+  const results = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) results.push(...findNodeFiles(full));
+    else if (entry.name.endsWith('.node')) results.push(full);
+  }
+  return results;
+}
+
 function findElectronVersion(context) {
   try {
     return require(path.join(context.packager.projectDir, 'node_modules', 'electron', 'package.json')).version;
@@ -36,7 +49,7 @@ function findSourceModule(name, projectDir) {
   return null;
 }
 
-function rebuildModule(modulePath, srcPath, electronVersion) {
+function rebuildModule(modulePath, srcPath, electronVersion, arch) {
   const name = path.basename(modulePath);
 
   // Copy build files from source (bun cache) if missing in unpacked.
@@ -65,7 +78,7 @@ function rebuildModule(modulePath, srcPath, electronVersion) {
 
   console.log(`[rebuild-native] Rebuilding ${name} for Electron ${electronVersion}...`);
   execSync(
-    `npx --yes node-gyp rebuild --target=${electronVersion} --arch=${process.arch} --dist-url=https://electronjs.org/headers --runtime=electron`,
+    `npx --yes node-gyp rebuild --target=${electronVersion} --arch=${arch} --dist-url=https://electronjs.org/headers --runtime=electron`,
     { cwd: modulePath, stdio: 'inherit', timeout: 180000 }
   );
   console.log(`[rebuild-native] ${name} rebuilt successfully`);
@@ -85,23 +98,16 @@ module.exports = async function afterPack(context) {
   }
 
   const electronVersion = findElectronVersion(context);
-  console.log(`[rebuild-native] Electron version: ${electronVersion}`);
+  const arch = ARCH_MAP[context.arch] || process.arch;
+  console.log(`[rebuild-native] Electron version: ${electronVersion}, arch: ${arch}`);
 
-  // Use electron-rebuild for all native modules at once — it handles
-  // different build systems (node-gyp, cmake, etc.) correctly.
-  // Falls back to per-module node-gyp if electron-rebuild isn't available.
-  // Rebuild each native module individually with node-gyp targeting Electron's ABI.
-  // electron-rebuild's --version flag is unreliable with bun workspaces — it often
-  // rebuilds against the system Node ABI instead of Electron's.
-
-  // Fallback: rebuild individually with node-gyp
   for (const name of NATIVE_MODULES) {
     const modulePath = path.join(unpackedDir, name);
     if (!fs.existsSync(modulePath)) continue;
 
     const srcPath = findSourceModule(name, context.packager.projectDir);
     try {
-      rebuildModule(modulePath, srcPath, electronVersion);
+      rebuildModule(modulePath, srcPath, electronVersion, arch);
     } catch (err) {
       console.warn(`[rebuild-native] Failed to rebuild ${name} (non-fatal):`, err.message);
     }
@@ -120,6 +126,16 @@ module.exports = async function afterPack(context) {
       console.warn('[rebuild-native] Failed to sign spawn-helper:', err.message);
     }
   }
+
+  const nodeFiles = findNodeFiles(unpackedDir);
+  for (const file of nodeFiles) {
+    try {
+      execSync(`codesign --force --sign - "${file}"`, { stdio: 'inherit' });
+    } catch (err) {
+      console.warn(`[rebuild-native] Failed to sign ${path.basename(file)}:`, err.message);
+    }
+  }
+  console.log(`[rebuild-native] Signed ${nodeFiles.length} .node binaries`);
 
   // node-pty's unixTerminal.js unconditionally does
   //   helperPath = helperPath.replace('app.asar', 'app.asar.unpacked')

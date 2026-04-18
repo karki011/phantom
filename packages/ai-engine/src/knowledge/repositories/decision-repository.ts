@@ -95,7 +95,7 @@ export class DecisionRepository {
    * Used by DecisionQuery for similarity scoring.
    */
   findRecent(limit = 100): DecisionRecord[] {
-    const rows = this.knowledgeDb.db.prepare<[], DecisionRow>(`
+    const rows = this.knowledgeDb.db.prepare<[string], DecisionRow>(`
       SELECT id, goal, strategy_id, strategy_name, confidence, complexity, risk, duration_ms, created_at
       FROM decisions
       WHERE project_id = ?
