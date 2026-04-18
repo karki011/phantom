@@ -13,6 +13,8 @@
     "preview": "electron-vite preview",
     "start": "electron .",
     "prebuild:dist": "node scripts/copy-native-modules.cjs",
+    "compile:app": "electron-vite build",
+    "package": "electron-builder --mac",
     "dist:mac": "npm run prebuild:dist && electron-builder --mac && node scripts/validate-native-runtime.cjs",
     "dist:dir": "npm run prebuild:dist && electron-builder --dir && node scripts/validate-native-runtime.cjs"
   },

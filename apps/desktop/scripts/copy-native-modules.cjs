@@ -214,11 +214,20 @@ function main() {
     log('─────────────────────────────────────────────');
   }
 
-  // ── Copy hidden deps that bun doesn't hoist ──────────────────────────────
+  // ── Remove install-time-only deps from root node_modules ─────────────────
   log('─────────────────────────────────────────────');
-  log('Ensuring hidden dependencies are resolvable...');
-
   const rootNodeModules = path.join(ROOT_DIR, 'node_modules');
+
+  for (const dep of STRIP_DEPS) {
+    const depPath = path.join(rootNodeModules, dep);
+    if (fs.existsSync(depPath)) {
+      fs.rmSync(depPath, { recursive: true, force: true });
+      log(`Removed stale ${dep} from root node_modules`);
+    }
+  }
+
+  // ── Copy hidden deps that bun doesn't hoist ──────────────────────────────
+  log('Ensuring hidden dependencies are resolvable...');
 
   for (const dep of HIDDEN_DEPS) {
     const destPath = path.join(rootNodeModules, dep);

@@ -306,7 +306,7 @@ class GraphEngineService {
       if (!evictId) break;
 
       // Don't evict projects with active builds
-      if (this.building.has(evictId) || this.enriching.has(evictId)) {
+      if (this.buildStatuses.get(evictId)?.status === 'building' || this.enriching.has(evictId)) {
         this.lru.push(evictId); // put it back
         continue;
       }

@@ -55,8 +55,16 @@ export const COST_PER_TOKEN = {
   CACHE_WRITE: 3.75,
 } as const;
 
+/** A single model-pricing entry (microdollars per token). */
+export type ModelPricingEntry = {
+  readonly input: number;
+  readonly output: number;
+  readonly cacheRead: number;
+  readonly cacheWrite: number;
+};
+
 /** Get pricing tier from a model string (e.g., "claude-opus-4-6[1m]") */
-export const getModelPricing = (model: string | null | undefined): typeof MODEL_PRICING.sonnet => {
+export const getModelPricing = (model: string | null | undefined): ModelPricingEntry => {
   if (!model) return MODEL_PRICING.sonnet;
   const lower = model.toLowerCase();
   if (lower.includes('opus')) {

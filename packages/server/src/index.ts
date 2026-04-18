@@ -8,7 +8,8 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
-import { db, sqlite, runMigrations, seedDatabase, userPreferences } from '@phantom-os/db';
+import { db, sqlite, dbError, runMigrations, seedDatabase, userPreferences } from '@phantom-os/db';
+import { DB_PATH } from '@phantom-os/shared/constants-node';
 import { startSessionWatcher } from './collectors/session-watcher.js';
 import { startTaskWatcher } from './collectors/task-watcher.js';
 import { startTodoWatcher } from './collectors/todo-watcher.js';
@@ -82,6 +83,8 @@ const broadcast = (event: string, data: unknown): void => {
   }
 };
 
+logger.info('PhantomOS', `Starting server — DB_PATH: ${DB_PATH}${dbError ? `, dbError: ${dbError}` : ''}`);
+
 // ---------------------------------------------------------------------------
 // Initialize Process Registry
 // ---------------------------------------------------------------------------
@@ -93,13 +96,17 @@ initWorktreeBroadcast(broadcast);
 // Database Bootstrap
 // ---------------------------------------------------------------------------
 
-runMigrations(sqlite);
-seedDatabase(db, sqlite);
-seedAchievements();
+if (!dbError) {
+  runMigrations(sqlite);
+  seedDatabase(db, sqlite);
+  seedAchievements();
 
-// Initialize graph engine after migrations so tables exist
-graphEngine.init(broadcast);
-orchestratorEngine.init(broadcast);
+  // Initialize graph engine after migrations so tables exist
+  graphEngine.init(broadcast);
+  orchestratorEngine.init(broadcast);
+} else {
+  logger.warn('DB', `Database unavailable — running in degraded mode: ${dbError}`);
+}
 
 // ---------------------------------------------------------------------------
 // Hono App
@@ -108,6 +115,17 @@ orchestratorEngine.init(broadcast);
 const app = new Hono();
 
 app.use('*', cors({ origin: ['http://localhost:3850', 'http://localhost:3849', 'http://127.0.0.1:3850', 'http://127.0.0.1:3849'] }));
+
+// Return 503 for API routes when DB is unavailable (let /health and /events through)
+app.use('/api/*', async (c, next) => {
+  if (dbError) {
+    return c.json(
+      { error: 'Database unavailable', dbError, DB_PATH },
+      503,
+    );
+  }
+  return next();
+});
 
 // Mount route groups
 app.route('/api', hunterRoutes);
@@ -190,7 +208,12 @@ app.get('/events', (c) => {
 });
 
 // Health check
-app.get('/health', (c) => c.json({ status: 'alive', timestamp: Date.now() }));
+app.get('/health', (c) => c.json({
+  status: 'alive',
+  timestamp: Date.now(),
+  db: dbError ? 'error' : 'ok',
+  dbError,
+}));
 
 // Sweep stale SSE clients that silently disconnected (laptop sleep, WiFi switch)
 setInterval(() => {
@@ -300,12 +323,14 @@ startMcpServer().catch((err) =>
 // Register phantom-ai globally only if the user has opted in via preferences.
 // During onboarding Phase 4 (Neural Link), POST /api/claude-integration sets
 // this preference and calls registerPhantomMcpGlobal() directly.
-const mcpPref = db.select({ value: userPreferences.value })
-  .from(userPreferences)
-  .where(eq(userPreferences.key, 'claude_mcp_enabled'))
-  .get();
-if (mcpPref?.value === 'true') {
-  registerPhantomMcpGlobal();
+if (!dbError) {
+  const mcpPref = db.select({ value: userPreferences.value })
+    .from(userPreferences)
+    .where(eq(userPreferences.key, 'claude_mcp_enabled'))
+    .get();
+  if (mcpPref?.value === 'true') {
+    registerPhantomMcpGlobal();
+  }
 }
 
 // Skip daemon — use direct PTY (node-pty) for terminal sessions.

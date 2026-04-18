@@ -1,0 +1,63 @@
+name: Build Desktop App
+
+on:
+  workflow_call:
+    inputs:
+      artifact_prefix:
+        description: "Prefix for artifact names"
+        required: false
+        type: string
+        default: "desktop"
+      artifact_retention_days:
+        description: "Days to retain artifacts"
+        required: false
+        type: number
+        default: 30
+
+jobs:
+  build-macos:
+    name: Build - macOS (${{ matrix.arch }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - run: bun install --frozen
+
+      - name: Build server + desktop
+        run: bun run build
+
+      - name: Package for ${{ matrix.arch }}
+        working-directory: apps/desktop
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npx electron-builder --mac --${{ matrix.arch }} --publish never
+
+      - name: Validate native runtime
+        working-directory: apps/desktop
+        run: node scripts/validate-native-runtime.cjs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_prefix }}-mac-${{ matrix.arch }}-dmg
+          path: apps/desktop/release/*.dmg
+          retention-days: ${{ inputs.artifact_retention_days }}
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_prefix }}-mac-${{ matrix.arch }}-zip
+          path: apps/desktop/release/*.zip
+          retention-days: ${{ inputs.artifact_retention_days }}
+          if-no-files-found: error
