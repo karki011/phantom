@@ -1,10 +1,10 @@
 {
   "name": "@phantom-os/desktop",
   "productName": "PhantomOS",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "private": true,
   "type": "module",
-  "description": "PhantomOS Electron Desktop App",
+  "description": "A single surface where every AI session, code change, and plan is tracked automatically — so instead of managing the chaos, you just build.",
   "author": "Subash Karki",
   "main": "dist/main/index.js",
   "scripts": {
