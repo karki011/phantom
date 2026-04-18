@@ -11,6 +11,8 @@ declare global {
       watchDirectory: (rootPath: string) => Promise<unknown>;
       unwatchDirectory: (rootPath: string) => Promise<unknown>;
       onFsChange: (callback: (data: { rootPath: string; dir: string; fileCount: number }) => void) => () => void;
+      onUpdaterStatus: (callback: (data: { status: string; version?: string; error?: string }) => void) => () => void;
+      restartToUpdate: () => void;
     };
   }
 }

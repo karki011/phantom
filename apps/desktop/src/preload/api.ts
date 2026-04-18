@@ -38,4 +38,22 @@ export const phantomAPI = {
     ipcRenderer.on('phantom:fs-change', handler);
     return () => ipcRenderer.removeListener('phantom:fs-change', handler);
   },
+
+  // --- Auto-updater bridge ---
+
+  /**
+   * Subscribe to auto-updater status events from the main process.
+   * Returns an unsubscribe function.
+   */
+  onUpdaterStatus: (callback: (data: { status: string; version?: string; error?: string }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { status: string; version?: string; error?: string }) =>
+      callback(data);
+    ipcRenderer.on('updater:status', handler);
+    return () => ipcRenderer.removeListener('updater:status', handler);
+  },
+
+  /** Request main process to quit and install the downloaded update. */
+  restartToUpdate: (): void => {
+    ipcRenderer.send('updater:restart');
+  },
 };

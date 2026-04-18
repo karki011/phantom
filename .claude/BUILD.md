@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-- macOS (Apple Silicon)
+- macOS (Apple Silicon or Intel)
 - Bun 1.3+ (`bun --version`)
 - Node.js 22+ (`node --version`)
 
@@ -38,13 +38,63 @@ This runs, in order:
 1. **Clean** `apps/desktop/release/` and `packages/server/dist/`
 2. **Build** the server bundle (`packages/server/dist/index.cjs`) and the renderer (via electron-vite)
 3. **Package** into `.app` + `.dmg` via electron-builder. The `afterPack` hook (`apps/desktop/scripts/rebuild-native.cjs`) then:
-   - Rebuilds `better-sqlite3` and `node-pty` against Electron's Node ABI
-   - Ad-hoc codesigns `spawn-helper` (required by macOS for `posix_spawn`)
+   - Rebuilds `better-sqlite3` and `node-pty` against Electron's Node ABI using `context.arch` (not `process.arch`) for correct cross-compilation
+   - Codesigns **all `.node` binaries** (`better_sqlite3.node`, `pty.node`) plus `spawn-helper` to prevent Gatekeeper quarantine
    - Patches `node-pty/lib/unixTerminal.js` to make the `app.asar → app.asar.unpacked` rewrite idempotent (see *Known Build Issues*)
+
+**Note:** `electron-builder.yml` uses `target: default` (per-arch builds), not universal. This means arm64 and x64 DMGs are built separately.
 
 Output: `apps/desktop/release/PhantomOS-{version}-arm64.dmg`. The ad-hoc DMG is what teammates need the `xattr` dance for.
 
-### Signed + notarized (public distribution)
+### CI/CD Release (recommended — multi-arch)
+
+The standard release flow uses GitHub Actions to build arm64 + x64 DMGs in parallel:
+
+```bash
+bash apps/desktop/create-release.sh
+```
+
+This interactive script:
+1. Prompts for a version bump (patch / minor / major)
+2. Updates `package.json`, commits, and creates a `desktop-v*.*.*` tag
+3. Pushes the tag to remote (dual push: `karki011/Phantom-OS` + `HMK-Solutions/Phantom-OS`)
+4. Monitors CI progress until both arch builds complete
+
+**Tag format**: `desktop-v1.2.3` — pushing this tag triggers the GitHub Actions workflow.
+
+#### GitHub Secrets required
+
+| Secret | Purpose |
+|--------|---------|
+| `MAC_CERTIFICATE` | Base64-encoded Developer ID Application `.p12` |
+| `MAC_CERTIFICATE_PASSWORD` | Password for the `.p12` |
+| `APPLE_ID` | Apple Developer email |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password for notarization |
+| `APPLE_TEAM_ID` | Apple Developer Team ID |
+
+#### Iterating on CI
+
+When debugging the CI workflow, use the retag script to avoid version churn:
+
+```bash
+bash scripts/retag-and-push.sh
+```
+
+This deletes and re-creates the tag at HEAD, then force-pushes it to re-trigger the workflow.
+
+#### Auto-updater
+
+Once a user has installed PhantomOS, subsequent releases are delivered automatically. The app uses `electron-updater` to check GitHub Releases on startup, downloads new DMGs in the background, and prompts the user to restart to apply.
+
+The `publish` config in `electron-builder.yml` points to `HMK-Solutions/Phantom-OS`.
+
+#### GitHub Pages
+
+A landing page at `docs/index.html` provides download links with smart arch detection (serves the correct DMG for the visitor's CPU architecture).
+
+### Signed + notarized (local — single arch)
+
+For local signed builds without CI:
 
 One-time setup:
 
@@ -167,12 +217,17 @@ If a new file regresses this, grep: `grep -rnE "fetch\(\`/api/|fetch\('/api/|fet
 |------|---------|
 | `scripts/build-server.mjs` | Bundles the server to CJS, renames to `.cjs` |
 | `scripts/verify-bundle.sh` | Launches the packaged `.app` and probes every API route |
-| `apps/desktop/electron-builder.yml` | Electron packaging config (DMG, asar, extraResources) |
-| `apps/desktop/scripts/rebuild-native.cjs` | afterPack hook — rebuilds native modules, codesigns spawn-helper, patches `unixTerminal.js` |
+| `scripts/retag-and-push.sh` | Deletes + re-creates a tag at HEAD for CI iteration |
+| `apps/desktop/create-release.sh` | Interactive release script: version bump, tag, push, monitor CI |
+| `apps/desktop/electron-builder.yml` | Electron packaging config (DMG, asar, extraResources, `target: default`, `publish` to GitHub) |
+| `apps/desktop/scripts/rebuild-native.cjs` | afterPack hook — rebuilds native modules (using `context.arch`), codesigns all `.node` binaries + spawn-helper, patches `unixTerminal.js` |
+| `apps/desktop/scripts/copy-native-modules.cjs` | Copies native modules into the build tree |
 | `apps/desktop/resources/server-preload.cjs` | Runtime hook — redirects native module requires to unpacked dir |
 | `apps/desktop/build/entitlements.mac.plist` | macOS entitlements (JIT, network, file access, library validation disabled) |
 | `apps/desktop/src/main/server.ts` | Spawns the API server in prod via `child_process.spawn(process.execPath, ..., { env: { ELECTRON_RUN_AS_NODE: '1' } })` |
 | `apps/desktop/src/renderer/index.html` | Inline script sets `window.__PHANTOM_API_BASE` before modules load |
+| `docs/index.html` | GitHub Pages landing page with smart arch-detection downloads |
+| `.github/workflows/build-desktop.yml` | CI/CD — builds arm64 + x64 DMGs on `desktop-v*` tag push |
 
 ## Architecture (Production)
 

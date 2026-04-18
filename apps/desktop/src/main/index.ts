@@ -10,6 +10,7 @@ import { createWindow } from './window';
 import { registerLifecycle, allowQuit } from './lifecycle';
 import { registerIpcHandlers } from './ipc-handlers';
 import { shutdownScannerWorker } from './scanner-bridge';
+import { checkForUpdates } from './auto-updater';
 
 // Set app name immediately — before anything else so macOS dock shows "PhantomOS"
 app.setName('PhantomOS');
@@ -20,7 +21,13 @@ registerIpcHandlers();
 // Boot the API server, then create the window once ready.
 // Terminal daemon is disabled — direct PTY (node-pty) is used instead.
 startServer().then(() => {
-  registerLifecycle(createWindow);
+  registerLifecycle(() => {
+    createWindow();
+
+    // Check for updates after window is created (production only)
+    checkForUpdates();
+    setInterval(checkForUpdates, 30 * 60 * 1000); // re-check every 30 minutes
+  });
 });
 
 // Graceful shutdown — stop the server only when ceremony has completed

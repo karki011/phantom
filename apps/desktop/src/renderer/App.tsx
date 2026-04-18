@@ -64,6 +64,7 @@ import { TerminalFocusTracker } from './components/TerminalFocusTracker';
 import { fetchApi, generateMorningBrief, type JournalEntry } from './lib/api';
 import { useTour } from './hooks/useTour';
 import { ServerLogModal } from './components/ServerLogModal';
+import { UpdateBanner } from './components/notifications/UpdateBanner';
 
 /** Listen for terminal title changes (OSC sequences) and update pane tab labels */
 const TerminalTitleListener = () => {
@@ -469,6 +470,7 @@ export const App = () => {
       />
     )}
     <ServerLogModal opened={serverLogOpen} onClose={() => setServerLogOpen(false)} />
+    <UpdateBanner />
     <AppShell
       header={{ height: '3.5rem' }}
       footer={{ height: '2.5rem' }}

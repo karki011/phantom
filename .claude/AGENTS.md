@@ -77,13 +77,33 @@ Animations use CSS keyframes injected at runtime: `ceremony-breathe`, `ceremony-
 | `bun run dev` | Start dev (server + desktop) |
 | `bun run dev:api` | Start API server only (port 3849) |
 | `bun run dev:desktop` | Start desktop app only |
-| `bun run dist:mac` | Build DMG for macOS |
+| `bun run dist:mac` | Build DMG for macOS (local, single arch) |
 | `bash scripts/verify-bundle.sh` | Verify packaged build (run after every `dist:mac`) |
-| `bash apps/desktop/create-release.sh` | Create a tagged release |
-
-**CI**: GitHub Actions builds arm64 + x64 on tag push.
+| `bash apps/desktop/create-release.sh` | Interactive release: version bump, tag, push, monitor CI |
+| `bash scripts/retag-and-push.sh` | Re-create tag at HEAD to re-trigger CI (for iteration) |
 
 **Important**: Always run `bash scripts/verify-bundle.sh` after `bun run dist:mac` before claiming success.
+
+### CI/CD Pipeline
+
+- **Trigger**: Pushing a `desktop-v*.*.*` tag fires the GitHub Actions workflow.
+- **What it does**: Builds arm64 + x64 DMGs in parallel on macOS runners, codesigns, notarizes, and uploads to GitHub Releases.
+- **Required GitHub Secrets**: `MAC_CERTIFICATE`, `MAC_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`.
+- **Dual push remote**: `origin` pushes to both `karki011/Phantom-OS` and `HMK-Solutions/Phantom-OS`.
+- `electron-builder.yml` uses `target: default` (per-arch, not universal) with `publish` config for `HMK-Solutions/Phantom-OS`.
+
+### Release Process
+
+1. Run `bash apps/desktop/create-release.sh` — it prompts for version bump, creates the tag, pushes, and monitors CI.
+2. CI builds both arch DMGs and publishes them to GitHub Releases.
+3. The GitHub Pages landing page (`docs/index.html`) auto-detects visitor arch and links to the correct DMG.
+4. Existing users receive the update automatically via `electron-updater` (checks GitHub Releases on startup, downloads in background, prompts restart).
+
+### Build Details
+
+- `rebuild-native.cjs` uses `context.arch` from electron-builder (not `process.arch`) for correct cross-compilation.
+- All `.node` binaries (`better_sqlite3.node`, `pty.node`) are codesigned in the `afterPack` hook to prevent Gatekeeper quarantine.
+- Server DB init is wrapped in try-catch; degraded mode returns 503 on DB failure. `/health` includes DB status.
 
 ## Agent Specializations
 
