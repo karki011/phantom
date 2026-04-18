@@ -31,8 +31,13 @@ jobs:
 
       - run: bun install
 
-      - name: Build server + desktop
-        run: ./node_modules/.bin/turbo build
+      - name: Build server
+        run: node scripts/build-server.mjs
+        working-directory: packages/server
+
+      - name: Build desktop
+        run: npx electron-vite build
+        working-directory: apps/desktop
 
       - name: Copy native modules
         working-directory: apps/desktop
