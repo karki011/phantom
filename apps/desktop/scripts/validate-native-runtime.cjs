@@ -162,9 +162,10 @@ function main() {
     } else {
       console.log(`  ✓ Found ${nodeFiles.length} .node binary file(s)`);
 
-      // Check 3: architecture of each .node file
+      // Check 3: architecture of each .node file (skip non-macOS prebuilds)
+      const macNodeFiles = nodeFiles.filter((f) => !f.includes('win32') && !f.includes('linux'));
       const foundArchitectures = new Set();
-      for (const nodeFile of nodeFiles) {
+      for (const nodeFile of macNodeFiles) {
         let fileOutput = '';
         try {
           fileOutput = execSync(`file "${nodeFile}"`, { encoding: 'utf8', timeout: 10000 });
