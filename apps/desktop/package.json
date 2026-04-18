@@ -1,7 +1,7 @@
 {
   "name": "@phantom-os/desktop",
   "productName": "PhantomOS",
-  "version": "1.0.2",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "description": "A single surface where every AI session, code change, and plan is tracked automatically — so instead of managing the chaos, you just build.",

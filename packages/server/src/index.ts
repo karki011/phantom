@@ -309,7 +309,7 @@ const server = serve({ fetch: app.fetch, port: API_PORT }, (info) => {
     '================================================',
     '',
   );
-  writeManifest(info.port, '1.0.0');
+  writeManifest(info.port, '0.0.1');
 });
 
 setupTerminalWs(server as unknown as Server);

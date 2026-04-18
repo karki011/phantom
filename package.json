@@ -1,7 +1,7 @@
 {
   "name": "phantom-os",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.0.1",
   "type": "module",
   "packageManager": "bun@1.3.11",
   "description": "PhantomOS — Solo Leveling System gamified Claude session dashboard",

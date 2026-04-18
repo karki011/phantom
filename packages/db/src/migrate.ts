@@ -119,6 +119,7 @@ export const runMigrations = (sqlite: Database.Database): void => {
       }
     }
   };
+  addColumn('sessions', 'model', 'TEXT', 'NULL');
   addColumn('sessions', 'input_tokens', 'INTEGER', '0');
   addColumn('sessions', 'output_tokens', 'INTEGER', '0');
   addColumn('sessions', 'cache_read_tokens', 'INTEGER', '0');
