@@ -29,10 +29,14 @@ jobs:
         with:
           bun-version-file: .bun-version
 
-      - run: bun install --frozen-lockfile
+      - run: bun install
 
       - name: Build server + desktop
-        run: bunx --bun turbo build
+        run: ./node_modules/.bin/turbo build
+
+      - name: Copy native modules
+        working-directory: apps/desktop
+        run: node scripts/copy-native-modules.cjs
 
       - name: Package for ${{ matrix.arch }}
         working-directory: apps/desktop
@@ -42,7 +46,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npx electron-builder --mac --${{ matrix.arch }} --publish never
+        run: ./node_modules/.bin/electron-builder --mac --${{ matrix.arch }} --publish never
 
       - name: Validate native runtime
         working-directory: apps/desktop
