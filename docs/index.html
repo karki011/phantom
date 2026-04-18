@@ -6,7 +6,7 @@
   <title>PhantomOS — Developer Desktop Environment</title>
   <meta name="description" content="PhantomOS is a developer desktop environment built with Electron. Manage git worktrees, terminal sessions, AI-powered code assistance, and project orchestration in one unified workspace.">
   <meta name="theme-color" content="#0a0a0f">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👻</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cdefs%3E%3CradialGradient id='bg' cx='50%25' cy='50%25' r='50%25'%3E%3Cstop offset='0%25' stop-color='%23111128'/%3E%3Cstop offset='100%25' stop-color='%230a0a14'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='256' cy='256' r='248' fill='url(%23bg)'/%3E%3Ccircle cx='256' cy='256' r='244' fill='none' stroke='%2300d4ff' stroke-width='1.5' opacity='0.15'/%3E%3Cg stroke='%2300d4ff' stroke-width='3' opacity='0.5'%3E%3Cline x1='256' y1='52' x2='340' y2='68'/%3E%3Cline x1='340' y1='68' x2='404' y2='116'/%3E%3Cline x1='404' y1='116' x2='420' y2='196'/%3E%3Cline x1='420' y1='196' x2='420' y2='276'/%3E%3Cline x1='420' y1='276' x2='420' y2='356'/%3E%3Cline x1='420' y1='356' x2='388' y2='404'/%3E%3Cline x1='388' y1='404' x2='348' y2='440'/%3E%3Cline x1='348' y1='440' x2='308' y2='404'/%3E%3Cline x1='308' y1='404' x2='256' y2='440'/%3E%3Cline x1='256' y1='440' x2='204' y2='404'/%3E%3Cline x1='204' y1='404' x2='164' y2='440'/%3E%3Cline x1='164' y1='440' x2='124' y2='404'/%3E%3Cline x1='124' y1='404' x2='92' y2='356'/%3E%3Cline x1='92' y1='356' x2='92' y2='276'/%3E%3Cline x1='92' y1='276' x2='92' y2='196'/%3E%3Cline x1='92' y1='196' x2='108' y2='116'/%3E%3Cline x1='108' y1='116' x2='172' y2='68'/%3E%3Cline x1='172' y1='68' x2='256' y2='52'/%3E%3C/g%3E%3Cg fill='%2300d4ff' opacity='0.6'%3E%3Ccircle cx='256' cy='52' r='7'/%3E%3Ccircle cx='340' cy='68' r='7'/%3E%3Ccircle cx='404' cy='116' r='7'/%3E%3Ccircle cx='420' cy='196' r='7'/%3E%3Ccircle cx='420' cy='276' r='7'/%3E%3Ccircle cx='420' cy='356' r='7'/%3E%3Ccircle cx='388' cy='404' r='7'/%3E%3Ccircle cx='348' cy='440' r='7'/%3E%3Ccircle cx='308' cy='404' r='7'/%3E%3Ccircle cx='256' cy='440' r='7'/%3E%3Ccircle cx='204' cy='404' r='7'/%3E%3Ccircle cx='164' cy='440' r='7'/%3E%3Ccircle cx='124' cy='404' r='7'/%3E%3Ccircle cx='92' cy='356' r='7'/%3E%3Ccircle cx='92' cy='276' r='7'/%3E%3Ccircle cx='92' cy='196' r='7'/%3E%3Ccircle cx='108' cy='116' r='7'/%3E%3Ccircle cx='172' cy='68' r='7'/%3E%3C/g%3E%3Ccircle cx='192' cy='212' r='18' fill='%23a855f7'/%3E%3Ccircle cx='320' cy='212' r='18' fill='%23a855f7'/%3E%3Ccircle cx='192' cy='212' r='8' fill='%23c084fc' opacity='0.7'/%3E%3Ccircle cx='320' cy='212' r='8' fill='%23c084fc' opacity='0.7'/%3E%3C/svg%3E">
   <style>
     /* ── Reset & Base ──────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -149,15 +149,16 @@
     }
 
     .nav-brand-icon {
-      font-size: 24px;
       width: 36px;
       height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--accent-cyan-dim);
-      border: 1px solid rgba(0, 212, 255, 0.25);
       border-radius: 8px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .nav-brand-icon img {
+      width: 100%;
+      height: 100%;
     }
 
     .nav-brand-text {
@@ -411,10 +412,16 @@
     }
 
     .download-icon {
-      font-size: 48px;
-      margin-bottom: 20px;
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 20px;
       animation: subtleFloat 4s ease-in-out infinite;
-      display: inline-block;
+    }
+
+    .download-icon img {
+      width: 100%;
+      height: 100%;
+      border-radius: 16px;
     }
 
     .download-card h2 {
@@ -624,7 +631,7 @@
   <nav>
     <div class="container">
       <a href="#" class="nav-brand">
-        <div class="nav-brand-icon">👻</div>
+        <div class="nav-brand-icon"><img src="icon.svg" alt="PhantomOS"></div>
         <div class="nav-brand-text">Phantom<span>OS</span></div>
       </a>
       <ul class="nav-links">
@@ -719,7 +726,7 @@
     <section class="download" id="download">
       <div class="container">
         <div class="download-card animate-in">
-          <div class="download-icon">👻</div>
+          <div class="download-icon"><img src="icon.svg" alt="PhantomOS"></div>
           <h2>Download PhantomOS</h2>
           <p class="version-info">macOS 12+ required</p>
 

@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#111128"/>
+      <stop offset="100%" stop-color="#0a0a14"/>
+    </radialGradient>
+    <filter id="eye-glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="node-glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <circle cx="256" cy="256" r="248" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="244" fill="none" stroke="#00d4ff" stroke-width="1.5" opacity="0.15"/>
+
+  <!-- Ghost outline edges (scaled from 64 viewBox to 512: multiply by 8) -->
+  <g stroke="#00d4ff" stroke-width="3" opacity="0.5">
+    <line x1="256" y1="52" x2="340" y2="68"/>
+    <line x1="340" y1="68" x2="404" y2="116"/>
+    <line x1="404" y1="116" x2="420" y2="196"/>
+    <line x1="420" y1="196" x2="420" y2="276"/>
+    <line x1="420" y1="276" x2="420" y2="356"/>
+    <line x1="420" y1="356" x2="388" y2="404"/>
+    <line x1="388" y1="404" x2="348" y2="440"/>
+    <line x1="348" y1="440" x2="308" y2="404"/>
+    <line x1="308" y1="404" x2="256" y2="440"/>
+    <line x1="256" y1="440" x2="204" y2="404"/>
+    <line x1="204" y1="404" x2="164" y2="440"/>
+    <line x1="164" y1="440" x2="124" y2="404"/>
+    <line x1="124" y1="404" x2="92" y2="356"/>
+    <line x1="92" y1="356" x2="92" y2="276"/>
+    <line x1="92" y1="276" x2="92" y2="196"/>
+    <line x1="92" y1="196" x2="108" y2="116"/>
+    <line x1="108" y1="116" x2="172" y2="68"/>
+    <line x1="172" y1="68" x2="256" y2="52"/>
+  </g>
+
+  <!-- Ghost outline nodes -->
+  <g fill="#00d4ff" filter="url(#node-glow)">
+    <circle cx="256" cy="52" r="7"/>
+    <circle cx="340" cy="68" r="7"/>
+    <circle cx="404" cy="116" r="7"/>
+    <circle cx="420" cy="196" r="7"/>
+    <circle cx="420" cy="276" r="7"/>
+    <circle cx="420" cy="356" r="7"/>
+    <circle cx="388" cy="404" r="7"/>
+    <circle cx="348" cy="440" r="7"/>
+    <circle cx="308" cy="404" r="7"/>
+    <circle cx="256" cy="440" r="7"/>
+    <circle cx="204" cy="404" r="7"/>
+    <circle cx="164" cy="440" r="7"/>
+    <circle cx="124" cy="404" r="7"/>
+    <circle cx="92" cy="356" r="7"/>
+    <circle cx="92" cy="276" r="7"/>
+    <circle cx="92" cy="196" r="7"/>
+    <circle cx="108" cy="116" r="7"/>
+    <circle cx="172" cy="68" r="7"/>
+  </g>
+
+  <!-- Inner graph edges -->
+  <g stroke="#00d4ff" stroke-width="2.5" opacity="0.35">
+    <line x1="256" y1="284" x2="208" y2="332"/>
+    <line x1="256" y1="284" x2="304" y2="332"/>
+    <line x1="208" y1="332" x2="256" y2="380"/>
+    <line x1="304" y1="332" x2="256" y2="380"/>
+    <line x1="208" y1="332" x2="304" y2="332"/>
+  </g>
+
+  <!-- Inner graph nodes -->
+  <g fill="#00d4ff" opacity="0.5">
+    <circle cx="256" cy="284" r="7"/>
+    <circle cx="208" cy="332" r="7"/>
+    <circle cx="304" cy="332" r="7"/>
+    <circle cx="256" cy="380" r="7"/>
+  </g>
+
+  <!-- Eyes with glow -->
+  <circle cx="192" cy="212" r="18" fill="#a855f7" filter="url(#eye-glow)"/>
+  <circle cx="320" cy="212" r="18" fill="#a855f7" filter="url(#eye-glow)"/>
+  <!-- Eye highlights -->
+  <circle cx="192" cy="212" r="8" fill="#c084fc" opacity="0.7"/>
+  <circle cx="320" cy="212" r="8" fill="#c084fc" opacity="0.7"/>
+</svg>
