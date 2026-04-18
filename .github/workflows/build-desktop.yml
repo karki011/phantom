@@ -33,7 +33,6 @@ jobs:
 
       - name: Build server
         run: node scripts/build-server.mjs
-        working-directory: packages/server
 
       - name: Build desktop
         run: bun run build
