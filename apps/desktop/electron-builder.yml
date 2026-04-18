@@ -32,7 +32,7 @@ mac:
 
 publish:
   provider: github
-  owner: karki011
+  owner: HMK-Solutions
   repo: Phantom-OS
 
 dmg:
