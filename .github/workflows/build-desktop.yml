@@ -29,10 +29,10 @@ jobs:
         with:
           bun-version-file: .bun-version
 
-      - run: bun install --frozen
+      - run: bun install --frozen-lockfile
 
       - name: Build server + desktop
-        run: bun run build
+        run: bunx --bun turbo build
 
       - name: Package for ${{ matrix.arch }}
         working-directory: apps/desktop
