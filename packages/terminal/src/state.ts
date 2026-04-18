@@ -247,7 +247,9 @@ export const attachSession = async (
 
   const fit = new FitAddon();
   term.loadAddon(fit);
-  term.loadAddon(new WebLinksAddon());
+  term.loadAddon(new WebLinksAddon((_event, uri) => {
+    window.open(uri, '_blank');
+  }));
 
   const session: TerminalSession = {
     term,

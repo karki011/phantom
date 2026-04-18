@@ -19,7 +19,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 
-import { activeWorktreeAtom } from '../../atoms/worktrees';
+import { activeWorktreeAtom, projectsAtom } from '../../atoms/worktrees';
 import {
   prCreatingSetAtom,
   prStatusFamily,
@@ -93,7 +93,7 @@ const onRowLeave = (e: React.MouseEvent<HTMLDivElement>) => {
 // PrSection
 // ---------------------------------------------------------------------------
 
-const PrSection = memo(function PrSection({ worktreeId }: { worktreeId: string }) {
+const PrSection = memo(function PrSection({ worktreeId, isDefaultBranch }: { worktreeId: string; isDefaultBranch?: boolean }) {
   const pr = useAtomValue(prStatusFamily(worktreeId));
   const creatingSet = useAtomValue(prCreatingSetAtom);
   const addCreating = useSetAtom(addPrCreatingAtom);
@@ -174,8 +174,7 @@ const PrSection = memo(function PrSection({ worktreeId }: { worktreeId: string }
         </Text>
       )}
 
-      {/* Create PR button — hide when a PR already exists */}
-      {!pr && (
+      {!pr && !isDefaultBranch && (
         <div
           onClick={!isCreating ? handleCreatePr : undefined}
           style={{
@@ -566,12 +565,16 @@ function ActivitySkeleton() {
 
 export function GitActivityPanel() {
   const worktree = useAtomValue(activeWorktreeAtom);
+  const projects = useAtomValue(projectsAtom);
   const wtId = worktree?.id ?? '';
   const setPrStatus = useSetAtom(prStatusFamily(wtId));
   const setCiRuns = useSetAtom(ciRunsFamily(wtId));
   const setCommits = useSetAtom(commitsFamily(wtId));
   const refreshTrigger = useAtomValue(activityRefreshAtom);
   const [initialLoading, setInitialLoading] = useState(true);
+
+  const project = worktree ? projects.find(p => p.id === worktree.projectId) : undefined;
+  const isDefaultBranch = worktree?.branch === (project?.defaultBranch ?? 'main');
 
   // On worktree switch, show loading only if we have no cached data for this worktree.
   // atomFamily data is keyed by wtId — no need to clear, previous worktree stays warm.
@@ -659,7 +662,7 @@ export function GitActivityPanel() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <ScrollArea style={{ flex: 1 }} scrollbarSize={6}>
-        <PrSection worktreeId={worktree.id} />
+        <PrSection worktreeId={worktree.id} isDefaultBranch={isDefaultBranch} />
 
         <div style={{ height: 1, backgroundColor: 'var(--phantom-border-subtle)', margin: '2px 8px' }} />
 
