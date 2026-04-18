@@ -36,7 +36,7 @@ jobs:
         working-directory: packages/server
 
       - name: Build desktop
-        run: npx electron-vite build
+        run: bun run build
         working-directory: apps/desktop
 
       - name: Copy native modules
