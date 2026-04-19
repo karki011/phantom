@@ -1,0 +1,32 @@
+# Build
+build/bin/
+build/frontend/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Wails auto-generated
+wailsjs/
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go
+vendor/
+
+# Secrets
+.env
+.env.local
