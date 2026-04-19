@@ -20,6 +20,7 @@ PhantomOS is an **AI-powered development command center** — a native desktop a
 - **Desktop:** Wails v2 (native macOS WebKit, ~15-20MB binary)
 - **Backend:** Go (goroutines for true parallelism)
 - **Frontend:** Solid.js + TypeScript (zero-rerender architecture)
+- **Build:** Vite 8 (Rolldown — Rust-based unified bundler, 10-30x faster builds)
 - **Styling:** Vanilla Extract (compile-time CSS, zero runtime)
 - **Components:** Kobalte (headless, accessible)
 - **Database:** SQLite (pure Go, WAL mode, sqlc for type-safe queries)

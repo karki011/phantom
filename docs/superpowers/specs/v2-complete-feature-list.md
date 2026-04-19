@@ -10,7 +10,7 @@ Generated: 2026-04-18
 3. Backend Language: Go (monolithic service)
 4. Database: SQLite with sqlc (type-safe queries)
 5. Terminal: Go PTY (pseudo-terminal management)
-6. Build Tool: Vite (fast HMR)
+6. Build Tool: Vite 8 (Rolldown — Rust-based unified bundler, 10-30x faster builds)
 7. Styling: Tailwind CSS
 8. Component Animations: solid-motionone
 
