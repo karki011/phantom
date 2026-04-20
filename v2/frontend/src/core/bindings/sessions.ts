@@ -41,6 +41,14 @@ export async function getSessionTasks(sessionId: string): Promise<Task[]> {
   }
 }
 
+export async function parseSessionHistory(sessionId: string): Promise<number> {
+  try {
+    return (await App()?.ParseSessionHistory(sessionId)) ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export async function getActivityLog(sessionId: string, limit: number): Promise<ActivityLog[]> {
   try {
     const raw = (await App()?.GetActivityLog(sessionId, limit)) ?? [];

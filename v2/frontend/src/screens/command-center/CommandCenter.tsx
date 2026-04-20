@@ -2,8 +2,8 @@
 
 import { createSignal, createMemo, onMount } from 'solid-js';
 import type { ActivityLog } from '../../core/types';
-import { getActivityLog } from '../../core/bindings';
-import { sessions } from '../../core/signals/sessions';
+import { getActivityLog, parseSessionHistory, getSessions } from '../../core/bindings';
+import { sessions, setSessions } from '../../core/signals/sessions';
 import { projects } from '../../core/signals/projects';
 import { onWailsEvent } from '../../core/events';
 import { isActiveSession } from '../../utils/format';
@@ -69,6 +69,14 @@ export function CommandCenter() {
 
     const initial = await getActivityLog('', 100);
     setActivities(initial);
+
+    // Scan sessions missing model data — parse their JSONL, then refresh
+    const needsScan = sessions().filter((s) => !s.model && ((s.input_tokens ?? 0) + (s.output_tokens ?? 0) > 0 || isActiveSession(s.status)));
+    if (needsScan.length > 0) {
+      await Promise.all(needsScan.map((s) => parseSessionHistory(s.id)));
+      const refreshed = await getSessions();
+      setSessions(refreshed);
+    }
   });
 
   return (

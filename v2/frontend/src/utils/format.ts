@@ -41,7 +41,7 @@ export function relativeTime(epoch: number | null): string {
 
 /** Short model name: "claude-3-opus-20240229" → "opus" */
 export function shortModel(model: string | null): string {
-  if (!model) return 'unknown';
+  if (!model) return '—';
   const parts = model.split('-');
   const known = ['opus', 'sonnet', 'haiku'];
   for (const p of parts) {

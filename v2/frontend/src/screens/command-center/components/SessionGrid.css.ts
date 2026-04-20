@@ -42,7 +42,7 @@ export const list = style({
 
 export const row = style({
   display: 'grid',
-  gridTemplateColumns: '8px 1fr 100px 80px 60px 60px 56px',
+  gridTemplateColumns: '8px 1fr 80px 60px 60px 56px',
   alignItems: 'center',
   gap: vars.space.sm,
   padding: `${vars.space.xs} ${vars.space.md}`,
@@ -91,41 +91,6 @@ export const model = style({
   whiteSpace: 'nowrap',
 });
 
-export const contextCell = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.xs,
-});
-
-export const contextBar = style({
-  flex: 1,
-  height: '3px',
-  background: vars.color.bgTertiary,
-  borderRadius: vars.radius.full,
-  overflow: 'hidden',
-});
-
-export const contextFill = style({
-  height: '100%',
-  borderRadius: vars.radius.full,
-  background: vars.color.accent,
-  transition: `width ${vars.animation.normal} ease`,
-});
-
-export const contextFillWarning = style({
-  background: vars.color.warning,
-});
-
-export const contextFillDanger = style({
-  background: vars.color.danger,
-});
-
-export const contextPct = style({
-  color: vars.color.textDisabled,
-  fontSize: vars.fontSize.xs,
-  width: '28px',
-  textAlign: 'right',
-});
 
 export const tokens = style({
   color: vars.color.textSecondary,
@@ -155,7 +120,7 @@ export const empty = style({
 
 export const headerRow = style({
   display: 'grid',
-  gridTemplateColumns: '8px 1fr 100px 80px 60px 60px 56px',
+  gridTemplateColumns: '8px 1fr 80px 60px 60px 56px',
   alignItems: 'center',
   gap: vars.space.sm,
   padding: `0 ${vars.space.md} ${vars.space.xs}`,

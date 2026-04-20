@@ -24,12 +24,6 @@ function statusDotClass(status: string | null): string {
   return `${styles.statusDot} ${styles.statusEnded}`;
 }
 
-function contextFillClass(pct: number): string {
-  if (pct >= 90) return `${styles.contextFill} ${styles.contextFillDanger}`;
-  if (pct >= 75) return `${styles.contextFill} ${styles.contextFillWarning}`;
-  return styles.contextFill;
-}
-
 export function SessionGrid(props: SessionGridProps) {
   const sorted = createMemo(() =>
     [...props.sessions()].sort((a, b) => {
@@ -58,7 +52,6 @@ export function SessionGrid(props: SessionGridProps) {
           <span />
           <span>name</span>
           <span>model</span>
-          <span>ctx</span>
           <span style={{ 'text-align': 'right' }}>tokens</span>
           <span style={{ 'text-align': 'right' }}>cost</span>
           <span style={{ 'text-align': 'right' }}>when</span>
@@ -66,19 +59,12 @@ export function SessionGrid(props: SessionGridProps) {
         <div class={styles.list}>
           <For each={sorted()}>
             {(session) => {
-              const pct = () => Math.min(100, Math.max(0, session.context_used_pct ?? 0));
               const totalTok = () => (session.input_tokens ?? 0) + (session.output_tokens ?? 0);
               return (
                 <div class={styles.row}>
                   <div class={statusDotClass(session.status)} />
                   <span class={styles.sessionName}>{deriveSessionName(session)}</span>
-                  <span class={styles.model}>{session.model ?? 'unknown'}</span>
-                  <div class={styles.contextCell}>
-                    <div class={styles.contextBar}>
-                      <div class={contextFillClass(pct())} style={{ width: `${pct()}%` }} />
-                    </div>
-                    <span class={styles.contextPct}>{pct()}%</span>
-                  </div>
+                  <span class={styles.model}>{session.model ?? '—'}</span>
                   <span class={styles.tokens}>{formatTokens(totalTok())}</span>
                   <span class={styles.cost}>{formatCost(session.estimated_cost_micros)}</span>
                   <span class={styles.time}>{relativeTime(session.started_at)}</span>
