@@ -41,7 +41,8 @@ export function ActivityFeed(props: ActivityFeedProps) {
 
   function handleScroll() {
     if (!listRef) return;
-    setPaused(listRef.scrollTop > 50);
+    const shouldPause = listRef.scrollTop > 50;
+    if (shouldPause !== paused()) setPaused(shouldPause);
   }
 
   function scrollToTop() {

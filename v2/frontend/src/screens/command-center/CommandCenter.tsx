@@ -1,6 +1,6 @@
 // Author: Subash Karki
 
-import { createSignal, onMount } from 'solid-js';
+import { createSignal, createMemo, onMount } from 'solid-js';
 import type { ActivityLog } from '../../core/types';
 import { getActivityLog } from '../../core/bindings';
 import { sessions } from '../../core/signals/sessions';
@@ -18,7 +18,7 @@ export function CommandCenter() {
   const [selectedProjectId, setSelectedProjectId] = createSignal<string | null>(null);
   const [selectedWorktree, setSelectedWorktree] = createSignal<string | null>(null);
 
-  const filteredSessions = () => {
+  const filteredSessions = createMemo(() => {
     const pid = selectedProjectId();
     const wtPath = selectedWorktree();
     let result = sessions();
@@ -35,15 +35,15 @@ export function CommandCenter() {
     }
 
     return result;
-  };
+  });
 
-  const filteredActivities = () => {
+  const filteredActivities = createMemo(() => {
     const pid = selectedProjectId();
     if (!pid) return activities();
 
     const sessionIds = new Set(filteredSessions().map((s) => s.id));
     return activities().filter((a) => a.session_id && sessionIds.has(a.session_id));
-  };
+  });
 
   onMount(async () => {
     const initial = await getActivityLog('', 100);

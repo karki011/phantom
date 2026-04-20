@@ -40,6 +40,8 @@ export function ProjectTree(props: ProjectTreeProps) {
   });
 
   async function loadProjectData(projectId: string) {
+    if (worktrees()[projectId]) return;
+
     const [wts, recs] = await Promise.all([
       listWorktrees(projectId),
       getProjectRecipes(projectId),

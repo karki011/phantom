@@ -1,6 +1,7 @@
 // Author: Subash Karki
 
 import type { Session } from '../../../core/types';
+import { formatTokens, formatCost, relativeTime } from '../../../utils/format';
 import { ContextBar } from '../../../shared/ContextBar/ContextBar';
 import * as styles from './SessionCard.css';
 
@@ -17,26 +18,6 @@ function deriveSessionName(s: Session): string {
   return s.id.slice(0, 8);
 }
 
-function formatTokens(n: number | null): string {
-  if (!n) return '0';
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
-}
-
-function formatCost(micros: number | null): string {
-  if (!micros) return '$0.00';
-  return `$${(micros / 1_000_000).toFixed(2)}`;
-}
-
-function formatRelativeTime(epochSecs: number | null): string {
-  if (!epochSecs) return '';
-  const diffSecs = Math.floor(Date.now() / 1000 - epochSecs);
-  if (diffSecs < 60) return `${diffSecs}s ago`;
-  if (diffSecs < 3600) return `${Math.floor(diffSecs / 60)}m ago`;
-  if (diffSecs < 86400) return `${Math.floor(diffSecs / 3600)}h ago`;
-  return `${Math.floor(diffSecs / 86400)}d ago`;
-}
 
 function statusClass(status: string | null): string {
   switch (status) {
@@ -65,7 +46,7 @@ export function SessionCard(props: SessionCardProps) {
       <div class={styles.stats}>
         <span class={styles.statValue}>{formatTokens(totalTokens())} tok</span>
         <span class={styles.costValue}>{formatCost(s().estimated_cost_micros)}</span>
-        <span class={styles.statValue}>{formatRelativeTime(s().started_at)}</span>
+        <span class={styles.statValue}>{relativeTime(s().started_at)}</span>
       </div>
     </div>
   );

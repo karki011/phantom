@@ -1,7 +1,8 @@
 // Author: Subash Karki
 
-import { For, Show, type Accessor } from 'solid-js';
+import { For, Show, createMemo, type Accessor } from 'solid-js';
 import type { Session } from '../../../core/types';
+import { isActiveSession } from '../../../utils/format';
 import { SessionCard } from './SessionCard';
 import * as styles from './SessionGrid.css';
 
@@ -10,16 +11,17 @@ interface SessionGridProps {
 }
 
 export function SessionGrid(props: SessionGridProps) {
-  const sorted = () =>
+  const sorted = createMemo(() =>
     [...props.sessions()].sort((a, b) => {
-      const aActive = a.status === 'active' || a.status === 'running' ? 1 : 0;
-      const bActive = b.status === 'active' || b.status === 'running' ? 1 : 0;
+      const aActive = isActiveSession(a.status) ? 1 : 0;
+      const bActive = isActiveSession(b.status) ? 1 : 0;
       if (aActive !== bActive) return bActive - aActive;
       return (b.started_at ?? 0) - (a.started_at ?? 0);
-    });
+    })
+  );
 
   const activeCount = () =>
-    props.sessions().filter((s) => s.status === 'active' || s.status === 'running').length;
+    props.sessions().filter((s) => isActiveSession(s.status)).length;
 
   return (
     <div class={styles.container}>
