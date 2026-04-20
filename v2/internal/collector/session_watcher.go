@@ -238,8 +238,13 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 		// Do NOT overwrite status here: let checkStale handle completed detection.
 		// This prevents race conditions where a JSONL write triggers processSessionFile
 		// and a transient PID check failure incorrectly marks an active session as completed.
-		existingStatus := existing.Status
-		if existingStatus.Valid && existingStatus.String == "active" && status == "completed" {
+		// Trust the PID check as source of truth for existing sessions:
+		// - If PID is alive → session is active (resurrect if DB says completed)
+		// - If PID is dead → preserve DB status (let checkStale handle completion)
+		if status == "active" {
+			// PID alive — force active regardless of DB state
+		} else if existing.Status.Valid && existing.Status.String == "active" {
+			// PID check failed but DB says active — don't flip to completed here
 			status = "active"
 		}
 		if err := sw.queries.UpdateSession(sw.ctx, db.UpdateSessionParams{
