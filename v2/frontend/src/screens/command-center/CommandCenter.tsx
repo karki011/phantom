@@ -36,10 +36,12 @@ export function CommandCenter() {
     }
 
     // Show active sessions + sessions from last 48 hours
-    const cutoff = Date.now() / 1000 - 48 * 3600;
+    const cutoffMs = Date.now() - 48 * 3600 * 1000;
     result = result.filter((s) => {
       if (isActiveSession(s.status)) return true;
-      return (s.started_at ?? 0) > cutoff;
+      const t = s.started_at ?? 0;
+      const tMs = t > 1e12 ? t : t * 1000;
+      return tMs > cutoffMs;
     });
 
     // Hide empty sessions (no tokens, no model — scanner artifacts)

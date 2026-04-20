@@ -92,11 +92,19 @@ export function ProjectTree(props: ProjectTreeProps) {
 
   function sessionCountForWorktree(worktreePath: string | null): number {
     if (!worktreePath) return 0;
-    return props.sessions().filter((s) => s.cwd === worktreePath).length;
+    return props.sessions().filter((s) => {
+      if (s.cwd === worktreePath) return true;
+      if (s.cwd && s.cwd.startsWith(worktreePath)) return true;
+      return false;
+    }).length;
   }
 
   function sessionCountForProject(project: Project): number {
-    return props.sessions().filter((s) => s.repo === project.repo_path).length;
+    return props.sessions().filter((s) => {
+      if (s.repo && s.repo === project.repo_path) return true;
+      if (s.cwd && project.repo_path && s.cwd.startsWith(project.repo_path)) return true;
+      return false;
+    }).length;
   }
 
   function worktreeStatusIndicator(path: string | null): { symbol: string; class: string } {
