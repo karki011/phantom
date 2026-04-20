@@ -21,6 +21,11 @@ import (
 )
 
 
+// rescanMaxAttempts caps how many times periodicRescan will retry a session
+// that's missing tokens or model data. Raised from 5 to 20 so short sessions
+// that eventually get an assistant turn are still captured.
+const rescanMaxAttempts = 20
+
 // JSONLScanner scans JSONL conversation files and enriches sessions with
 // token usage, cost estimates, message counts, and tool breakdowns.
 type JSONLScanner struct {
@@ -153,9 +158,12 @@ func (js *JSONLScanner) processJSONLFile(path string) {
 		return
 	}
 
-	// Skip sessions already enriched (InputTokens > 0)
+	// Skip sessions already fully enriched (tokens AND model both populated).
+	// Don't skip on tokens alone — model may still need backfilling if it was
+	// empty on the first write.
 	if existing, err := js.queries.GetSession(js.ctx, sessionID); err == nil {
-		if existing.InputTokens.Valid && existing.InputTokens.Int64 > 0 {
+		if existing.InputTokens.Valid && existing.InputTokens.Int64 > 0 &&
+			existing.Model.Valid && existing.Model.String != "" {
 			return
 		}
 	}
@@ -385,14 +393,17 @@ func (js *JSONLScanner) rescan() {
 	}
 
 	for _, s := range sessions {
-		// Skip already enriched sessions
-		if s.InputTokens.Valid && s.InputTokens.Int64 > 0 {
+		// Skip only if fully enriched (both tokens AND model populated).
+		// Rescan sessions missing either tokens or model.
+		hasTokens := s.InputTokens.Valid && s.InputTokens.Int64 > 0
+		hasModel := s.Model.Valid && s.Model.String != ""
+		if hasTokens && hasModel {
 			continue
 		}
 
 		js.mu.Lock()
 		attempts := js.rescanAttempts[s.ID]
-		if attempts >= 5 {
+		if attempts >= rescanMaxAttempts {
 			js.mu.Unlock()
 			continue
 		}
@@ -413,7 +424,7 @@ func (js *JSONLScanner) rescan() {
 	// retries, so rescanAttempts doesn't grow without bound.
 	js.mu.Lock()
 	for id, attempts := range js.rescanAttempts {
-		if _, active := activeIDs[id]; !active || attempts >= 5 {
+		if _, active := activeIDs[id]; !active || attempts >= rescanMaxAttempts {
 			delete(js.rescanAttempts, id)
 		}
 	}
@@ -498,6 +509,40 @@ func (js *JSONLScanner) pollActiveContext() {
 		}); err != nil {
 			log.Printf("jsonl_scanner: update active context %s: %v", s.ID, err)
 			continue
+		}
+
+		// Backfill model if the scan found one and the DB doesn't have it yet.
+		// UpdateSessionTokens doesn't touch the model column, so we use the
+		// wider UpdateSession path when model needs writing.
+		if result.Model != "" && (!s.Model.Valid || s.Model.String == "") {
+			if err := js.queries.UpdateSession(js.ctx, db.UpdateSessionParams{
+				ID:                  s.ID,
+				Pid:                 s.Pid,
+				Cwd:                 s.Cwd,
+				Repo:                s.Repo,
+				Name:                s.Name,
+				Kind:                s.Kind,
+				Model:               sql.NullString{String: result.Model, Valid: true},
+				Entrypoint:          s.Entrypoint,
+				EndedAt:             s.EndedAt,
+				Status:              s.Status,
+				TaskCount:           s.TaskCount,
+				CompletedTasks:      s.CompletedTasks,
+				XpEarned:            s.XpEarned,
+				InputTokens:         sql.NullInt64{Int64: result.InputTokens, Valid: true},
+				OutputTokens:        sql.NullInt64{Int64: result.OutputTokens, Valid: true},
+				CacheReadTokens:     sql.NullInt64{Int64: result.CacheRead, Valid: true},
+				CacheWriteTokens:    sql.NullInt64{Int64: result.CacheWrite, Valid: true},
+				EstimatedCostMicros: sql.NullInt64{Int64: costMicros, Valid: true},
+				MessageCount:        sql.NullInt64{Int64: result.MessageCount, Valid: true},
+				ToolUseCount:        sql.NullInt64{Int64: result.ToolUseCount, Valid: true},
+				FirstPrompt:         s.FirstPrompt,
+				ToolBreakdown:       s.ToolBreakdown,
+				LastInputTokens:     sql.NullInt64{Int64: result.InputTokens, Valid: true},
+				ContextUsedPct:      s.ContextUsedPct,
+			}); err != nil {
+				log.Printf("jsonl_scanner: backfill model for %s: %v", s.ID, err)
+			}
 		}
 
 		js.emitEvent(EventSessionContext, map[string]interface{}{

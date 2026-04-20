@@ -31,14 +31,22 @@ type SessionWatcher struct {
 	// debounce per-file fsnotify events
 	mu       sync.Mutex
 	debounce map[string]*time.Timer
+
+	// stale detection — require N consecutive PID check failures before marking
+	// completed. Handles transient ESRCH errors during zombie reap, exec transitions, etc.
+	staleMu       sync.Mutex
+	staleFailures map[string]int
 }
+
+const staleFailureThreshold = 3
 
 // NewSessionWatcher creates a SessionWatcher. queries must be backed by db.Writer.
 func NewSessionWatcher(queries *db.Queries, emitEvent func(string, interface{})) *SessionWatcher {
 	return &SessionWatcher{
-		queries:   queries,
-		emitEvent: emitEvent,
-		debounce:  make(map[string]*time.Timer),
+		queries:       queries,
+		emitEvent:     emitEvent,
+		debounce:      make(map[string]*time.Timer),
+		staleFailures: make(map[string]int),
 	}
 }
 
@@ -378,9 +386,24 @@ func (sw *SessionWatcher) checkStale() {
 		stale := false
 
 		if s.Pid.Valid && s.Pid.Int64 > 0 {
-			// Check PID liveness: signal 0 checks alive without sending signal
+			// Check PID liveness: signal 0 checks alive without sending signal.
+			// Require consecutive failures to avoid flipping on transient ESRCH
+			// (zombie reap, exec transitions, etc.)
 			if err := syscall.Kill(int(s.Pid.Int64), 0); err != nil {
-				stale = true
+				sw.staleMu.Lock()
+				sw.staleFailures[s.ID]++
+				count := sw.staleFailures[s.ID]
+				sw.staleMu.Unlock()
+				if count >= staleFailureThreshold {
+					stale = true
+				} else {
+					slog.Info("session_watcher: PID check failed (retry)", "session_id", s.ID, "pid", s.Pid.Int64, "count", count)
+				}
+			} else {
+				// PID alive — reset the counter
+				sw.staleMu.Lock()
+				delete(sw.staleFailures, s.ID)
+				sw.staleMu.Unlock()
 			}
 		} else if s.StartedAt.Valid && (now-s.StartedAt.Int64) > 600 {
 			// No PID + age > 10 min → mark completed
