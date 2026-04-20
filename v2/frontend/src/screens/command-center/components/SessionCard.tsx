@@ -1,7 +1,7 @@
 // Author: Subash Karki
 
 import type { Session } from '../../../core/types';
-import { formatTokens, formatCost, relativeTime } from '../../../utils/format';
+import { formatTokens, formatCost, relativeTime, isActiveSession } from '../../../utils/format';
 import { ContextBar } from '../../../shared/ContextBar/ContextBar';
 import * as styles from './SessionCard.css';
 
@@ -20,15 +20,9 @@ function deriveSessionName(s: Session): string {
 
 
 function statusClass(status: string | null): string {
-  switch (status) {
-    case 'active':
-    case 'running':
-      return `${styles.statusDot} ${styles.statusActive}`;
-    case 'stale':
-      return `${styles.statusDot} ${styles.statusStale}`;
-    default:
-      return `${styles.statusDot} ${styles.statusEnded}`;
-  }
+  if (isActiveSession(status)) return `${styles.statusDot} ${styles.statusActive}`;
+  if (status === 'stale') return `${styles.statusDot} ${styles.statusStale}`;
+  return `${styles.statusDot} ${styles.statusEnded}`;
 }
 
 export function SessionCard(props: SessionCardProps) {

@@ -42,6 +42,13 @@ export function CommandCenter() {
       return (s.started_at ?? 0) > cutoff;
     });
 
+    // Hide empty sessions (no tokens, no model — scanner artifacts)
+    result = result.filter((s) => {
+      if (isActiveSession(s.status)) return true;
+      const hasData = (s.input_tokens ?? 0) + (s.output_tokens ?? 0) > 0 || s.model;
+      return hasData;
+    });
+
     return result;
   });
 
