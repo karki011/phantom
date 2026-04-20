@@ -234,7 +234,14 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 	// Try GetSession first — if exists, update; if not, create
 	existing, err := sw.queries.GetSession(sw.ctx, sessionID)
 	if err == nil {
-		// Session exists — update
+		// Session exists — update metadata only.
+		// Do NOT overwrite status here: let checkStale handle completed detection.
+		// This prevents race conditions where a JSONL write triggers processSessionFile
+		// and a transient PID check failure incorrectly marks an active session as completed.
+		existingStatus := existing.Status
+		if existingStatus.Valid && existingStatus.String == "active" && status == "completed" {
+			status = "active"
+		}
 		if err := sw.queries.UpdateSession(sw.ctx, db.UpdateSessionParams{
 			ID:                  sessionID,
 			Pid:                 nullInt64(pid),

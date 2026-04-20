@@ -66,7 +66,7 @@ export function SessionGrid(props: SessionGridProps) {
         <div class={styles.list}>
           <For each={sorted()}>
             {(session) => {
-              const pct = () => session.context_used_pct ?? 0;
+              const pct = () => Math.min(100, Math.max(0, session.context_used_pct ?? 0));
               const totalTok = () => (session.input_tokens ?? 0) + (session.output_tokens ?? 0);
               return (
                 <div class={styles.row}>
