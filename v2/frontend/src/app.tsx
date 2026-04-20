@@ -5,6 +5,7 @@ import { createSignal, onMount, Show, Switch, Match } from 'solid-js';
 import { shadowMonarchDarkTheme } from './styles/theme.css';
 import * as styles from './styles/app.css';
 import { bootstrapSessions } from './core/signals/sessions';
+import { bootstrapProjects } from './core/signals/projects';
 import { loadPref } from './core/signals/preferences';
 import { initTheme, initFontStyle } from './core/signals/theme';
 import { activeScreen } from './core/signals/navigation';
@@ -32,6 +33,7 @@ export function App() {
     if (!onboardingDone) setShowOnboarding(true);
 
     bootstrapSessions();
+    bootstrapProjects();
     setReady(true);
   });
 
