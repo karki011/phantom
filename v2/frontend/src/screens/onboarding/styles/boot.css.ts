@@ -1,0 +1,98 @@
+// Author: Subash Karki
+
+import { style, keyframes } from '@vanilla-extract/css';
+import { vars } from '../../../styles/theme.css';
+
+const textGlow = keyframes({
+  '0%, 100%': { textShadow: `0 0 10px ${vars.color.accentGlow}` },
+  '50%': { textShadow: `0 0 25px ${vars.color.accent}, 0 0 50px ${vars.color.accentGlow}` },
+});
+
+export const terminal = style({
+  position: 'absolute',
+  inset: 0,
+  background: vars.color.terminalBg,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.sm,
+  lineHeight: 2,
+  color: vars.color.terminalText,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  overflow: 'hidden',
+});
+
+export const linesContainer = style({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  maxWidth: '700px',
+  width: '100%',
+});
+
+export const line = style({
+  whiteSpace: 'pre-wrap',
+  minHeight: '1.8em',
+  textAlign: 'center',
+});
+
+export const lineNormal = style({
+  color: vars.color.terminalText,
+});
+
+export const lineTitle = style({
+  color: vars.color.accent,
+  fontFamily: vars.font.display,
+  fontWeight: 700,
+  fontSize: vars.fontSize.xxl,
+  letterSpacing: '0.2em',
+  animation: `${textGlow} 3s ease-in-out infinite`,
+  marginBottom: vars.space.md,
+});
+
+export const lineSubtitle = style({
+  color: vars.color.accentMuted,
+  fontSize: vars.fontSize.xs,
+  letterSpacing: '0.3em',
+  textTransform: 'uppercase',
+  marginBottom: vars.space.lg,
+});
+
+export const lineAccent = style({
+  color: vars.color.accent,
+  fontWeight: 600,
+  fontSize: vars.fontSize.md,
+});
+
+export const lineSuccess = style({
+  color: vars.color.success,
+  fontWeight: 600,
+  fontSize: vars.fontSize.md,
+});
+
+export const lineDim = style({
+  color: vars.color.textDisabled,
+  fontSize: vars.fontSize.xs,
+});
+
+export const lineDramatic = style({
+  color: vars.color.textPrimary,
+  fontFamily: vars.font.display,
+  fontSize: vars.fontSize.lg,
+  letterSpacing: '0.1em',
+  marginTop: vars.space.md,
+});
+
+export const cursor = style({
+  color: vars.color.terminalCursor,
+  marginLeft: '2px',
+});
+
+export const separator = style({
+  width: '120px',
+  height: '1px',
+  background: `linear-gradient(90deg, transparent, ${vars.color.accent}, transparent)`,
+  margin: `${vars.space.sm} auto`,
+});

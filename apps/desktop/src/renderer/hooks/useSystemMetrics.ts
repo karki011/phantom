@@ -1,6 +1,7 @@
 /**
  * useSystemMetrics Hook
  * Polls /system-metrics for live CPU and memory data.
+ * Uses timeout to prevent connection pool exhaustion when server is busy.
  *
  * @author Subash Karki
  */
@@ -22,23 +23,34 @@ export interface SystemMetrics {
   topProcesses: TopProcess[];
 }
 
-const POLL_INTERVAL_MS = 3_000;
+const POLL_INTERVAL_MS = 5_000;
+const TIMEOUT_MS = 4_000;
 
 export const useSystemMetrics = () => {
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
 
   useEffect(() => {
-    const fetchMetrics = () =>
-      fetch(`${apiBase}/api/system-metrics`)
+    let active = true;
+
+    const fetchMetrics = () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+      fetch(`${apiBase}/api/system-metrics`, { signal: controller.signal })
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
-          if (data) setMetrics(data as SystemMetrics);
+          if (active && data) setMetrics(data as SystemMetrics);
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => clearTimeout(timeout));
+    };
 
     fetchMetrics();
     const interval = setInterval(fetchMetrics, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, []);
 
   return metrics;

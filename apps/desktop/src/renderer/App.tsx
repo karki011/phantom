@@ -65,6 +65,8 @@ import { fetchApi, generateMorningBrief, type JournalEntry } from './lib/api';
 import { useTour } from './hooks/useTour';
 import { ServerLogModal } from './components/ServerLogModal';
 import { UpdateBanner } from './components/notifications/UpdateBanner';
+import { EnrichmentWidget } from './components/EnrichmentWidget';
+import { updateEnrichmentAtom } from './atoms/enrichment';
 
 /** Listen for terminal title changes (OSC sequences) and update pane tab labels */
 const TerminalTitleListener = () => {
@@ -97,6 +99,21 @@ const FileOpenListener = () => {
     window.addEventListener('phantom:open-file-in-editor', handler);
     return () => window.removeEventListener('phantom:open-file-in-editor', handler);
   }, [store]);
+  return null;
+};
+
+/** Listen for enrichment SSE events (via DOM) and update enrichment atom */
+const EnrichmentListener = () => {
+  const updateEnrichment = useSetAtom(updateEnrichmentAtom);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { type: string; data: Record<string, unknown> } | undefined;
+      if (!detail?.type) return;
+      updateEnrichment({ type: detail.type, data: detail.data });
+    };
+    window.addEventListener('phantom:enrichment', handler);
+    return () => window.removeEventListener('phantom:enrichment', handler);
+  }, [updateEnrichment]);
   return null;
 };
 
@@ -412,6 +429,7 @@ export const App = () => {
     <GlobalShortcuts />
     <FloatingClaudeComposer />
     <TerminalFocusTracker />
+    <EnrichmentListener />
     {/* Settings modal */}
     <Modal
       opened={settingsVisible}
@@ -584,6 +602,7 @@ export const App = () => {
         </Group>
       </AppShell.Footer>
     </AppShell>
+    <EnrichmentWidget />
     </WorkspaceProvider>
   );
 };

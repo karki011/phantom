@@ -32,9 +32,36 @@ const projectsDataAtom = atom<ProjectData[]>([]);
 const projectsLoadingAtom = atom(false);
 const projectsErrorAtom = atom<unknown>(null);
 
-export const projectsAtom = atom((get) =>
-  [...get(projectsDataAtom)].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
-);
+export interface PendingProject {
+  name: string;
+  repoPath: string;
+}
+
+export const pendingProjectsAtom = atom<PendingProject[]>([]);
+
+export const projectsAtom = atom((get) => {
+  const real = get(projectsDataAtom);
+  const pending = get(pendingProjectsAtom);
+  const realPaths = new Set(real.map((p) => p.repoPath));
+
+  const pendingAsProjects: ProjectData[] = pending
+    .filter((p) => !realPaths.has(p.repoPath))
+    .map((p) => ({
+      id: `pending-${p.repoPath}`,
+      repoPath: p.repoPath,
+      name: p.name,
+      defaultBranch: 'main',
+      worktreeBaseDir: '',
+      color: null,
+      starred: 0,
+      createdAt: Date.now(),
+    }));
+
+  return [...real, ...pendingAsProjects].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+  );
+});
+
 export const projectsLoadingStateAtom = atom((get) => get(projectsLoadingAtom));
 
 export const refreshProjectsAtom = atom(null, async (_get, set) => {

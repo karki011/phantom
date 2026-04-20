@@ -1,160 +1,97 @@
-import { createSignal, onMount, onCleanup, Show } from 'solid-js';
-import { Dialog } from '@kobalte/core/dialog';
-import { shadowMonarchTheme, vars } from './styles/theme.css';
+// PhantomOS v2 — App shell
+// Author: Subash Karki
+
+import { createSignal, onMount, Show, Switch, Match } from 'solid-js';
+import { shadowMonarchDarkTheme } from './styles/theme.css';
 import * as styles from './styles/app.css';
-
-declare global {
-  interface Window {
-    go: {
-      'internal/app': {
-        App: {
-          HealthCheck(): Promise<{
-            status: string;
-            version: string;
-            uptime_ms: number;
-            ws_port: number;
-            go_version: string;
-            goroutines: number;
-            mem_alloc_mb: number;
-          }>;
-        };
-      };
-    };
-    runtime: {
-      EventsOn(event: string, callback: (...args: any[]) => void): () => void;
-    };
-  }
-}
-
-interface HealthData {
-  status: string;
-  version: string;
-  uptime_ms: number;
-  ws_port: number;
-  go_version: string;
-  goroutines: number;
-  mem_alloc_mb: number;
-}
+import { bootstrapSessions } from './core/signals/sessions';
+import { loadPref } from './core/signals/preferences';
+import { initTheme, initFontStyle } from './core/signals/theme';
+import { activeScreen } from './core/signals/navigation';
+import { healthCheck } from './core/bindings';
+import { OnboardingFlow } from './screens/onboarding';
+import { Settings } from './screens/settings';
+import { StatusStrip, Dock, CommandPalette } from './chrome';
+import { playSound } from './core/audio/engine';
 
 export function App() {
-  const [health, setHealth] = createSignal<HealthData | null>(null);
-  const [pulse, setPulse] = createSignal<HealthData | null>(null);
-  const [aboutOpen, setAboutOpen] = createSignal(false);
+  const [ready, setReady] = createSignal(false);
+  const [showOnboarding, setShowOnboarding] = createSignal(false);
+  const [bootingUp, setBootingUp] = createSignal(false);
 
   onMount(async () => {
-    try {
-      const result = await window.go['internal/app'].App.HealthCheck();
-      setHealth(result);
-    } catch {
-      // Wails bindings not available in dev server mode
-    }
+    document.body.classList.add(shadowMonarchDarkTheme);
 
-    // Subscribe to health pulse events
-    if (window.runtime?.EventsOn) {
-      const unsub = window.runtime.EventsOn('health:pulse', (data: HealthData) => {
-        setPulse(data);
-      });
-      onCleanup(() => unsub?.());
-    }
+    const savedTheme = await loadPref('theme');
+    if (savedTheme) initTheme(savedTheme);
+
+    const savedFont = await loadPref('font_style');
+    if (savedFont) initFontStyle(savedFont);
+
+    const onboardingDone = await loadPref('onboarding_completed');
+    if (!onboardingDone) setShowOnboarding(true);
+
+    bootstrapSessions();
+    setReady(true);
   });
 
-  const currentHealth = () => pulse() || health();
-  const isConnected = () => currentHealth()?.status === 'ok';
-
-  onMount(() => {
-    document.body.classList.add(shadowMonarchTheme);
-  });
+  function handleOnboardingComplete() {
+    setShowOnboarding(false);
+    setBootingUp(true);
+    playSound('reveal');
+    setTimeout(() => setBootingUp(false), 1500);
+  }
 
   return (
-    <div class={styles.appContainer}>
-      <h1 class={styles.title} onClick={() => setAboutOpen(true)}>
-        Phantom OS
-      </h1>
-      <p class={styles.subtitle}>System Online</p>
+    <div class={styles.appShell}>
+      <Show when={showOnboarding()}>
+        <OnboardingFlow onComplete={handleOnboardingComplete} />
+      </Show>
 
-      <Dialog open={aboutOpen()} onOpenChange={setAboutOpen}>
-        <Dialog.Portal>
-          <Dialog.Overlay
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: vars.color.bgOverlay,
-              'z-index': 50,
-            }}
-          />
-          <Dialog.Content
-            style={{
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              background: vars.color.bgTertiary,
-              border: `1px solid ${vars.color.accent}`,
-              'border-radius': vars.radius.lg,
-              padding: vars.space.xl,
-              'min-width': '360px',
-              'z-index': 51,
-              'box-shadow': vars.shadow.glow,
-            }}
-          >
-            <Dialog.Title
-              style={{
-                'font-family': vars.font.display,
-                'font-size': vars.fontSize.lg,
-                color: vars.color.accent,
-                'letter-spacing': '0.1em',
-                'margin-bottom': vars.space.lg,
-              }}
-            >
-              PHANTOM OS
-            </Dialog.Title>
-            <Dialog.Description>
-              <Show when={currentHealth()} fallback={<p style={{ color: vars.color.textSecondary }}>Loading...</p>}>
-                {(h) => (
-                  <div
-                    style={{
-                      'font-family': vars.font.mono,
-                      'font-size': vars.fontSize.sm,
-                      color: vars.color.textPrimary,
-                      display: 'flex',
-                      'flex-direction': 'column',
-                      gap: vars.space.sm,
-                    }}
-                  >
-                    <p>Version: <span style={{ color: vars.color.textPrimary }}>{h().version}</span></p>
-                    <p>Status: <span style={{ color: vars.color.success }}>{h().status}</span></p>
-                    <p>Go: <span style={{ color: vars.color.textPrimary }}>{h().go_version}</span></p>
-                    <p>Goroutines: <span style={{ color: vars.color.info }}>{h().goroutines}</span></p>
-                    <p>Memory: <span style={{ color: vars.color.info }}>{h().mem_alloc_mb.toFixed(1)} MB</span></p>
-                    <p>Uptime: <span style={{ color: vars.color.textPrimary }}>{Math.floor(h().uptime_ms / 1000)}s</span></p>
-                    <p style={{ 'margin-top': vars.space.md, 'font-size': vars.fontSize.xs, color: vars.color.textDisabled }}>
-                      Author: Subash Karki
-                    </p>
-                  </div>
-                )}
-              </Show>
-            </Dialog.Description>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog>
-
-      <div class={styles.statusBar}>
-        <div class={styles.healthInfo}>
-          <span
-            class={`${styles.statusDot} ${isConnected() ? styles.statusDotOnline : styles.statusDotOffline}`}
-          />
-          <span>{isConnected() ? 'Connected' : 'Connecting...'}</span>
+      <Show when={bootingUp()}>
+        <div class={styles.bootOverlay}>
+          <div class={styles.bootSweepLine} />
         </div>
-        <Show when={currentHealth()}>
-          {(h) => (
-            <>
-              <span>v{h().version}</span>
-              <span>Goroutines: {h().goroutines}</span>
-              <span>Mem: {h().mem_alloc_mb.toFixed(1)}MB</span>
-            </>
-          )}
-        </Show>
-      </div>
+      </Show>
+
+      <Show when={ready() && !showOnboarding()}>
+        <StatusStrip />
+
+        <main class={styles.mainArea}>
+          <Switch fallback={<div class={styles.screenPlaceholder}>Select a screen</div>}>
+            <Match when={activeScreen() === 'command'}>
+              <div class={styles.screenPlaceholder}>Command Center — coming soon</div>
+            </Match>
+            <Match when={activeScreen() === 'settings'}>
+              <Settings />
+            </Match>
+            <Match when={activeScreen() === 'smart-view'}>
+              <div class={styles.screenPlaceholder}>Smart View — coming soon</div>
+            </Match>
+            <Match when={activeScreen() === 'git-ops'}>
+              <div class={styles.screenPlaceholder}>Git Ops — coming soon</div>
+            </Match>
+            <Match when={activeScreen() === 'eagle-eye'}>
+              <div class={styles.screenPlaceholder}>Eagle Eye — coming soon</div>
+            </Match>
+            <Match when={activeScreen() === 'wards'}>
+              <div class={styles.screenPlaceholder}>Wards — coming soon</div>
+            </Match>
+            <Match when={activeScreen() === 'playground'}>
+              <div class={styles.screenPlaceholder}>AI Playground — coming soon</div>
+            </Match>
+            <Match when={activeScreen() === 'codeburn'}>
+              <div class={styles.screenPlaceholder}>CodeBurn — coming soon</div>
+            </Match>
+            <Match when={activeScreen() === 'hunter'}>
+              <div class={styles.screenPlaceholder}>Hunter Stats — coming soon</div>
+            </Match>
+          </Switch>
+        </main>
+
+        <Dock />
+        <CommandPalette />
+      </Show>
     </div>
   );
 }

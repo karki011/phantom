@@ -1,0 +1,75 @@
+// bindings_session_ctrl.go exposes session lifecycle operations to the Wails frontend.
+// Author: Subash Karki
+package app
+
+import (
+	"context"
+	"log"
+
+	"github.com/subashkarki/phantom-os-v2/internal/session"
+)
+
+// PauseSession pauses the named session, buffering its output.
+func (a *App) PauseSession(sessionID string) error {
+	if err := a.SessionCtrl.Pause(context.Background(), sessionID); err != nil {
+		log.Printf("app: PauseSession %s: %v", sessionID, err)
+		return err
+	}
+	return nil
+}
+
+// ResumeSession resumes a paused session. Buffered output is discarded in this
+// binding; callers that need flushed output should subscribe to the terminal
+// output channel directly.
+func (a *App) ResumeSession(sessionID string) error {
+	// noop flush — frontend drives output via WebSocket subscription.
+	if err := a.SessionCtrl.Resume(context.Background(), sessionID, func([]byte) {}); err != nil {
+		log.Printf("app: ResumeSession %s: %v", sessionID, err)
+		return err
+	}
+	return nil
+}
+
+// SetSessionPolicy changes the approval policy for a session.
+func (a *App) SetSessionPolicy(sessionID, policy string) error {
+	if err := a.SessionCtrl.SetPolicy(context.Background(), sessionID, session.Policy(policy)); err != nil {
+		log.Printf("app: SetSessionPolicy %s -> %s: %v", sessionID, policy, err)
+		return err
+	}
+	return nil
+}
+
+// GetSessionState returns the current state snapshot for a session.
+func (a *App) GetSessionState(sessionID string) *session.SessionState {
+	return a.SessionCtrl.GetState(sessionID)
+}
+
+// BranchSession creates a new session forked from sessionID at the event
+// identified by atEventSeq.
+func (a *App) BranchSession(sessionID string, atEventSeq int) (*session.BranchInfo, error) {
+	info, err := a.SessionCtrl.Branch(context.Background(), sessionID, atEventSeq)
+	if err != nil {
+		log.Printf("app: BranchSession %s at %d: %v", sessionID, atEventSeq, err)
+		return nil, err
+	}
+	return info, nil
+}
+
+// RewindSession soft-marks a session as rewound to toEventSeq.
+func (a *App) RewindSession(sessionID string, toEventSeq int) error {
+	if err := a.SessionCtrl.Rewind(context.Background(), sessionID, toEventSeq); err != nil {
+		log.Printf("app: RewindSession %s to %d: %v", sessionID, toEventSeq, err)
+		return err
+	}
+	return nil
+}
+
+// GetSessionBranches returns all branches of a session. Returns nil on error.
+func (a *App) GetSessionBranches(sessionID string) []session.BranchInfo {
+	branches, err := a.SessionCtrl.GetBranches(context.Background(), sessionID)
+	if err != nil {
+		log.Printf("app: GetSessionBranches %s: %v", sessionID, err)
+		return nil
+	}
+	return branches
+}

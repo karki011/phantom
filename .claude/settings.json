@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -rf *)",
+      "Bash(rm -f *)",
+      "Bash(rm *)",
+      "Bash(pnpm lint *)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm typecheck:tsc *)",
+      "Bash(pnpm typecheck:tsc)",
+      "Bash(pnpm check *)",
+      "Bash(pnpm check)",
+      "Bash(npx tsc --noEmit *)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(bunx tsc --noEmit *)",
+      "Bash(bunx tsc --noEmit)",
+      "Bash(npx biome check *)",
+      "Bash(lsof -i *)",
+      "Bash(lsof -nP *)",
+      "Bash(sqlite3 ~/.phantom-os/phantom.db *)",
+      "Bash(claude plugin *)"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+rules:
+  - id: rm-outside-worktree
+    name: rm-outside-worktree
+    level: block
+    description: Prevents recursive deletion that escapes the worktree root via relative paths.
+    tool: Bash
+    pattern: "rm\\s+-rf?\\s+\\.\\."
+    message: "Delete escapes worktree root"
+    allow_bypass: true
+    enabled: true
+    audit: true
+    tags:
+      - filesystem
+      - destructive

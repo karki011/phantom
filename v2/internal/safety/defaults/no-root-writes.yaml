@@ -1,0 +1,13 @@
+rules:
+  - id: no-root-writes
+    name: no-root-writes
+    level: block
+    description: Blocks file writes to system root directories (/etc, /usr, /bin, /sbin).
+    path_pattern: "^/(etc|usr|bin|sbin)/"
+    message: "Write to system root directory is not allowed"
+    allow_bypass: false
+    enabled: true
+    audit: true
+    tags:
+      - filesystem
+      - system

@@ -7,6 +7,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, basename } from 'node:path';
 import { logger } from './logger.js';
+import { runGitTask } from './git-pool.js';
 
 interface WorktreeInfo {
   path: string;
@@ -149,6 +150,31 @@ export const getDefaultBranch = async (repoPath: string): Promise<string> => {
       }
     }
   }
+};
+
+/** Detect the default branch using the git-pool worker thread (non-blocking) */
+export const getDefaultBranchAsync = async (repoPath: string): Promise<string> => {
+  try {
+    // Try symbolic-ref first (works if there's a remote)
+    const refResult = await runGitTask('raw', repoPath, ['symbolic-ref', 'refs/remotes/origin/HEAD']);
+    if (refResult.exitCode === 0 && refResult.stdout.trim()) {
+      return refResult.stdout.trim().replace('refs/remotes/origin/', '');
+    }
+  } catch { /* fall through */ }
+
+  try {
+    // Fallback: check for 'main'
+    const mainResult = await runGitTask('raw', repoPath, ['rev-parse', '--verify', 'main']);
+    if (mainResult.exitCode === 0) return 'main';
+  } catch { /* fall through */ }
+
+  try {
+    // Fallback: check for 'master'
+    const masterResult = await runGitTask('raw', repoPath, ['rev-parse', '--verify', 'master']);
+    if (masterResult.exitCode === 0) return 'master';
+  } catch { /* fall through */ }
+
+  return 'main';
 };
 
 /** Check if a path is a valid git repository */

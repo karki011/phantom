@@ -1,6 +1,7 @@
 /**
  * ManageProjectsModal — bulk remove projects from the sidebar.
  * Checkbox list lets the user select multiple projects to remove at once.
+ * Shows onboarding-style progress during removal.
  *
  * @author Subash Karki
  */
@@ -22,24 +23,15 @@ import {
   refreshProjectsAtom,
   refreshWorktreesAtom,
 } from '../../atoms/worktrees';
+import { shortenPath } from '../../lib/paths';
 import { showSystemNotification } from '../notifications/SystemToast';
 import { PhantomModal } from '../PhantomModal';
+import { ProgressLog, type ProgressEntry } from './ProgressLog';
 
 interface ManageProjectsModalProps {
   opened: boolean;
   onClose: () => void;
 }
-
-const shortenPath = (fullPath: string): string => {
-  const home = '/Users/';
-  const idx = fullPath.indexOf(home);
-  if (idx >= 0) {
-    const rest = fullPath.slice(idx + home.length);
-    const parts = rest.split('/');
-    return parts.length > 1 ? `~/${parts.slice(1).join('/')}` : `~/${rest}`;
-  }
-  return fullPath;
-};
 
 export function ManageProjectsModal({ opened, onClose }: ManageProjectsModalProps) {
   const projects = useAtomValue(projectsAtom);
@@ -48,15 +40,22 @@ export function ManageProjectsModal({ opened, onClose }: ManageProjectsModalProp
   const refreshWorktrees = useSetAtom(refreshWorktreesAtom);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [removing, setRemoving] = useState(false);
   const [confirmStep, setConfirmStep] = useState(false);
+
+  const [removing, setRemoving] = useState(false);
+  const [removeEntries, setRemoveEntries] = useState<ProgressEntry[]>([]);
+  const [removeIndex, setRemoveIndex] = useState(0);
+  const [removeDone, setRemoveDone] = useState(false);
 
   // Reset on open
   useEffect(() => {
     if (opened) {
       setSelected(new Set());
-      setRemoving(false);
       setConfirmStep(false);
+      setRemoving(false);
+      setRemoveEntries([]);
+      setRemoveIndex(0);
+      setRemoveDone(false);
     }
   }, [opened]);
 
@@ -86,18 +85,34 @@ export function ManageProjectsModal({ opened, onClose }: ManageProjectsModalProp
     const ids = Array.from(selected);
     if (ids.length === 0) return;
 
+    const entries: ProgressEntry[] = ids.map((id) => ({
+      name: projects.find((p) => p.id === id)?.name ?? id,
+      status: 'pending' as const,
+    }));
+
+    setRemoveEntries(entries);
+    setRemoveIndex(0);
     setRemoving(true);
+    setRemoveDone(false);
+
     let removed = 0;
     let errors = 0;
 
-    for (const id of ids) {
+    for (let i = 0; i < ids.length; i++) {
+      setRemoveIndex(i);
       try {
-        await deleteProject({ id });
+        await deleteProject({ id: ids[i] });
+        entries[i].status = 'success';
         removed++;
       } catch {
+        entries[i].status = 'error';
         errors++;
       }
+      setRemoveEntries([...entries]);
     }
+
+    setRemoveIndex(ids.length);
+    setRemoveDone(true);
 
     refreshProjects();
     refreshWorktrees();
@@ -115,26 +130,39 @@ export function ManageProjectsModal({ opened, onClose }: ManageProjectsModalProp
         'success',
       );
     }
-
-    setRemoving(false);
-    onClose();
-  }, [selected, confirmStep, deleteProject, refreshProjects, refreshWorktrees, onClose]);
+  }, [selected, confirmStep, projects, deleteProject, refreshProjects, refreshWorktrees]);
 
   return (
     <PhantomModal
       opened={opened}
       onClose={onClose}
-      title="Manage Projects"
-      closeOnClickOutside={!removing}
-      closeOnEscape={!removing}
+      title={removing ? 'Removing Projects' : 'Manage Projects'}
+      closeOnClickOutside={!removing || removeDone}
+      closeOnEscape={!removing || removeDone}
       size="lg"
     >
       <Stack gap="md">
-        {projects.length === 0 ? (
+        {/* ── Removal Progress Phase ── */}
+        {removing && (
+          <ProgressLog
+            title="REMOVING PROJECTS"
+            doneTitle="REMOVAL COMPLETE"
+            entries={removeEntries}
+            currentIndex={removeIndex}
+            done={removeDone}
+            accentColor="#ef4444"
+            onDone={onClose}
+          />
+        )}
+
+        {/* ── Selection Phase ── */}
+        {!removing && projects.length === 0 && (
           <Text fz="sm" c="var(--phantom-text-muted)" ta="center" py="lg">
             No projects to manage.
           </Text>
-        ) : (
+        )}
+
+        {!removing && projects.length > 0 && (
           <>
             <Group justify="space-between" align="center">
               <Text fz="xs" c="var(--phantom-text-muted)">
@@ -193,13 +221,12 @@ export function ManageProjectsModal({ opened, onClose }: ManageProjectsModalProp
             )}
 
             <Group justify="flex-end" gap="md" mt="xs">
-              <Button variant="subtle" size="md" onClick={onClose} disabled={removing}>
+              <Button variant="subtle" size="md" onClick={onClose}>
                 Cancel
               </Button>
               <Button
                 size="md"
                 color="red"
-                loading={removing}
                 disabled={selected.size === 0}
                 onClick={handleRemove}
                 leftSection={<Trash2 size={16} />}

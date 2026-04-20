@@ -13,9 +13,10 @@ import {
   Tooltip,
   UnstyledButton,
 } from '@mantine/core';
-import { ChevronRight, GitBranch, Plus, RefreshCw, Sparkles, Star } from 'lucide-react';
+import { Check, ChevronRight, GitBranch, Loader2, Plus, RefreshCw, Sparkles, Star } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { enrichmentItemStatusAtom } from '../../atoms/enrichment';
 import type { DiscoveredWorktree, ProjectData, WorktreeData } from '../../lib/api';
 import { detectProjectProfile, getDiscoveredWorktrees, importWorktree, renameProject, toggleProjectStar } from '../../lib/api';
 import { refreshProjectsAtom, refreshWorktreesAtom } from '../../atoms/worktrees';
@@ -53,9 +54,22 @@ export const ProjectSection = React.memo(function ProjectSection({
   const [isHovered, setIsHovered] = useState(false);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [discovered, setDiscovered] = useState<DiscoveredWorktree[]>([]);
+  const [showComplete, setShowComplete] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const refreshProjects = useSetAtom(refreshProjectsAtom);
   const refreshWorktrees = useSetAtom(refreshWorktreesAtom);
+  const getEnrichmentStatus = useAtomValue(enrichmentItemStatusAtom);
+  const enrichmentStatus = getEnrichmentStatus(project.id);
+  const isPending = project.id.startsWith('pending-');
+
+  // Show check icon briefly when enrichment completes, then fade
+  useEffect(() => {
+    if (enrichmentStatus === 'complete') {
+      setShowComplete(true);
+      const timer = setTimeout(() => setShowComplete(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [enrichmentStatus]);
 
   const refreshDiscovered = useCallback(() => {
     if (project.id) {
@@ -169,9 +183,9 @@ export const ProjectSection = React.memo(function ProjectSection({
       >
         <div
           role="button"
-          tabIndex={0}
-          onClick={onToggle}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onToggle(); }}
+          tabIndex={isPending ? -1 : 0}
+          onClick={isPending ? undefined : onToggle}
+          onKeyDown={isPending ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') onToggle(); }}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
           style={{
@@ -179,7 +193,7 @@ export const ProjectSection = React.memo(function ProjectSection({
             width: '100%',
             borderRadius: 4,
             padding: '6px 12px',
-            cursor: 'pointer',
+            cursor: isPending ? 'default' : 'pointer',
             transition: 'background-color 120ms ease',
             backgroundColor: isHovered
               ? 'var(--phantom-surface-card)'
@@ -196,16 +210,27 @@ export const ProjectSection = React.memo(function ProjectSection({
                 flexShrink: 0,
               }}
             />
-            <div
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                backgroundColor:
-                  project.color || 'var(--phantom-accent-purple)',
-                flexShrink: 0,
-              }}
-            />
+            {isPending ? (
+              <Loader2
+                size={10}
+                style={{
+                  color: 'var(--phantom-text-muted)',
+                  flexShrink: 0,
+                  animation: 'spin 1s linear infinite',
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor:
+                    project.color || 'var(--phantom-accent-purple)',
+                  flexShrink: 0,
+                }}
+              />
+            )}
             {isRenaming ? (
               <TextInput
                 ref={renameInputRef}
@@ -232,12 +257,33 @@ export const ProjectSection = React.memo(function ProjectSection({
               <Text
                 fz="0.8rem"
                 fw={600}
-                c="var(--phantom-text-primary)"
+                c={isPending ? 'var(--phantom-text-muted)' : 'var(--phantom-text-primary)'}
                 truncate
-                style={{ flex: 1 }}
+                style={{ flex: 1, opacity: isPending ? 0.6 : 1 }}
               >
                 {project.name}
               </Text>
+            )}
+            {enrichmentStatus === 'building' && (
+              <Loader2
+                size={10}
+                style={{
+                  color: '#00d4ff',
+                  flexShrink: 0,
+                  animation: 'spin 1s linear infinite',
+                }}
+              />
+            )}
+            {showComplete && (
+              <Check
+                size={10}
+                style={{
+                  color: '#22c55e',
+                  flexShrink: 0,
+                  opacity: 1,
+                  transition: 'opacity 500ms ease',
+                }}
+              />
             )}
             <Tooltip
               label={project.starred ? 'Unstar' : starredCount >= MAX_STARRED ? `Max ${MAX_STARRED} starred` : 'Star project'}
@@ -489,6 +535,9 @@ export const ProjectSection = React.memo(function ProjectSection({
         projectName={project.name}
         worktreeCount={worktrees.length}
       />
+      {enrichmentStatus === 'building' && (
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      )}
     </div>
   );
 });

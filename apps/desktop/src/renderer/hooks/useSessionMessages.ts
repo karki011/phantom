@@ -53,7 +53,8 @@ export const useSessionMessages = (
       }
 
       setError(false);
-    } catch {
+    } catch (err) {
+      if (signal?.aborted) return;
       setError(true);
     } finally {
       setLoading(false);

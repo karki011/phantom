@@ -10,20 +10,47 @@ import { join } from 'node:path';
 import { desc, eq, and } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db, projects, worktrees, worktreeSections, paneStates, chatConversations, chatMessages, terminalSessions } from '@phantom-os/db';
-import { isGitRepo, getDefaultBranch, getRepoName, getWorktreeDir, listWorktrees, cloneRepo } from '../worktree-manager.js';
+import { isGitRepo, getDefaultBranch, getDefaultBranchAsync, getRepoName, getWorktreeDir, listWorktrees, cloneRepo } from '../worktree-manager.js';
 import { removeWorktree } from '../worktree-manager.js';
 import { detectProject } from '../project-detector.js';
+import { detectProjectAsync } from '../detect-pool.js';
 import { logger } from '../logger.js';
 import { graphEngine } from '../services/graph-engine.js';
+import { enrichmentQueue } from '../enrichment-queue.js';
 
 export const projectRoutes = new Hono();
 
-/** Non-blocking git fetch — runs in background, doesn't block the response */
-const backgroundFetch = (repoPath: string): void => {
-  exec('git fetch origin', { cwd: repoPath, timeout: 15_000 }, (err) => {
-    if (err) logger.debug('Projects', `fetch failed for ${repoPath}: ${err.message}`);
-    else logger.debug('Projects', `fetched ${repoPath}`);
+// ---------------------------------------------------------------------------
+// Background work queue — limits concurrent git fetches and graph builds
+// to prevent server overload when bulk-importing many projects.
+// ---------------------------------------------------------------------------
+
+const MAX_CONCURRENT_BG = 3;
+let activeBg = 0;
+const bgQueue: (() => void)[] = [];
+
+const runNextBg = (): void => {
+  while (activeBg < MAX_CONCURRENT_BG && bgQueue.length > 0) {
+    activeBg++;
+    bgQueue.shift()!();
+  }
+};
+
+const enqueueBg = (fn: () => Promise<void>): void => {
+  bgQueue.push(() => {
+    fn().finally(() => { activeBg--; runNextBg(); });
   });
+  runNextBg();
+};
+
+const backgroundFetch = (repoPath: string): void => {
+  enqueueBg(() => new Promise<void>((resolve) => {
+    exec('git fetch origin', { cwd: repoPath, timeout: 15_000 }, (err) => {
+      if (err) logger.debug('Projects', `fetch failed for ${repoPath}: ${err.message}`);
+      else logger.debug('Projects', `fetched ${repoPath}`);
+      resolve();
+    });
+  }));
 };
 
 /** GET /projects — List all projects */
@@ -80,16 +107,41 @@ projectRoutes.post('/projects', async (c) => {
 
   db.insert(projects).values(project).run();
 
-  // Build graph in background — don't await
-  void graphEngine.buildProject(project.id, project.repoPath).catch(() => {});
+  enrichmentQueue.enqueue(project.id, name, repoPath);
 
   return c.json(project, 201);
 });
 
-/** POST /projects/open — Open (or create) a project + default worktree in one call */
-projectRoutes.post('/projects/open', async (c) => {
+/** POST /projects/git-init — Initialize a git repository at the given path */
+projectRoutes.post('/projects/git-init', async (c) => {
   const body = await c.req.json<{ repoPath: string }>();
   const { repoPath } = body;
+
+  if (!repoPath) {
+    return c.json({ error: 'repoPath is required' }, 400);
+  }
+
+  if (!existsSync(repoPath)) {
+    return c.json({ error: 'Path does not exist' }, 400);
+  }
+
+  if (isGitRepo(repoPath)) {
+    return c.json({ error: 'Path is already a git repository' }, 400);
+  }
+
+  try {
+    execSync('git init', { cwd: repoPath, stdio: 'pipe' });
+    return c.json({ ok: true, path: repoPath });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'git init failed';
+    return c.json({ error: message }, 500);
+  }
+});
+
+/** POST /projects/open — Open (or create) a project + default worktree in one call */
+projectRoutes.post('/projects/open', async (c) => {
+  const body = await c.req.json<{ repoPath: string; skipBackground?: boolean }>();
+  const { repoPath, skipBackground } = body;
 
   if (!repoPath) {
     return c.json({ error: 'repoPath is required' }, 400);
@@ -111,8 +163,7 @@ projectRoutes.post('/projects/open', async (c) => {
     .get();
 
   if (existing) {
-    // Fetch latest from remote in background so branch list stays current
-    backgroundFetch(repoPath);
+    if (!skipBackground) backgroundFetch(repoPath);
 
     // Ensure a branch-type worktree entry exists for the existing project
     const existingBranch = db
@@ -151,12 +202,10 @@ projectRoutes.post('/projects/open', async (c) => {
     return c.json({ project: existing, worktree: firstWorktree ?? null });
   }
 
-  // Fetch remote refs before reading branches
-  backgroundFetch(repoPath);
+  if (!skipBackground) backgroundFetch(repoPath);
 
-  // Auto-detect project name from directory basename
   const name = getRepoName(repoPath);
-  const defaultBranch = await getDefaultBranch(repoPath);
+  const defaultBranch = skipBackground ? 'main' : await getDefaultBranch(repoPath);
 
   const project = {
     id: randomUUID(),
@@ -170,9 +219,10 @@ projectRoutes.post('/projects/open', async (c) => {
 
   db.insert(projects).values(project).run();
 
-  // Auto-detect project profile
-  const profile = detectProject(repoPath);
-  db.update(projects).set({ profile: JSON.stringify(profile) }).where(eq(projects.id, project.id)).run();
+  if (!skipBackground) {
+    const profile = detectProject(repoPath);
+    db.update(projects).set({ profile: JSON.stringify(profile) }).where(eq(projects.id, project.id)).run();
+  }
 
   // Create a branch-type worktree entry for the repo's current branch
   const branchEntry = {
@@ -191,10 +241,111 @@ projectRoutes.post('/projects/open', async (c) => {
   };
   db.insert(worktrees).values(branchEntry).run();
 
-  // Build graph in background — don't await
-  void graphEngine.buildProject(project.id, project.repoPath).catch(() => {});
+  if (!skipBackground) {
+    enrichmentQueue.enqueue(project.id, name, repoPath);
+  }
 
   return c.json({ project, worktree: branchEntry }, 201);
+});
+
+/** POST /projects/bulk-add — Add multiple repositories concurrently */
+projectRoutes.post('/projects/bulk-add', async (c) => {
+  const body = await c.req.json<{ repoPaths: string[] }>();
+  const { repoPaths } = body;
+
+  if (!repoPaths?.length) {
+    return c.json({ error: 'repoPaths is required' }, 400);
+  }
+
+  const allProjects: any[] = [];
+  const allWorktrees: any[] = [];
+
+  // Process in chunks of 5 concurrently
+  for (let i = 0; i < repoPaths.length; i += 5) {
+    const chunk = repoPaths.slice(i, i + 5);
+
+    const results = await Promise.allSettled(
+      chunk.map(async (repoPath) => {
+        // Validate path exists and is a git repo
+        if (!existsSync(repoPath) || !isGitRepo(repoPath)) {
+          logger.debug('Projects', `bulk-add: skipping invalid path ${repoPath}`);
+          return null;
+        }
+
+        // Skip if project already exists in DB
+        const existing = db.select().from(projects).where(eq(projects.repoPath, repoPath)).get();
+        if (existing) {
+          logger.debug('Projects', `bulk-add: skipping existing project ${repoPath}`);
+          return null;
+        }
+
+        const name = getRepoName(repoPath);
+        const defaultBranch = await getDefaultBranchAsync(repoPath);
+
+        // Detect project profile via worker thread
+        let profile: any = null;
+        try {
+          profile = await detectProjectAsync(repoPath);
+        } catch (err) {
+          logger.debug('Projects', `bulk-add: profile detection failed for ${repoPath}: ${err instanceof Error ? err.message : err}`);
+        }
+
+        const project = {
+          id: randomUUID(),
+          name,
+          repoPath,
+          defaultBranch,
+          worktreeBaseDir: getWorktreeDir(name, ''),
+          color: null,
+          createdAt: Date.now(),
+        };
+
+        db.insert(projects).values(project).run();
+
+        if (profile) {
+          db.update(projects).set({ profile: JSON.stringify(profile) }).where(eq(projects.id, project.id)).run();
+        }
+
+        const branchEntry = {
+          id: randomUUID(),
+          projectId: project.id,
+          type: 'branch' as const,
+          name: 'Local',
+          branch: defaultBranch,
+          worktreePath: repoPath,
+          portBase: null,
+          sectionId: null,
+          baseBranch: null,
+          tabOrder: 0,
+          isActive: 1,
+          createdAt: Date.now(),
+        };
+
+        db.insert(worktrees).values(branchEntry).run();
+
+        // Enqueue graph build via enrichment queue
+        enrichmentQueue.enqueue(project.id, project.name, repoPath);
+
+        return { project, worktree: branchEntry };
+      }),
+    );
+
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value) {
+        allProjects.push(result.value.project);
+        allWorktrees.push(result.value.worktree);
+      }
+    }
+  }
+
+  return c.json({ projects: allProjects, worktrees: allWorktrees });
+});
+
+/** POST /projects/:id/prioritize — Move a project to the front of the enrichment queue */
+projectRoutes.post('/projects/:id/prioritize', (c) => {
+  const id = c.req.param('id');
+  enrichmentQueue.prioritize(id);
+  return c.json({ ok: true });
 });
 
 /** POST /projects/scan — Scan a directory for git repositories */
@@ -312,7 +463,7 @@ projectRoutes.post('/projects/batch-open', async (c) => {
     db.insert(worktrees).values(branchEntry).run();
 
     backgroundFetch(repoPath);
-    void graphEngine.buildProject(project.id, repoPath).catch(() => {});
+    enrichmentQueue.enqueue(project.id, name, repoPath);
 
     results.push({ repoPath, project, worktree: branchEntry });
   }

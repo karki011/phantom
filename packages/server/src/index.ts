@@ -49,6 +49,7 @@ import { journalRoutes } from './routes/journal.js';
 import { cleanupRoutes } from './routes/cleanup.js';
 import cockpitRoutes from './routes/cockpit.js';
 import { graphEngine } from './services/graph-engine.js';
+import { enrichmentQueue } from './enrichment-queue.js';
 import { orchestratorEngine } from './services/orchestrator-engine.js';
 import { startMcpServer, stopMcpServer } from './mcp/index.js';
 import { registerPhantomMcpGlobal } from './services/mcp-config.js';
@@ -103,6 +104,7 @@ if (!dbError) {
 
   // Initialize graph engine after migrations so tables exist
   graphEngine.init(broadcast);
+  enrichmentQueue.init(broadcast, graphEngine);
   orchestratorEngine.init(broadcast);
 } else {
   logger.warn('DB', `Database unavailable — running in degraded mode: ${dbError}`);

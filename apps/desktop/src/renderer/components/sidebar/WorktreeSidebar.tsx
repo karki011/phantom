@@ -11,6 +11,7 @@ import {
   ScrollArea,
   Skeleton,
   Text,
+  TextInput,
   Tooltip,
 } from '@mantine/core';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
@@ -21,10 +22,12 @@ import {
   FolderPlus,
   FolderSearch,
   Plus,
+  Search,
   Settings2,
   Star,
+  X,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   activeWorktreeIdAtom,
@@ -46,21 +49,8 @@ import { EmptyState } from './EmptyState';
 import { CloneRepoModal } from './CloneRepoModal';
 import { ScanProjectsModal } from './ScanProjectsModal';
 import { ManageProjectsModal } from './ManageProjectsModal';
-
-/** Call Electron's native folder picker via IPC */
-const pickFolder = async (): Promise<string | null> => {
-  try {
-    const api = window.phantomOS;
-    if (api?.invoke) {
-      const result = await api.invoke('phantom:pick-folder');
-      return result as string | null;
-    }
-    return window.prompt('Enter repository path:');
-  } catch (err) {
-    console.error('[WorktreeSidebar] Folder picker failed:', err);
-    return window.prompt('Enter repository path:');
-  }
-};
+import { GitInitModal } from './GitInitModal';
+import { pickFolder } from '../../lib/electron';
 
 export function WorktreeSidebar() {
   const projects = useAtomValue(projectsAtom);
@@ -85,9 +75,63 @@ export function WorktreeSidebar() {
   const [cloneOpen, setCloneOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [gitInitPath, setGitInitPath] = useState<string | null>(null);
 
   // Track which project should show inline worktree input from header "+"
   const [inlineInputProjectId, setInlineInputProjectId] = useState<string | null>(null);
+
+  // Search / filter
+  const [searchTerm, setSearchTerm] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  /** Projects + worktrees filtered by search term */
+  const { filteredProjects, matchingProjectIds } = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return { filteredProjects: projects, matchingProjectIds: new Set<string>() };
+
+    const matching = new Set<string>();
+    const filtered = projects.filter((project) => {
+      // Check project name
+      if (project.name.toLowerCase().includes(term)) {
+        matching.add(project.id);
+        return true;
+      }
+      // Check worktree names and branches
+      const wts = worktreesByProject.get(project.id) ?? [];
+      const hasMatch = wts.some(
+        (w) =>
+          w.name.toLowerCase().includes(term) ||
+          w.branch.toLowerCase().includes(term),
+      );
+      if (hasMatch) {
+        matching.add(project.id);
+        return true;
+      }
+      return false;
+    });
+    return { filteredProjects: filtered, matchingProjectIds: matching };
+  }, [projects, worktreesByProject, searchTerm]);
+
+  // Auto-expand projects that match the search (have matching worktrees inside)
+  useEffect(() => {
+    if (!searchTerm.trim() || matchingProjectIds.size === 0) return;
+    setExpandedProjects((prev) => {
+      const toExpand = [...matchingProjectIds].filter((id) => !prev.includes(id));
+      return toExpand.length > 0 ? [...prev, ...toExpand] : prev;
+    });
+  }, [matchingProjectIds, searchTerm, setExpandedProjects]);
+
+  // Keyboard shortcut: Cmd+F / Ctrl+F to focus search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f' && !collapsed && projects.length > 0) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [collapsed, projects.length]);
 
   // Fetch on mount — TanStack Query handles background refetch + SSE invalidation
   useEffect(() => {
@@ -132,11 +176,12 @@ export function WorktreeSidebar() {
         'success',
       );
     } catch (err) {
-      showSystemNotification(
-        'Error',
-        'Failed to open repository.',
-        'warning',
-      );
+      const message = err instanceof Error ? err.message : '';
+      if (message.includes('not a git repository')) {
+        setGitInitPath(folder);
+      } else {
+        showSystemNotification('Error', 'Failed to open repository.', 'warning');
+      }
       console.error('[WorktreeSidebar] openRepository failed:', err);
     }
   }, [openRepo]);
@@ -451,6 +496,47 @@ export function WorktreeSidebar() {
             </Group>
           </Group>
 
+          {/* Search bar — only when projects exist */}
+          {projects.length > 0 && (
+            <div style={{ padding: '4px 8px 2px', flexShrink: 0 }}>
+              <TextInput
+                ref={searchInputRef}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.currentTarget.value)}
+                placeholder="Filter projects..."
+                size="xs"
+                leftSection={
+                  <Search size={13} style={{ color: 'var(--phantom-text-muted)' }} />
+                }
+                rightSection={
+                  searchTerm ? (
+                    <ActionIcon
+                      variant="subtle"
+                      size={16}
+                      onClick={() => {
+                        setSearchTerm('');
+                        searchInputRef.current?.focus();
+                      }}
+                      aria-label="Clear search"
+                    >
+                      <X size={12} style={{ color: 'var(--phantom-text-muted)' }} />
+                    </ActionIcon>
+                  ) : null
+                }
+                styles={{
+                  input: {
+                    backgroundColor: 'var(--phantom-surface-bg)',
+                    borderColor: 'var(--phantom-border-subtle)',
+                    color: 'var(--phantom-text-primary)',
+                    fontSize: '0.75rem',
+                    height: 28,
+                    minHeight: 28,
+                  },
+                }}
+              />
+            </div>
+          )}
+
           {/* Body */}
           {loading && projects.length === 0 ? (
             <div style={{ flex: 1, padding: '8px 12px' }}>
@@ -466,32 +552,36 @@ export function WorktreeSidebar() {
           <ScrollArea style={{ flex: 1 }} scrollbarSize={6}>
             <div style={{ padding: '4px 0' }}>
               {/* Starred projects section */}
-              {starredCount > 0 && (
-                <>
-                  <div style={{ padding: '4px 12px 2px', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Star size={10} style={{ fill: 'var(--phantom-accent-gold)', color: 'var(--phantom-accent-gold)' }} />
-                    <Text fz="0.65rem" fw={600} c="var(--phantom-accent-gold)" tt="uppercase" style={{ letterSpacing: '0.08em' }}>
-                      Starred
-                    </Text>
-                    <Text fz="0.6rem" c="var(--phantom-text-muted)" ml="auto">{starredCount}/5</Text>
-                  </div>
-                  {projects.filter((p) => p.starred).map((project) => (
-                    <ProjectSection
-                      key={project.id}
-                      project={project}
-                      worktrees={worktreesByProject.get(project.id) ?? []}
-                      isExpanded={expandedProjects.includes(project.id)}
-                      activeWorktreeId={activeWorktreeId}
-                      starredCount={starredCount}
-                      onToggle={() => toggleProject(project.id)}
-                      onSelectWorktree={setActiveWorktreeId}
-                    />
-                  ))}
-                  <div style={{ height: 1, backgroundColor: 'var(--phantom-border-subtle)', margin: '8px 12px', opacity: 0.5 }} />
-                </>
-              )}
+              {(() => {
+                const starredFiltered = filteredProjects.filter((p) => p.starred);
+                if (starredFiltered.length === 0) return null;
+                return (
+                  <>
+                    <div style={{ padding: '4px 12px 2px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Star size={10} style={{ fill: 'var(--phantom-accent-gold)', color: 'var(--phantom-accent-gold)' }} />
+                      <Text fz="0.65rem" fw={600} c="var(--phantom-accent-gold)" tt="uppercase" style={{ letterSpacing: '0.08em' }}>
+                        Starred
+                      </Text>
+                      <Text fz="0.6rem" c="var(--phantom-text-muted)" ml="auto">{starredCount}/5</Text>
+                    </div>
+                    {starredFiltered.map((project) => (
+                      <ProjectSection
+                        key={project.id}
+                        project={project}
+                        worktrees={worktreesByProject.get(project.id) ?? []}
+                        isExpanded={expandedProjects.includes(project.id)}
+                        activeWorktreeId={activeWorktreeId}
+                        starredCount={starredCount}
+                        onToggle={() => toggleProject(project.id)}
+                        onSelectWorktree={setActiveWorktreeId}
+                      />
+                    ))}
+                    <div style={{ height: 1, backgroundColor: 'var(--phantom-border-subtle)', margin: '8px 12px', opacity: 0.5 }} />
+                  </>
+                );
+              })()}
               {/* All other projects */}
-              {projects.filter((p) => !p.starred).map((project, idx) => (
+              {filteredProjects.filter((p) => !p.starred).map((project, idx) => (
                 <div key={project.id}>
                   {idx > 0 && (
                     <div style={{ height: 1, backgroundColor: 'var(--phantom-border-subtle)', margin: '6px 12px', opacity: 0.5 }} />
@@ -499,7 +589,7 @@ export function WorktreeSidebar() {
                   <ProjectSection
                     project={project}
                     worktrees={worktreesByProject.get(project.id) ?? []}
-                    isExpanded={expandedProjects.includes(project.id)}
+                    isExpanded={!project.id.startsWith('pending-') && expandedProjects.includes(project.id)}
                     activeWorktreeId={activeWorktreeId}
                     starredCount={starredCount}
                     onToggle={() => toggleProject(project.id)}
@@ -507,6 +597,14 @@ export function WorktreeSidebar() {
                   />
                 </div>
               ))}
+              {/* No results message */}
+              {filteredProjects.length === 0 && searchTerm.trim() && (
+                <div style={{ padding: '16px 12px', textAlign: 'center' }}>
+                  <Text fz="0.75rem" c="var(--phantom-text-muted)">
+                    No projects match "{searchTerm.trim()}"
+                  </Text>
+                </div>
+              )}
             </div>
           </ScrollArea>
           )}
@@ -606,6 +704,7 @@ export function WorktreeSidebar() {
           <CloneRepoModal opened={cloneOpen} onClose={() => setCloneOpen(false)} />
           <ScanProjectsModal opened={scanOpen} onClose={() => setScanOpen(false)} />
           <ManageProjectsModal opened={manageOpen} onClose={() => setManageOpen(false)} />
+          <GitInitModal opened={gitInitPath !== null} onClose={() => setGitInitPath(null)} folderPath={gitInitPath} />
 
           {/* Resize handle on right edge */}
           <ResizeHandle

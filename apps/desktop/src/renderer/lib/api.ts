@@ -177,6 +177,7 @@ export const fetchApi = async <T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> => {
+  if (path.includes('pending-')) return Promise.reject(new Error('Pending project — not yet available'));
   const url = `${BASE_URL}${path}`;
   const method = (options?.method ?? 'GET').toUpperCase();
   const isGet = method === 'GET' && !options?.body;
@@ -402,11 +403,31 @@ export interface OpenRepositoryResult {
   worktree: WorktreeData;
 }
 
-export const openRepository = (repoPath: string): Promise<OpenRepositoryResult> =>
+export const openRepository = (repoPath: string, opts?: { skipBackground?: boolean }): Promise<OpenRepositoryResult> =>
   fetchApi<OpenRepositoryResult>('/api/projects/open', {
+    method: 'POST',
+    body: JSON.stringify({ repoPath, skipBackground: opts?.skipBackground }),
+  });
+
+export const gitInitRepository = (repoPath: string): Promise<{ ok: boolean; path: string }> =>
+  fetchApi<{ ok: boolean; path: string }>('/api/projects/git-init', {
     method: 'POST',
     body: JSON.stringify({ repoPath }),
   });
+
+export interface BulkAddResult {
+  projects: ProjectData[];
+  worktrees: WorktreeData[];
+}
+
+export const bulkAddProjects = (repoPaths: string[]): Promise<BulkAddResult> =>
+  fetchApi<BulkAddResult>('/api/projects/bulk-add', {
+    method: 'POST',
+    body: JSON.stringify({ repoPaths }),
+  });
+
+export const prioritizeEnrichment = (projectId: string): Promise<void> =>
+  fetchApi<void>(`/api/projects/${projectId}/prioritize`, { method: 'POST' });
 
 export interface ScannedRepo {
   path: string;
@@ -446,8 +467,10 @@ export interface BranchesData {
   defaultBranch: string;
 }
 
-export const getProjectBranches = (projectId: string): Promise<BranchesData> =>
-  fetchApi<BranchesData>(`/api/projects/${projectId}/branches`);
+export const getProjectBranches = (projectId: string): Promise<BranchesData> => {
+  if (projectId.startsWith('pending-')) return Promise.resolve({ local: [], remote: [], current: 'main', defaultBranch: 'main' });
+  return fetchApi<BranchesData>(`/api/projects/${projectId}/branches`);
+};
 
 export interface CloneResult {
   project: ProjectData;

@@ -38,20 +38,12 @@ import {
   worktreesAtom,
 } from '../atoms/worktrees';
 import { type BranchesData, getProjectBranches } from '../lib/api';
+import { pickFolder } from '../lib/electron';
+import { shortenPath } from '../lib/paths';
 import { showSystemNotification } from './notifications/SystemToast';
 import { CloneRepoModal } from './sidebar/CloneRepoModal';
+import { GitInitModal } from './sidebar/GitInitModal';
 import { ScanProjectsModal } from './sidebar/ScanProjectsModal';
-
-/** Call Electron's native folder picker via IPC */
-const pickFolder = async (): Promise<string | null> => {
-  try {
-    const api = window.phantomOS;
-    if (api?.invoke) return (await api.invoke('phantom:pick-folder')) as string | null;
-    return window.prompt('Enter repository path:');
-  } catch {
-    return window.prompt('Enter repository path:');
-  }
-};
 
 const slugify = (name: string): string =>
   name.toLowerCase().replace(/[^a-z0-9/]+/g, '-').replace(/^-|-$/g, '');
@@ -67,16 +59,6 @@ const GETTING_STARTED = [
   { icon: Gamepad2, title: 'Track XP & achievements', description: 'Earn XP, climb hunter ranks, and unlock achievements' },
 ];
 
-const shortenPath = (fullPath: string): string => {
-  const home = '/Users/';
-  const idx = fullPath.indexOf(home);
-  if (idx >= 0) {
-    const rest = fullPath.slice(idx + home.length);
-    const parts = rest.split('/');
-    return parts.length > 1 ? `~/${parts.slice(1).join('/')}` : `~/${rest}`;
-  }
-  return fullPath;
-};
 
 // ---------------------------------------------------------------------------
 // Create First Workspace Form
@@ -236,6 +218,7 @@ export function WelcomePage() {
 
   const [cloneOpen, setCloneOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [gitInitPath, setGitInitPath] = useState<string | null>(null);
 
   useEffect(() => { refreshProjects(); }, [refreshProjects]);
 
@@ -245,20 +228,25 @@ export function WelcomePage() {
     try {
       await openRepo(folder);
       showSystemNotification('Repository Opened', `Opened ${folder.split('/').pop() ?? folder}`, 'success');
-    } catch {
-      showSystemNotification('Error', 'Failed to open repository.', 'warning');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      if (message.includes('not a git repository')) {
+        setGitInitPath(folder);
+      } else {
+        showSystemNotification('Error', 'Failed to open repository.', 'warning');
+      }
     }
   }, [openRepo]);
 
-  // If we have a project but no worktrees → show "Create first worktree"
-  const firstProject = projects[0];
+  // If we have a real (non-pending) project but no worktrees → show "Create first worktree"
+  const firstRealProject = projects.find((p) => !p.id.startsWith('pending-'));
   const hasWorktrees = worktrees.length > 0;
 
-  if (firstProject && !hasWorktrees) {
+  if (firstRealProject && !hasWorktrees) {
     return (
       <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', backgroundColor: 'var(--phantom-surface-bg)' }}>
         <div style={{ padding: '48px 32px' }}>
-          <CreateFirstWorktree projectId={firstProject.id} projectName={firstProject.name} defaultBranch={firstProject.defaultBranch ?? 'main'} />
+          <CreateFirstWorktree projectId={firstRealProject.id} projectName={firstRealProject.name} defaultBranch={firstRealProject.defaultBranch ?? 'main'} />
         </div>
       </div>
     );
@@ -296,6 +284,7 @@ export function WelcomePage() {
 
         <CloneRepoModal opened={cloneOpen} onClose={() => setCloneOpen(false)} />
         <ScanProjectsModal opened={scanOpen} onClose={() => setScanOpen(false)} />
+        <GitInitModal opened={gitInitPath !== null} onClose={() => setGitInitPath(null)} folderPath={gitInitPath} />
 
         {/* Two-column layout */}
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xl">

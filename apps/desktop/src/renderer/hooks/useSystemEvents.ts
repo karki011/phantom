@@ -321,6 +321,14 @@ export const useSystemEvents = (): void => {
           }));
           return;
         }
+
+        // Forward enrichment events — EnrichmentListener updates atom via DOM event
+        if (eventType === 'project:enrichment' || eventType === 'enrichment:progress') {
+          window.dispatchEvent(new CustomEvent('phantom:enrichment', {
+            detail: { type: eventType, data: parsed.data },
+          }));
+          return;
+        }
       };
 
       source.onerror = () => {

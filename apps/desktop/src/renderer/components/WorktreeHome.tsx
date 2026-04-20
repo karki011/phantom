@@ -29,6 +29,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { activeWorktreeAtom, deleteWorktreeAtom, pendingClaudeAtom, projectsAtom } from '../atoms/worktrees';
+import { enrichmentItemStatusAtom, prioritizeEnrichmentAtom } from '../atoms/enrichment';
 import type { CustomRecipe } from '../atoms/recipes';
 import { useProjectProfile } from '../hooks/useProjectProfile';
 import { useRecipes, type EnrichedRecipe } from '../hooks/useRecipes';
@@ -192,6 +193,18 @@ export function WorktreeHome() {
     ? projects.find((p) => p.id === worktree.projectId) ?? null
     : null;
   const { profile: projectProfile } = useProjectProfile(project?.id ?? null);
+
+  // Enrichment status for this project
+  const getEnrichmentStatus = useAtomValue(enrichmentItemStatusAtom);
+  const enrichmentStatus = project?.id ? getEnrichmentStatus(project.id) : null;
+  const prioritize = useSetAtom(prioritizeEnrichmentAtom);
+
+  // If project is queued for enrichment, bump it to front when viewing
+  useEffect(() => {
+    if (project?.id && enrichmentStatus === 'queued') {
+      prioritize(project.id);
+    }
+  }, [project?.id, enrichmentStatus, prioritize]);
 
   // Recipe favorites + custom recipes
   const { allRecipes, favoriteRecipes, toggleFavorite, addCustomRecipe, editCustomRecipe, deleteCustomRecipe } = useRecipes(project?.id ?? null, projectProfile);
@@ -428,6 +441,14 @@ export function WorktreeHome() {
         {setupStatus === 'failed' && (
           <Paper p="sm" mb="md" bg="color-mix(in srgb, var(--phantom-status-warning) 10%, var(--phantom-surface-card))" radius="md" style={{ border: '1px solid var(--phantom-status-warning)' }}>
             <Text fz="xs" c="var(--phantom-status-warning)">Setup failed — check terminal for details</Text>
+          </Paper>
+        )}
+        {enrichmentStatus === 'building' && (
+          <Paper p="sm" mb="md" bg="color-mix(in srgb, #00d4ff 10%, var(--phantom-surface-card))" radius="md" style={{ border: '1px solid rgba(0,212,255,0.3)' }}>
+            <Group gap="xs">
+              <Loader size={14} color="#00d4ff" />
+              <Text fz="xs" c="#00d4ff">Building dependency graph...</Text>
+            </Group>
           </Paper>
         )}
 
