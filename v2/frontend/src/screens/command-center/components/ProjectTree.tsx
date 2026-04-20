@@ -16,6 +16,19 @@ interface ProjectTreeProps {
   setSelectedWorktree: (path: string | null) => void;
 }
 
+function projectType(profile: string | null): string {
+  if (!profile) return 'unknown';
+  try {
+    const parsed = JSON.parse(profile);
+    const parts: string[] = [];
+    if (parsed.type) parts.push(parsed.type);
+    if (parsed.buildSystem) parts.push(parsed.buildSystem);
+    return parts.join(' · ') || 'unknown';
+  } catch {
+    return profile;
+  }
+}
+
 export function ProjectTree(props: ProjectTreeProps) {
   const [worktrees, setWorktrees] = createSignal<Record<string, Workspace[]>>({});
   const [worktreeStatuses, setWorktreeStatuses] = createSignal<Record<string, WorktreeStatus>>({});
@@ -137,7 +150,7 @@ export function ProjectTree(props: ProjectTreeProps) {
                     {project.name}
                   </div>
                   <div class={styles.projectMeta}>
-                    {project.profile ?? 'unknown'} · {sessionCountForProject(project)} sessions
+                    {projectType(project.profile)} · {sessionCountForProject(project)} sessions
                   </div>
                 </div>
                 <Show when={isSelected()}>

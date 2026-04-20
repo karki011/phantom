@@ -1,37 +1,65 @@
 // Author: Subash Karki
 
 import { For, Show, createSignal, type Accessor } from 'solid-js';
-import type { ActivityLog, ActivityMetadata } from '../../../core/types';
+import type { ActivityLog } from '../../../core/types';
 import * as styles from './ActivityFeed.css';
 
 interface ActivityFeedProps {
   activities: Accessor<ActivityLog[]>;
 }
 
-function parseMetadata(raw: string | null): ActivityMetadata {
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw) as ActivityMetadata;
-  } catch {
-    return {};
-  }
-}
-
-function formatRelativeShort(epochSecs: number): string {
-  const diffSecs = Math.floor(Date.now() / 1000 - epochSecs);
+function formatRelativeShort(epoch: number): string {
+  const ts = epoch > 1e12 ? epoch : epoch * 1000;
+  const diffMs = Date.now() - ts;
+  if (diffMs < 0) return '0s';
+  const diffSecs = Math.floor(diffMs / 1000);
   if (diffSecs < 60) return `${diffSecs}s`;
   if (diffSecs < 3600) return `${Math.floor(diffSecs / 60)}m`;
   if (diffSecs < 86400) return `${Math.floor(diffSecs / 3600)}h`;
   return `${Math.floor(diffSecs / 86400)}d`;
 }
 
+function eventIcon(type: string): string {
+  switch (type) {
+    case 'SESSION_START': return '▶';
+    case 'SESSION_COMPLETE_BONUS': return '✓';
+    case 'TASK_COMPLETE': return '☑';
+    case 'SPEED_TASK': return '⚡';
+    case 'LONG_SESSION': return '⏱';
+    case 'ACHIEVEMENT': return '★';
+    case 'FIRST_SESSION_OF_DAY': return '☀';
+    case 'NEW_REPO': return '📁';
+    default: return '•';
+  }
+}
+
+function eventLabel(type: string): string {
+  switch (type) {
+    case 'SESSION_START': return 'Session started';
+    case 'SESSION_COMPLETE_BONUS': return 'Session completed';
+    case 'TASK_COMPLETE': return 'Task completed';
+    case 'SPEED_TASK': return 'Speed task bonus';
+    case 'LONG_SESSION': return 'Long session';
+    case 'ACHIEVEMENT': return 'Achievement unlocked';
+    case 'FIRST_SESSION_OF_DAY': return 'First session today';
+    case 'NEW_REPO': return 'New repo detected';
+    default: return type.toLowerCase().replace(/_/g, ' ');
+  }
+}
+
 function typeColorClass(type: string): string {
   switch (type) {
-    case 'tool': return styles.typeTool;
-    case 'git': return styles.typeGit;
-    case 'message': return styles.typeMessage;
-    case 'response': return styles.typeResponse;
-    default: return styles.typeMessage;
+    case 'ACHIEVEMENT':
+    case 'SPEED_TASK':
+      return styles.typeTool;
+    case 'SESSION_START':
+    case 'NEW_REPO':
+      return styles.typeGit;
+    case 'SESSION_COMPLETE_BONUS':
+    case 'TASK_COMPLETE':
+      return styles.typeResponse;
+    default:
+      return styles.typeMessage;
   }
 }
 
@@ -67,18 +95,17 @@ export function ActivityFeed(props: ActivityFeedProps) {
       >
         <div class={styles.list} ref={listRef} onScroll={handleScroll}>
           <For each={props.activities()}>
-            {(activity) => {
-              const meta = () => parseMetadata(activity.metadata);
-              return (
-                <div class={styles.entry}>
-                  <span class={styles.timestamp}>{formatRelativeShort(activity.timestamp)}</span>
-                  <span class={styles.icon}>{meta().icon ?? '•'}</span>
-                  <span class={`${styles.detail} ${typeColorClass(activity.type)}`}>
-                    {meta().detail ?? activity.type}
-                  </span>
-                </div>
-              );
-            }}
+            {(activity) => (
+              <div class={styles.entry}>
+                <span class={styles.timestamp}>
+                  {formatRelativeShort(activity.timestamp)}
+                </span>
+                <span class={styles.icon}>{eventIcon(activity.type)}</span>
+                <span class={`${styles.detail} ${typeColorClass(activity.type)}`}>
+                  {eventLabel(activity.type)}
+                </span>
+              </div>
+            )}
           </For>
         </div>
       </Show>

@@ -6,6 +6,7 @@ import { getActivityLog } from '../../core/bindings';
 import { sessions } from '../../core/signals/sessions';
 import { projects } from '../../core/signals/projects';
 import { onWailsEvent } from '../../core/events';
+import { isActiveSession } from '../../utils/format';
 import { ProjectTree } from './components/ProjectTree';
 import { SessionGrid } from './components/SessionGrid';
 import { ActivityFeed } from './components/ActivityFeed';
@@ -33,6 +34,13 @@ export function CommandCenter() {
     if (wtPath) {
       result = result.filter((s) => s.cwd === wtPath);
     }
+
+    // Show active sessions + sessions from last 48 hours
+    const cutoff = Date.now() / 1000 - 48 * 3600;
+    result = result.filter((s) => {
+      if (isActiveSession(s.status)) return true;
+      return (s.started_at ?? 0) > cutoff;
+    });
 
     return result;
   });
