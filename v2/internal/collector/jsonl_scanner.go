@@ -239,8 +239,8 @@ func (js *JSONLScanner) scanFile(path string) (*scanResult, error) {
 	}
 
 	scanner := bufio.NewScanner(f)
-	// Increase buffer for potentially large lines
-	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024)
+	// 10MB max: Claude lines can contain thinking signatures, base64 images, large tool outputs
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 
 	for scanner.Scan() {
 		line := scanner.Bytes()
@@ -584,7 +584,8 @@ func (js *JSONLScanner) tailScan(path string) (*scanResult, error) {
 		ToolBreakdown: make(map[string]int),
 	}
 	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024)
+	// 10MB max: Claude lines can contain thinking signatures, base64 images, large tool outputs
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 
 	first := true
 	for scanner.Scan() {

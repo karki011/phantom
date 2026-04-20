@@ -13,8 +13,8 @@ import (
 )
 
 const tailPollInterval = 500 * time.Millisecond
-const scannerBufSize = 256 * 1024  // 256 KB initial buffer
-const scannerMaxSize = 1024 * 1024 // 1 MB max line length
+const scannerBufSize = 64 * 1024        // 64 KB initial buffer
+const scannerMaxSize = 10 * 1024 * 1024 // 10 MB max line length — Claude lines can include thinking signatures, base64 images, large tool outputs
 
 // Scanner reads a JSONL file and produces Events using the embedded Parser.
 type Scanner struct {
