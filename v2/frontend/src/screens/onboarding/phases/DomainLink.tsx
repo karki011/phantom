@@ -9,7 +9,12 @@ import { buttonRecipe } from '../../../styles/recipes.css';
 import { PhasePanel } from '../PhasePanel';
 import { AutoTimer } from '../engine/AutoTimer';
 import * as styles from '../styles/phases.css';
-import type { ProjectProfile } from '../../../core/types';
+interface ProjectProfile {
+  name: string;
+  repo_path: string;
+  language: string | null;
+  framework: string | null;
+}
 
 interface DomainLinkProps {
   onComplete: (data: Record<string, string>) => void;

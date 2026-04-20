@@ -1,6 +1,13 @@
 // Author: Subash Karki
 
-import type { Project, ProjectProfile } from '../types';
+import type { Project } from '../types';
+
+interface ProjectProfile {
+  name: string;
+  repo_path: string;
+  language: string | null;
+  framework: string | null;
+}
 import { normalize } from './_normalize';
 
 const App = () => (window as any).go?.['app']?.App;

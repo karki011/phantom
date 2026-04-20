@@ -46,16 +46,14 @@ export interface ActivityLog {
 
 export interface Project {
   id: string;
-  repo_path: string;
-  name: string | null;
-  detected_at: number | null;
-}
-
-export interface ProjectProfile {
   name: string;
   repo_path: string;
-  language: string | null;
-  framework: string | null;
+  default_branch: string | null;
+  worktree_base_dir: string | null;
+  color: string | null;
+  profile: string | null;
+  starred: number | null;
+  created_at: number;
 }
 
 export interface HealthResponse {
@@ -72,4 +70,51 @@ export interface WsMessage {
   type: string;
   session_id: string;
   payload: string;
+}
+
+export interface Workspace {
+  id: string;
+  project_id: string;
+  type: string;
+  name: string;
+  branch: string;
+  worktree_path: string | null;
+  port_base: number | null;
+  section_id: string | null;
+  base_branch: string | null;
+  tab_order: number | null;
+  is_active: number | null;
+  ticket_url: string | null;
+  created_at: number;
+}
+
+export interface WorktreeStatus {
+  path: string;
+  branch: string;
+  commit: string;
+  is_bare: boolean;
+  ahead_by: number;
+  behind_by: number;
+  is_clean: boolean;
+  has_conflicts: boolean;
+  conflicts: string[];
+  active_session?: string;
+  pr_number?: number;
+}
+
+export interface Recipe {
+  id: string;
+  label: string;
+  command: string;
+  icon: string;
+  description: string;
+  category: 'setup' | 'test' | 'lint' | 'build' | 'serve' | 'deploy' | 'custom';
+  auto: boolean;
+}
+
+export interface ActivityMetadata {
+  icon?: string;
+  detail?: string;
+  file_path?: string;
+  command?: string;
 }
