@@ -46,12 +46,12 @@ export function CommandCenter() {
   });
 
   onMount(async () => {
-    const initial = await getActivityLog('', 100);
-    setActivities(initial);
-
     onWailsEvent<ActivityLog>('activity', (entry) => {
       setActivities((prev) => [entry, ...prev].slice(0, MAX_ACTIVITIES));
     });
+
+    const initial = await getActivityLog('', 100);
+    setActivities(initial);
   });
 
   return (

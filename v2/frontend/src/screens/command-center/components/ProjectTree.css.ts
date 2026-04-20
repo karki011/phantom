@@ -72,7 +72,7 @@ export const starIcon = style({
 
 export const projectMeta = style({
   fontFamily: vars.font.mono,
-  fontSize: '10px',
+  fontSize: vars.fontSize.xs,
   color: vars.color.textDisabled,
   marginTop: '2px',
   paddingLeft: vars.space.sm,
@@ -88,7 +88,7 @@ export const expandedContent = style({
 
 export const sectionLabel = style({
   fontFamily: vars.font.mono,
-  fontSize: '9px',
+  fontSize: vars.fontSize.xs,
   fontWeight: 600,
   color: vars.color.textDisabled,
   letterSpacing: '0.1em',
@@ -130,6 +130,6 @@ export const worktreeName = style({
 
 export const worktreeSessionCount = style({
   color: vars.color.textDisabled,
-  fontSize: '10px',
+  fontSize: vars.fontSize.xs,
   flexShrink: 0,
 });

@@ -96,14 +96,12 @@ export function ProjectTree(props: ProjectTreeProps) {
   }
 
   function handleTogglePin(projectId: string, recipeId: string) {
-    setPinnedRecipes((prev) => {
-      const current = prev[projectId] ?? [];
-      const next = current.includes(recipeId)
-        ? current.filter((id) => id !== recipeId)
-        : [...current, recipeId];
-      void setPref(`pinned_recipes:${projectId}`, JSON.stringify(next));
-      return { ...prev, [projectId]: next };
-    });
+    const current = pinnedRecipes()[projectId] ?? [];
+    const next = current.includes(recipeId)
+      ? current.filter((id) => id !== recipeId)
+      : [...current, recipeId];
+    setPinnedRecipes((prev) => ({ ...prev, [projectId]: next }));
+    void setPref(`pinned_recipes:${projectId}`, JSON.stringify(next));
   }
 
   function handleRunRecipe(_recipe: Recipe) {
@@ -155,7 +153,7 @@ export function ProjectTree(props: ProjectTreeProps) {
                             <div
                               class={styles.worktreeRow}
                               classList={{ [styles.worktreeRowSelected]: isWtSelected() }}
-                              onClick={() => handleWorktreeClick(wt.worktree_path!)}
+                              onClick={() => wt.worktree_path && handleWorktreeClick(wt.worktree_path)}
                             >
                               <span class={status().class}>{status().symbol}</span>
                               <span class={styles.worktreeName}>{wt.branch}</span>
