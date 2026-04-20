@@ -265,6 +265,11 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 		} else if existing.Status.Valid && existing.Status.String == "active" {
 			status = "active"
 		}
+		// Clear ended_at when session is active (resurrect case)
+		endedAt := existing.EndedAt
+		if status == "active" {
+			endedAt = sql.NullInt64{}
+		}
 		if err := sw.queries.UpdateSession(sw.ctx, db.UpdateSessionParams{
 			ID:                  sessionID,
 			Pid:                 nullInt64(pid),
@@ -274,7 +279,7 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 			Kind:                nullString(raw.Kind),
 			Model:               nullStringOr(raw.Model, existing.Model),
 			Entrypoint:          nullString(raw.Entrypoint),
-			EndedAt:             existing.EndedAt,
+			EndedAt:             endedAt,
 			Status:              nullString(status),
 			TaskCount:           existing.TaskCount,
 			CompletedTasks:      existing.CompletedTasks,
@@ -383,6 +388,7 @@ func (sw *SessionWatcher) checkStale() {
 		}
 
 		if stale {
+			slog.Warn("session_watcher: marking stale", "session_id", s.ID, "pid", s.Pid.Int64)
 			if err := sw.queries.UpdateSessionStatus(sw.ctx, db.UpdateSessionStatusParams{
 				ID:      s.ID,
 				Status:  nullString("completed"),
