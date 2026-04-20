@@ -3,8 +3,32 @@
 
 import { createSignal, createMemo } from 'solid-js';
 import type { Session } from '../types';
-import { getSessions } from '../bindings';
+import { getSessions, getSession } from '../bindings';
 import { onWailsEvent } from '../events';
+
+// ── Event payload types (Go backend sends these, NOT full Session objects) ──
+
+interface SessionNewEvent {
+  sessionId: string;
+  cwd?: string;
+  kind?: string;
+  status?: string;
+}
+
+interface SessionUpdateEvent {
+  sessionId: string;
+  status?: string;
+}
+
+interface SessionEndEvent {
+  sessionId: string;
+  reason?: string;
+}
+
+interface SessionContextEvent {
+  sessionId: string;
+  contextUsedPct: number;
+}
 
 // ── Signals ───────────────────────────────────────────────────────────────────
 
@@ -13,7 +37,6 @@ const [activeSessionId, setActiveSessionId] = createSignal<string | null>(null);
 
 // ── Derived ───────────────────────────────────────────────────────────────────
 
-/** The currently selected session object, or null if none is selected. */
 const activeSession = createMemo<Session | null>(() => {
   const id = activeSessionId();
   if (!id) return null;
@@ -22,34 +45,41 @@ const activeSession = createMemo<Session | null>(() => {
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
-/**
- * Call once from the App root (onMount) to load initial state and wire
- * Wails event subscriptions. Must be called inside a reactive Solid root.
- */
 export function bootstrapSessions(): void {
-  // Initial load
   getSessions().then((data) => setSessions(data));
 
-  // New session created
-  onWailsEvent<Session>('session:new', (s) => {
-    setSessions((prev) => {
-      const exists = prev.some((p) => p.id === s.id);
-      return exists ? prev : [s, ...prev];
-    });
+  onWailsEvent<SessionNewEvent>('session:new', async (evt) => {
+    const exists = sessions().some((s) => s.id === evt.sessionId);
+    if (exists) return;
+    const full = await getSession(evt.sessionId);
+    if (full) {
+      setSessions((prev) =>
+        prev.some((s) => s.id === full.id) ? prev : [full, ...prev],
+      );
+    }
   });
 
-  // Session metadata updated (status, token counts, cost, etc.)
-  onWailsEvent<Session>('session:update', (updated) => {
+  onWailsEvent<SessionUpdateEvent>('session:update', async (evt) => {
+    const full = await getSession(evt.sessionId);
+    if (full) {
+      setSessions((prev) =>
+        prev.map((s) => (s.id === full.id ? full : s)),
+      );
+    }
+  });
+
+  onWailsEvent<SessionEndEvent>('session:end', ({ sessionId }) => {
     setSessions((prev) =>
-      prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)),
+      prev.map((s) =>
+        s.id === sessionId ? { ...s, status: 'completed', ended_at: Date.now() / 1000 } : s,
+      ),
     );
   });
 
-  // Session ended — mark as completed without removing from list
-  onWailsEvent<{ id: string }>('session:end', ({ id }) => {
+  onWailsEvent<SessionContextEvent>('session:context', ({ sessionId, contextUsedPct }) => {
     setSessions((prev) =>
       prev.map((s) =>
-        s.id === id ? { ...s, status: 'completed', ended_at: Date.now() / 1000 } : s,
+        s.id === sessionId ? { ...s, context_used_pct: contextUsedPct } : s,
       ),
     );
   });
