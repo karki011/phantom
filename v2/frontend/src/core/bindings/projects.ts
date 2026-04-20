@@ -1,6 +1,6 @@
 // Author: Subash Karki
 
-import type { Project } from '../types';
+import type { Project, Workspace, WorktreeStatus, Recipe } from '../types';
 
 interface ProjectProfile {
   name: string;
@@ -35,5 +35,32 @@ export async function detectProject(repoPath: string): Promise<ProjectProfile | 
     return (await App()?.DetectProject(repoPath)) ?? null;
   } catch {
     return null;
+  }
+}
+
+export async function getProjectRecipes(projectId: string): Promise<Recipe[]> {
+  try {
+    const raw = (await App()?.GetProjectRecipes(projectId)) ?? [];
+    return normalize<Recipe[]>(raw);
+  } catch {
+    return [];
+  }
+}
+
+export async function listWorktrees(projectId: string): Promise<Workspace[]> {
+  try {
+    const raw = (await App()?.ListWorktrees(projectId)) ?? [];
+    return normalize<Workspace[]>(raw);
+  } catch {
+    return [];
+  }
+}
+
+export async function getAllWorktreeStatus(): Promise<WorktreeStatus[]> {
+  try {
+    const raw = (await App()?.GetAllWorktreeStatus()) ?? [];
+    return normalize<WorktreeStatus[]>(raw);
+  } catch {
+    return [];
   }
 }
