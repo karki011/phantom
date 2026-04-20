@@ -171,7 +171,7 @@ type rawSession struct {
 	Name       string      `json:"name"`
 	Kind       string      `json:"kind"`
 	Entrypoint string      `json:"entrypoint"`
-	StartedAt  string      `json:"startedAt"`
+	StartedAt  interface{} `json:"startedAt"` // may be ISO string or unix ms number
 	Model      string      `json:"model"`
 }
 
@@ -204,12 +204,27 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 	// Parse PID flexibly (string or number)
 	pid := parsePID(raw.Pid)
 
-	// Parse startedAt ISO timestamp to unix epoch
+	// Parse startedAt — may be ISO string or unix ms number
 	var startedEpoch int64
-	if raw.StartedAt != "" {
-		if t, err := time.Parse(time.RFC3339, raw.StartedAt); err == nil {
+	switch v := raw.StartedAt.(type) {
+	case float64:
+		if v > 1e12 {
+			startedEpoch = int64(v / 1000)
+		} else {
+			startedEpoch = int64(v)
+		}
+	case json.Number:
+		if n, err := v.Int64(); err == nil {
+			if n > 1e12 {
+				startedEpoch = n / 1000
+			} else {
+				startedEpoch = n
+			}
+		}
+	case string:
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
 			startedEpoch = t.Unix()
-		} else if t, err := time.Parse(time.RFC3339Nano, raw.StartedAt); err == nil {
+		} else if t, err := time.Parse(time.RFC3339Nano, v); err == nil {
 			startedEpoch = t.Unix()
 		}
 	}
@@ -227,24 +242,27 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 	status := "active"
 	if pid > 0 {
 		if err := syscall.Kill(int(pid), 0); err != nil {
+			slog.Warn("session_watcher: PID check failed", "session_id", sessionID, "pid", pid, "err", err)
 			status = "completed"
+		} else {
+			slog.Info("session_watcher: PID alive", "session_id", sessionID, "pid", pid)
 		}
+	} else {
+		slog.Warn("session_watcher: no PID", "session_id", sessionID)
+		status = "completed"
 	}
 
 	// Try GetSession first — if exists, update; if not, create
 	existing, err := sw.queries.GetSession(sw.ctx, sessionID)
 	if err == nil {
-		// Session exists — update metadata only.
-		// Do NOT overwrite status here: let checkStale handle completed detection.
-		// This prevents race conditions where a JSONL write triggers processSessionFile
-		// and a transient PID check failure incorrectly marks an active session as completed.
-		// Trust the PID check as source of truth for existing sessions:
-		// - If PID is alive → session is active (resurrect if DB says completed)
-		// - If PID is dead → preserve DB status (let checkStale handle completion)
+		dbStatus := ""
+		if existing.Status.Valid {
+			dbStatus = existing.Status.String
+		}
+		slog.Info("session_watcher: update existing", "session_id", sessionID, "pid", pid, "pid_status", status, "db_status", dbStatus)
 		if status == "active" {
 			// PID alive — force active regardless of DB state
 		} else if existing.Status.Valid && existing.Status.String == "active" {
-			// PID check failed but DB says active — don't flip to completed here
 			status = "active"
 		}
 		if err := sw.queries.UpdateSession(sw.ctx, db.UpdateSessionParams{
