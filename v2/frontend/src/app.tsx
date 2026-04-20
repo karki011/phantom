@@ -12,6 +12,7 @@ import { activeScreen } from './core/signals/navigation';
 import { healthCheck } from './core/bindings';
 import { OnboardingFlow } from './screens/onboarding';
 import { Settings } from './screens/settings';
+import { CommandCenter } from './screens/command-center';
 import { StatusStrip, Dock, CommandPalette } from './chrome';
 import { playSound } from './core/audio/engine';
 
@@ -62,7 +63,7 @@ export function App() {
         <main class={styles.mainArea}>
           <Switch fallback={<div class={styles.screenPlaceholder}>Select a screen</div>}>
             <Match when={activeScreen() === 'command'}>
-              <div class={styles.screenPlaceholder}>Command Center — coming soon</div>
+              <CommandCenter />
             </Match>
             <Match when={activeScreen() === 'settings'}>
               <Settings />
