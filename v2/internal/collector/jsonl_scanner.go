@@ -196,20 +196,9 @@ func (js *JSONLScanner) processJSONLFile(path string) {
 		return
 	}
 
-	if err := js.queries.UpdateSession(js.ctx, db.UpdateSessionParams{
+	if err := js.queries.UpdateSessionEnrichment(js.ctx, db.UpdateSessionEnrichmentParams{
 		ID:                  sessionID,
-		Pid:                 existing.Pid,
-		Cwd:                 existing.Cwd,
-		Repo:                existing.Repo,
-		Name:                existing.Name,
-		Kind:                existing.Kind,
 		Model:               nullStringOr(result.Model, existing.Model),
-		Entrypoint:          existing.Entrypoint,
-		EndedAt:             existing.EndedAt,
-		Status:              existing.Status,
-		TaskCount:           existing.TaskCount,
-		CompletedTasks:      existing.CompletedTasks,
-		XpEarned:            existing.XpEarned,
 		InputTokens:         sql.NullInt64{Int64: result.InputTokens, Valid: true},
 		OutputTokens:        sql.NullInt64{Int64: result.OutputTokens, Valid: true},
 		CacheReadTokens:     sql.NullInt64{Int64: result.CacheRead, Valid: true},
@@ -220,7 +209,6 @@ func (js *JSONLScanner) processJSONLFile(path string) {
 		FirstPrompt:         nullStringOr(result.FirstPrompt, existing.FirstPrompt),
 		ToolBreakdown:       nullStringOr(toolBreakdownJSON, existing.ToolBreakdown),
 		LastInputTokens:     sql.NullInt64{Int64: result.InputTokens, Valid: true},
-		ContextUsedPct:      existing.ContextUsedPct,
 	}); err != nil {
 		log.Printf("jsonl_scanner: update session %s: %v", sessionID, err)
 	}
@@ -512,23 +500,12 @@ func (js *JSONLScanner) pollActiveContext() {
 		}
 
 		// Backfill model if the scan found one and the DB doesn't have it yet.
-		// UpdateSessionTokens doesn't touch the model column, so we use the
-		// wider UpdateSession path when model needs writing.
+		// Use UpdateSessionEnrichment which never touches status or ended_at,
+		// avoiding the race with session_watcher.
 		if result.Model != "" && (!s.Model.Valid || s.Model.String == "") {
-			if err := js.queries.UpdateSession(js.ctx, db.UpdateSessionParams{
+			if err := js.queries.UpdateSessionEnrichment(js.ctx, db.UpdateSessionEnrichmentParams{
 				ID:                  s.ID,
-				Pid:                 s.Pid,
-				Cwd:                 s.Cwd,
-				Repo:                s.Repo,
-				Name:                s.Name,
-				Kind:                s.Kind,
 				Model:               sql.NullString{String: result.Model, Valid: true},
-				Entrypoint:          s.Entrypoint,
-				EndedAt:             s.EndedAt,
-				Status:              s.Status,
-				TaskCount:           s.TaskCount,
-				CompletedTasks:      s.CompletedTasks,
-				XpEarned:            s.XpEarned,
 				InputTokens:         sql.NullInt64{Int64: result.InputTokens, Valid: true},
 				OutputTokens:        sql.NullInt64{Int64: result.OutputTokens, Valid: true},
 				CacheReadTokens:     sql.NullInt64{Int64: result.CacheRead, Valid: true},
@@ -539,7 +516,6 @@ func (js *JSONLScanner) pollActiveContext() {
 				FirstPrompt:         s.FirstPrompt,
 				ToolBreakdown:       s.ToolBreakdown,
 				LastInputTokens:     sql.NullInt64{Int64: result.InputTokens, Valid: true},
-				ContextUsedPct:      s.ContextUsedPct,
 			}); err != nil {
 				log.Printf("jsonl_scanner: backfill model for %s: %v", s.ID, err)
 			}

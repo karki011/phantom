@@ -398,6 +398,58 @@ func (q *Queries) UpdateSessionStatus(ctx context.Context, arg UpdateSessionStat
 	return err
 }
 
+const updateSessionEnrichment = `-- name: UpdateSessionEnrichment :exec
+UPDATE sessions SET
+    model = ?,
+    input_tokens = ?,
+    output_tokens = ?,
+    cache_read_tokens = ?,
+    cache_write_tokens = ?,
+    estimated_cost_micros = ?,
+    message_count = ?,
+    tool_use_count = ?,
+    first_prompt = ?,
+    tool_breakdown = ?,
+    last_input_tokens = ?
+WHERE id = ?
+`
+
+type UpdateSessionEnrichmentParams struct {
+	Model               sql.NullString `json:"model"`
+	InputTokens         sql.NullInt64  `json:"input_tokens"`
+	OutputTokens        sql.NullInt64  `json:"output_tokens"`
+	CacheReadTokens     sql.NullInt64  `json:"cache_read_tokens"`
+	CacheWriteTokens    sql.NullInt64  `json:"cache_write_tokens"`
+	EstimatedCostMicros sql.NullInt64  `json:"estimated_cost_micros"`
+	MessageCount        sql.NullInt64  `json:"message_count"`
+	ToolUseCount        sql.NullInt64  `json:"tool_use_count"`
+	FirstPrompt         sql.NullString `json:"first_prompt"`
+	ToolBreakdown       sql.NullString `json:"tool_breakdown"`
+	LastInputTokens     sql.NullInt64  `json:"last_input_tokens"`
+	ID                  string         `json:"id"`
+}
+
+// UpdateSessionEnrichment updates only scanner-derived enrichment fields.
+// It deliberately omits status and ended_at to avoid the read-modify-write
+// race with session_watcher, which exclusively owns those columns.
+func (q *Queries) UpdateSessionEnrichment(ctx context.Context, arg UpdateSessionEnrichmentParams) error {
+	_, err := q.db.ExecContext(ctx, updateSessionEnrichment,
+		arg.Model,
+		arg.InputTokens,
+		arg.OutputTokens,
+		arg.CacheReadTokens,
+		arg.CacheWriteTokens,
+		arg.EstimatedCostMicros,
+		arg.MessageCount,
+		arg.ToolUseCount,
+		arg.FirstPrompt,
+		arg.ToolBreakdown,
+		arg.LastInputTokens,
+		arg.ID,
+	)
+	return err
+}
+
 const updateSessionTokens = `-- name: UpdateSessionTokens :exec
 UPDATE sessions SET
     input_tokens = ?,

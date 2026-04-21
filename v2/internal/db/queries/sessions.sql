@@ -76,5 +76,20 @@ UPDATE sessions SET
     ended_at = ?
 WHERE id = ?;
 
+-- name: UpdateSessionEnrichment :exec
+UPDATE sessions SET
+    model = ?,
+    input_tokens = ?,
+    output_tokens = ?,
+    cache_read_tokens = ?,
+    cache_write_tokens = ?,
+    estimated_cost_micros = ?,
+    message_count = ?,
+    tool_use_count = ?,
+    first_prompt = ?,
+    tool_breakdown = ?,
+    last_input_tokens = ?
+WHERE id = ?;
+
 -- name: DeleteSession :exec
 DELETE FROM sessions WHERE id = ?;
