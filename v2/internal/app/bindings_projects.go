@@ -6,8 +6,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log"
+	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -103,4 +106,55 @@ func (a *App) GetProjectRecipes(projectId string) []project.Recipe {
 		return []project.Recipe{}
 	}
 	return profile.Recipes
+}
+
+// ScanDirectory walks parentPath recursively (max 3 levels) and returns paths
+// containing a .git directory. Skips node_modules, .git, vendor, and other
+// non-project directories.
+func (a *App) ScanDirectory(parentPath string) []string {
+	var repos []string
+	skipDirs := map[string]bool{
+		"node_modules": true, ".git": true, "vendor": true,
+		".cache": true, "dist": true, "build": true, "__pycache__": true,
+	}
+
+	maxDepth := 3
+	parentDepth := strings.Count(filepath.Clean(parentPath), string(filepath.Separator))
+
+	filepath.WalkDir(parentPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // skip unreadable entries
+		}
+		if !d.IsDir() {
+			return nil
+		}
+
+		depth := strings.Count(filepath.Clean(path), string(filepath.Separator)) - parentDepth
+		if depth > maxDepth {
+			return fs.SkipDir
+		}
+
+		if skipDirs[d.Name()] {
+			return fs.SkipDir
+		}
+
+		// Check if this directory contains a .git subdirectory.
+		gitPath := filepath.Join(path, ".git")
+		if info, err := os.Stat(gitPath); err == nil && info.IsDir() {
+			repos = append(repos, path)
+			return fs.SkipDir // don't recurse into git repos
+		}
+
+		return nil
+	})
+
+	return repos
+}
+
+// CloneRepository clones a git repo from url into destPath, then registers it as a project.
+func (a *App) CloneRepository(url, destPath string) (*db.Project, error) {
+	if err := git.Clone(a.ctx, url, destPath); err != nil {
+		return nil, fmt.Errorf("CloneRepository: %w", err)
+	}
+	return a.AddProject(destPath)
 }

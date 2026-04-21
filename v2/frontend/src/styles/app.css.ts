@@ -22,15 +22,15 @@ export const appShell = style({
   overflow: 'hidden',
 });
 
-export const mainArea = style({
+export const shellReady = style({
   flex: 1,
-  overflowY: 'auto',
-  overflowX: 'hidden',
-  paddingTop: '40px',
-  paddingBottom: '64px',
   display: 'flex',
-  flexDirection: 'column',
-  position: 'relative',
+  alignItems: 'center',
+  justifyContent: 'center',
+  color: vars.color.textDisabled,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.sm,
+  userSelect: 'none',
 });
 
 export const bootOverlay = style({
@@ -53,15 +53,3 @@ export const bootSweepLine = style({
   top: '0%',
 });
 
-export const screenPlaceholder = style({
-  flex: 1,
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: vars.space.md,
-  color: vars.color.textDisabled,
-  fontFamily: vars.font.mono,
-  fontSize: vars.fontSize.sm,
-  userSelect: 'none',
-});

@@ -1,0 +1,15 @@
+// PhantomOS v2 — Pane type registry
+// Author: Subash Karki
+
+import { lazy, type Component } from 'solid-js';
+import type { PaneType } from '@/core/panes/types';
+
+const registry: Partial<Record<PaneType, Component<any>>> = {
+  terminal: lazy(() => import('./TerminalPane')),
+  home: lazy(() => import('./WorktreeHome')),
+  // editor, chat, diff, journal — placeholders for Wave 4+
+};
+
+export function getPaneComponent(kind: string): Component<any> | undefined {
+  return registry[kind as PaneType];
+}

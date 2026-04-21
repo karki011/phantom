@@ -1,20 +1,26 @@
-// PhantomOS v2 — App shell
+// PhantomOS v2 — App shell (Wave 1: Worktree Workspace layout)
 // Author: Subash Karki
 
-import { createSignal, onMount, Show, Switch, Match } from 'solid-js';
+import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { shadowMonarchDarkTheme } from './styles/theme.css';
 import * as styles from './styles/app.css';
+import * as shellStyles from './styles/app-shell.css';
 import { bootstrapSessions } from './core/signals/sessions';
 import { bootstrapProjects } from './core/signals/projects';
+import { bootstrapApp, activeTopTab, activeWorktreeId } from './core/signals/app';
 import { loadPref } from './core/signals/preferences';
 import { initTheme, initFontStyle } from './core/signals/theme';
-import { activeScreen } from './core/signals/navigation';
-import { healthCheck } from './core/bindings';
 import { OnboardingFlow } from './screens/onboarding';
-import { Settings } from './screens/settings';
-import { CommandCenter } from './screens/command-center';
-import { StatusStrip, Dock, CommandPalette } from './chrome';
 import { playSound } from './core/audio/engine';
+import { SystemHeader } from './components/layout/SystemHeader';
+import { TopTabBar } from './components/layout/TopTabBar';
+import { StatusBar } from './components/layout/StatusBar';
+import { WorktreeSidebar, RightSidebar } from './components/sidebar';
+import { Workspace } from './components/panes/Workspace';
+import { switchWorkspace } from './core/panes/signals';
+import { registerKeyboardShortcuts } from './core/keyboard';
+import { WelcomePage } from './components/WelcomePage';
+import { waitForWails } from './core/bindings/ready';
 
 export function App() {
   const [ready, setReady] = createSignal(false);
@@ -33,9 +39,19 @@ export function App() {
     const onboardingDone = await loadPref('onboarding_completed');
     if (!onboardingDone) setShowOnboarding(true);
 
+    await waitForWails();
+    bootstrapApp();
     bootstrapSessions();
     bootstrapProjects();
     setReady(true);
+
+    const cleanupShortcuts = registerKeyboardShortcuts();
+    onCleanup(cleanupShortcuts);
+  });
+
+  createEffect(() => {
+    const wtId = activeWorktreeId();
+    if (wtId) switchWorkspace(wtId);
   });
 
   function handleOnboardingComplete() {
@@ -58,42 +74,33 @@ export function App() {
       </Show>
 
       <Show when={ready() && !showOnboarding()}>
-        <StatusStrip />
+        <SystemHeader />
+        <TopTabBar />
 
-        <main class={styles.mainArea}>
-          <Switch fallback={<div class={styles.screenPlaceholder}>Select a screen</div>}>
-            <Match when={activeScreen() === 'command'}>
-              <CommandCenter />
-            </Match>
-            <Match when={activeScreen() === 'settings'}>
-              <Settings />
-            </Match>
-            <Match when={activeScreen() === 'smart-view'}>
-              <div class={styles.screenPlaceholder}>Smart View — coming soon</div>
-            </Match>
-            <Match when={activeScreen() === 'git-ops'}>
-              <div class={styles.screenPlaceholder}>Git Ops — coming soon</div>
-            </Match>
-            <Match when={activeScreen() === 'eagle-eye'}>
-              <div class={styles.screenPlaceholder}>Eagle Eye — coming soon</div>
-            </Match>
-            <Match when={activeScreen() === 'wards'}>
-              <div class={styles.screenPlaceholder}>Wards — coming soon</div>
-            </Match>
-            <Match when={activeScreen() === 'playground'}>
-              <div class={styles.screenPlaceholder}>AI Playground — coming soon</div>
-            </Match>
-            <Match when={activeScreen() === 'codeburn'}>
-              <div class={styles.screenPlaceholder}>CodeBurn — coming soon</div>
-            </Match>
-            <Match when={activeScreen() === 'hunter'}>
-              <div class={styles.screenPlaceholder}>Hunter Stats — coming soon</div>
-            </Match>
-          </Switch>
-        </main>
+        <div class={shellStyles.mainContent}>
+          <Show when={activeTopTab() === 'system'}>
+            <div class={shellStyles.systemPlaceholder}>
+              System / Cockpit — coming soon
+            </div>
+          </Show>
 
-        <Dock />
-        <CommandPalette />
+          <Show when={activeTopTab() === 'worktree'}>
+            <Show when={activeWorktreeId()} fallback={<WelcomePage />}>
+              <div class={shellStyles.threeColumnLayout}>
+                <WorktreeSidebar />
+
+                <div class={shellStyles.centerWorkspace}>
+                  <Workspace />
+                </div>
+
+                {/* Right sidebar — Wave 5 */}
+                <RightSidebar />
+              </div>
+            </Show>
+          </Show>
+        </div>
+
+        <StatusBar />
       </Show>
     </div>
   );

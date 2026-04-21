@@ -110,3 +110,25 @@ func (a *App) ListWorktrees(projectId string) []db.Workspace {
 func (a *App) GetDefaultBranch(repoPath string) string {
 	return git.GetDefaultBranch(a.ctx, repoPath)
 }
+
+// GetProjectBranches returns all local branch names for a project.
+func (a *App) GetProjectBranches(projectId string) []string {
+	q := db.New(a.DB.Reader)
+	proj, err := q.GetProject(a.ctx, projectId)
+	if err != nil {
+		log.Printf("app/bindings_git: GetProjectBranches(%s) error: %v", projectId, err)
+		return []string{}
+	}
+
+	branches, err := git.ListBranches(a.ctx, proj.RepoPath)
+	if err != nil {
+		log.Printf("app/bindings_git: ListBranches(%s) error: %v", proj.RepoPath, err)
+		return []string{}
+	}
+
+	names := make([]string, 0, len(branches))
+	for _, b := range branches {
+		names = append(names, b.Name)
+	}
+	return names
+}

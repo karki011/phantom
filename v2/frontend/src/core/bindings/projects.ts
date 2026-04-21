@@ -64,3 +64,37 @@ export async function getAllWorktreeStatus(): Promise<WorktreeStatus[]> {
     return [];
   }
 }
+
+export async function removeProject(id: string): Promise<boolean> {
+  try {
+    await App()?.RemoveProject(id);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function browseDirectory(title: string): Promise<string> {
+  try {
+    return (await App()?.BrowseDirectory(title)) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export async function scanDirectory(parentPath: string): Promise<string[]> {
+  try {
+    return (await App()?.ScanDirectory(parentPath)) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function cloneRepository(url: string, destPath: string): Promise<Project | null> {
+  try {
+    const raw = (await App()?.CloneRepository(url, destPath)) ?? null;
+    return raw ? normalize<Project>(raw) : null;
+  } catch {
+    return null;
+  }
+}

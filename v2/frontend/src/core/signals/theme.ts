@@ -8,6 +8,12 @@ import {
   shadowMonarchLightTheme,
   hunterRankDarkTheme,
   hunterRankLightTheme,
+  czDarkTheme,
+  czLightTheme,
+  cyberpunkTheme,
+  draculaTheme,
+  nordDarkTheme,
+  nordLightTheme,
 } from '../../styles/theme.css';
 import { getPref, setPref } from './preferences';
 
@@ -17,7 +23,13 @@ export type ThemeId =
   | 'shadow-monarch-dark'
   | 'shadow-monarch-light'
   | 'hunter-rank-dark'
-  | 'hunter-rank-light';
+  | 'hunter-rank-light'
+  | 'cz-dark'
+  | 'cz-light'
+  | 'cyberpunk'
+  | 'dracula'
+  | 'nord-dark'
+  | 'nord-light';
 
 const [activeTheme, setActiveTheme] = createSignal<ThemeId>('shadow-monarch-dark');
 
@@ -28,6 +40,12 @@ const themeClassMap: Record<ThemeId, string> = {
   'shadow-monarch-light': shadowMonarchLightTheme,
   'hunter-rank-dark': hunterRankDarkTheme,
   'hunter-rank-light': hunterRankLightTheme,
+  'cz-dark': czDarkTheme,
+  'cz-light': czLightTheme,
+  'cyberpunk': cyberpunkTheme,
+  'dracula': draculaTheme,
+  'nord-dark': nordDarkTheme,
+  'nord-light': nordLightTheme,
 };
 
 export function applyTheme(theme: ThemeId): void {
@@ -48,6 +66,12 @@ export function initTheme(savedTheme: string): void {
     'shadow-monarch-light',
     'hunter-rank-dark',
     'hunter-rank-light',
+    'cz-dark',
+    'cz-light',
+    'cyberpunk',
+    'dracula',
+    'nord-dark',
+    'nord-light',
   ];
   const theme: ThemeId = (validIds.includes(savedTheme as ThemeId) ? savedTheme : 'shadow-monarch-dark') as ThemeId;
   applyTheme(theme);

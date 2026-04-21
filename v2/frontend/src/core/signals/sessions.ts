@@ -48,6 +48,11 @@ const activeSession = createMemo<Session | null>(() => {
 export function bootstrapSessions(): void {
   getSessions().then((data) => setSessions(data));
 
+  // Poll every 15s as fallback when Wails event bridge is unavailable
+  setInterval(() => {
+    getSessions().then((data) => setSessions(data));
+  }, 15_000);
+
   onWailsEvent<SessionNewEvent>('session:new', async (evt) => {
     const exists = sessions().some((s) => s.id === evt.sessionId);
     if (exists) return;

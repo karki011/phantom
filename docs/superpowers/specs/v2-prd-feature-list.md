@@ -138,23 +138,7 @@ PhantomOS is an **AI-powered development command center** — a native desktop a
 90. fsnotify-based instant local change detection (no polling)
 91. Gutter decorations (modified/added/deleted lines in editor)
 
-### 6. SIDEBAR / NAVIGATION (15 features)
 
-92. Smart project tree (Pinned / Active / Recent / All sections)
-93. Per-worktree context panel (git status + changed files + activity)
-94. Changed files view with +/- counts vs base branch
-95. Git activity panel (recent commits per branch)
-96. File explorer (gitignore-aware, git status indicators)
-97. Session list (active/recent, provider, model, cost)
-98. Branch switcher
-99. Clone repo modal
-100. Scan projects modal
-101. PR badge
-102. Inline worktree input
-103. Global sidebar search/filter
-104. Virtualized project list (handles 163+ projects)
-105. Changed file count badges on each worktree
-106. Click-to-navigate (file to editor, commit to detail, worktree to session)
 
 ### 7. AI ENGINE (27 features)
 
@@ -340,19 +324,3 @@ PhantomOS is an **AI-powered development command center** — a native desktop a
 
 ---
 
-## Implementation Phases
-
-| Phase | Scope | Estimated Effort |
-|---|---|---|
-| 0 | Wails + Solid.js shell | 2-3 days |
-| 1 | Core (SQLite, terminal, collectors, project detection) | 2-3 weeks |
-| 2 | Git operations + all new git features | 3-4 weeks |
-| 3 | Stream parser + Smart View | 3-4 weeks |
-| 4 | AI Engine (parity + enhancements) | 4-6 weeks |
-| 5 | Safety Rules Engine | 2-3 weeks |
-| 6 | Session Controller | 5-7 weeks |
-| 7 | Remaining features (12 sub-phases) | 6-8 weeks |
-| 8 | Rich Editor (Monaco) | 4-6 weeks |
-| 9 | Extension System | 4-6 weeks |
-| 10 | Distribution (DMG, signing, auto-updater) | 2-3 weeks |
-| **Total** | **Full rewrite** | **~9-12 months** |
