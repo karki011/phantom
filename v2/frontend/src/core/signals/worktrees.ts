@@ -3,7 +3,7 @@
 
 import { createSignal, createMemo } from 'solid-js';
 import { onWailsEvent } from '../events';
-import { projects } from './projects';
+import { projects, bootstrapProjects } from './projects';
 import { setActiveWorktreeId } from './app';
 import { listWorktrees, createWorktree, removeWorktree } from '../bindings';
 import { setPref, loadPref } from './preferences';
@@ -39,8 +39,10 @@ export const filteredProjects = createMemo(() => {
 async function loadProjectWorktrees(projectId: string): Promise<void> {
   try {
     const wts = await listWorktrees(projectId);
+    console.log('[worktrees] loaded for project', projectId, wts);
     setWorktreeMap((prev) => ({ ...prev, [projectId]: wts ?? [] }));
-  } catch {
+  } catch (err) {
+    console.error('[worktrees] failed to load for project', projectId, err);
     setWorktreeMap((prev) => ({ ...prev, [projectId]: [] }));
   }
 }
@@ -53,7 +55,10 @@ async function refreshAllWorktrees(): Promise<void> {
 
 // Bootstrap: load persisted prefs, all worktrees, subscribe to events
 export async function bootstrapWorktrees(): Promise<void> {
+  await bootstrapProjects();
+  console.log('[worktrees] bootstrapping, projects:', projects().length);
   await refreshAllWorktrees();
+  console.log('[worktrees] bootstrap complete, worktreeMap:', worktreeMap());
 
   // Restore sidebar width
   const savedWidth = await loadPref('sidebar_width');

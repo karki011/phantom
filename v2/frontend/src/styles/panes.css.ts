@@ -162,9 +162,11 @@ export const layoutSplitVertical = style({
 export const paneContainer = style({
   display: 'flex',
   flexDirection: 'column',
+  flex: 1,
   overflow: 'hidden',
   minWidth: '100px',
   minHeight: '80px',
+  height: '100%',
   position: 'relative',
   outline: '1px solid transparent',
   transition: `outline-color ${vars.animation.fast}`,
@@ -202,13 +204,6 @@ export const paneHeaderActions = style({
   flexDirection: 'row',
   alignItems: 'center',
   gap: '2px',
-  opacity: 0,
-  transition: `opacity ${vars.animation.fast}`,
-  selectors: {
-    [`${paneHeader}:hover &`]: {
-      opacity: 1,
-    },
-  },
 });
 
 export const paneHeaderButton = style({

@@ -1,7 +1,7 @@
 // PhantomOS v2 — App shell (Wave 1: Worktree Workspace layout)
 // Author: Subash Karki
 
-import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
+import { createSignal, createEffect, onMount, onCleanup, Show, untrack } from 'solid-js';
 import { shadowMonarchDarkTheme } from './styles/theme.css';
 import * as styles from './styles/app.css';
 import * as shellStyles from './styles/app-shell.css';
@@ -51,7 +51,7 @@ export function App() {
 
   createEffect(() => {
     const wtId = activeWorktreeId();
-    if (wtId) switchWorkspace(wtId);
+    if (wtId) untrack(() => switchWorkspace(wtId));
   });
 
   function handleOnboardingComplete() {
@@ -85,18 +85,19 @@ export function App() {
           </Show>
 
           <Show when={activeTopTab() === 'worktree'}>
-            <Show when={activeWorktreeId()} fallback={<WelcomePage />}>
-              <div class={shellStyles.threeColumnLayout}>
-                <WorktreeSidebar />
+            <div class={shellStyles.threeColumnLayout}>
+              <WorktreeSidebar />
 
-                <div class={shellStyles.centerWorkspace}>
+              <div class={shellStyles.centerWorkspace}>
+                <Show when={activeWorktreeId()} fallback={<WelcomePage />}>
                   <Workspace />
-                </div>
-
-                {/* Right sidebar — Wave 5 */}
-                <RightSidebar />
+                </Show>
               </div>
-            </Show>
+
+              <Show when={activeWorktreeId()}>
+                <RightSidebar />
+              </Show>
+            </div>
           </Show>
         </div>
 

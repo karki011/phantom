@@ -66,10 +66,13 @@ export async function getAllWorktreeStatus(): Promise<WorktreeStatus[]> {
 }
 
 export async function removeProject(id: string): Promise<boolean> {
+  console.log('[bindings] removeProject called:', id);
   try {
     await App()?.RemoveProject(id);
+    console.log('[bindings] removeProject success');
     return true;
-  } catch {
+  } catch (err) {
+    console.error('[bindings] removeProject error:', err);
     return false;
   }
 }

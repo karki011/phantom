@@ -61,20 +61,28 @@ export const projectList = style({
 
 export const projectSection = style({
   borderBottom: `1px solid ${vars.color.divider}`,
+  paddingTop: vars.space.sm,
+  paddingBottom: vars.space.md,
 });
 
 export const projectHeader = style({
   display: 'flex',
   flexDirection: 'row',
   alignItems: 'center',
-  gap: vars.space.xs,
-  padding: `${vars.space.xs} ${vars.space.sm}`,
+  gap: vars.space.sm,
+  padding: `${vars.space.sm} ${vars.space.md}`,
   cursor: 'pointer',
   userSelect: 'none',
+  borderRadius: vars.radius.sm,
   transition: `background ${vars.animation.fast} ease`,
   ':hover': {
     backgroundColor: vars.color.bgHover,
   },
+});
+
+export const projectIcon = style({
+  color: vars.color.textSecondary,
+  flexShrink: 0,
 });
 
 export const projectName = style({
@@ -112,15 +120,19 @@ export const chevronExpanded = style({
 export const worktreeList = style({
   display: 'flex',
   flexDirection: 'column',
-  paddingLeft: vars.space.md,
+  gap: vars.space.xs,
+  paddingLeft: vars.space.lg,
+  marginLeft: vars.space.md,
+  marginTop: vars.space.xs,
+  borderLeft: `1px solid ${vars.color.divider}`,
 });
 
 export const worktreeItem = style({
   display: 'flex',
   flexDirection: 'row',
   alignItems: 'center',
-  gap: vars.space.xs,
-  padding: `${vars.space.xs} ${vars.space.sm}`,
+  gap: vars.space.sm,
+  padding: `${vars.space.sm} ${vars.space.sm}`,
   cursor: 'pointer',
   borderRadius: vars.radius.sm,
   transition: `background ${vars.animation.fast} ease`,
@@ -134,6 +146,11 @@ export const worktreeItemActive = style({
   backgroundColor: vars.color.bgActive,
   borderLeft: `2px solid ${vars.color.accent}`,
   paddingLeft: `calc(${vars.space.sm} - 2px)`,
+});
+
+export const worktreeIcon = style({
+  color: vars.color.accent,
+  flexShrink: 0,
 });
 
 export const branchName = style({
@@ -254,6 +271,7 @@ export const contextMenuContent = style({
   boxShadow: vars.shadow.md,
   minWidth: '160px',
   zIndex: 100,
+  outline: 'none',
 });
 
 export const contextMenuItem = style({
@@ -264,8 +282,12 @@ export const contextMenuItem = style({
   fontSize: vars.fontSize.sm,
   color: vars.color.textPrimary,
   cursor: 'pointer',
+  outline: 'none',
   transition: `background ${vars.animation.fast} ease`,
   ':hover': {
+    backgroundColor: vars.color.bgHover,
+  },
+  ':focus-visible': {
     backgroundColor: vars.color.bgHover,
   },
 });

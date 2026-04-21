@@ -2,7 +2,8 @@
 // Author: Subash Karki
 
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { Terminal, Trash2 } from 'lucide-solid';
+import { Terminal, Trash2, GitBranch, GitFork } from 'lucide-solid';
+import { Tip } from '@/shared/Tip/Tip';
 import * as styles from '@/styles/sidebar.css';
 import { activeWorktreeId } from '@/core/signals/app';
 import { selectWorktree, removeWorktreeById } from '@/core/signals/worktrees';
@@ -32,11 +33,16 @@ export function WorktreeItem(props: WorktreeItemProps) {
         class={`${styles.worktreeItem}${isActive() ? ` ${styles.worktreeItemActive}` : ''}`}
         onClick={handleClick}
       >
+        {props.worktree.type === 'branch' ? (
+          <Tip label="Local branch"><GitBranch size={13} class={styles.worktreeIcon} /></Tip>
+        ) : (
+          <Tip label="Git worktree"><GitFork size={13} class={styles.worktreeIcon} /></Tip>
+        )}
         <span class={styles.branchName} title={props.worktree.branch}>
           {props.worktree.branch}
         </span>
         {props.hasActiveSession && (
-          <span class={styles.sessionDot} title="Active session" />
+          <Tip label="Active session"><span class={styles.sessionDot} /></Tip>
         )}
       </ContextMenu.Trigger>
 

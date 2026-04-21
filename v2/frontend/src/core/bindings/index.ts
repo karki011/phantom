@@ -1,7 +1,8 @@
 // Author: Subash Karki
 
 export { getSessions, getActiveSessions, getSession, getSessionTasks, getActivityLog, parseSessionHistory } from './sessions';
-export { createTerminal, writeTerminal, resizeTerminal, destroyTerminal, getTerminalScrollback } from './terminal';
+export { createTerminal, writeTerminal, writeBubbleteaProgram, resizeTerminal, destroyTerminal, getTerminalScrollback, subscribeTerminal, unsubscribeTerminal, listTerminals, runRecipe, runBubbleteaProgram } from './terminal';
+export type { TerminalInfo } from './terminal';
 export { getProjects, addProject, detectProject, getProjectRecipes, listWorktrees, getAllWorktreeStatus, removeProject, browseDirectory, scanDirectory, cloneRepository } from './projects';
 export { getPreference, setPreference, getGitUserName } from './preferences';
 export { healthCheck } from './health';

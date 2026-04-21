@@ -13,7 +13,7 @@ import {
   bootstrapWorktrees,
 } from '@/core/signals/worktrees';
 import { addProject, browseDirectory, cloneRepository, scanDirectory } from '@/core/bindings';
-import { bootstrapProjects } from '@/core/signals/projects';
+import { refreshProjects } from '@/core/signals/projects';
 import { ProjectSection } from './ProjectSection';
 import { ResizeHandle } from './ResizeHandle';
 
@@ -26,7 +26,7 @@ export function WorktreeSidebar() {
     const path = await browseDirectory('Select project directory');
     if (!path) return;
     await addProject(path);
-    await bootstrapProjects();
+    await refreshProjects();
     await bootstrapWorktrees();
   }
 
@@ -37,7 +37,7 @@ export function WorktreeSidebar() {
     for (const p of paths) {
       await addProject(p);
     }
-    await bootstrapProjects();
+    await refreshProjects();
     await bootstrapWorktrees();
   }
 
@@ -49,7 +49,7 @@ export function WorktreeSidebar() {
     const dest = await browseDirectory('Select destination directory');
     if (!dest) return;
     await cloneRepository(url, dest);
-    await bootstrapProjects();
+    await refreshProjects();
     await bootstrapWorktrees();
   }
 

@@ -15,6 +15,8 @@ export interface TerminalSession {
   sessionId: string;
   attached: boolean;
   unsubscribe?: () => void;
+  /** SearchAddon instance — available only when @xterm/addon-search is installed */
+  searchAddon?: { findNext(term: string, opts?: object): void; findPrevious(term: string, opts?: object): void };
 }
 
 const sessions = new Map<string, TerminalSession>();

@@ -67,13 +67,46 @@ func (a *App) AddProject(repoPath string) (*db.Project, error) {
 	if err != nil {
 		return nil, fmt.Errorf("AddProject: GetProject after create: %w", err)
 	}
+
+	// Auto-create a workspace for the default branch so the sidebar has something to show.
+	wsID := uuid.New().String()
+	wsParams := db.CreateWorkspaceParams{
+		ID:           wsID,
+		ProjectID:    id,
+		Type:         "branch",
+		Name:         defaultBranch,
+		Branch:       defaultBranch,
+		WorktreePath: sql.NullString{String: repoPath, Valid: true},
+		IsActive:     sql.NullInt64{Int64: 1, Valid: true},
+		CreatedAt:    now,
+	}
+	if err := q.CreateWorkspace(a.ctx, wsParams); err != nil {
+		log.Printf("AddProject: auto-create workspace warning: %v", err)
+	}
+
 	return &proj, nil
 }
 
-// RemoveProject deletes a project by ID.
+// RemoveProject deletes a project and all related data by ID.
 func (a *App) RemoveProject(id string) error {
-	q := db.New(a.DB.Writer)
-	return q.DeleteProject(a.ctx, id)
+	rq := db.New(a.DB.Reader)
+	workspaces, err := rq.ListWorkspacesByProject(a.ctx, id)
+	if err != nil {
+		log.Printf("RemoveProject: list workspaces warning: %v", err)
+	}
+	wq := db.New(a.DB.Writer)
+	for _, ws := range workspaces {
+		if err := wq.DeleteWorkspace(a.ctx, ws.ID); err != nil {
+			log.Printf("RemoveProject: delete workspace %s warning: %v", ws.ID, err)
+		}
+	}
+	// Clean up graph data (code-review-graph FK references)
+	for _, table := range []string{"graph_edges", "graph_nodes", "graph_meta", "workspace_sections"} {
+		if _, err := a.DB.Writer.ExecContext(a.ctx, "DELETE FROM "+table+" WHERE project_id = ?", id); err != nil {
+			log.Printf("RemoveProject: clean %s warning: %v", table, err)
+		}
+	}
+	return wq.DeleteProject(a.ctx, id)
 }
 
 // DetectProject runs project detection on the given repo path without persisting.

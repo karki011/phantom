@@ -14,6 +14,7 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/session"
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
 	"github.com/subashkarki/phantom-os-v2/internal/terminal"
+	"github.com/subashkarki/phantom-os-v2/internal/tui"
 	"github.com/subashkarki/phantom-os-v2/internal/ws"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -25,6 +26,15 @@ type App struct {
 	mu        sync.RWMutex
 	wsHub     *ws.Hub
 	wsServer  *ws.Server
+
+	// terminalSubs tracks active Wails-event subscriptions keyed by session ID.
+	// Each value is a cancel func that stops the forwarding goroutine.
+	terminalSubs   map[string]context.CancelFunc
+	terminalSubsMu sync.Mutex
+
+	// tuiSessions holds active Bubbletea PTY sessions keyed by session ID.
+	tuiSessions   map[string]*tui.Session
+	tuiSessionsMu sync.RWMutex
 
 	// Services — injected before Startup via setter methods.
 	DB                *db.DB
@@ -74,6 +84,8 @@ type HealthResponse struct {
 
 func (a *App) Startup(ctx context.Context) {
 	a.ctx, a.cancel = context.WithCancel(ctx)
+	a.terminalSubs = make(map[string]context.CancelFunc)
+	a.tuiSessions = make(map[string]*tui.Session)
 
 	// Start WebSocket hub and server.
 	a.wsHub = ws.NewHub()
@@ -135,6 +147,14 @@ func (a *App) Shutdown(ctx context.Context) {
 	if a.Terminal != nil {
 		a.Terminal.DestroyAll()
 	}
+
+	// Clean up TUI sessions to release PTY file descriptors.
+	a.tuiSessionsMu.Lock()
+	for id, sess := range a.tuiSessions {
+		sess.Close()
+		delete(a.tuiSessions, id)
+	}
+	a.tuiSessionsMu.Unlock()
 
 	// Cancel the app context to stop all remaining goroutines (WS, health pulse).
 	if a.cancel != nil {

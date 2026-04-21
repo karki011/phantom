@@ -6,6 +6,8 @@ import type { PaneType } from '@/core/panes/types';
 
 const registry: Partial<Record<PaneType, Component<any>>> = {
   terminal: lazy(() => import('./TerminalPane')),
+  // TUI programs (Bubbletea) render inside xterm.js — same component as terminal
+  tui: lazy(() => import('./TerminalPane')),
   home: lazy(() => import('./WorktreeHome')),
   // editor, chat, diff, journal — placeholders for Wave 4+
 };

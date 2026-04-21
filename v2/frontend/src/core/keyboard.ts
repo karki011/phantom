@@ -5,6 +5,7 @@ import { setActiveTopTab } from './signals/app';
 import { setLeftSidebarCollapsed, leftSidebarCollapsed } from './signals/worktrees';
 import { setRightSidebarCollapsed, rightSidebarCollapsed } from './signals/files';
 import { addTab, splitPane, activePaneId } from './panes/signals';
+// TODO(Phase 7h): import { runRecipe } from './bindings'; import { activeWorktreeId } from './signals/app';
 
 export function registerKeyboardShortcuts(): () => void {
   function handler(e: KeyboardEvent): void {
@@ -58,6 +59,14 @@ export function registerKeyboardShortcuts(): () => void {
       e.preventDefault();
       const paneId = activePaneId();
       if (paneId) splitPane(paneId, 'vertical');
+      return;
+    }
+
+    // Cmd+Shift+R: Run recipe on active worktree
+    // TODO(Phase 7h): open a recipe picker UI, then call runRecipe(activeProjectId, selectedRecipeId)
+    if (meta && e.key === 'r' && e.shiftKey) {
+      e.preventDefault();
+      console.log('[PhantomOS] Run recipe — recipe picker coming in Phase 7h');
       return;
     }
 

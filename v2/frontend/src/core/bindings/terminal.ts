@@ -5,13 +5,17 @@ const App = () => (window as any).go?.['app']?.App;
 export async function createTerminal(id: string, cwd: string, cols: number, rows: number): Promise<void> {
   try {
     await App()?.CreateTerminal(id, cwd, cols, rows);
-  } catch {}
+  } catch (error) {
+    console.error('[terminal] createTerminal failed', { id, error });
+  }
 }
 
 export async function writeTerminal(id: string, data: string): Promise<void> {
   try {
     await App()?.WriteTerminal(id, data);
-  } catch {}
+  } catch (error) {
+    console.error('[terminal] writeTerminal failed', { id, error });
+  }
 }
 
 export async function resizeTerminal(id: string, cols: number, rows: number): Promise<void> {
@@ -31,5 +35,79 @@ export async function getTerminalScrollback(id: string): Promise<string> {
     return (await App()?.GetTerminalScrollback(id)) ?? '';
   } catch {
     return '';
+  }
+}
+
+export async function subscribeTerminal(sessionId: string): Promise<void> {
+  try {
+    await App()?.SubscribeTerminal(sessionId);
+  } catch {}
+}
+
+export async function unsubscribeTerminal(sessionId: string): Promise<void> {
+  try {
+    await App()?.UnsubscribeTerminal(sessionId);
+  } catch {}
+}
+
+export interface TerminalInfo {
+  id: string;
+  cwd: string;
+  cols: number;
+  rows: number;
+}
+
+export async function listTerminals(): Promise<TerminalInfo[]> {
+  try {
+    return (await App()?.ListTerminals()) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Run a project recipe in a new terminal session.
+ * @param projectId - The project to run the recipe in
+ * @param recipeId  - The recipe to execute
+ * @returns The new terminal session ID
+ */
+export async function runRecipe(projectId: string, recipeId: string): Promise<string> {
+  try {
+    return (await App()?.RunRecipe(projectId, recipeId)) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Launch a Bubbletea TUI program and return its session ID.
+ * The session ID can be subscribed to via the existing terminal infrastructure
+ * using `terminal:{sessionId}:data` events.
+ * @param programType - The type of TUI program to launch (e.g. 'setup-wizard')
+ * @param args        - Key/value arguments passed to the TUI program
+ * @returns The new session ID, or empty string if the binding is not ready
+ */
+export async function runBubbleteaProgram(
+  programType: string,
+  args: Record<string, string>,
+): Promise<string> {
+  try {
+    return (await App()?.RunBubbleteaProgram(programType, args)) ?? '';
+  } catch (error) {
+    console.error('[terminal] runBubbleteaProgram failed', { programType, error });
+    return '';
+  }
+}
+
+/**
+ * Send keyboard input to an active Bubbletea TUI session.
+ * @param sessionId - The TUI session ID returned by runBubbleteaProgram
+ * @param data      - Raw input string from xterm.js onData
+ */
+export async function writeBubbleteaProgram(sessionId: string, data: string): Promise<void> {
+  try {
+    await App()?.WriteBubbleteaProgram(sessionId, data);
+  } catch (error) {
+    console.error('[terminal] writeBubbleteaProgram failed', { sessionId, error });
   }
 }

@@ -31,16 +31,18 @@ export function TabBar() {
               title={tab.label}
             >
               <span class={styles.tabLabel}>{tab.label}</span>
-              <span
-                class={styles.tabClose}
-                onClick={handleClose}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && handleClose(e as any)}
-                aria-label={`Close ${tab.label}`}
-              >
-                &#x2715;
-              </span>
+              {tab.label !== 'Home' && (
+                <span
+                  class={styles.tabClose}
+                  onClick={handleClose}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && handleClose(e as any)}
+                  aria-label={`Close ${tab.label}`}
+                >
+                  &#x2715;
+                </span>
+              )}
             </button>
           );
         }}

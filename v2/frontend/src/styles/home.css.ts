@@ -68,13 +68,16 @@ export const quickActionButton = style({
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: vars.space.xs,
-  padding: vars.space.md,
-  borderRadius: vars.radius.md,
+  justifyContent: 'center',
+  gap: vars.space.sm,
+  padding: `${vars.space.xl} ${vars.space.xl}`,
+  borderRadius: vars.radius.lg,
   background: vars.color.bgTertiary,
   border: `1px solid ${vars.color.border}`,
   cursor: 'pointer',
-  minWidth: '80px',
+  flex: 1,
+  minWidth: '120px',
+  minHeight: '110px',
   transition: `all ${vars.animation.fast} ease`,
   color: vars.color.textSecondary,
   ':hover': {
@@ -85,32 +88,42 @@ export const quickActionButton = style({
 });
 
 export const quickActionIcon = style({
-  width: '24px',
-  height: '24px',
+  width: '36px',
+  height: '36px',
   color: vars.color.accent,
   flexShrink: 0,
 });
 
 export const quickActionLabel = style({
-  fontSize: vars.fontSize.xs,
-  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textPrimary,
+  fontWeight: 500,
   whiteSpace: 'nowrap',
+});
+
+export const quickActionHint = style({
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textDisabled,
+  fontStyle: 'italic',
 });
 
 export const statusGrid = style({
   display: 'grid',
   gridTemplateColumns: '1fr 1fr',
-  gap: vars.space.sm,
+  gap: vars.space.md,
 });
 
 export const statusCard = style({
+  padding: vars.space.lg,
+  background: vars.color.bgTertiary,
+  borderRadius: vars.radius.lg,
+  border: `1px solid ${vars.color.border}`,
+});
+
+export const statusCell = style({
   display: 'flex',
   flexDirection: 'column',
-  padding: vars.space.md,
-  background: vars.color.bgTertiary,
-  borderRadius: vars.radius.md,
   gap: vars.space.xs,
-  border: `1px solid ${vars.color.border}`,
 });
 
 export const statusLabel = style({
@@ -118,10 +131,11 @@ export const statusLabel = style({
   color: vars.color.textDisabled,
   textTransform: 'uppercase',
   letterSpacing: '0.05em',
+  lineHeight: 1,
 });
 
 export const statusValue = style({
-  fontSize: vars.fontSize.lg,
+  fontSize: vars.fontSize.md,
   color: vars.color.textPrimary,
   fontWeight: 600,
   fontFamily: vars.font.mono,

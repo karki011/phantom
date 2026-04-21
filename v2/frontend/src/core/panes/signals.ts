@@ -7,6 +7,7 @@
 import { createMemo } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import { activeWorktreeId } from '@/core/signals/app';
+import { worktreeMap } from '@/core/signals/worktrees';
 import type { WorkspaceState, Tab, PaneType, PaneLeaf, LayoutNode } from './types';
 import {
   uid,
@@ -20,12 +21,12 @@ import {
 // Factories
 // ---------------------------------------------------------------------------
 
-function makePane(kind: PaneType, title?: string): import('./types').Pane {
+function makePane(kind: PaneType, title?: string, data?: Record<string, unknown>): import('./types').Pane {
   return {
     id: uid(),
     kind,
     title: title ?? kind,
-    data: {},
+    data: data ?? {},
   };
 }
 
@@ -41,7 +42,7 @@ function makeTab(paneType: PaneType = 'terminal', label?: string): Tab {
 }
 
 function defaultState(): WorkspaceState {
-  const tab = makeTab('terminal', 'Terminal');
+  const tab = makeTab('home', 'Home');
   return {
     tabs: [tab],
     activeTabId: tab.id,
@@ -73,20 +74,36 @@ const activePaneId = createMemo(() => activeTab()?.activePaneId ?? '');
 // ---------------------------------------------------------------------------
 
 const stateCache = new Map<string, WorkspaceState>();
+let previousWorktreeId: string | null = null;
 
 export function switchWorkspace(worktreeId: string): void {
-  // Save current state before switching
-  const currentId = activeWorktreeId();
-  if (currentId) {
-    stateCache.set(currentId, JSON.parse(JSON.stringify(workspace)));
+  // Save current state under the PREVIOUS worktree before switching
+  if (previousWorktreeId && previousWorktreeId !== worktreeId) {
+    stateCache.set(previousWorktreeId, JSON.parse(JSON.stringify(workspace)));
   }
+  previousWorktreeId = worktreeId;
 
   const cached = stateCache.get(worktreeId);
   if (cached) {
     setWorkspace(cached);
   } else {
-    const state = defaultState();
-    setWorkspace(state);
+    // Look up the worktree path from worktreeMap to pre-populate cwd
+    let cwd = '';
+    const allWorktrees = worktreeMap();
+    for (const workspaces of Object.values(allWorktrees)) {
+      const match = workspaces.find((w) => w.id === worktreeId);
+      if (match) {
+        cwd = match.worktree_path ?? '';
+        break;
+      }
+    }
+
+    const tab = makeTab('home', 'Home');
+    const paneId = tab.activePaneId;
+    if (paneId && tab.panes[paneId]) {
+      tab.panes[paneId] = { ...tab.panes[paneId], data: { cwd } };
+    }
+    setWorkspace({ tabs: [tab], activeTabId: tab.id });
   }
 }
 
@@ -104,10 +121,36 @@ export function addTab(paneType: PaneType = 'terminal'): void {
   );
 }
 
+/**
+ * Add a new tab with a pre-populated pane data payload.
+ * Used by TUI launchers (Bubbletea) that need to pass a session ID
+ * into the pane before it mounts.
+ */
+export function addTabWithData(
+  paneType: PaneType,
+  label: string,
+  data: Record<string, unknown>,
+): void {
+  const tab = makeTab(paneType, label);
+  const paneId = tab.activePaneId;
+  if (paneId && tab.panes[paneId]) {
+    tab.panes[paneId] = { ...tab.panes[paneId], data };
+  }
+  setWorkspace(
+    produce((s) => {
+      s.tabs.push(tab);
+      s.activeTabId = tab.id;
+    }),
+  );
+}
+
 export function removeTab(tabId: string): void {
   setWorkspace(
     produce((s) => {
       if (s.tabs.length <= 1) return; // Prevent removing last tab
+      const tab = s.tabs.find((t) => t.id === tabId);
+      if (!tab) return;
+      if (tab.label === 'Home') return; // Home tab must always remain
       s.tabs = s.tabs.filter((t) => t.id !== tabId);
       if (s.activeTabId === tabId) {
         s.activeTabId = s.tabs[0]?.id ?? '';

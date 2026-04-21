@@ -2,6 +2,7 @@
 // Author: Subash Karki
 
 import { Show, Suspense, Dynamic } from 'solid-js/web';
+import { Columns2, Rows2, X } from 'lucide-solid';
 import * as styles from '@/styles/panes.css';
 import { activeTab, setActivePaneInTab, splitPane, closePane, activePaneId } from '@/core/panes/signals';
 import { getPaneComponent } from './PaneRegistry';
@@ -61,7 +62,7 @@ export function PaneContainer(props: PaneContainerProps) {
             onClick={handleSplitH}
             type="button"
           >
-            &#x2015;
+            <Columns2 size={12} />
           </button>
           <button
             class={styles.paneHeaderButton}
@@ -69,7 +70,7 @@ export function PaneContainer(props: PaneContainerProps) {
             onClick={handleSplitV}
             type="button"
           >
-            &#x2502;
+            <Rows2 size={12} />
           </button>
           <button
             class={`${styles.paneHeaderButton} danger`}
@@ -77,7 +78,7 @@ export function PaneContainer(props: PaneContainerProps) {
             onClick={handleClose}
             type="button"
           >
-            &#x2715;
+            <X size={12} />
           </button>
         </div>
       </div>
@@ -87,7 +88,7 @@ export function PaneContainer(props: PaneContainerProps) {
         <Show when={PaneComponent()} fallback={<PlaceholderContent kind={props.pane.paneType} />}>
           {(Comp) => (
             <Suspense fallback={<PlaceholderContent kind={props.pane.paneType} />}>
-              <Dynamic component={Comp()} />
+              <Dynamic component={Comp()} paneId={props.pane.id} cwd={paneData()?.data?.cwd as string ?? ''} sessionId={paneData()?.data?.sessionId as string ?? ''} />
             </Suspense>
           )}
         </Show>
