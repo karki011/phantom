@@ -27,6 +27,9 @@ Thumbs.db
 # Go
 vendor/
 
+# Docs (local planning only)
+docs/
+
 # Secrets
 .env
 .env.local
