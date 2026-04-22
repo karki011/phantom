@@ -8,6 +8,20 @@ import (
 	"strings"
 )
 
+// InitRepo runs `git init` at the given path.
+func InitRepo(ctx context.Context, path string) error {
+	cmd := exec.CommandContext(ctx, "git", "init", path)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if msg != "" {
+			return fmt.Errorf("init %s: %w: %s", path, err, msg)
+		}
+		return fmt.Errorf("init %s: %w", path, err)
+	}
+	return nil
+}
+
 // Clone clones a git repository from url into destPath.
 // It runs in the OS temp dir so it is not bound to any specific repo.
 func Clone(ctx context.Context, url, destPath string) error {

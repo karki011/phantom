@@ -26,6 +26,7 @@ export const content = style({
   animation: `${fadeIn} 150ms ease`,
   maxWidth: '240px',
   lineHeight: 1.4,
+  whiteSpace: 'pre-line',
 });
 
 export const arrow = style({

@@ -1,8 +1,15 @@
 // PhantomOS v2 — Left sidebar: project/worktree navigation
 // Author: Subash Karki
 
-import { Show, For, onMount } from 'solid-js';
-import { FolderPlus, GitBranch, HardDriveDownload } from 'lucide-solid';
+import { Show, For, onMount, createSignal } from 'solid-js';
+import { FolderPlus, GitBranch, HardDriveDownload, Settings2 } from 'lucide-solid';
+import { TextField } from '@kobalte/core/text-field';
+import { Tip } from '@/shared/Tip/Tip';
+import { PhantomModal, phantomModalStyles } from '@/shared/PhantomModal/PhantomModal';
+import { buttonRecipe } from '@/styles/recipes.css';
+import { CloneDialog } from '@/shared/CloneDialog/CloneDialog';
+import { ScanResultsDialog } from '@/shared/ScanResultsDialog/ScanResultsDialog';
+import { ManageProjectsDialog } from '@/shared/ManageProjectsDialog/ManageProjectsDialog';
 import * as styles from '@/styles/sidebar.css';
 import {
   filteredProjects,
@@ -12,7 +19,8 @@ import {
   leftSidebarCollapsed,
   bootstrapWorktrees,
 } from '@/core/signals/worktrees';
-import { addProject, browseDirectory, cloneRepository, scanDirectory } from '@/core/bindings';
+import { addProject, browseDirectory, cloneRepository, isGitRepo, initGitRepo } from '@/core/bindings';
+import { showToast, showWarningToast } from '@/shared/Toast/Toast';
 import { refreshProjects } from '@/core/signals/projects';
 import { ProjectSection } from './ProjectSection';
 import { ResizeHandle } from './ResizeHandle';
@@ -22,30 +30,52 @@ export function WorktreeSidebar() {
     bootstrapWorktrees();
   });
 
+  const [gitInitPath, setGitInitPath] = createSignal('');
+  const gitInitOpen = () => gitInitPath() !== '';
+
   async function handleAddProject() {
     const path = await browseDirectory('Select project directory');
     if (!path) return;
+    const alreadyExists = filteredProjects().some((p) => p.repo_path === path);
+    if (alreadyExists) {
+      showWarningToast('Already added', `"${path.split('/').pop()}" is already in your projects`);
+      return;
+    }
+    const hasGit = await isGitRepo(path);
+    if (!hasGit) {
+      setGitInitPath(path);
+      return;
+    }
     await addProject(path);
     await refreshProjects();
     await bootstrapWorktrees();
+    showToast('Project added', path.split('/').pop() ?? path);
   }
+
+  async function handleConfirmGitInit() {
+    const path = gitInitPath();
+    setGitInitPath('');
+    await initGitRepo(path);
+    await addProject(path);
+    await refreshProjects();
+    await bootstrapWorktrees();
+    showToast('Project initialized', `Git repo created and project added`);
+  }
+
+  const [scanOpen, setScanOpen] = createSignal(false);
+  const [scanParent, setScanParent] = createSignal('');
 
   async function handleScanDirectory() {
     const parent = await browseDirectory('Select directory to scan');
     if (!parent) return;
-    const paths = await scanDirectory(parent);
-    for (const p of paths) {
-      await addProject(p);
-    }
-    await refreshProjects();
-    await bootstrapWorktrees();
+    setScanParent(parent);
+    setScanOpen(true);
   }
 
-  async function handleClone() {
-    // Prompt is handled by the OS; for now open a browser-based URL dialog.
-    // In a real flow this would open a modal — kept simple per KISS principle.
-    const url = window.prompt('Repository URL to clone:');
-    if (!url) return;
+  const [cloneOpen, setCloneOpen] = createSignal(false);
+  const [manageOpen, setManageOpen] = createSignal(false);
+
+  async function handleCloneSubmit(url: string) {
     const dest = await browseDirectory('Select destination directory');
     if (!dest) return;
     await cloneRepository(url, dest);
@@ -61,13 +91,13 @@ export function WorktreeSidebar() {
       >
         {/* Search input */}
         <div class={styles.searchWrapper}>
-          <input
-            class={styles.searchInput}
-            type="text"
-            placeholder="Search projects & branches…"
-            value={sidebarSearch()}
-            onInput={(e) => setSidebarSearch(e.currentTarget.value)}
-          />
+          <TextField value={sidebarSearch()} onChange={setSidebarSearch} class={styles.searchInput}>
+            <TextField.Input
+              class={styles.searchInputField}
+              placeholder="Search projects & branches…"
+              aria-label="Search projects and branches"
+            />
+          </TextField>
         </div>
 
         {/* Project list */}
@@ -79,36 +109,83 @@ export function WorktreeSidebar() {
 
         {/* Bottom actions */}
         <div class={styles.actions}>
-          <button
-            class={styles.actionButton}
-            type="button"
-            onClick={handleAddProject}
-            title="Add project"
-          >
-            <FolderPlus size={13} />
-            Add
-          </button>
-          <button
-            class={styles.actionButton}
-            type="button"
-            onClick={handleScanDirectory}
-            title="Scan directory for repos"
-          >
-            <GitBranch size={13} />
-            Scan
-          </button>
-          <button
-            class={styles.actionButton}
-            type="button"
-            onClick={handleClone}
-            title="Clone repository"
-          >
-            <HardDriveDownload size={13} />
-            Clone
-          </button>
+          <Tip label="Add a single project directory">
+            <button
+              class={styles.actionButton}
+              type="button"
+              onClick={handleAddProject}
+            >
+              <FolderPlus size={13} />
+              Add
+            </button>
+          </Tip>
+          <Tip label="Scan a folder for all git repos">
+            <button
+              class={styles.actionButton}
+              type="button"
+              onClick={handleScanDirectory}
+            >
+              <GitBranch size={13} />
+              Scan
+            </button>
+          </Tip>
+          <Tip label="Clone a repository by URL">
+            <button
+              class={styles.actionButton}
+              type="button"
+              onClick={() => setCloneOpen(true)}
+            >
+              <HardDriveDownload size={13} />
+              Clone
+            </button>
+          </Tip>
+          <Tip label="Bulk remove projects">
+            <button
+              class={styles.actionButton}
+              type="button"
+              onClick={() => setManageOpen(true)}
+            >
+              <Settings2 size={13} />
+              Manage
+            </button>
+          </Tip>
         </div>
 
         <ResizeHandle />
+
+        <CloneDialog
+          open={cloneOpen}
+          onOpenChange={setCloneOpen}
+          onClone={handleCloneSubmit}
+        />
+
+        <ScanResultsDialog
+          open={scanOpen}
+          onOpenChange={setScanOpen}
+          parentPath={scanParent}
+        />
+
+        <ManageProjectsDialog
+          open={manageOpen}
+          onOpenChange={setManageOpen}
+        />
+
+        <PhantomModal
+          open={gitInitOpen}
+          onOpenChange={(open) => { if (!open) setGitInitPath(''); }}
+          title="No Git Repository Found"
+          description={`The directory "${gitInitPath().split('/').pop()}" does not contain a git repository. Would you like to initialize one?`}
+          size="sm"
+        >
+          <div class={phantomModalStyles.actions}>
+            <button type="button" class={buttonRecipe({ variant: 'ghost', size: 'md' })} onClick={() => setGitInitPath('')}>
+              Cancel
+            </button>
+            <button type="button" class={buttonRecipe({ variant: 'primary', size: 'md' })} onClick={handleConfirmGitInit}>
+              Initialize Git
+            </button>
+          </div>
+        </PhantomModal>
       </div>
     </Show>
   );

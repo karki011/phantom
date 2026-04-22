@@ -2,6 +2,7 @@
 // Author: Subash Karki
 
 import { For, Show, createSignal } from 'solid-js';
+import { Collapsible } from '@kobalte/core/collapsible';
 import { ChevronRight, Folder, FolderOpen, FileText } from 'lucide-solid';
 import * as styles from '@/styles/right-sidebar.css';
 import {
@@ -38,54 +39,50 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
   const [expanded, setExpanded] = createSignal(props.node.expanded ?? false);
 
   const indent = () => props.depth * 12;
-
-  function handleClick() {
-    if (props.node.isDir) {
-      setExpanded((v) => !v);
-      // Lazy load: if no children yet, the real implementation would call a binding here.
-      // For now we just toggle the visual state.
-    } else {
-      setSelectedFile(props.node.path);
-    }
-  }
-
   const isSelected = () => !props.node.isDir && selectedFile() === props.node.path;
 
-  return (
-    <>
+  if (!props.node.isDir) {
+    return (
       <div
-        class={`${styles.fileItem} ${props.node.isDir ? styles.fileItemDir : ''} ${isSelected() ? styles.fileItemSelected : ''}`}
+        class={`${styles.fileItem} ${isSelected() ? styles.fileItemSelected : ''}`}
         style={{ 'padding-left': `${indent() + 8}px` }}
-        onClick={handleClick}
+        onClick={() => setSelectedFile(props.node.path)}
         title={props.node.path}
       >
-        <Show
-          when={props.node.isDir}
-          fallback={<FileText size={14} class={styles.fileIcon} />}
-        >
-          <ChevronRight
-            size={12}
-            class={styles.fileIcon}
-            style={{ transform: expanded() ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 150ms ease' }}
-          />
-          <Show when={expanded()} fallback={<Folder size={14} class={styles.fileIcon} />}>
-            <FolderOpen size={14} class={styles.fileIcon} />
-          </Show>
-        </Show>
-
+        <FileText size={14} class={styles.fileIcon} />
         <span class={styles.fileName}>{props.node.name}</span>
-
         <Show when={props.node.gitStatus}>
           <GitBadge status={props.node.gitStatus!} />
         </Show>
       </div>
+    );
+  }
 
-      <Show when={props.node.isDir && expanded() && props.node.children?.length}>
-        <For each={props.node.children}>
-          {(child) => <FileTreeItem node={child} depth={props.depth + 1} />}
-        </For>
-      </Show>
-    </>
+  return (
+    <Collapsible open={expanded()} onOpenChange={setExpanded}>
+      <Collapsible.Trigger
+        class={`${styles.fileItem} ${styles.fileItemDir}`}
+        style={{ 'padding-left': `${indent() + 8}px` }}
+        title={props.node.path}
+      >
+        <ChevronRight size={12} class={styles.fileChevron} />
+        <Show when={expanded()} fallback={<Folder size={14} class={styles.fileIcon} />}>
+          <FolderOpen size={14} class={styles.fileIcon} />
+        </Show>
+        <span class={styles.fileName}>{props.node.name}</span>
+        <Show when={props.node.gitStatus}>
+          <GitBadge status={props.node.gitStatus!} />
+        </Show>
+      </Collapsible.Trigger>
+
+      <Collapsible.Content>
+        <Show when={props.node.children?.length}>
+          <For each={props.node.children}>
+            {(child) => <FileTreeItem node={child} depth={props.depth + 1} />}
+          </For>
+        </Show>
+      </Collapsible.Content>
+    </Collapsible>
   );
 }
 

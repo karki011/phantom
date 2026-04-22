@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -111,7 +112,7 @@ func (a *App) GetDefaultBranch(repoPath string) string {
 	return git.GetDefaultBranch(a.ctx, repoPath)
 }
 
-// GetProjectBranches returns all local branch names for a project.
+// GetProjectBranches returns all branch names (local + remote) for a project.
 func (a *App) GetProjectBranches(projectId string) []string {
 	q := db.New(a.DB.Reader)
 	proj, err := q.GetProject(a.ctx, projectId)
@@ -120,15 +121,37 @@ func (a *App) GetProjectBranches(projectId string) []string {
 		return []string{}
 	}
 
-	branches, err := git.ListBranches(a.ctx, proj.RepoPath)
+	log.Printf("GetProjectBranches: called for project %s, repoPath=%s", projectId, proj.RepoPath)
+
+	seen := make(map[string]bool)
+	var names []string
+
+	local, err := git.ListBranches(a.ctx, proj.RepoPath)
 	if err != nil {
-		log.Printf("app/bindings_git: ListBranches(%s) error: %v", proj.RepoPath, err)
-		return []string{}
+		log.Printf("GetProjectBranches: ListBranches error: %v", err)
+	}
+	log.Printf("GetProjectBranches: local branches count=%d", len(local))
+	for _, b := range local {
+		if !seen[b.Name] {
+			seen[b.Name] = true
+			names = append(names, b.Name)
+		}
 	}
 
-	names := make([]string, 0, len(branches))
-	for _, b := range branches {
-		names = append(names, b.Name)
+	remote, err := git.ListRemoteBranches(a.ctx, proj.RepoPath)
+	if err != nil {
+		log.Printf("GetProjectBranches: ListRemoteBranches error: %v", err)
 	}
+	log.Printf("GetProjectBranches: remote branches count=%d", len(remote))
+	for _, b := range remote {
+		name := strings.TrimPrefix(b.Name, "origin/")
+		if name == "HEAD" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+
+	log.Printf("GetProjectBranches: returning %d total branches", len(names))
 	return names
 }

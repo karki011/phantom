@@ -4,7 +4,8 @@
 // Integrates with the Terminal Runtime Registry so sessions survive
 // SolidJS component unmount/remount cycles (tab switches, worktree changes).
 
-import { onMount, onCleanup, createSignal, Show } from 'solid-js';
+import { onMount, onCleanup, createSignal, createEffect, Show } from 'solid-js';
+import { TextField } from '@kobalte/core/text-field';
 import '@xterm/xterm/css/xterm.css';
 import * as termStyles from '@/styles/terminal.css';
 import { PhantomLoader } from '@/shared/PhantomLoader/PhantomLoader';
@@ -21,14 +22,18 @@ import {
   writeBubbleteaProgram,
   resizeTerminal,
   getTerminalScrollback,
+  runTerminalCommand,
 } from '@/core/bindings';
 import { vars } from '@/styles/theme.css';
+import { currentMonoFont, activeFontStyle } from '@/core/signals/theme';
 
 interface TerminalPaneProps {
   paneId: string;
   cwd?: string;
   /** Present when rendered for a TUI pane — the Go-side session already exists. */
   sessionId?: string;
+  /** Initial command to execute after the PTY is ready (plain terminal panes only). */
+  command?: string;
 }
 
 export default function TerminalPane(props: TerminalPaneProps) {
@@ -40,21 +45,22 @@ export default function TerminalPane(props: TerminalPaneProps) {
   const sessionId = effectiveSessionId;
   const [showSearch, setShowSearch] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
-  const [loading, setLoading] = createSignal(true);
+  const isReattach = hasSession(sessionId);
+  const [loading, setLoading] = createSignal(!isReattach);
 
   onMount(async () => {
     // --- Reattach path: session already lives in the registry ---
-    if (hasSession(sessionId)) {
+    if (isReattach) {
       const session = attachSession(sessionId, containerRef);
       if (session) {
-        // Give the container a frame to settle its dimensions before refitting
-        requestAnimationFrame(() => {
-          try {
-            session.fitAddon.fit();
-            session.terminal.focus();
-          } catch {}
-          setLoading(false);
-        });
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            try {
+              session.fitAddon.fit();
+              session.terminal.focus();
+            } catch {}
+          }),
+        );
         return;
       }
     }
@@ -67,6 +73,7 @@ export default function TerminalPane(props: TerminalPaneProps) {
     };
 
     const session = createSession(sessionId, {
+      fontFamily: currentMonoFont(),
       theme: {
         background: resolve(vars.color.terminalBg, '#0a0a1a'),
         foreground: resolve(vars.color.terminalText, '#e0def4'),
@@ -140,17 +147,26 @@ export default function TerminalPane(props: TerminalPaneProps) {
       /* first launch — no scrollback to restore */
     }
 
-    // Final fit, focus, and reveal (minimum 600ms so the loader animation is visible)
+    // Final fit, focus, and reveal (minimum 600ms so the loader animation is visible).
+    // Double-rAF ensures the browser has finished layout so xterm measures full width.
     const mountedAt = performance.now();
-    requestAnimationFrame(() => {
-      try {
-        session.fitAddon.fit();
-        session.terminal.focus();
-      } catch {}
-      const elapsed = performance.now() - mountedAt;
-      const remaining = Math.max(0, 600 - elapsed);
-      setTimeout(() => setLoading(false), remaining);
-    });
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        try {
+          session.fitAddon.fit();
+          session.terminal.focus();
+        } catch {}
+        const elapsed = performance.now() - mountedAt;
+        const remaining = Math.max(0, 600 - elapsed);
+        setTimeout(async () => {
+          setLoading(false);
+          try { session.fitAddon.fit(); } catch {}
+          if (props.command) {
+            await runTerminalCommand(sessionId, props.command);
+          }
+        }, remaining);
+      }),
+    );
   });
 
   // ResizeObserver: refit xterm whenever the pane container resizes
@@ -165,6 +181,16 @@ export default function TerminalPane(props: TerminalPaneProps) {
     });
     ro.observe(containerRef);
     onCleanup(() => ro.disconnect());
+  });
+
+  // Live font update: when the user switches font styles, push the new mono
+  // font-family directly into xterm.js options so the change is instant.
+  createEffect(() => {
+    const font = currentMonoFont(); // reactive — re-runs when activeFontStyle changes
+    const session = getSession(sessionId);
+    if (session) {
+      session.terminal.options.fontFamily = font;
+    }
   });
 
   // Cmd+F: toggle search bar
@@ -246,15 +272,16 @@ export default function TerminalPane(props: TerminalPaneProps) {
       <div class={termStyles.terminalContainer} ref={containerRef!} />
       <Show when={showSearch()}>
         <div class={termStyles.searchBar}>
-          <input
-            ref={searchInputRef!}
-            class={termStyles.searchInput}
-            type="text"
-            placeholder="Search..."
-            value={searchQuery()}
-            onInput={handleSearchInput}
-            onKeyDown={handleSearchKeydown}
-          />
+          <TextField class={termStyles.searchInput}>
+            <TextField.Input
+              ref={searchInputRef!}
+              class={termStyles.searchInputField}
+              placeholder="Search..."
+              value={searchQuery()}
+              onInput={handleSearchInput}
+              onKeyDown={handleSearchKeydown}
+            />
+          </TextField>
           <button class={termStyles.searchButton} onClick={findPrevious} title="Previous match (Shift+Enter)">
             ↑
           </button>

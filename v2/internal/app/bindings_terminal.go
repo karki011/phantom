@@ -49,6 +49,13 @@ func (a *App) WriteTerminal(id string, data string) error {
 	return a.Terminal.Write(id, []byte(data))
 }
 
+// RunTerminalCommand writes a command string to the terminal's PTY stdin,
+// followed by a newline to execute it.
+// Author: Subash Karki
+func (a *App) RunTerminalCommand(sessionId string, command string) error {
+	return a.Terminal.Write(sessionId, []byte(command+"\n"))
+}
+
 // ResizeTerminal updates the PTY window size.
 func (a *App) ResizeTerminal(id string, cols, rows int) error {
 	return a.Terminal.Resize(id, uint16(cols), uint16(rows))

@@ -1,7 +1,8 @@
 // PhantomOS v2 — Right sidebar with Files, Changes, and Activity tabs
 // Author: Subash Karki
 
-import { Show, For } from 'solid-js';
+import { Show } from 'solid-js';
+import { Tabs } from '@kobalte/core/tabs';
 import { activeWorktreeId } from '@/core/signals/app';
 import {
   rightSidebarWidth,
@@ -15,14 +16,6 @@ import { GitActivityPanel } from './GitActivityPanel';
 import { RightResizeHandle } from './RightResizeHandle';
 import * as styles from '@/styles/right-sidebar.css';
 
-type RightTab = 'files' | 'changes' | 'activity';
-
-const TABS: { value: RightTab; label: string }[] = [
-  { value: 'files', label: 'Files' },
-  { value: 'changes', label: 'Changes' },
-  { value: 'activity', label: 'Activity' },
-];
-
 export function RightSidebar() {
   return (
     <Show when={activeWorktreeId() && !rightSidebarCollapsed()}>
@@ -32,41 +25,28 @@ export function RightSidebar() {
       >
         <RightResizeHandle />
 
-        {/* Tab list */}
-        <div class={styles.tabList} role="tablist" aria-label="Right sidebar">
-          <For each={TABS}>
-            {(tab) => (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={rightSidebarTab() === tab.value}
-                class={rightSidebarTab() === tab.value ? styles.tabActive : styles.tab}
-                onClick={() => setRightSidebarTab(tab.value)}
-              >
-                {tab.label}
-              </button>
-            )}
-          </For>
-        </div>
+        <Tabs
+          value={rightSidebarTab()}
+          onChange={setRightSidebarTab}
+        >
+          <Tabs.List class={styles.tabList} aria-label="Right sidebar">
+            <Tabs.Trigger value="files" class={styles.tab}>Files</Tabs.Trigger>
+            <Tabs.Trigger value="changes" class={styles.tab}>Changes</Tabs.Trigger>
+            <Tabs.Trigger value="activity" class={styles.tab}>Activity</Tabs.Trigger>
+          </Tabs.List>
 
-        {/* Tab panels */}
-        <Show when={rightSidebarTab() === 'files'}>
-          <div class={styles.tabPanel} role="tabpanel">
+          <Tabs.Content value="files" class={styles.tabPanel}>
             <FilesView />
-          </div>
-        </Show>
+          </Tabs.Content>
 
-        <Show when={rightSidebarTab() === 'changes'}>
-          <div class={styles.tabPanel} role="tabpanel">
+          <Tabs.Content value="changes" class={styles.tabPanel}>
             <ChangesView />
-          </div>
-        </Show>
+          </Tabs.Content>
 
-        <Show when={rightSidebarTab() === 'activity'}>
-          <div class={styles.tabPanel} role="tabpanel">
+          <Tabs.Content value="activity" class={styles.tabPanel}>
             <GitActivityPanel />
-          </div>
-        </Show>
+          </Tabs.Content>
+        </Tabs>
       </div>
     </Show>
   );

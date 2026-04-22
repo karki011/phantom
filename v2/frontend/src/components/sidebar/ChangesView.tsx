@@ -2,6 +2,7 @@
 // Author: Subash Karki
 
 import { For, Show } from 'solid-js';
+import { TextField } from '@kobalte/core/text-field';
 import { GitCommit, Sparkles, Plus, Minus, FileQuestion, FilePen } from 'lucide-solid';
 import * as styles from '@/styles/right-sidebar.css';
 import {
@@ -111,13 +112,16 @@ export function ChangesView() {
         {/* Commit area */}
         <div style={{ 'margin-top': 'auto' }}>
           <div class={styles.commitArea}>
-            <textarea
-              class={styles.commitInput}
-              placeholder="Commit message..."
+            <TextField
               value={commitMessage()}
-              onInput={(e) => setCommitMessage(e.currentTarget.value)}
-              rows={3}
-            />
+              onChange={setCommitMessage}
+              class={styles.commitInput}
+            >
+              <TextField.TextArea
+                placeholder="Commit message..."
+                rows={3}
+              />
+            </TextField>
             <div class={styles.commitActions}>
               <button
                 type="button"

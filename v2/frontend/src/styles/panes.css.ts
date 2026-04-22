@@ -1,8 +1,65 @@
 // PhantomOS v2 — Pane system styles
 // Author: Subash Karki
 
-import { style, styleVariants } from '@vanilla-extract/css';
+import { style, styleVariants, keyframes, globalStyle } from '@vanilla-extract/css';
 import { vars } from './theme.css';
+
+// ---------------------------------------------------------------------------
+// Skeleton placeholder
+// ---------------------------------------------------------------------------
+
+const skeletonPulse = keyframes({
+  '0%': { opacity: 1 },
+  '50%': { opacity: 0.4 },
+  '100%': { opacity: 1 },
+});
+
+export const skeletonPlaceholder = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.sm,
+  padding: vars.space.md,
+  height: '100%',
+  boxSizing: 'border-box',
+});
+
+export const skeletonLine = style({
+  borderRadius: vars.radius.sm,
+  background: vars.color.bgTertiary,
+  selectors: {
+    '[data-visible][data-animate] &': {
+      animation: `${skeletonPulse} 1.8s ease-in-out infinite`,
+    },
+  },
+});
+
+export const skeletonHeader = style([
+  {
+    height: '16px',
+    width: '40%',
+    borderRadius: vars.radius.sm,
+    background: vars.color.bgTertiary,
+    marginBottom: vars.space.xs,
+    selectors: {
+      '[data-visible][data-animate] &': {
+        animation: `${skeletonPulse} 1.8s ease-in-out infinite`,
+      },
+    },
+  },
+]);
+
+export const skeletonBody = style([
+  {
+    flex: 1,
+    borderRadius: vars.radius.sm,
+    background: vars.color.bgTertiary,
+    selectors: {
+      '[data-visible][data-animate] &': {
+        animation: `${skeletonPulse} 1.8s ease-in-out infinite 0.3s`,
+      },
+    },
+  },
+]);
 
 // ---------------------------------------------------------------------------
 // Workspace shell
@@ -35,6 +92,14 @@ export const tabBar = style({
   '::-webkit-scrollbar': { display: 'none' },
 });
 
+export const tabList = style({
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'stretch',
+  flex: 1,
+  gap: '1px',
+});
+
 export const tab = style({
   display: 'flex',
   flexDirection: 'row',
@@ -58,13 +123,12 @@ export const tab = style({
       backgroundColor: vars.color.bgHover,
       color: vars.color.textPrimary,
     },
+    '&[data-selected]': {
+      backgroundColor: vars.color.bgTertiary,
+      color: vars.color.textPrimary,
+      borderBottom: `2px solid ${vars.color.accent}`,
+    },
   },
-});
-
-export const tabActive = style({
-  backgroundColor: vars.color.bgTertiary,
-  color: vars.color.textPrimary,
-  borderBottom: `2px solid ${vars.color.accent}`,
 });
 
 export const tabLabel = style({
@@ -231,6 +295,34 @@ export const paneContent = style({
   flex: 1,
   overflow: 'hidden',
   position: 'relative',
+  display: 'flex',
+  flexDirection: 'column',
+});
+
+// ---------------------------------------------------------------------------
+// Floating header overlay (hover-reveal, replaces the always-visible paneHeader)
+// ---------------------------------------------------------------------------
+
+export const paneHeaderFloat = style({
+  position: 'absolute',
+  top: vars.space.xs,
+  right: vars.space.xs,
+  zIndex: 20,
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `${vars.space.xs} ${vars.space.sm}`,
+  borderRadius: vars.radius.sm,
+  backgroundColor: `color-mix(in srgb, ${vars.color.bgSecondary} 85%, transparent)`,
+  backdropFilter: 'blur(4px)',
+  opacity: 0,
+  transition: `opacity ${vars.animation.fast} ease`,
+  pointerEvents: 'none',
+});
+
+globalStyle(`${paneContainer}:hover ${paneHeaderFloat}`, {
+  opacity: 1,
+  pointerEvents: 'auto',
 });
 
 // ---------------------------------------------------------------------------

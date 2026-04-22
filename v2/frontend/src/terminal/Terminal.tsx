@@ -8,6 +8,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { vars } from '../styles/theme.css';
 import { createTerminal, writeTerminal, resizeTerminal, getTerminalScrollback } from '../core/bindings';
+import { MONO_FONT_FAMILY } from '../core/terminal/registry';
 import * as styles from './Terminal.css';
 import type { WsMessage } from '../core/types';
 
@@ -32,7 +33,7 @@ export function Terminal(props: TerminalProps) {
       cs.getPropertyValue(v.replace(/^var\(/, '').replace(/\)$/, '')).trim() || fallback;
 
     term = new XTerm({
-      fontFamily: '"JetBrains Mono", "Fira Code", "SF Mono", monospace',
+      fontFamily: MONO_FONT_FAMILY,
       fontSize: 13,
       lineHeight: 1.4,
       cursorBlink: true,

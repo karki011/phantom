@@ -28,6 +28,12 @@ export const buttonRecipe = recipe({
         color: vars.color.textPrimary,
         ':hover': { background: vars.color.bgHover },
       },
+      outline: {
+        background: 'transparent',
+        color: vars.color.textPrimary,
+        border: `1px solid ${vars.color.border}`,
+        ':hover': { background: vars.color.bgHover, borderColor: vars.color.borderFocus },
+      },
       danger: {
         background: vars.color.danger,
         color: vars.color.textInverse,

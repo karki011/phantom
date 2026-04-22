@@ -6,6 +6,7 @@ import * as styles from '@/styles/panes.css';
 import type { LayoutNode, PaneLeaf, SplitNode } from '@/core/panes/types';
 import { PaneContainer } from './PaneContainer';
 import { PaneResizeHandle } from './PaneResizeHandle';
+import { activeTab } from '@/core/panes/signals';
 
 interface LayoutRendererProps {
   layout: LayoutNode;
@@ -14,10 +15,12 @@ interface LayoutRendererProps {
 }
 
 export function LayoutRenderer(props: LayoutRendererProps) {
+  const isSolo = () => activeTab()?.layout.type === 'leaf';
+
   return (
     <Switch>
       <Match when={props.layout.type === 'leaf'}>
-        <PaneContainer pane={props.layout as PaneLeaf} />
+        <PaneContainer pane={props.layout as PaneLeaf} isSolo={isSolo()} />
       </Match>
 
       <Match when={props.layout.type === 'split'}>

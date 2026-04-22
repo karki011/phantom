@@ -1,13 +1,17 @@
 // PhantomOS v2 — Welcome page (no worktree selected)
 // Author: Subash Karki
 
+import { createSignal } from 'solid-js';
 import * as styles from '@/styles/home.css';
 import { buttonRecipe } from '@/styles/recipes.css';
 import { addProject, browseDirectory, cloneRepository, scanDirectory } from '@/core/bindings';
 import { refreshProjects } from '@/core/signals/projects';
 import { bootstrapWorktrees } from '@/core/signals/worktrees';
+import { CloneDialog } from '@/shared/CloneDialog/CloneDialog';
 
 export function WelcomePage() {
+  const [cloneOpen, setCloneOpen] = createSignal(false);
+
   async function handleAddProject() {
     const path = await browseDirectory('Select project directory');
     if (!path) return;
@@ -16,9 +20,7 @@ export function WelcomePage() {
     await bootstrapWorktrees();
   }
 
-  async function handleClone() {
-    const url = window.prompt('Repository URL to clone:');
-    if (!url) return;
+  async function handleCloneSubmit(url: string) {
     const dest = await browseDirectory('Select destination directory');
     if (!dest) return;
     await cloneRepository(url, dest);
@@ -47,13 +49,19 @@ export function WelcomePage() {
         <button class={buttonRecipe({ variant: 'primary', size: 'md' })} type="button" onClick={handleAddProject}>
           Add Project
         </button>
-        <button class={buttonRecipe({ variant: 'ghost', size: 'md' })} type="button" onClick={handleClone}>
+        <button class={buttonRecipe({ variant: 'ghost', size: 'md' })} type="button" onClick={() => setCloneOpen(true)}>
           Clone Repository
         </button>
         <button class={buttonRecipe({ variant: 'ghost', size: 'md' })} type="button" onClick={handleScan}>
           Scan Directory
         </button>
       </div>
+
+      <CloneDialog
+        open={cloneOpen}
+        onOpenChange={setCloneOpen}
+        onClone={handleCloneSubmit}
+      />
     </div>
   );
 }

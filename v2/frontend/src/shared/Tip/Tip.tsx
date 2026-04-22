@@ -8,11 +8,13 @@ import * as styles from './Tip.css';
 interface TipProps {
   label: string;
   children: JSX.Element;
+  openDelay?: number;
+  placement?: 'top' | 'bottom' | 'left' | 'right';
 }
 
 export function Tip(props: TipProps) {
   return (
-    <Tooltip openDelay={0} closeDelay={0}>
+    <Tooltip openDelay={props.openDelay ?? 0} closeDelay={0} placement={props.placement ?? 'top'}>
       <Tooltip.Trigger as="span" class={styles.trigger}>
         {props.children}
       </Tooltip.Trigger>

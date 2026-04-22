@@ -77,6 +77,23 @@ export async function removeProject(id: string): Promise<boolean> {
   }
 }
 
+export async function isGitRepo(path: string): Promise<boolean> {
+  try {
+    return (await App()?.IsGitRepo(path)) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+export async function initGitRepo(path: string): Promise<boolean> {
+  try {
+    await App()?.InitGitRepo(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function browseDirectory(title: string): Promise<string> {
   try {
     return (await App()?.BrowseDirectory(title)) ?? '';
@@ -100,4 +117,9 @@ export async function cloneRepository(url: string, destPath: string): Promise<Pr
   } catch {
     return null;
   }
+}
+
+export async function toggleStarProject(id: string): Promise<boolean> {
+  const result = await App()?.ToggleStarProject(id);
+  return result ?? false;
 }

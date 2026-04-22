@@ -16,47 +16,10 @@ export const terminalContainer = style({
   width: '100%',
   height: '100%',
   overflow: 'hidden',
-  contain: 'strict',
-});
-
-const textGlow = keyframes({
-  '0%, 100%': { textShadow: `0 0 10px ${vars.color.accentGlow}` },
-  '50%': { textShadow: `0 0 25px ${vars.color.accent}, 0 0 50px ${vars.color.accentGlow}` },
-});
-
-const scanline = keyframes({
-  '0%': { top: '-2px' },
-  '100%': { top: '100%' },
-});
-
-export const loadingOverlay = style({
-  position: 'absolute',
-  inset: 0,
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  background: vars.color.terminalBg,
-  zIndex: 5,
-  overflow: 'hidden',
-});
-
-export const loadingText = style({
-  fontFamily: vars.font.mono,
-  fontSize: vars.fontSize.sm,
-  color: vars.color.accent,
-  letterSpacing: '0.15em',
-  animation: `${textGlow} 3s ease-in-out infinite`,
-});
-
-export const loadingScanline = style({
-  position: 'absolute',
-  left: 0,
-  right: 0,
-  height: '2px',
-  background: `linear-gradient(90deg, transparent, ${vars.color.accent}, transparent)`,
-  opacity: 0.4,
-  animation: `${scanline} 2s linear infinite`,
+  // 'strict' includes size containment which prevents xterm from measuring
+  // the true available width. Use layout+paint only so FitAddon.fit() sees
+  // the correct container dimensions.
+  contain: 'layout paint',
 });
 
 export const restoreBanner = style({
@@ -99,15 +62,23 @@ export const searchInput = style({
   background: vars.color.bgSecondary,
   border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.sm,
+  width: '180px',
+  selectors: {
+    '&:focus-within': {
+      borderColor: vars.color.borderFocus,
+    },
+  },
+});
+
+export const searchInputField = style({
+  background: 'transparent',
+  border: 'none',
   color: vars.color.textPrimary,
   fontFamily: vars.font.mono,
   fontSize: vars.fontSize.xs,
   padding: `2px ${vars.space.sm}`,
-  width: '180px',
+  width: '100%',
   outline: 'none',
-  ':focus': {
-    borderColor: vars.color.borderFocus,
-  },
   '::placeholder': {
     color: vars.color.textDisabled,
   },

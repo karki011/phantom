@@ -3,11 +3,18 @@
 import { style } from '@vanilla-extract/css';
 import { vars } from '../../styles/theme.css';
 
+export const progressRoot = style({
+  display: 'contents',
+});
+
 export const container = style({
   display: 'flex',
   gap: vars.space.sm,
   justifyContent: 'center',
   padding: vars.space.md,
+  background: 'none',
+  border: 'none',
+  height: 'auto',
 });
 
 export const hex = style({

@@ -8,6 +8,8 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 
+export const MONO_FONT_FAMILY = '"JetBrains Mono", "Fira Code", "SF Mono", monospace';
+
 export interface TerminalSession {
   terminal: Terminal;
   fitAddon: FitAddon;
@@ -37,13 +39,13 @@ function getOffscreen(): HTMLDivElement {
 
 export function createSession(
   sessionId: string,
-  opts?: { theme?: Record<string, string> },
+  opts?: { theme?: Record<string, string>; fontFamily?: string },
 ): TerminalSession {
   if (sessions.has(sessionId)) return sessions.get(sessionId)!;
 
   const terminal = new Terminal({
     fontSize: 14,
-    fontFamily: '"JetBrains Mono", "Fira Code", "SF Mono", monospace',
+    fontFamily: opts?.fontFamily ?? MONO_FONT_FAMILY,
     lineHeight: 1.4,
     cursorBlink: true,
     cursorStyle: 'bar',

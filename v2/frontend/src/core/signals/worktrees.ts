@@ -7,6 +7,7 @@ import { projects, bootstrapProjects } from './projects';
 import { setActiveWorktreeId } from './app';
 import { listWorktrees, createWorktree, removeWorktree } from '../bindings';
 import { setPref, loadPref } from './preferences';
+import { clearWorktreeCache } from '../panes/signals';
 import type { Workspace, WorktreeStatus } from '../types';
 
 // Worktree data per project (keyed by project id)
@@ -124,13 +125,26 @@ export async function createWorktreeForProject(
   await loadProjectWorktrees(projectId);
 }
 
-// Remove a worktree and refresh
+// Remove a worktree, clean up tabs/cache, and switch to local branch if needed
 export async function removeWorktreeById(
   projectId: string,
   worktreeId: string,
 ): Promise<void> {
+  const isActive = activeWorktreeId() === worktreeId;
+
   await removeWorktree(worktreeId);
+  clearWorktreeCache(worktreeId);
   await loadProjectWorktrees(projectId);
+
+  if (isActive) {
+    const projectWorktrees = worktreeMap()[projectId] ?? [];
+    const localBranch = projectWorktrees.find((w) => w.type === 'branch');
+    if (localBranch) {
+      selectWorktree(localBranch.id);
+    } else if (projectWorktrees.length > 0) {
+      selectWorktree(projectWorktrees[0].id);
+    }
+  }
 }
 
 export {

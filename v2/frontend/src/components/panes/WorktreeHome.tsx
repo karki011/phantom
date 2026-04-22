@@ -1,10 +1,13 @@
 // PhantomOS v2 — Worktree home pane (Hunter's Terminal)
 // Author: Subash Karki
 
-import { createMemo } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
+import { GitBranch } from 'lucide-solid';
 import { activeWorktreeId } from '@/core/signals/app';
 import { worktreeMap } from '@/core/signals/worktrees';
+import { projects } from '@/core/signals/projects';
 import { addTabWithData } from '@/core/panes/signals';
+import { NewWorktreeDialog } from '@/shared/NewWorktreeDialog/NewWorktreeDialog';
 import * as styles from '@/styles/home.css';
 
 export default function WorktreeHome() {
@@ -18,16 +21,44 @@ export default function WorktreeHome() {
     return null;
   });
 
+  const activeProject = createMemo(() => {
+    const wt = activeWorktree();
+    if (!wt) return null;
+    return projects().find((p) => p.id === wt.project_id) ?? null;
+  });
+
+  const [worktreeOpen, setWorktreeOpen] = createSignal(false);
+
   return (
     <div class={styles.homeContainer}>
-      {/* Hunter Banner */}
-      <div class={styles.hunterBanner}>
-        <span class={styles.rankBadge}>E</span>
-        <div class={styles.rankInfo}>
-          <span class={styles.rankTitle}>Shadow Soldier</span>
-          <span class={styles.rankLevel}>Level 1 · 0 XP</span>
+      {/* Workspace Status Card */}
+      <div class={styles.statusCard}>
+        {/* Row 1: Icon + Label */}
+        <div class={styles.statusHeader}>
+          <span class={styles.statusIcon}>
+            <GitBranch size={14} />
+          </span>
+          <span class={styles.statusTitle}>Workspace Status</span>
+        </div>
+
+        {/* Row 2: Green dot + Branch name */}
+        <div class={styles.statusBranch}>
+          <span class={styles.statusDot} />
+          <span class={styles.statusBranchName}>{activeWorktree()?.branch ?? '—'}</span>
+        </div>
+
+        {/* Row 3: Meta summary */}
+        <div class={styles.statusMeta}>
+          {activeWorktree()?.type === 'branch' ? 'Local' : 'Worktree'}
+          {' · '}
+          <span title={activeWorktree()?.worktree_path ?? ''}>{activeWorktree()?.worktree_path ?? '—'}</span>
+          {' · '}
+          Graph Ready
         </div>
       </div>
+
+      {/* Separator */}
+      <div class={styles.sectionSeparator} />
 
       {/* Quick Actions */}
       <div>
@@ -41,6 +72,29 @@ export default function WorktreeHome() {
               <path d="M8 10h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
             </svg>
             <span class={styles.quickActionLabel}>Terminal</span>
+          </button>
+
+          {/* New Session — worktree flow from local branch, direct Claude from worktree */}
+          <button
+            class={styles.quickActionButton}
+            type="button"
+            title={activeWorktree()?.type === 'branch' ? 'Create a worktree and start Claude session' : 'Start Claude in this worktree'}
+            onClick={() => {
+              if (activeWorktree()?.type === 'branch') {
+                setWorktreeOpen(true);
+              } else {
+                addTabWithData('terminal', 'Claude', {
+                  cwd: activeWorktree()?.worktree_path ?? '',
+                  command: 'claude --dangerously-skip-permissions',
+                });
+              }
+            }}
+          >
+            <svg class={styles.quickActionIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="1.5" y="2.5" width="13" height="11" rx="2" stroke="currentColor" stroke-width="1.4" />
+              <path d="M9 5.5L7 8.5h2.5L7 11.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span class={styles.quickActionLabel}>New Session</span>
           </button>
 
           {/* Editor */}
@@ -75,33 +129,15 @@ export default function WorktreeHome() {
         </div>
       </div>
 
-      {/* Workspace Info */}
-      <div class={styles.statusCard}>
-        <div class={styles.statusGrid}>
-          <div class={styles.statusCell}>
-            <span class={styles.statusLabel}>
-              {activeWorktree()?.type === 'branch' ? 'Local Branch' : 'Worktree'}
-            </span>
-            <span class={styles.statusValue}>{activeWorktree()?.branch ?? '—'}</span>
-          </div>
-          <div class={styles.statusCell}>
-            <span class={styles.statusLabel}>Code Graph</span>
-            <span class={styles.statusValue}>Ready</span>
-          </div>
-          <div class={styles.statusCell}>
-            <span class={styles.statusLabel}>Path</span>
-            <span class={styles.statusValue} title={activeWorktree()?.worktree_path ?? ''}>
-              {activeWorktree()?.worktree_path ?? '—'}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Plans */}
-      <div class={styles.statusCard}>
-        <span class={styles.statusLabel}>Plans</span>
-        <span class={styles.statusValue}>No plans discovered yet</span>
-      </div>
+      {activeProject() && (
+        <NewWorktreeDialog
+          open={worktreeOpen}
+          onOpenChange={setWorktreeOpen}
+          projectId={activeProject()!.id}
+          projectName={activeProject()!.name}
+          defaultBranch={activeProject()!.default_branch ?? 'main'}
+        />
+      )}
     </div>
   );
 }

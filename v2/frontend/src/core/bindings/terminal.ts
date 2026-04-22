@@ -100,6 +100,20 @@ export async function runBubbleteaProgram(
 }
 
 /**
+ * Write a command to the terminal's PTY stdin followed by a newline,
+ * causing the shell to execute it immediately.
+ * @param sessionId - The terminal session ID
+ * @param command   - The command string to execute (no trailing newline needed)
+ */
+export async function runTerminalCommand(sessionId: string, command: string): Promise<void> {
+  try {
+    await App()?.RunTerminalCommand(sessionId, command);
+  } catch (error) {
+    console.error('[terminal] runTerminalCommand failed', { sessionId, error });
+  }
+}
+
+/**
  * Send keyboard input to an active Bubbletea TUI session.
  * @param sessionId - The TUI session ID returned by runBubbleteaProgram
  * @param data      - Raw input string from xterm.js onData

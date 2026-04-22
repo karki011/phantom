@@ -1,7 +1,7 @@
 // PhantomOS v2 — Sidebar styles (Vanilla Extract)
 // Author: Subash Karki
 
-import { style, styleVariants } from '@vanilla-extract/css';
+import { globalStyle, style, styleVariants } from '@vanilla-extract/css';
 import { vars } from './theme.css';
 
 export const sidebar = style({
@@ -38,15 +38,24 @@ export const searchInput = style({
   backgroundColor: vars.color.bgTertiary,
   border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.sm,
+  transition: `border-color ${vars.animation.fast} ease`,
+  selectors: {
+    '&:focus-within': {
+      borderColor: vars.color.borderFocus,
+    },
+  },
+});
+
+export const searchInputField = style({
+  width: '100%',
+  height:'40px',
+  background: 'transparent',
+  border: 'none',
   color: vars.color.textPrimary,
   fontFamily: vars.font.mono,
   fontSize: vars.fontSize.xs,
   padding: `${vars.space.xs} ${vars.space.sm}`,
   outline: 'none',
-  transition: `border-color ${vars.animation.fast} ease`,
-  ':focus': {
-    borderColor: vars.color.borderFocus,
-  },
   '::placeholder': {
     color: vars.color.textDisabled,
   },
@@ -66,6 +75,13 @@ export const projectSection = style({
 });
 
 export const projectHeader = style({
+  appearance: 'none',
+  background: 'none',
+  border: 'none',
+  font: 'inherit',
+  color: 'inherit',
+  textAlign: 'left',
+  width: '100%',
   display: 'flex',
   flexDirection: 'row',
   alignItems: 'center',
@@ -111,10 +127,11 @@ export const chevron = style({
   flexShrink: 0,
   transition: `transform ${vars.animation.fast} ease`,
   transform: 'rotate(0deg)',
-});
-
-export const chevronExpanded = style({
-  transform: 'rotate(90deg)',
+  selectors: {
+    '[data-expanded] &': {
+      transform: 'rotate(90deg)',
+    },
+  },
 });
 
 export const worktreeList = style({
@@ -139,13 +156,13 @@ export const worktreeItem = style({
   position: 'relative',
   ':hover': {
     backgroundColor: vars.color.bgHover,
+  width: '100%',
   },
 });
 
 export const worktreeItemActive = style({
   backgroundColor: vars.color.bgActive,
-  borderLeft: `2px solid ${vars.color.accent}`,
-  paddingLeft: `calc(${vars.space.sm} - 2px)`,
+  width: '100%',
 });
 
 export const worktreeIcon = style({
@@ -184,21 +201,29 @@ export const inlineInputField = style({
   backgroundColor: vars.color.bgTertiary,
   border: `1px solid ${vars.color.borderFocus}`,
   borderRadius: vars.radius.sm,
+});
+
+globalStyle(`${inlineInputField} input`, {
+  width: '100%',
+  background: 'transparent',
+  border: 'none',
   color: vars.color.textPrimary,
   fontFamily: vars.font.mono,
   fontSize: vars.fontSize.xs,
   padding: `${vars.space.xs} ${vars.space.sm}`,
   outline: 'none',
-  '::placeholder': {
-    color: vars.color.textDisabled,
-  },
+});
+
+globalStyle(`${inlineInputField} input::placeholder`, {
+  color: vars.color.textDisabled,
 });
 
 export const actions = style({
   display: 'flex',
   flexDirection: 'row',
   alignItems: 'center',
-  gap: vars.space.xs,
+  justifyContent: 'center',
+  gap: vars.space.sm,
   padding: vars.space.sm,
   borderTop: `1px solid ${vars.color.divider}`,
   flexShrink: 0,
@@ -244,6 +269,44 @@ export const projectAddButton = style({
   ':hover': {
     backgroundColor: vars.color.bgHover,
     color: vars.color.textPrimary,
+  },
+});
+
+export const starButton = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  padding: '2px',
+  borderRadius: vars.radius.sm,
+  color: vars.color.textDisabled,
+  transition: `all ${vars.animation.fast} ease`,
+  flexShrink: 0,
+  selectors: {
+    '&:hover': {
+      color: vars.color.warning,
+    },
+  },
+});
+
+export const starButtonActive = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  padding: '2px',
+  borderRadius: vars.radius.sm,
+  color: vars.color.warning,
+  transition: `all ${vars.animation.fast} ease`,
+  flexShrink: 0,
+  selectors: {
+    '&:hover': {
+      color: vars.color.textSecondary,
+    },
   },
 });
 

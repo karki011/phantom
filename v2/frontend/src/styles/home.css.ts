@@ -1,17 +1,27 @@
 // PhantomOS v2 — Home and Welcome page styles
 // Author: Subash Karki
 
-import { style } from '@vanilla-extract/css';
+import { style, keyframes } from '@vanilla-extract/css';
 import { vars } from './theme.css';
+
+const borderGlow = keyframes({
+  '0%, 100%': {
+    boxShadow: `0 0 20px color-mix(in srgb, ${vars.color.accent} 10%, transparent), inset 0 0 20px color-mix(in srgb, ${vars.color.accent} 5%, transparent)`,
+  },
+  '50%': {
+    boxShadow: `0 0 30px color-mix(in srgb, ${vars.color.accent} 20%, transparent), inset 0 0 30px color-mix(in srgb, ${vars.color.accent} 8%, transparent)`,
+  },
+});
 
 export const homeContainer = style({
   display: 'flex',
   flexDirection: 'column',
-  padding: `${vars.space.lg} ${vars.space.xl}`,
-  gap: vars.space.lg,
+  padding: vars.space.xxl,
+  gap: vars.space.xl,
   overflowY: 'auto',
   height: '100%',
   boxSizing: 'border-box',
+  background: vars.color.bgPrimary,
 });
 
 export const welcomeContainer = style({
@@ -49,12 +59,21 @@ export const welcomeActions = style({
 });
 
 export const sectionTitle = style({
+  fontFamily: vars.font.mono,
   fontSize: vars.fontSize.xs,
   color: vars.color.textSecondary,
   textTransform: 'uppercase',
   letterSpacing: '0.1em',
-  marginBottom: vars.space.xs,
-  fontWeight: 600,
+  marginBottom: vars.space.sm,
+  fontWeight: 400,
+});
+
+export const sectionSeparator = style({
+  width: '100%',
+  height: '1px',
+  background: `linear-gradient(90deg, transparent, ${vars.color.accent}, transparent)`,
+  marginBottom: vars.space.xl,
+  opacity: 0.4,
 });
 
 export const quickActions = style({
@@ -73,7 +92,7 @@ export const quickActionButton = style({
   padding: `${vars.space.xl} ${vars.space.xl}`,
   borderRadius: vars.radius.lg,
   background: vars.color.bgTertiary,
-  border: `1px solid ${vars.color.border}`,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 20%, ${vars.color.border})`,
   cursor: 'pointer',
   flex: 1,
   minWidth: '120px',
@@ -82,8 +101,15 @@ export const quickActionButton = style({
   color: vars.color.textSecondary,
   ':hover': {
     background: vars.color.bgHover,
-    borderColor: vars.color.borderHover,
+    borderColor: `color-mix(in srgb, ${vars.color.accent} 45%, ${vars.color.border})`,
     color: vars.color.textPrimary,
+    boxShadow: `0 0 12px color-mix(in srgb, ${vars.color.accent} 18%, transparent)`,
+  },
+  selectors: {
+    '&[data-active]': {
+      borderColor: vars.color.accent,
+      boxShadow: `0 0 16px color-mix(in srgb, ${vars.color.accent} 25%, transparent)`,
+    },
   },
 });
 
@@ -102,46 +128,81 @@ export const quickActionLabel = style({
 });
 
 export const quickActionHint = style({
-  fontSize: vars.fontSize.xs,
-  color: vars.color.textDisabled,
-  fontStyle: 'italic',
-});
-
-export const statusGrid = style({
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: vars.space.md,
-});
-
-export const statusCard = style({
-  padding: vars.space.lg,
-  background: vars.color.bgTertiary,
-  borderRadius: vars.radius.lg,
-  border: `1px solid ${vars.color.border}`,
-});
-
-export const statusCell = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: vars.space.xs,
-});
-
-export const statusLabel = style({
+  fontFamily: vars.font.mono,
   fontSize: vars.fontSize.xs,
   color: vars.color.textDisabled,
   textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  lineHeight: 1,
+  letterSpacing: '0.08em',
 });
 
-export const statusValue = style({
+export const statusCard = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.sm,
+  padding: vars.space.lg,
+  background: vars.color.bgTertiary,
+  borderRadius: vars.radius.lg,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 20%, ${vars.color.border})`,
+  fontFamily: vars.font.mono,
+});
+
+export const statusHeader = style({
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: vars.space.xs,
+});
+
+export const statusIcon = style({
+  color: vars.color.accent,
+  flexShrink: 0,
+  display: 'flex',
+  alignItems: 'center',
+});
+
+export const statusTitle = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textSecondary,
+  textTransform: 'uppercase',
+  letterSpacing: '0.12em',
+  fontWeight: 400,
+});
+
+export const statusBranch = style({
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: vars.space.sm,
+});
+
+export const statusDot = style({
+  width: '6px',
+  height: '6px',
+  borderRadius: '50%',
+  background: vars.color.success,
+  flexShrink: 0,
+  boxShadow: vars.color.successGlow,
+});
+
+export const statusBranchName = style({
+  fontFamily: vars.font.mono,
   fontSize: vars.fontSize.md,
   color: vars.color.textPrimary,
   fontWeight: 600,
-  fontFamily: vars.font.mono,
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
+});
+
+export const statusMeta = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textSecondary,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  flex: 1,
 });
 
 export const hunterBanner = style({
@@ -149,11 +210,11 @@ export const hunterBanner = style({
   flexDirection: 'row',
   alignItems: 'center',
   gap: vars.space.md,
-  padding: vars.space.md,
+  padding: vars.space.lg,
   background: vars.color.bgSecondary,
   borderRadius: vars.radius.lg,
-  border: `1px solid ${vars.color.accentMuted}`,
-  boxShadow: vars.shadow.glow,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 30%, ${vars.color.border})`,
+  animation: `${borderGlow} 4s ease-in-out infinite`,
 });
 
 export const rankBadge = style({
@@ -169,7 +230,8 @@ export const rankBadge = style({
   background: vars.color.accentMuted,
   borderRadius: vars.radius.md,
   flexShrink: 0,
-  textShadow: `0 0 12px ${vars.color.accent}`,
+  textShadow: `0 0 16px ${vars.color.accent}, 0 0 30px ${vars.color.accentGlow}`,
+  boxShadow: `0 0 12px color-mix(in srgb, ${vars.color.accent} 30%, transparent)`,
 });
 
 export const rankInfo = style({
@@ -179,29 +241,18 @@ export const rankInfo = style({
 });
 
 export const rankTitle = style({
-  fontSize: vars.fontSize.sm,
-  color: vars.color.textPrimary,
-  fontWeight: 500,
+  fontFamily: vars.font.display,
+  fontSize: vars.fontSize.md,
+  color: vars.color.accent,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase',
+  fontWeight: 700,
 });
 
 export const rankLevel = style({
-  fontSize: vars.fontSize.xs,
-  color: vars.color.textSecondary,
-});
-
-export const plansCard = style({
-  background: vars.color.bgTertiary,
-  padding: vars.space.md,
-  borderRadius: vars.radius.md,
-  border: `1px solid ${vars.color.border}`,
-});
-
-export const planItem = style({
-  display: 'flex',
-  flexDirection: 'row',
-  gap: vars.space.xs,
-  fontSize: vars.fontSize.xs,
   fontFamily: vars.font.mono,
-  padding: `${vars.space.xs} 0`,
+  fontSize: vars.fontSize.xs,
   color: vars.color.textSecondary,
+  letterSpacing: '0.08em',
 });
+

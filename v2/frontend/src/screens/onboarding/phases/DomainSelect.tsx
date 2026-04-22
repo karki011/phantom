@@ -73,7 +73,7 @@ export function DomainSelect(props: DomainSelectProps) {
                 <ToggleGroup.Item value={t.id} class={styles.themeCard}>
                   <div class={styles.themePreview} style={{ background: t.colors.bg }}>
                     <div class={styles.themePreviewAccent} style={{ background: t.colors.accent }} />
-                    <span style={{ color: t.colors.text, 'font-size': '14px', 'font-weight': '600', 'font-family': 'monospace' }}>Aa</span>
+                    <span style={{ color: t.colors.text, 'font-size': '14px', 'font-weight': '600', 'font-family': 'var(--font-mono, "JetBrains Mono", "Fira Code", "SF Mono", monospace)' }}>Aa</span>
                   </div>
                   <div class={styles.themeCardBody}>
                     <div class={styles.themeName}>{t.name}</div>

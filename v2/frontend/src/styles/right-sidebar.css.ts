@@ -1,7 +1,7 @@
 // PhantomOS v2 — Right sidebar styles (Vanilla Extract)
 // Author: Subash Karki
 
-import { style } from '@vanilla-extract/css';
+import { globalStyle, style } from '@vanilla-extract/css';
 import { vars } from './theme.css';
 import { buttonRecipe } from './recipes.css';
 
@@ -48,23 +48,21 @@ export const tab = style({
   userSelect: 'none',
   transition: `color ${vars.animation.fast} ease, border-color ${vars.animation.fast} ease`,
   outline: 'none',
-  ':hover': {
-    color: vars.color.textPrimary,
-    borderBottomColor: vars.color.accentMuted,
-  },
-});
-
-export const tabActive = style([
-  tab,
-  {
-    color: vars.color.accent,
-    borderBottomColor: vars.color.accent,
-    ':hover': {
+  selectors: {
+    '&:hover': {
+      color: vars.color.textPrimary,
+      borderBottomColor: vars.color.accentMuted,
+    },
+    '&[data-selected]': {
+      color: vars.color.accent,
+      borderBottomColor: vars.color.accent,
+    },
+    '&[data-selected]:hover': {
       color: vars.color.accent,
       borderBottomColor: vars.color.accent,
     },
   },
-]);
+});
 
 export const tabPanel = style({
   flex: 1,
@@ -112,6 +110,20 @@ export const fileIcon = style({
   height: '14px',
   flexShrink: 0,
   color: vars.color.textDisabled,
+});
+
+export const fileChevron = style({
+  width: '12px',
+  height: '12px',
+  flexShrink: 0,
+  color: vars.color.textDisabled,
+  transition: `transform ${vars.animation.fast} ease`,
+  transform: 'rotate(0deg)',
+  selectors: {
+    '[data-expanded] &': {
+      transform: 'rotate(90deg)',
+    },
+  },
 });
 
 export const fileName = style({
@@ -225,6 +237,18 @@ export const commitInput = style({
   backgroundColor: vars.color.bgTertiary,
   border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.sm,
+  transition: `border-color ${vars.animation.fast} ease`,
+  selectors: {
+    '&:focus-within': {
+      borderColor: vars.color.borderFocus,
+    },
+  },
+});
+
+globalStyle(`${commitInput} textarea`, {
+  width: '100%',
+  background: 'transparent',
+  border: 'none',
   color: vars.color.textPrimary,
   fontFamily: vars.font.body,
   fontSize: vars.fontSize.xs,
@@ -232,13 +256,11 @@ export const commitInput = style({
   outline: 'none',
   resize: 'none',
   minHeight: '60px',
-  transition: `border-color ${vars.animation.fast} ease`,
-  ':focus': {
-    borderColor: vars.color.borderFocus,
-  },
-  '::placeholder': {
-    color: vars.color.textDisabled,
-  },
+  boxSizing: 'border-box',
+});
+
+globalStyle(`${commitInput} textarea::placeholder`, {
+  color: vars.color.textDisabled,
 });
 
 export const commitActions = style({

@@ -380,24 +380,6 @@ func (q *Queries) UpdateSession(ctx context.Context, arg UpdateSessionParams) er
 	return err
 }
 
-const updateSessionStatus = `-- name: UpdateSessionStatus :exec
-UPDATE sessions SET
-    status = ?,
-    ended_at = ?
-WHERE id = ?
-`
-
-type UpdateSessionStatusParams struct {
-	Status  sql.NullString `json:"status"`
-	EndedAt sql.NullInt64  `json:"ended_at"`
-	ID      string         `json:"id"`
-}
-
-func (q *Queries) UpdateSessionStatus(ctx context.Context, arg UpdateSessionStatusParams) error {
-	_, err := q.db.ExecContext(ctx, updateSessionStatus, arg.Status, arg.EndedAt, arg.ID)
-	return err
-}
-
 const updateSessionEnrichment = `-- name: UpdateSessionEnrichment :exec
 UPDATE sessions SET
     model = ?,
@@ -429,9 +411,6 @@ type UpdateSessionEnrichmentParams struct {
 	ID                  string         `json:"id"`
 }
 
-// UpdateSessionEnrichment updates only scanner-derived enrichment fields.
-// It deliberately omits status and ended_at to avoid the read-modify-write
-// race with session_watcher, which exclusively owns those columns.
 func (q *Queries) UpdateSessionEnrichment(ctx context.Context, arg UpdateSessionEnrichmentParams) error {
 	_, err := q.db.ExecContext(ctx, updateSessionEnrichment,
 		arg.Model,
@@ -447,6 +426,24 @@ func (q *Queries) UpdateSessionEnrichment(ctx context.Context, arg UpdateSession
 		arg.LastInputTokens,
 		arg.ID,
 	)
+	return err
+}
+
+const updateSessionStatus = `-- name: UpdateSessionStatus :exec
+UPDATE sessions SET
+    status = ?,
+    ended_at = ?
+WHERE id = ?
+`
+
+type UpdateSessionStatusParams struct {
+	Status  sql.NullString `json:"status"`
+	EndedAt sql.NullInt64  `json:"ended_at"`
+	ID      string         `json:"id"`
+}
+
+func (q *Queries) UpdateSessionStatus(ctx context.Context, arg UpdateSessionStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateSessionStatus, arg.Status, arg.EndedAt, arg.ID)
 	return err
 }
 

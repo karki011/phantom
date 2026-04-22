@@ -121,6 +121,12 @@ Available skills in `.claude/skills/`:
 
 For full build architecture and known issues, see `.claude/BUILD.md`.
 
+## Rules
+
+| Category | Rule | Path |
+|----------|------|------|
+| Coding | Coding Principles (DRY, KISS, YAGNI, SOLID, PhantomOS-specific) | `.claude/rules/coding-principles.md` |
+
 ## Author
 
 All commits and PRs should be credited to **Subash Karki**.

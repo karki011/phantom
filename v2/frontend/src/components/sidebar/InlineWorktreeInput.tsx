@@ -2,6 +2,7 @@
 // Author: Subash Karki
 
 import { createSignal, onMount } from 'solid-js';
+import { TextField } from '@kobalte/core/text-field';
 import * as styles from '@/styles/sidebar.css';
 import { createWorktreeForProject, setCreatingInProject } from '@/core/signals/worktrees';
 
@@ -46,17 +47,19 @@ export function InlineWorktreeInput(props: InlineWorktreeInputProps) {
 
   return (
     <div class={styles.inlineInput}>
-      <input
-        ref={inputRef}
-        class={styles.inlineInputField}
-        type="text"
-        placeholder="branch-name…"
+      <TextField
         value={value()}
+        onChange={setValue}
         disabled={loading()}
-        onInput={(e) => setValue(e.currentTarget.value)}
-        onKeyDown={onKeyDown}
-        onBlur={cancel}
-      />
+        class={styles.inlineInputField}
+      >
+        <TextField.Input
+          ref={inputRef}
+          placeholder="branch-name…"
+          onKeyDown={onKeyDown}
+          onBlur={cancel}
+        />
+      </TextField>
     </div>
   );
 }

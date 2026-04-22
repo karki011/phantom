@@ -21,6 +21,7 @@ import { switchWorkspace } from './core/panes/signals';
 import { registerKeyboardShortcuts } from './core/keyboard';
 import { WelcomePage } from './components/WelcomePage';
 import { waitForWails } from './core/bindings/ready';
+import { ToastRegion } from './shared/Toast/Toast';
 
 export function App() {
   const [ready, setReady] = createSignal(false);
@@ -63,6 +64,7 @@ export function App() {
 
   return (
     <div class={styles.appShell}>
+      <ToastRegion />
       <Show when={showOnboarding()}>
         <OnboardingFlow onComplete={handleOnboardingComplete} />
       </Show>

@@ -57,6 +57,13 @@ export const topTabBar = style({
   gap: '2px',
 });
 
+export const topTabList = style({
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'stretch',
+  gap: '2px',
+});
+
 export const topTab = style({
   display: 'flex',
   alignItems: 'center',
@@ -73,24 +80,21 @@ export const topTab = style({
   transition: `color ${vars.animation.fast} ease, border-color ${vars.animation.fast} ease`,
   outline: 'none',
 
-  ':hover': {
-    color: vars.color.textPrimary,
-    borderBottomColor: vars.color.accentMuted,
-  },
-});
-
-export const topTabActive = style([
-  topTab,
-  {
-    color: vars.color.accent,
-    borderBottomColor: vars.color.accent,
-
-    ':hover': {
+  selectors: {
+    '&:hover': {
+      color: vars.color.textPrimary,
+      borderBottomColor: vars.color.accentMuted,
+    },
+    '&[data-selected]': {
+      color: vars.color.accent,
+      borderBottomColor: vars.color.accent,
+    },
+    '&[data-selected]:hover': {
       color: vars.color.accent,
       borderBottomColor: vars.color.accent,
     },
   },
-]);
+});
 
 // ── Main Content ──────────────────────────────────────────────────────────────
 

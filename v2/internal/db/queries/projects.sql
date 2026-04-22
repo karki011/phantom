@@ -30,5 +30,11 @@ UPDATE projects SET
     starred = ?
 WHERE id = ?;
 
+-- name: ToggleStarProject :exec
+UPDATE projects SET starred = CASE WHEN starred = 1 THEN 0 ELSE 1 END WHERE id = ?;
+
+-- name: CountStarredProjects :one
+SELECT COUNT(*) FROM projects WHERE starred = 1;
+
 -- name: DeleteProject :exec
 DELETE FROM projects WHERE id = ?;

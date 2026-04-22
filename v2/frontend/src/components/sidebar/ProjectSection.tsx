@@ -1,24 +1,24 @@
 // PhantomOS v2 — Collapsible project section with nested worktrees
 // Author: Subash Karki
 
-import { Show, For } from 'solid-js';
+import { For, createSignal } from 'solid-js';
+import { Collapsible } from '@kobalte/core/collapsible';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { ChevronRight, Plus, FolderOpen, Folder, Trash2 } from 'lucide-solid';
+import { ChevronRight, Plus, FolderOpen, Folder, Trash2, Star } from 'lucide-solid';
 import { Tip } from '@/shared/Tip/Tip';
 import * as styles from '@/styles/sidebar.css';
 import {
   worktreeMap,
   expandedProjects,
-  creatingInProject,
   toggleProject,
-  setCreatingInProject,
 } from '@/core/signals/worktrees';
-import { removeProject } from '@/core/bindings';
+import { removeProject, toggleStarProject } from '@/core/bindings';
 import { refreshProjects } from '@/core/signals/projects';
 import { sessions } from '@/core/signals/sessions';
 import { bootstrapWorktrees } from '@/core/signals/worktrees';
 import { WorktreeItem } from './WorktreeItem';
-import { InlineWorktreeInput } from './InlineWorktreeInput';
+import { NewWorktreeDialog } from '@/shared/NewWorktreeDialog/NewWorktreeDialog';
+import { showWarningToast } from '@/shared/Toast/Toast';
 import type { Project } from '@/core/types';
 
 interface ProjectSectionProps {
@@ -28,7 +28,7 @@ interface ProjectSectionProps {
 export function ProjectSection(props: ProjectSectionProps) {
   const worktrees = () => worktreeMap()[props.project.id] ?? [];
   const isExpanded = () => expandedProjects().has(props.project.id);
-  const isCreating = () => creatingInProject() === props.project.id;
+  const [worktreeOpen, setWorktreeOpen] = createSignal(false);
 
   const activeSessions = () => sessions().filter(
     (s) => s.status === 'active' || s.status === 'running',
@@ -44,12 +44,22 @@ export function ProjectSection(props: ProjectSectionProps) {
     toggleProject(props.project.id);
   }
 
+  const isStarred = () => props.project.starred === 1;
+
+  async function handleStarClick(e?: MouseEvent) {
+    e?.stopPropagation();
+    try {
+      await toggleStarProject(props.project.id);
+      await refreshProjects();
+      await bootstrapWorktrees();
+    } catch (err) {
+      showWarningToast('Limit reached', 'Maximum of 10 starred projects');
+    }
+  }
+
   function handleAddClick(e?: MouseEvent) {
     e?.stopPropagation();
-    console.log('[sidebar] New Worktree clicked, project:', props.project.id, 'expanded:', isExpanded());
-    if (!isExpanded()) toggleProject(props.project.id);
-    setCreatingInProject(props.project.id);
-    console.log('[sidebar] creatingInProject set to:', props.project.id);
+    setWorktreeOpen(true);
   }
 
   async function handleRemoveProject() {
@@ -68,38 +78,42 @@ export function ProjectSection(props: ProjectSectionProps) {
 
   return (
     <ContextMenu>
-      <div class={styles.projectSection}>
-        {/* Project header */}
-        <ContextMenu.Trigger as="div" class={styles.projectHeader} onClick={handleHeaderClick}>
-          <ChevronRight
-            size={12}
-            class={`${styles.chevron}${isExpanded() ? ` ${styles.chevronExpanded}` : ''}`}
-          />
-          {isExpanded() ? (
-            <Tip label="Project (expanded)"><FolderOpen size={14} class={styles.projectIcon} /></Tip>
-          ) : (
-            <Tip label="Project"><Folder size={14} class={styles.projectIcon} /></Tip>
-          )}
-          <span class={styles.projectName} title={props.project.name}>
-            {props.project.name}
-          </span>
-          <span class={styles.worktreeCount}>{worktrees().length}</span>
-          {/* Add worktree button */}
-          <Tip label="New worktree">
-            <button
-              class={styles.projectAddButton}
-              onClick={handleAddClick}
-              type="button"
-            >
-              <Plus size={12} />
-            </button>
-          </Tip>
+      <Collapsible
+        open={isExpanded()}
+        onOpenChange={() => toggleProject(props.project.id)}
+        class={styles.projectSection}
+      >
+        {/* Project header — ContextMenu.Trigger captures right-click;
+            Collapsible.Trigger captures left-click for expand/collapse */}
+        <ContextMenu.Trigger as="div">
+          <Collapsible.Trigger class={styles.projectHeader}>
+            <ChevronRight size={12} class={styles.chevron} />
+            {isExpanded() ? (
+              <Tip label="Project (expanded)"><FolderOpen size={14} class={styles.projectIcon} /></Tip>
+            ) : (
+              <Tip label="Project"><Folder size={14} class={styles.projectIcon} /></Tip>
+            )}
+            <span class={styles.projectName} title={props.project.name}>
+              {props.project.name}
+            </span>
+            <span class={styles.worktreeCount}>{worktrees().length}</span>
+            <Tip label={isStarred() ? "Unstar project" : "Star project (max 10)"}>
+              <button
+                class={isStarred() ? styles.starButtonActive : styles.starButton}
+                onClick={handleStarClick}
+                type="button"
+              >
+                <Star size={12} />
+              </button>
+            </Tip>
+          </Collapsible.Trigger>
         </ContextMenu.Trigger>
 
-        {/* Worktree list (expanded) */}
-        <Show when={isExpanded()}>
+        {/* Worktree list — animated by Kobalte Collapsible */}
+        <Collapsible.Content>
           <div class={styles.worktreeList}>
-            <For each={worktrees()}>
+            {/* Branch entries first */}
+            <For each={worktrees().filter(wt => wt.type === 'branch')}>
               {(wt) => (
                 <WorktreeItem
                   worktree={wt}
@@ -108,12 +122,27 @@ export function ProjectSection(props: ProjectSectionProps) {
                 />
               )}
             </For>
-            <Show when={isCreating()}>
-              <InlineWorktreeInput projectId={props.project.id} />
-            </Show>
+            {/* Worktrees second */}
+            <For each={worktrees().filter(wt => wt.type !== 'branch')}>
+              {(wt) => (
+                <WorktreeItem
+                  worktree={wt}
+                  projectId={props.project.id}
+                  hasActiveSession={hasActiveSession(wt)}
+                />
+              )}
+            </For>
           </div>
-        </Show>
-      </div>
+        </Collapsible.Content>
+      </Collapsible>
+
+      <NewWorktreeDialog
+        open={worktreeOpen}
+        onOpenChange={setWorktreeOpen}
+        projectId={props.project.id}
+        projectName={props.project.name}
+        defaultBranch={props.project.default_branch ?? 'main'}
+      />
 
       {/* Context menu for the project */}
       <ContextMenu.Portal>

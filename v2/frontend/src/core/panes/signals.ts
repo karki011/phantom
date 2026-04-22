@@ -113,12 +113,8 @@ export function switchWorkspace(worktreeId: string): void {
 
 export function addTab(paneType: PaneType = 'terminal'): void {
   const tab = makeTab(paneType);
-  setWorkspace(
-    produce((s) => {
-      s.tabs.push(tab);
-      s.activeTabId = tab.id;
-    }),
-  );
+  setWorkspace(produce((s) => { s.tabs.push(tab); }));
+  queueMicrotask(() => setWorkspace('activeTabId', tab.id));
 }
 
 /**
@@ -136,24 +132,21 @@ export function addTabWithData(
   if (paneId && tab.panes[paneId]) {
     tab.panes[paneId] = { ...tab.panes[paneId], data };
   }
-  setWorkspace(
-    produce((s) => {
-      s.tabs.push(tab);
-      s.activeTabId = tab.id;
-    }),
-  );
+  setWorkspace(produce((s) => { s.tabs.push(tab); }));
+  queueMicrotask(() => setWorkspace('activeTabId', tab.id));
 }
 
 export function removeTab(tabId: string): void {
   setWorkspace(
     produce((s) => {
-      if (s.tabs.length <= 1) return; // Prevent removing last tab
-      const tab = s.tabs.find((t) => t.id === tabId);
-      if (!tab) return;
-      if (tab.label === 'Home') return; // Home tab must always remain
+      if (s.tabs.length <= 1) return;
+      const idx = s.tabs.findIndex((t) => t.id === tabId);
+      if (idx === -1) return;
+      if (s.tabs[idx].label === 'Home') return;
       s.tabs = s.tabs.filter((t) => t.id !== tabId);
       if (s.activeTabId === tabId) {
-        s.activeTabId = s.tabs[0]?.id ?? '';
+        const nextTab = s.tabs[idx] ?? s.tabs[idx - 1] ?? s.tabs[0];
+        s.activeTabId = nextTab?.id ?? '';
       }
     }),
   );
@@ -234,5 +227,9 @@ export function resizeSplit(path: number[], percentage: number): void {
 // ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
+
+export function clearWorktreeCache(worktreeId: string): void {
+  stateCache.delete(worktreeId);
+}
 
 export { workspace, tabs, activeTab, activePaneId };

@@ -118,3 +118,12 @@ export function initFontStyle(saved: string): void {
 }
 
 export { activeFontStyle };
+
+/**
+ * Returns the raw mono font-family string for the active font style.
+ * Reactive — tracks activeFontStyle() so callers (e.g. xterm.js) can
+ * subscribe and update live when the user switches font styles.
+ */
+export function currentMonoFont(): string {
+  return fontStyleMap[activeFontStyle()].mono;
+}

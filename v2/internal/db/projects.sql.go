@@ -10,6 +10,17 @@ import (
 	"database/sql"
 )
 
+const countStarredProjects = `-- name: CountStarredProjects :one
+SELECT COUNT(*) FROM projects WHERE starred = 1
+`
+
+func (q *Queries) CountStarredProjects(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countStarredProjects)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createProject = `-- name: CreateProject :exec
 INSERT INTO projects (
     id, name, repo_path, default_branch, worktree_base_dir,
@@ -136,6 +147,15 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const toggleStarProject = `-- name: ToggleStarProject :exec
+UPDATE projects SET starred = CASE WHEN starred = 1 THEN 0 ELSE 1 END WHERE id = ?
+`
+
+func (q *Queries) ToggleStarProject(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, toggleStarProject, id)
+	return err
 }
 
 const updateProject = `-- name: UpdateProject :exec

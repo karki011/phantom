@@ -33,6 +33,12 @@ func (a *App) GetProjects() []db.Project {
 // AddProject detects the project type at repoPath, persists it to the DB,
 // and returns the newly created project record.
 func (a *App) AddProject(repoPath string) (*db.Project, error) {
+	// Return existing project if already registered.
+	rq := db.New(a.DB.Reader)
+	if existing, err := rq.FindProjectByRepoPath(a.ctx, repoPath); err == nil {
+		return &existing, nil
+	}
+
 	// Detect project profile.
 	profile := project.Detect(repoPath)
 
@@ -62,7 +68,7 @@ func (a *App) AddProject(repoPath string) (*db.Project, error) {
 	}
 
 	// Read back from reader to return the full record.
-	rq := db.New(a.DB.Reader)
+	rq = db.New(a.DB.Reader)
 	proj, err := rq.GetProject(a.ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("AddProject: GetProject after create: %w", err)
@@ -139,6 +145,43 @@ func (a *App) GetProjectRecipes(projectId string) []project.Recipe {
 		return []project.Recipe{}
 	}
 	return profile.Recipes
+}
+
+// ToggleStarProject flips the starred state of a project. Returns the new starred value.
+// Enforces a max of 10 starred projects.
+func (a *App) ToggleStarProject(id string) (bool, error) {
+	rq := db.New(a.DB.Reader)
+	proj, err := rq.GetProject(a.ctx, id)
+	if err != nil {
+		return false, fmt.Errorf("ToggleStarProject: GetProject: %w", err)
+	}
+
+	isCurrentlyStarred := proj.Starred.Valid && proj.Starred.Int64 == 1
+	if !isCurrentlyStarred {
+		count, err := rq.CountStarredProjects(a.ctx)
+		if err != nil {
+			return false, fmt.Errorf("ToggleStarProject: CountStarred: %w", err)
+		}
+		if count >= 10 {
+			return false, fmt.Errorf("maximum of 10 starred projects reached")
+		}
+	}
+
+	wq := db.New(a.DB.Writer)
+	if err := wq.ToggleStarProject(a.ctx, id); err != nil {
+		return false, fmt.Errorf("ToggleStarProject: %w", err)
+	}
+	return !isCurrentlyStarred, nil
+}
+
+// IsGitRepo checks whether the given path contains a git repository.
+func (a *App) IsGitRepo(path string) bool {
+	return git.IsGitRepo(a.ctx, path)
+}
+
+// InitGitRepo runs `git init` at the given path.
+func (a *App) InitGitRepo(path string) error {
+	return git.InitRepo(a.ctx, path)
 }
 
 // ScanDirectory walks parentPath recursively (max 3 levels) and returns paths
