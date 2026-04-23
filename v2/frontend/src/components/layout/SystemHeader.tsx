@@ -3,6 +3,7 @@
 
 import { createMemo } from 'solid-js';
 import { sessions } from '@/core/signals/sessions';
+import { openSettings } from '@/core/signals/settings';
 import * as shellStyles from '@/styles/app-shell.css';
 
 // Inline SVG icons — no icon library dependency
@@ -146,6 +147,7 @@ export function SystemHeader() {
           type="button"
           title="Settings"
           aria-label="Open settings"
+          onClick={() => openSettings()}
         >
           <GearIcon />
         </button>

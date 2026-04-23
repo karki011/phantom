@@ -5,28 +5,32 @@ package app
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/git"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // CreateWorktree creates a git worktree for the given project and branch,
 // then persists the workspace record in the database.
 func (a *App) CreateWorktree(projectId, branch, baseBranch string) (*db.Workspace, error) {
+	log.Info("app/CreateWorktree: called", "projectId", projectId, "branch", branch, "baseBranch", baseBranch)
 	// Look up the project to get repoPath and name.
 	q := db.New(a.DB.Reader)
 	proj, err := q.GetProject(a.ctx, projectId)
 	if err != nil {
+		log.Error("app/CreateWorktree: project not found", "projectId", projectId, "err", err)
 		return nil, fmt.Errorf("CreateWorktree: project %s not found: %w", projectId, err)
 	}
 
 	// Compute target directory for the worktree.
 	targetDir, err := git.GetWorktreeDir(proj.Name, branch)
 	if err != nil {
+		log.Error("app/CreateWorktree: GetWorktreeDir failed", "err", err)
 		return nil, fmt.Errorf("CreateWorktree: GetWorktreeDir: %w", err)
 	}
 
@@ -41,6 +45,7 @@ func (a *App) CreateWorktree(projectId, branch, baseBranch string) (*db.Workspac
 
 	// Create the git worktree on disk.
 	if err := git.Create(a.ctx, proj.RepoPath, branch, targetDir, baseBranch); err != nil {
+		log.Error("app/CreateWorktree: git.Create failed", "err", err)
 		return nil, fmt.Errorf("CreateWorktree: git.Create: %w", err)
 	}
 
@@ -62,6 +67,7 @@ func (a *App) CreateWorktree(projectId, branch, baseBranch string) (*db.Workspac
 
 	wq := db.New(a.DB.Writer)
 	if err := wq.CreateWorkspace(a.ctx, params); err != nil {
+		log.Error("app/CreateWorktree: CreateWorkspace failed", "err", err)
 		return nil, fmt.Errorf("CreateWorktree: CreateWorkspace: %w", err)
 	}
 
@@ -69,68 +75,85 @@ func (a *App) CreateWorktree(projectId, branch, baseBranch string) (*db.Workspac
 	rq := db.New(a.DB.Reader)
 	ws, err := rq.GetWorkspace(a.ctx, id)
 	if err != nil {
+		log.Error("app/CreateWorktree: GetWorkspace after create failed", "err", err)
 		return nil, fmt.Errorf("CreateWorktree: GetWorkspace after create: %w", err)
 	}
+	wailsRuntime.EventsEmit(a.ctx, EventWorktreeCreated)
+	log.Info("app/CreateWorktree: success", "id", ws.ID, "branch", ws.Branch, "path", ws.WorktreePath.String)
 	return &ws, nil
 }
 
 // RemoveWorktree removes a worktree from disk and deletes the workspace record.
 func (a *App) RemoveWorktree(worktreeId string) error {
+	log.Info("app/RemoveWorktree: called", "worktreeId", worktreeId)
 	// Get the workspace to find worktree path.
 	q := db.New(a.DB.Reader)
 	ws, err := q.GetWorkspace(a.ctx, worktreeId)
 	if err != nil {
+		log.Error("app/RemoveWorktree: workspace not found", "worktreeId", worktreeId, "err", err)
 		return fmt.Errorf("RemoveWorktree: workspace %s not found: %w", worktreeId, err)
 	}
 
 	// Remove the git worktree from disk if path exists.
 	if ws.WorktreePath.Valid && ws.WorktreePath.String != "" {
 		if err := git.Remove(a.ctx, ws.WorktreePath.String); err != nil {
-			log.Printf("app/bindings_git: git.Remove(%s) warning: %v", ws.WorktreePath.String, err)
+			log.Warn("app/RemoveWorktree: git.Remove warning (continuing)", "path", ws.WorktreePath.String, "err", err)
 			// Continue to delete the DB record even if git removal fails.
 		}
 	}
 
 	// Delete workspace record from database.
 	wq := db.New(a.DB.Writer)
-	return wq.DeleteWorkspace(a.ctx, worktreeId)
+	if err := wq.DeleteWorkspace(a.ctx, worktreeId); err != nil {
+		log.Error("app/RemoveWorktree: DeleteWorkspace failed", "worktreeId", worktreeId, "err", err)
+		return err
+	}
+	wailsRuntime.EventsEmit(a.ctx, EventWorktreeRemoved)
+	log.Info("app/RemoveWorktree: success", "worktreeId", worktreeId)
+	return nil
 }
 
 // ListWorktrees returns all workspaces for a given project.
 func (a *App) ListWorktrees(projectId string) []db.Workspace {
+	log.Info("app/ListWorktrees: called", "projectId", projectId)
 	q := db.New(a.DB.Reader)
 	workspaces, err := q.ListWorkspacesByProject(a.ctx, projectId)
 	if err != nil {
-		log.Printf("app/bindings_git: ListWorkspacesByProject(%s) error: %v", projectId, err)
+		log.Error("app/ListWorktrees: ListWorkspacesByProject failed", "projectId", projectId, "err", err)
 		return []db.Workspace{}
 	}
+	log.Info("app/ListWorktrees: success", "count", len(workspaces))
 	return workspaces
 }
 
 // GetDefaultBranch returns the default branch for the repository at repoPath.
 func (a *App) GetDefaultBranch(repoPath string) string {
-	return git.GetDefaultBranch(a.ctx, repoPath)
+	log.Info("app/GetDefaultBranch: called", "repoPath", repoPath)
+	result := git.GetDefaultBranch(a.ctx, repoPath)
+	log.Info("app/GetDefaultBranch: success", "branch", result)
+	return result
 }
 
 // GetProjectBranches returns all branch names (local + remote) for a project.
 func (a *App) GetProjectBranches(projectId string) []string {
+	log.Info("app/GetProjectBranches: called", "projectId", projectId)
 	q := db.New(a.DB.Reader)
 	proj, err := q.GetProject(a.ctx, projectId)
 	if err != nil {
-		log.Printf("app/bindings_git: GetProjectBranches(%s) error: %v", projectId, err)
+		log.Error("app/GetProjectBranches: project not found", "projectId", projectId, "err", err)
 		return []string{}
 	}
 
-	log.Printf("GetProjectBranches: called for project %s, repoPath=%s", projectId, proj.RepoPath)
+	log.Info("app/GetProjectBranches: resolving branches", "projectId", projectId, "repoPath", proj.RepoPath)
 
 	seen := make(map[string]bool)
 	var names []string
 
 	local, err := git.ListBranches(a.ctx, proj.RepoPath)
 	if err != nil {
-		log.Printf("GetProjectBranches: ListBranches error: %v", err)
+		log.Error("app/GetProjectBranches: ListBranches error", "err", err)
 	}
-	log.Printf("GetProjectBranches: local branches count=%d", len(local))
+	log.Info("app/GetProjectBranches: local branches", "count", len(local))
 	for _, b := range local {
 		if !seen[b.Name] {
 			seen[b.Name] = true
@@ -140,9 +163,9 @@ func (a *App) GetProjectBranches(projectId string) []string {
 
 	remote, err := git.ListRemoteBranches(a.ctx, proj.RepoPath)
 	if err != nil {
-		log.Printf("GetProjectBranches: ListRemoteBranches error: %v", err)
+		log.Error("app/GetProjectBranches: ListRemoteBranches error", "err", err)
 	}
-	log.Printf("GetProjectBranches: remote branches count=%d", len(remote))
+	log.Info("app/GetProjectBranches: remote branches", "count", len(remote))
 	for _, b := range remote {
 		name := strings.TrimPrefix(b.Name, "origin/")
 		if name == "HEAD" || seen[name] {
@@ -152,6 +175,6 @@ func (a *App) GetProjectBranches(projectId string) []string {
 		names = append(names, name)
 	}
 
-	log.Printf("GetProjectBranches: returning %d total branches", len(names))
+	log.Info("app/GetProjectBranches: success", "total", len(names))
 	return names
 }

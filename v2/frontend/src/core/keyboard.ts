@@ -5,6 +5,9 @@ import { setActiveTopTab } from './signals/app';
 import { setLeftSidebarCollapsed, leftSidebarCollapsed } from './signals/worktrees';
 import { setRightSidebarCollapsed, rightSidebarCollapsed } from './signals/files';
 import { addTab, splitPane, activePaneId } from './panes/signals';
+import { zoomIn, zoomOut, zoomReset } from './signals/zoom';
+import { openSettings } from './signals/settings';
+import { toggleQuickOpen } from './signals/quickopen';
 // TODO(Phase 7h): import { runRecipe } from './bindings'; import { activeWorktreeId } from './signals/app';
 
 export function registerKeyboardShortcuts(): () => void {
@@ -67,6 +70,41 @@ export function registerKeyboardShortcuts(): () => void {
     if (meta && e.key === 'r' && e.shiftKey) {
       e.preventDefault();
       console.log('[PhantomOS] Run recipe — recipe picker coming in Phase 7h');
+      return;
+    }
+
+    // Cmd+= or Cmd++: Zoom in
+    if (meta && (e.key === '=' || e.key === '+')) {
+      e.preventDefault();
+      zoomIn();
+      return;
+    }
+
+    // Cmd+-: Zoom out
+    if (meta && e.key === '-') {
+      e.preventDefault();
+      zoomOut();
+      return;
+    }
+
+    // Cmd+0: Reset zoom
+    if (meta && e.key === '0') {
+      e.preventDefault();
+      zoomReset();
+      return;
+    }
+
+    // Cmd+,: Open settings
+    if (meta && e.key === ',') {
+      e.preventDefault();
+      openSettings();
+      return;
+    }
+
+    // Cmd+P: Quick Open file finder
+    if (meta && e.key === 'p') {
+      e.preventDefault();
+      toggleQuickOpen();
       return;
     }
 

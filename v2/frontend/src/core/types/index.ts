@@ -102,6 +102,51 @@ export interface WorktreeStatus {
   pr_number?: number;
 }
 
+export interface RepoStatus {
+  branch: string;
+  ahead_by: number;
+  behind_by: number;
+  is_clean: boolean;
+  staged: FileStatus[];
+  unstaged: FileStatus[];
+  untracked: FileStatus[];
+  has_conflicts: boolean;
+  conflicts: string[];
+}
+
+export interface FileStatus {
+  path: string;
+  status: string;
+}
+
+export interface BranchInfo {
+  name: string;
+  commit: string;
+  upstream: string;
+  ahead_by: number;
+  behind_by: number;
+  is_current: boolean;
+  is_remote: boolean;
+}
+
+export interface CommitInfo {
+  hash: string;
+  short_hash: string;
+  author: string;
+  email: string;
+  date: number;
+  subject: string;
+  body: string;
+  parents: string[];
+}
+
+export interface FileEntry {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  git_status: string;
+}
+
 export interface Recipe {
   id: string;
   label: string;
@@ -117,4 +162,22 @@ export interface ActivityMetadata {
   detail?: string;
   file_path?: string;
   command?: string;
+}
+
+export interface PrStatus {
+  number: number;
+  title: string;
+  state: string;
+  is_draft: boolean;
+  url: string;
+  head_ref_name: string;
+  base_ref_name: string;
+}
+
+export interface CiRun {
+  name: string;
+  status: string;
+  conclusion: string;
+  url: string;
+  bucket: string;
 }

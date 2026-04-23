@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -122,4 +123,220 @@ func FetchOrigin(ctx context.Context, repoPath string) error {
 
 	_, _ = runGit(fetchCtx, repoPath, "fetch", "origin")
 	return nil
+}
+
+// Stage stages the specified paths for commit.
+func Stage(ctx context.Context, repoPath string, paths ...string) error {
+	args := append([]string{"add", "--"}, paths...)
+	_, err := runGit(ctx, repoPath, args...)
+	return err
+}
+
+// StageAll stages all changes including untracked files.
+func StageAll(ctx context.Context, repoPath string) error {
+	_, err := runGit(ctx, repoPath, "add", "-A")
+	return err
+}
+
+// Unstage removes the specified paths from the staging area.
+// Falls back to git rm --cached for repos with no commits (empty HEAD).
+func Unstage(ctx context.Context, repoPath string, paths ...string) error {
+	args := append([]string{"reset", "HEAD", "--"}, paths...)
+	_, err := runGit(ctx, repoPath, args...)
+	if err != nil && strings.Contains(err.Error(), "Failed to resolve 'HEAD'") {
+		rmArgs := append([]string{"rm", "--cached", "--"}, paths...)
+		_, err = runGit(ctx, repoPath, rmArgs...)
+	}
+	return err
+}
+
+// Commit creates a commit with the given message.
+func Commit(ctx context.Context, repoPath, message string) error {
+	_, err := runGit(ctx, repoPath, "commit", "-m", message)
+	return err
+}
+
+// Push pushes the current branch to origin with a 60-second timeout.
+// If no upstream is configured, it sets upstream automatically.
+func Push(ctx context.Context, repoPath string) error {
+	pushCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	_, err := runGit(pushCtx, repoPath, "push")
+	if err != nil && strings.Contains(err.Error(), "no upstream branch") {
+		branch := GetCurrentBranch(ctx, repoPath)
+		if branch == "" {
+			return err
+		}
+		pushCtx2, cancel2 := context.WithTimeout(ctx, 60*time.Second)
+		defer cancel2()
+		_, err = runGit(pushCtx2, repoPath, "push", "-u", "origin", branch)
+	}
+	return err
+}
+
+// Pull pulls from origin with a 60-second timeout.
+func Pull(ctx context.Context, repoPath string) error {
+	pullCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	_, err := runGit(pullCtx, repoPath, "pull")
+	return err
+}
+
+// Discard discards working-tree changes for the specified paths.
+func Discard(ctx context.Context, repoPath string, paths ...string) error {
+	args := append([]string{"checkout", "--"}, paths...)
+	_, err := runGit(ctx, repoPath, args...)
+	return err
+}
+
+// DiscardAll discards all working-tree changes in the repo.
+func DiscardAll(ctx context.Context, repoPath string) error {
+	_, err := runGit(ctx, repoPath, "checkout", "--", ".")
+	return err
+}
+
+// LsFiles returns all tracked files in the repository using git ls-files.
+func LsFiles(ctx context.Context, repoPath string) ([]string, error) {
+	out, err := runGit(ctx, repoPath, "ls-files")
+	if err != nil {
+		return nil, err
+	}
+	if out == "" {
+		return []string{}, nil
+	}
+	return strings.Split(out, "\n"), nil
+}
+
+// normalizeStatus converts two-char porcelain status to a single display char.
+func normalizeStatus(s string) string {
+	switch s {
+	case "??":
+		return "?"
+	case "!!":
+		return "!"
+	}
+	// For XY codes like "M ", " M", "A ", " D", take the non-space char
+	if len(s) >= 2 {
+		if s[0] != ' ' {
+			return string(s[0])
+		}
+		return string(s[1])
+	}
+	return s
+}
+
+// FileEntry represents a filesystem entry with its git status.
+type FileEntry struct {
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	IsDir     bool   `json:"is_dir"`
+	GitStatus string `json:"git_status"`
+}
+
+// ListDirectory returns one-level directory listing with git status applied.
+// It skips .git and gitignored entries, and is not recursive — the frontend handles lazy loading.
+// Directories receive a git status badge if any child file has a status.
+func ListDirectory(ctx context.Context, repoPath, dirPath string) ([]FileEntry, error) {
+	// Build status map from porcelain output.
+	statusMap := make(map[string]string)
+	out, err := runGit(ctx, repoPath, "status", "--porcelain")
+	if err == nil && out != "" {
+		for _, line := range strings.Split(out, "\n") {
+			if len(line) < 4 {
+				continue
+			}
+			xy := strings.TrimSpace(line[:2])
+			filePath := strings.TrimSpace(line[3:])
+			// Rename format: "oldpath -> newpath"
+			if idx := strings.Index(filePath, " -> "); idx >= 0 {
+				filePath = filePath[idx+4:]
+			}
+			if xy != "" {
+				statusMap[filePath] = xy
+			}
+		}
+	}
+
+	// Compute relative directory path for building relative entry paths.
+	relDir, _ := filepath.Rel(repoPath, dirPath)
+	if relDir == "." {
+		relDir = ""
+	}
+
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, fmt.Errorf("ListDirectory: read dir %s: %w", dirPath, err)
+	}
+
+	// Build the list of relative paths to check for gitignore.
+	pathsToCheck := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == ".git" {
+			continue
+		}
+		var rel string
+		if relDir == "" {
+			rel = name
+		} else {
+			rel = relDir + "/" + name
+		}
+		pathsToCheck = append(pathsToCheck, rel)
+	}
+
+	// Use git check-ignore to build the set of ignored entries in this directory.
+	ignoredSet := make(map[string]bool)
+	if len(pathsToCheck) > 0 {
+		args := append([]string{"check-ignore"}, pathsToCheck...)
+		ignoredOut, _ := runGit(ctx, repoPath, args...)
+		if ignoredOut != "" {
+			for _, line := range strings.Split(ignoredOut, "\n") {
+				line = strings.TrimSpace(line)
+				if line != "" {
+					ignoredSet[filepath.Base(line)] = true
+				}
+			}
+		}
+	}
+
+	result := make([]FileEntry, 0, len(entries))
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == ".git" {
+			continue
+		}
+
+		var relPath string
+		if relDir == "" {
+			relPath = name
+		} else {
+			relPath = relDir + "/" + name
+		}
+
+		fe := FileEntry{
+			Name:  name,
+			Path:  relPath,
+			IsDir: entry.IsDir(),
+		}
+
+		if ignoredSet[name] {
+			fe.GitStatus = "!"
+		} else if !entry.IsDir() {
+			if status, ok := statusMap[relPath]; ok {
+				fe.GitStatus = normalizeStatus(status)
+			}
+		} else {
+			prefix := relPath + "/"
+			for filePath, status := range statusMap {
+				if strings.HasPrefix(filePath, prefix) {
+					fe.GitStatus = normalizeStatus(status)
+					break
+				}
+			}
+		}
+
+		result = append(result, fe)
+	}
+
+	return result, nil
 }

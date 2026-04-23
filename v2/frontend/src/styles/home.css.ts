@@ -16,6 +16,7 @@ const borderGlow = keyframes({
 export const homeContainer = style({
   display: 'flex',
   flexDirection: 'column',
+  alignItems: 'stretch',
   padding: vars.space.xxl,
   gap: vars.space.xl,
   overflowY: 'auto',
@@ -81,6 +82,8 @@ export const quickActions = style({
   flexDirection: 'row',
   gap: vars.space.sm,
   flexWrap: 'wrap',
+  width: '100%',
+  boxSizing: 'border-box',
 });
 
 export const quickActionButton = style({
@@ -144,6 +147,8 @@ export const statusCard = style({
   borderRadius: vars.radius.lg,
   border: `1px solid color-mix(in srgb, ${vars.color.accent} 20%, ${vars.color.border})`,
   fontFamily: vars.font.mono,
+  alignSelf: 'flex-start',
+  maxWidth: '480px',
 });
 
 export const statusHeader = style({
@@ -183,6 +188,90 @@ export const statusDot = style({
   background: vars.color.success,
   flexShrink: 0,
   boxShadow: vars.color.successGlow,
+});
+
+export const statusDotDirty = style({
+  width: '6px',
+  height: '6px',
+  borderRadius: '50%',
+  background: '#f59e0b',
+  flexShrink: 0,
+  boxShadow: '0 0 6px rgba(245, 158, 11, 0.5)',
+});
+
+export const statusGitInfo = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  marginTop: '4px',
+});
+
+export const statusBadge = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '3px',
+  padding: '2px 6px',
+  borderRadius: '4px',
+  backgroundColor: 'rgba(255,255,255,0.06)',
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.xs,
+});
+
+export const statusBadgeWarn = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '3px',
+  padding: '2px 6px',
+  borderRadius: '4px',
+  backgroundColor: 'rgba(245, 158, 11, 0.15)',
+  color: '#f59e0b',
+  fontSize: vars.fontSize.xs,
+});
+
+export const statusActionButton = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '3px',
+  padding: '2px 8px',
+  borderRadius: '4px',
+  backgroundColor: `color-mix(in srgb, ${vars.color.accent} 12%, transparent)`,
+  color: vars.color.accent,
+  fontSize: vars.fontSize.xs,
+  fontFamily: vars.font.mono,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 25%, transparent)`,
+  cursor: 'pointer',
+  transition: `all ${vars.animation.fast} ease`,
+  ':hover': {
+    backgroundColor: `color-mix(in srgb, ${vars.color.accent} 22%, transparent)`,
+    borderColor: vars.color.accent,
+  },
+});
+
+export const statusActionButtonWarn = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '3px',
+  padding: '2px 8px',
+  borderRadius: '4px',
+  backgroundColor: 'rgba(245, 158, 11, 0.12)',
+  color: '#f59e0b',
+  fontSize: vars.fontSize.xs,
+  fontFamily: vars.font.mono,
+  border: '1px solid rgba(245, 158, 11, 0.25)',
+  cursor: 'pointer',
+  transition: `all ${vars.animation.fast} ease`,
+  ':hover': {
+    backgroundColor: 'rgba(245, 158, 11, 0.22)',
+    borderColor: '#f59e0b',
+  },
+});
+
+export const statusClean = style({
+  color: vars.color.accent,
+  fontSize: vars.fontSize.xs,
+  fontFamily: vars.font.mono,
 });
 
 export const statusBranchName = style({

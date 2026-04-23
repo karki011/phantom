@@ -33,3 +33,4 @@ docs/
 # Secrets
 .env
 .env.local
+.ai

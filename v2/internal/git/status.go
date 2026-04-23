@@ -87,10 +87,10 @@ func parseStatusV2(out string, rs *RepoStatus) {
 			parseRenameEntry(line[2:], rs)
 
 		case strings.HasPrefix(line, "u "):
-			// Unmerged entry
+			// Unmerged entry: XY sub m1 m2 m3 mW h1 h2 h3 path
 			parts := strings.Fields(line[2:])
-			if len(parts) >= 9 {
-				path := parts[8]
+			if len(parts) >= 10 {
+				path := parts[9]
 				rs.HasConflicts = true
 				rs.Conflicts = append(rs.Conflicts, path)
 				rs.Unstaged = append(rs.Unstaged, FileStatus{Path: path, Status: "U"})
@@ -108,11 +108,11 @@ func parseStatusV2(out string, rs *RepoStatus) {
 // XY is two chars: index status (X) and working-tree status (Y).
 func parseOrdinaryEntry(rest string, rs *RepoStatus) {
 	parts := strings.Fields(rest)
-	if len(parts) < 9 {
+	if len(parts) < 8 {
 		return
 	}
 	xy := parts[0]
-	path := parts[8]
+	path := parts[7]
 
 	indexStatus := string(xy[0])
 	wtStatus := string(xy[1])

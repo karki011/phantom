@@ -9,6 +9,7 @@ import '@xterm/xterm/css/xterm.css';
 import { vars } from '../styles/theme.css';
 import { createTerminal, writeTerminal, resizeTerminal, getTerminalScrollback } from '../core/bindings';
 import { MONO_FONT_FAMILY } from '../core/terminal/registry';
+import { getZoomConfig } from '../core/signals/zoom';
 import * as styles from './Terminal.css';
 import type { WsMessage } from '../core/types';
 
@@ -34,7 +35,7 @@ export function Terminal(props: TerminalProps) {
 
     term = new XTerm({
       fontFamily: MONO_FONT_FAMILY,
-      fontSize: 13,
+      fontSize: getZoomConfig().terminalFontSize,
       lineHeight: 1.4,
       cursorBlink: true,
       theme: {

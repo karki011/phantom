@@ -1,17 +1,37 @@
 // PhantomOS v2 — File tree view with lazy-loaded directories and git status badges
 // Author: Subash Karki
 
-import { For, Show, createSignal } from 'solid-js';
+import { For, Show, createSignal, createEffect, on, onCleanup } from 'solid-js';
 import { Collapsible } from '@kobalte/core/collapsible';
-import { ChevronRight, Folder, FolderOpen, FileText } from 'lucide-solid';
+import { ContextMenu } from '@kobalte/core/context-menu';
+import { ChevronRight, Folder, FolderOpen, FileText, Search, X, Eye, AppWindow, Terminal, Clipboard } from 'lucide-solid';
 import * as styles from '@/styles/right-sidebar.css';
 import {
   fileTree,
   setFileTree,
+  setFilesCount,
   selectedFile,
   setSelectedFile,
   type FileNode,
 } from '@/core/signals/files';
+import { activeWorktreeId } from '@/core/signals/app';
+import { worktreeMap } from '@/core/signals/worktrees';
+import { listWorkspaceFiles, listWorkspaceDir, searchWorkspaceFiles, revealInFinder, openInFinder, openInDefaultApp } from '@/core/bindings';
+import { addTabWithData } from '@/core/panes/signals';
+import { showToast } from '@/shared/Toast/Toast';
+import type { FileEntry } from '@/core/types';
+
+// ── Base path helper ─────────────────────────────────────────────────────────
+
+function getBasePath(): string {
+  const wtId = activeWorktreeId();
+  if (!wtId) return '';
+  for (const workspaces of Object.values(worktreeMap())) {
+    const match = workspaces.find((w) => w.id === wtId);
+    if (match) return match.worktree_path ?? '';
+  }
+  return '';
+}
 
 // ── Git badge ─────────────────────────────────────────────────────────────────
 
@@ -37,76 +57,285 @@ function GitBadge(props: { status: string }) {
 
 function FileTreeItem(props: { node: FileNode; depth: number }) {
   const [expanded, setExpanded] = createSignal(props.node.expanded ?? false);
+  const [children, setChildren] = createSignal<FileNode[]>(props.node.children ?? []);
+  const [loaded, setLoaded] = createSignal(false);
 
   const indent = () => props.depth * 12;
   const isSelected = () => !props.node.isDir && selectedFile() === props.node.path;
 
+  async function handleExpand(open: boolean) {
+    setExpanded(open);
+    if (open && !loaded() && props.node.isDir) {
+      const wtId = activeWorktreeId();
+      if (!wtId) return;
+      const entries = await listWorkspaceDir(wtId, props.node.path);
+      const nodes: FileNode[] = entries.map((e) => ({
+        name: e.name,
+        path: e.path,
+        isDir: e.is_dir,
+        gitStatus: e.git_status || undefined,
+        children: e.is_dir ? [] : undefined,
+      }));
+      nodes.sort((a, b) => {
+        if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+      setChildren(nodes);
+      setLoaded(true);
+    }
+  }
+
+  const isIgnored = () => props.node.gitStatus === '!';
+
+  const absolutePath = () => {
+    const base = getBasePath();
+    return base ? `${base}/${props.node.path}` : props.node.path;
+  };
+
   if (!props.node.isDir) {
     return (
-      <div
-        class={`${styles.fileItem} ${isSelected() ? styles.fileItemSelected : ''}`}
-        style={{ 'padding-left': `${indent() + 8}px` }}
-        onClick={() => setSelectedFile(props.node.path)}
-        title={props.node.path}
-      >
-        <FileText size={14} class={styles.fileIcon} />
-        <span class={styles.fileName}>{props.node.name}</span>
-        <Show when={props.node.gitStatus}>
-          <GitBadge status={props.node.gitStatus!} />
-        </Show>
-      </div>
+      <ContextMenu>
+        <ContextMenu.Trigger
+          as="div"
+          class={`${styles.fileItem} ${isSelected() ? styles.fileItemSelected : ''} ${isIgnored() ? styles.fileItemIgnored : ''}`}
+          style={{ 'padding-left': `${indent() + 8}px` }}
+          onClick={() => setSelectedFile(props.node.path)}
+          title={props.node.path}
+        >
+          <FileText size={14} class={styles.fileIcon} />
+          <span class={styles.fileName}>{props.node.name}</span>
+          <Show when={props.node.gitStatus && props.node.gitStatus !== '!'}>
+            <GitBadge status={props.node.gitStatus!} />
+          </Show>
+        </ContextMenu.Trigger>
+        <ContextMenu.Portal>
+          <ContextMenu.Content class={styles.contextMenuContent}>
+            <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => revealInFinder(absolutePath())}>
+              <Eye size={13} />
+              Reveal in Finder
+            </ContextMenu.Item>
+            <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => openInDefaultApp(absolutePath())}>
+              <AppWindow size={13} />
+              Open File
+            </ContextMenu.Item>
+            <ContextMenu.Separator class={styles.contextMenuSeparator} />
+            <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.node.name); showToast('Copied', props.node.name); }}>
+              <Clipboard size={13} />
+              Copy File Name
+            </ContextMenu.Item>
+            <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.node.path); showToast('Copied', props.node.path); }}>
+              <Clipboard size={13} />
+              Copy Path
+            </ContextMenu.Item>
+            <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(absolutePath()); showToast('Copied', absolutePath()); }}>
+              <Clipboard size={13} />
+              Copy Absolute Path
+            </ContextMenu.Item>
+          </ContextMenu.Content>
+        </ContextMenu.Portal>
+      </ContextMenu>
     );
   }
 
   return (
-    <Collapsible open={expanded()} onOpenChange={setExpanded}>
-      <Collapsible.Trigger
-        class={`${styles.fileItem} ${styles.fileItemDir}`}
-        style={{ 'padding-left': `${indent() + 8}px` }}
-        title={props.node.path}
-      >
-        <ChevronRight size={12} class={styles.fileChevron} />
-        <Show when={expanded()} fallback={<Folder size={14} class={styles.fileIcon} />}>
-          <FolderOpen size={14} class={styles.fileIcon} />
-        </Show>
-        <span class={styles.fileName}>{props.node.name}</span>
-        <Show when={props.node.gitStatus}>
-          <GitBadge status={props.node.gitStatus!} />
-        </Show>
-      </Collapsible.Trigger>
+    <ContextMenu>
+      <ContextMenu.Trigger as="div">
+        <Collapsible open={expanded()} onOpenChange={handleExpand}>
+          <Collapsible.Trigger
+            class={`${styles.fileItem} ${styles.fileItemDir} ${isIgnored() ? styles.fileItemIgnored : ''}`}
+            style={{ 'padding-left': `${indent() + 8}px` }}
+            title={props.node.path}
+          >
+            <ChevronRight size={12} class={styles.fileChevron} />
+            <Show when={expanded()} fallback={<Folder size={14} class={styles.fileIcon} />}>
+              <FolderOpen size={14} class={styles.fileIcon} />
+            </Show>
+            <span class={styles.fileName}>{props.node.name}</span>
+            <Show when={props.node.gitStatus && props.node.gitStatus !== '!'}>
+              <GitBadge status={props.node.gitStatus!} />
+            </Show>
+          </Collapsible.Trigger>
 
-      <Collapsible.Content>
-        <Show when={props.node.children?.length}>
-          <For each={props.node.children}>
-            {(child) => <FileTreeItem node={child} depth={props.depth + 1} />}
-          </For>
-        </Show>
-      </Collapsible.Content>
-    </Collapsible>
+          <Collapsible.Content>
+            <Show when={children().length > 0}>
+              <For each={children()}>
+                {(child) => <FileTreeItem node={child} depth={props.depth + 1} />}
+              </For>
+            </Show>
+          </Collapsible.Content>
+        </Collapsible>
+      </ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenu.Content class={styles.contextMenuContent}>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => openInFinder(absolutePath())}>
+            <FolderOpen size={13} />
+            Open in Finder
+          </ContextMenu.Item>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => addTabWithData('terminal', 'Terminal', { cwd: absolutePath() })}>
+            <Terminal size={13} />
+            Open in Terminal
+          </ContextMenu.Item>
+          <ContextMenu.Separator class={styles.contextMenuSeparator} />
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.node.name); showToast('Copied', props.node.name); }}>
+            <Clipboard size={13} />
+            Copy Folder Name
+          </ContextMenu.Item>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.node.path); showToast('Copied', props.node.path); }}>
+            <Clipboard size={13} />
+            Copy Path
+          </ContextMenu.Item>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(absolutePath()); showToast('Copied', absolutePath()); }}>
+            <Clipboard size={13} />
+            Copy Absolute Path
+          </ContextMenu.Item>
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    </ContextMenu>
+  );
+}
+
+// ── Search result item ───────────────────────────────────────────────────────
+
+function SearchResultItem(props: { entry: FileEntry }) {
+  const dirPart = () => {
+    const idx = props.entry.path.lastIndexOf('/');
+    return idx > 0 ? props.entry.path.substring(0, idx) : '';
+  };
+  const isSelected = () => selectedFile() === props.entry.path;
+
+  return (
+    <div
+      class={`${styles.fileItem} ${isSelected() ? styles.fileItemSelected : ''}`}
+      style={{ 'padding-left': '8px' }}
+      onClick={() => setSelectedFile(props.entry.path)}
+      title={props.entry.path}
+    >
+      <FileText size={14} class={styles.fileIcon} />
+      <span class={styles.fileName}>{props.entry.name}</span>
+      <Show when={dirPart()}>
+        <span class={styles.searchResultPath}>{dirPart()}</span>
+      </Show>
+    </div>
   );
 }
 
 // ── Files view ────────────────────────────────────────────────────────────────
 
 export function FilesView() {
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const [searchResults, setSearchResults] = createSignal<FileEntry[]>([]);
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  onCleanup(() => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+  });
+
+  // Load the file tree when active worktree changes
+  createEffect(on(activeWorktreeId, async (wtId) => {
+    if (!wtId) { setFileTree([]); return; }
+    const entries = await listWorkspaceFiles(wtId);
+    const nodes: FileNode[] = entries.map((e) => ({
+      name: e.name,
+      path: e.path,
+      isDir: e.is_dir,
+      gitStatus: e.git_status || undefined,
+      children: e.is_dir ? [] : undefined,
+    }));
+    // Sort: directories first, then files, alphabetically
+    nodes.sort((a, b) => {
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    setFileTree(nodes);
+    setFilesCount(nodes.length);
+  }));
+
+  // Debounced search
+  function handleSearchInput(value: string) {
+    setSearchQuery(value);
+    if (debounceTimer) clearTimeout(debounceTimer);
+
+    if (!value.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    debounceTimer = setTimeout(async () => {
+      const wtId = activeWorktreeId();
+      if (!wtId) return;
+      const results = await searchWorkspaceFiles(wtId, value.trim());
+      setSearchResults(results);
+    }, 200);
+  }
+
+  function clearSearch() {
+    setSearchQuery('');
+    setSearchResults([]);
+    if (debounceTimer) clearTimeout(debounceTimer);
+  }
+
+  const isSearching = () => searchQuery().trim().length > 0;
+
   return (
-    <Show
-      when={fileTree().length > 0}
-      fallback={
-        <div class={styles.emptyState}>
-          <FileText size={24} />
-          <span>No files loaded</span>
-          <span style={{ 'font-size': '10px', opacity: '0.6' }}>
-            File tree will populate when a worktree is active
-          </span>
+    <>
+      {/* Search input */}
+      <div class={styles.fileSearchWrapper}>
+        <div class={styles.fileSearchInput}>
+          <Search size={13} class={styles.fileSearchIcon} />
+          <input
+            type="text"
+            placeholder="Search files..."
+            value={searchQuery()}
+            onInput={(e) => handleSearchInput(e.currentTarget.value)}
+          />
+          <Show when={isSearching()}>
+            <button class={styles.fileSearchClear} onClick={clearSearch} title="Clear search">
+              <X size={12} />
+            </button>
+          </Show>
         </div>
-      }
-    >
-      <div class={styles.fileTree}>
-        <For each={fileTree()}>
-          {(node) => <FileTreeItem node={node} depth={0} />}
-        </For>
       </div>
-    </Show>
+
+      {/* Search results or file tree */}
+      <Show
+        when={isSearching()}
+        fallback={
+          <Show
+            when={fileTree().length > 0}
+            fallback={
+              <div class={styles.emptyState}>
+                <FileText size={24} />
+                <span>No files loaded</span>
+                <span style={{ 'font-size': '10px', opacity: '0.6' }}>
+                  File tree will populate when a worktree is active
+                </span>
+              </div>
+            }
+          >
+            <div class={styles.fileTree}>
+              <For each={fileTree()}>
+                {(node) => <FileTreeItem node={node} depth={0} />}
+              </For>
+            </div>
+          </Show>
+        }
+      >
+        <Show
+          when={searchResults().length > 0}
+          fallback={
+            <div class={styles.emptyState}>
+              <Search size={20} />
+              <span>No matching files</span>
+            </div>
+          }
+        >
+          <div class={styles.fileTree}>
+            <For each={searchResults()}>
+              {(entry) => <SearchResultItem entry={entry} />}
+            </For>
+          </div>
+        </Show>
+      </Show>
+    </>
   );
 }

@@ -61,6 +61,24 @@ func BranchGraph(ctx context.Context, repoPath string, limit int) (string, error
 	return out, nil
 }
 
+// LogBranchOnly returns commits on HEAD that are not reachable from baseBranch.
+// If baseBranch is empty, it falls back to "main".
+// limit caps the number of results; pass 0 for no limit.
+func LogBranchOnly(ctx context.Context, repoPath, baseBranch string, limit int) ([]CommitInfo, error) {
+	if baseBranch == "" {
+		baseBranch = "main"
+	}
+	args := []string{"log", "--format=" + logFormat, baseBranch + "..HEAD"}
+	if limit > 0 {
+		args = append(args, "-n", strconv.Itoa(limit))
+	}
+	out, err := runGit(ctx, repoPath, args...)
+	if err != nil {
+		return nil, err
+	}
+	return parseLogOutput(out), nil
+}
+
 // parseLogOutput splits multi-line log output into CommitInfo records.
 // Each line: hash|shortHash|author|email|unixTime|subject|parents
 func parseLogOutput(out string) []CommitInfo {

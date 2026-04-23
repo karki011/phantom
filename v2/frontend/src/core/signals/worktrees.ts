@@ -4,7 +4,7 @@
 import { createSignal, createMemo } from 'solid-js';
 import { onWailsEvent } from '../events';
 import { projects, bootstrapProjects } from './projects';
-import { setActiveWorktreeId } from './app';
+import { activeWorktreeId, setActiveWorktreeId } from './app';
 import { listWorktrees, createWorktree, removeWorktree } from '../bindings';
 import { setPref, loadPref } from './preferences';
 import { clearWorktreeCache } from '../panes/signals';
@@ -49,7 +49,7 @@ async function loadProjectWorktrees(projectId: string): Promise<void> {
 }
 
 // Load worktrees for all projects
-async function refreshAllWorktrees(): Promise<void> {
+export async function refreshAllWorktrees(): Promise<void> {
   const allProjects = projects();
   await Promise.all(allProjects.map((p) => loadProjectWorktrees(p.id)));
 }
@@ -86,6 +86,7 @@ export async function bootstrapWorktrees(): Promise<void> {
   // Subscribe to backend events — refresh on changes
   onWailsEvent('worktree:created', () => refreshAllWorktrees());
   onWailsEvent('worktree:removed', () => refreshAllWorktrees());
+  onWailsEvent('worktree:updated', () => refreshAllWorktrees());
   onWailsEvent('git:status', () => refreshAllWorktrees());
 }
 
@@ -129,10 +130,14 @@ export async function createWorktreeForProject(
 export async function removeWorktreeById(
   projectId: string,
   worktreeId: string,
-): Promise<void> {
+): Promise<boolean> {
   const isActive = activeWorktreeId() === worktreeId;
 
-  await removeWorktree(worktreeId);
+  const ok = await removeWorktree(worktreeId);
+  if (!ok) {
+    console.error('[worktrees] removeWorktree failed for', worktreeId);
+    return false;
+  }
   clearWorktreeCache(worktreeId);
   await loadProjectWorktrees(projectId);
 
@@ -145,6 +150,7 @@ export async function removeWorktreeById(
       selectWorktree(projectWorktrees[0].id);
     }
   }
+  return true;
 }
 
 export {

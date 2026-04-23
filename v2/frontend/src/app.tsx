@@ -10,6 +10,7 @@ import { bootstrapProjects } from './core/signals/projects';
 import { bootstrapApp, activeTopTab, activeWorktreeId } from './core/signals/app';
 import { loadPref } from './core/signals/preferences';
 import { initTheme, initFontStyle } from './core/signals/theme';
+import { initZoom } from './core/signals/zoom';
 import { OnboardingFlow } from './screens/onboarding';
 import { playSound } from './core/audio/engine';
 import { SystemHeader } from './components/layout/SystemHeader';
@@ -22,6 +23,8 @@ import { registerKeyboardShortcuts } from './core/keyboard';
 import { WelcomePage } from './components/WelcomePage';
 import { waitForWails } from './core/bindings/ready';
 import { ToastRegion } from './shared/Toast/Toast';
+import { SettingsDialog } from './shared/SettingsDialog/SettingsDialog';
+import { QuickOpen } from './shared/QuickOpen/QuickOpen';
 
 export function App() {
   const [ready, setReady] = createSignal(false);
@@ -36,6 +39,8 @@ export function App() {
 
     const savedFont = await loadPref('font_style');
     if (savedFont) initFontStyle(savedFont);
+
+    await initZoom();
 
     const onboardingDone = await loadPref('onboarding_completed');
     if (!onboardingDone) setShowOnboarding(true);
@@ -65,6 +70,8 @@ export function App() {
   return (
     <div class={styles.appShell}>
       <ToastRegion />
+      <SettingsDialog />
+      <QuickOpen />
       <Show when={showOnboarding()}>
         <OnboardingFlow onComplete={handleOnboardingComplete} />
       </Show>

@@ -48,6 +48,7 @@ export const content = style({
 export const sm = style({ width: '480px' });
 export const md = style({ width: '600px' });
 export const lg = style({ width: '760px' });
+export const xl = style({ width: '900px' });
 
 export const header = style({
   display: 'flex',

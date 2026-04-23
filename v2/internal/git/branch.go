@@ -152,6 +152,12 @@ func CherryPick(ctx context.Context, repoPath, commitHash string) error {
 	return err
 }
 
+// RenameBranch renames a local branch from oldName to newName.
+func RenameBranch(ctx context.Context, repoPath, oldName, newName string) error {
+	_, err := runGit(ctx, repoPath, "branch", "-m", oldName, newName)
+	return err
+}
+
 // extractInt finds a keyword followed by a number in s and returns the number.
 // e.g. extractInt("ahead 2, behind 1", "ahead") -> (2, true)
 func extractInt(s, keyword string) (int, bool) {

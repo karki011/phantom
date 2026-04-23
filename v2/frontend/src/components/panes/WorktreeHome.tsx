@@ -1,13 +1,16 @@
 // PhantomOS v2 — Worktree home pane (Hunter's Terminal)
 // Author: Subash Karki
 
-import { createMemo, createSignal } from 'solid-js';
-import { GitBranch } from 'lucide-solid';
+import { createMemo, createSignal, createEffect, on, Show } from 'solid-js';
+import { GitBranch, ArrowUp, ArrowDown, FileEdit, FileQuestion } from 'lucide-solid';
 import { activeWorktreeId } from '@/core/signals/app';
 import { worktreeMap } from '@/core/signals/worktrees';
 import { projects } from '@/core/signals/projects';
 import { addTabWithData } from '@/core/panes/signals';
 import { NewWorktreeDialog } from '@/shared/NewWorktreeDialog/NewWorktreeDialog';
+import { getWorkspaceStatus, gitPull, gitPush, refreshWorkspaceStatus } from '@/core/bindings';
+import { showToast, showWarningToast } from '@/shared/Toast/Toast';
+import type { RepoStatus } from '@/core/types';
 import * as styles from '@/styles/home.css';
 
 export default function WorktreeHome() {
@@ -28,6 +31,13 @@ export default function WorktreeHome() {
   });
 
   const [worktreeOpen, setWorktreeOpen] = createSignal(false);
+  const [repoStatus, setRepoStatus] = createSignal<RepoStatus | null>(null);
+
+  createEffect(on(activeWorktreeId, async (wtId) => {
+    if (!wtId) { setRepoStatus(null); return; }
+    const status = await getWorkspaceStatus(wtId);
+    setRepoStatus(status);
+  }));
 
   return (
     <div class={styles.homeContainer}>
@@ -41,19 +51,80 @@ export default function WorktreeHome() {
           <span class={styles.statusTitle}>Workspace Status</span>
         </div>
 
-        {/* Row 2: Green dot + Branch name */}
+        {/* Row 2: Status dot + Branch name */}
         <div class={styles.statusBranch}>
-          <span class={styles.statusDot} />
+          <span class={repoStatus()?.is_clean ? styles.statusDot : styles.statusDotDirty} />
           <span class={styles.statusBranchName}>{activeWorktree()?.branch ?? '—'}</span>
         </div>
 
-        {/* Row 3: Meta summary */}
+        {/* Row 3: Git sync info */}
+        <Show when={repoStatus()}>
+          <div class={styles.statusGitInfo}>
+            <Show when={(repoStatus()?.ahead_by ?? 0) > 0}>
+              <button
+                type="button"
+                class={styles.statusActionButton}
+                title={`Push ${repoStatus()!.ahead_by} commit(s) to remote`}
+                onClick={async () => {
+                  const wtId = activeWorktreeId();
+                  if (!wtId) return;
+                  const ok = await gitPush(wtId);
+                  if (ok) {
+                    showToast('Pushed', 'Changes pushed to remote');
+                    setRepoStatus(await getWorkspaceStatus(wtId));
+                  } else {
+                    showWarningToast('Push failed', 'Could not push to remote');
+                  }
+                }}
+              >
+                <ArrowUp size={11} />
+                {repoStatus()!.ahead_by} to push
+              </button>
+            </Show>
+            <Show when={(repoStatus()?.behind_by ?? 0) > 0}>
+              <button
+                type="button"
+                class={styles.statusActionButtonWarn}
+                title={`Pull ${repoStatus()!.behind_by} commit(s) from remote`}
+                onClick={async () => {
+                  const wtId = activeWorktreeId();
+                  if (!wtId) return;
+                  const ok = await gitPull(wtId);
+                  if (ok) {
+                    showToast('Pulled', 'Up to date with remote');
+                    setRepoStatus(await getWorkspaceStatus(wtId));
+                  } else {
+                    showWarningToast('Pull failed', 'Could not pull from remote');
+                  }
+                }}
+              >
+                <ArrowDown size={11} />
+                {repoStatus()!.behind_by} to pull
+              </button>
+            </Show>
+            <Show when={(repoStatus()?.staged?.length ?? 0) + (repoStatus()?.unstaged?.length ?? 0) > 0}>
+              <span class={styles.statusBadge} title="Modified files">
+                <FileEdit size={11} />
+                {(repoStatus()?.staged?.length ?? 0) + (repoStatus()?.unstaged?.length ?? 0)}
+              </span>
+            </Show>
+            <Show when={(repoStatus()?.untracked?.length ?? 0) > 0}>
+              <span class={styles.statusBadge} title="Untracked files">
+                <FileQuestion size={11} />
+                {repoStatus()!.untracked!.length}
+              </span>
+            </Show>
+            <Show when={repoStatus()?.is_clean && (repoStatus()?.ahead_by ?? 0) === 0 && (repoStatus()?.behind_by ?? 0) === 0}>
+              <span class={styles.statusClean}>Clean · In sync</span>
+            </Show>
+          </div>
+        </Show>
+
+        {/* Row 4: Meta */}
         <div class={styles.statusMeta}>
           {activeWorktree()?.type === 'branch' ? 'Local' : 'Worktree'}
           {' · '}
           <span title={activeWorktree()?.worktree_path ?? ''}>{activeWorktree()?.worktree_path ?? '—'}</span>
-          {' · '}
-          Graph Ready
         </div>
       </div>
 

@@ -9,11 +9,11 @@ interface PhantomModalProps {
   onOpenChange: (open: boolean) => void;
   title: string;
   description?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   children: JSX.Element;
 }
 
-const sizeMap = { sm: styles.sm, md: styles.md, lg: styles.lg };
+const sizeMap = { sm: styles.sm, md: styles.md, lg: styles.lg, xl: styles.xl };
 
 export function PhantomModal(props: PhantomModalProps) {
   const sizeClass = () => sizeMap[props.size ?? 'md'];

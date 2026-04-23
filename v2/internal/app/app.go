@@ -3,10 +3,11 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/charmbracelet/log"
 
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
@@ -93,32 +94,35 @@ func (a *App) Startup(ctx context.Context) {
 	a.wsServer = ws.NewServer(a.wsHub, 9741)
 	if err := a.wsServer.Start(a.ctx); err != nil {
 		// log error but don't crash — WS is enhancement, not critical
-		log.Printf("app: ws server start: %v", err)
+		log.Error("app: ws server start failed", "err", err)
 	}
 
 	// Start all collectors. Non-fatal: log and continue if any fail.
 	if a.collectorRegistry != nil {
 		if err := a.collectorRegistry.StartAll(a.ctx); err != nil {
-			log.Printf("app: collector registry start: %v", err)
+			log.Error("app: collector registry start failed", "err", err)
 		}
 	}
 
 	// Start safety service (hot-reload watcher).
 	if a.Safety != nil {
 		if err := a.Safety.Start(a.ctx); err != nil {
-			log.Printf("app: safety service start: %v", err)
+			log.Error("app: safety service start failed", "err", err)
 		}
 	}
 
 	// Initialize session controller tables.
 	if a.SessionCtrl != nil {
 		if err := a.SessionCtrl.Init(a.ctx); err != nil {
-			log.Printf("app: session controller init: %v", err)
+			log.Error("app: session controller init failed", "err", err)
 		}
 	}
 
 	// Start health pulse goroutine — emits every 5s.
 	go a.healthPulseLoop()
+
+	// Start background git fetch — polls origin every 5 minutes.
+	go a.startBackgroundFetch()
 }
 
 func (a *App) DomReady(ctx context.Context) {
@@ -163,7 +167,7 @@ func (a *App) Shutdown(ctx context.Context) {
 
 	if a.DB != nil {
 		if err := a.DB.Close(); err != nil {
-			log.Printf("app: close db: %v", err)
+			log.Error("app: close db failed", "err", err)
 		}
 	}
 }

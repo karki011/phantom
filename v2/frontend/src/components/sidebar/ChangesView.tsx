@@ -1,79 +1,318 @@
-// PhantomOS v2 — Git changes view with staged/unstaged sections and commit UI
+// PhantomOS v2 — Git changes view with staged/unstaged collapsible sections
 // Author: Subash Karki
 
-import { For, Show } from 'solid-js';
+import { createSignal, createEffect, on, For, Show } from 'solid-js';
+import { Collapsible } from '@kobalte/core/collapsible';
+import { ContextMenu } from '@kobalte/core/context-menu';
 import { TextField } from '@kobalte/core/text-field';
-import { GitCommit, Sparkles, Plus, Minus, FileQuestion, FilePen } from 'lucide-solid';
-import * as styles from '@/styles/right-sidebar.css';
 import {
-  stagedChanges,
-  unstagedChanges,
-  gitChanges,
-  setGitChanges,
-  commitMessage,
-  setCommitMessage,
-  type GitChange,
+  ChevronRight, ChevronDown, GitCommit, Sparkles,
+  Plus, Minus, Undo2, RefreshCw,
+  ArrowDownFromLine, ArrowUpFromLine,
+  FilePen, FilePlus2, FileX, FileQuestion,
+  GitBranch, Eye, Clipboard, Trash2,
+} from 'lucide-solid';
+import * as styles from '@/styles/right-sidebar.css';
+import { activeWorktreeId } from '@/core/signals/app';
+import { worktreeMap } from '@/core/signals/worktrees';
+import {
+  gitStage, gitStageAll, gitUnstage, gitCommit,
+  gitDiscard, gitPull, gitPush, getWorkspaceStatus,
+  refreshWorkspaceStatus,
+  revealInFinder,
+} from '@/core/bindings';
+import { showToast, showWarningToast } from '@/shared/Toast/Toast';
+import { Tip } from '@/shared/Tip/Tip';
+import { onWailsEvent } from '@/core/events';
+import type { RepoStatus, FileStatus } from '@/core/types';
+import {
+  commitMessage, setCommitMessage, setChangesCount,
 } from '@/core/signals/files';
 
-// ── Status badge for changes ──────────────────────────────────────────────────
+// ── Base path helper ─────────────────────────────────────────────────────────
 
-function StatusIcon(props: { status: string; staged: boolean }) {
-  const iconProps = { size: 12 };
+function getBasePath(): string {
+  const wtId = activeWorktreeId();
+  if (!wtId) return '';
+  for (const workspaces of Object.values(worktreeMap())) {
+    const match = workspaces.find((w) => w.id === wtId);
+    if (match) return match.worktree_path ?? '';
+  }
+  return '';
+}
+
+// ── Status icon per git status code ──────────────────────────────────────────
+
+function FileStatusIcon(props: { status: string }) {
+  const iconProps = { size: 12, style: { 'flex-shrink': 0 } };
   switch (props.status) {
-    case 'added':    return <Plus {...iconProps} class={styles.gitBadgeA} />;
-    case 'deleted':  return <Minus {...iconProps} class={styles.gitBadgeD} />;
-    case 'modified': return <FilePen {...iconProps} class={styles.gitBadgeM} />;
-    default:         return <FileQuestion {...iconProps} class={styles.gitBadgeQ} />;
+    case 'M': return <FilePen {...iconProps} class={styles.statusIconM} />;
+    case 'A': return <FilePlus2 {...iconProps} class={styles.statusIconA} />;
+    case 'D': return <FileX {...iconProps} class={styles.statusIconD} />;
+    case 'R': return <FilePen {...iconProps} class={styles.statusIconM} style={{ color: '#22d3ee', 'flex-shrink': 0 }} />;
+    default:  return <FileQuestion {...iconProps} class={styles.statusIconQ} />;
   }
 }
 
-// ── Toggle stage/unstage ──────────────────────────────────────────────────────
+// ── Individual file row ───────────────────────────────────────────────────────
 
-function toggleStaged(path: string) {
-  setGitChanges((prev) =>
-    prev.map((c) => (c.path === path ? { ...c, staged: !c.staged } : c)),
-  );
-}
+function StagedFileRow(props: { file: FileStatus; onUnstage: (path: string) => void }) {
+  const name = () => props.file.path.split('/').pop() ?? props.file.path;
+  const absolutePath = () => {
+    const base = getBasePath();
+    return base ? `${base}/${props.file.path}` : props.file.path;
+  };
 
-// ── Single change item ────────────────────────────────────────────────────────
-
-function ChangeItem(props: { change: GitChange }) {
   return (
-    <div class={styles.changeItem}>
-      <input
-        type="checkbox"
-        class={styles.changeCheckbox}
-        checked={props.change.staged}
-        onChange={() => toggleStaged(props.change.path)}
-        title={props.change.staged ? 'Unstage' : 'Stage'}
-      />
-      <StatusIcon status={props.change.status} staged={props.change.staged} />
-      <span class={styles.changeFilePath} title={props.change.path}>
-        {props.change.path.split('/').pop() ?? props.change.path}
-      </span>
-    </div>
+    <ContextMenu>
+      <ContextMenu.Trigger as="div" class={styles.fileRow}>
+        <FileStatusIcon status={props.file.status} />
+        <span class={styles.fileRowName} title={props.file.path}>{name()}</span>
+        <div class={styles.fileRowActions}>
+          <Tip label="Unstage" placement="left">
+            <button
+              type="button"
+              class={styles.fileActionUnstage}
+              onClick={(e) => { e.stopPropagation(); props.onUnstage(props.file.path); }}
+            >
+              <Minus size={11} />
+            </button>
+          </Tip>
+        </div>
+      </ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenu.Content class={styles.contextMenuContent}>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => props.onUnstage(props.file.path)}>
+            <Minus size={13} />
+            Unstage
+          </ContextMenu.Item>
+          <ContextMenu.Separator class={styles.contextMenuSeparator} />
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.file.path); showToast('Copied', props.file.path); }}>
+            <Clipboard size={13} />
+            Copy Path
+          </ContextMenu.Item>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(absolutePath()); showToast('Copied', absolutePath()); }}>
+            <Clipboard size={13} />
+            Copy Absolute Path
+          </ContextMenu.Item>
+          <Show when={props.file.status !== 'D'}>
+            <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => revealInFinder(absolutePath())}>
+              <Eye size={13} />
+              Reveal in Finder
+            </ContextMenu.Item>
+          </Show>
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    </ContextMenu>
   );
 }
 
-// ── Changes view ──────────────────────────────────────────────────────────────
+function UnstagedFileRow(props: {
+  file: FileStatus;
+  onDiscard: (path: string) => void;
+  onStage: (path: string) => void;
+}) {
+  const name = () => props.file.path.split('/').pop() ?? props.file.path;
+  const absolutePath = () => {
+    const base = getBasePath();
+    return base ? `${base}/${props.file.path}` : props.file.path;
+  };
+  const isUntracked = () => props.file.status === '?';
+
+  return (
+    <ContextMenu>
+      <ContextMenu.Trigger as="div" class={styles.fileRow}>
+        <FileStatusIcon status={props.file.status} />
+        <span class={styles.fileRowName} title={props.file.path}>{name()}</span>
+        <div class={styles.fileRowActions}>
+          <Tip label="Discard changes" placement="left">
+            <button
+              type="button"
+              class={styles.fileActionDiscard}
+              onClick={(e) => { e.stopPropagation(); props.onDiscard(props.file.path); }}
+            >
+              <Undo2 size={11} />
+            </button>
+          </Tip>
+          <Tip label="Stage" placement="left">
+            <button
+              type="button"
+              class={styles.fileActionStage}
+              onClick={(e) => { e.stopPropagation(); props.onStage(props.file.path); }}
+            >
+              <Plus size={11} />
+            </button>
+          </Tip>
+        </div>
+      </ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenu.Content class={styles.contextMenuContent}>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => props.onStage(props.file.path)}>
+            <Plus size={13} />
+            Stage
+          </ContextMenu.Item>
+          <Show when={!isUntracked()}>
+            <ContextMenu.Item class={`${styles.contextMenuItem} ${styles.contextMenuItemDanger}`} onSelect={() => props.onDiscard(props.file.path)}>
+              <Trash2 size={13} />
+              Discard Changes
+            </ContextMenu.Item>
+          </Show>
+          <ContextMenu.Separator class={styles.contextMenuSeparator} />
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.file.path); showToast('Copied', props.file.path); }}>
+            <Clipboard size={13} />
+            Copy Path
+          </ContextMenu.Item>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(absolutePath()); showToast('Copied', absolutePath()); }}>
+            <Clipboard size={13} />
+            Copy Absolute Path
+          </ContextMenu.Item>
+          <Show when={props.file.status !== 'D'}>
+            <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => revealInFinder(absolutePath())}>
+              <Eye size={13} />
+              Reveal in Finder
+            </ContextMenu.Item>
+          </Show>
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    </ContextMenu>
+  );
+}
+
+// ── Main changes view ─────────────────────────────────────────────────────────
 
 export function ChangesView() {
+  const [repoStatus, setRepoStatus] = createSignal<RepoStatus | null>(null);
+  const [stagedOpen, setStagedOpen] = createSignal(true);
+  const [changesOpen, setChangesOpen] = createSignal(true);
+
+  const stagedFiles  = () => repoStatus()?.staged ?? [];
+  const unstagedFiles = () => [
+    ...(repoStatus()?.unstaged ?? []),
+    ...(repoStatus()?.untracked ?? []).map((f) => ({ ...f, status: '?' })),
+  ];
+
+  const aheadBy  = () => repoStatus()?.ahead_by  ?? 0;
+  const behindBy = () => repoStatus()?.behind_by ?? 0;
+  const branchName = () => repoStatus()?.branch ?? '';
+  const needsPull = () => behindBy() > 0;
+  const needsPush = () => aheadBy() > 0;
+  const syncLabel = () => {
+    const parts: string[] = [];
+    if (needsPull()) parts.push(`${behindBy()} behind`);
+    if (needsPush()) parts.push(`${aheadBy()} ahead`);
+    return parts.length > 0 ? parts.join(' · ') : 'In sync';
+  };
+
+  const [syncing, setSyncing] = createSignal(false);
+
+  async function refreshStatus(fetchRemote = false) {
+    const wtId = activeWorktreeId();
+    if (!wtId) { setRepoStatus(null); return; }
+    if (fetchRemote) setSyncing(true);
+    const status = fetchRemote
+      ? await refreshWorkspaceStatus(wtId)
+      : await getWorkspaceStatus(wtId);
+    setRepoStatus(status);
+    setChangesCount(
+      (status?.staged?.length ?? 0) + (status?.unstaged?.length ?? 0) + (status?.untracked?.length ?? 0),
+    );
+    if (fetchRemote) setSyncing(false);
+  }
+
+  // Auto-load when active worktree changes
+  createEffect(on(activeWorktreeId, () => { refreshStatus(); }));
+
+  // Backend-driven refresh
+  onWailsEvent('git:status', refreshStatus);
+
+  // ── Actions ────────────────────────────────────────────────────────────────
+
+  async function handleStage(path: string) {
+    const wtId = activeWorktreeId();
+    if (!wtId) return;
+    await gitStage(wtId, [path]);
+    await refreshStatus();
+  }
+
+  async function handleUnstage(path: string) {
+    const wtId = activeWorktreeId();
+    if (!wtId) return;
+    await gitUnstage(wtId, [path]);
+    await refreshStatus();
+  }
+
+  async function handleStageAll() {
+    const wtId = activeWorktreeId();
+    if (!wtId) return;
+    await gitStageAll(wtId);
+    await refreshStatus();
+  }
+
+  async function handleUnstageAll() {
+    const wtId = activeWorktreeId();
+    if (!wtId) return;
+    const paths = stagedFiles().map((f) => f.path);
+    if (paths.length === 0) return;
+    await gitUnstage(wtId, paths);
+    await refreshStatus();
+  }
+
+  async function handleDiscard(path: string) {
+    const wtId = activeWorktreeId();
+    if (!wtId) return;
+    await gitDiscard(wtId, [path]);
+    await refreshStatus();
+  }
+
+  async function handleDiscardAll() {
+    const wtId = activeWorktreeId();
+    if (!wtId) return;
+    const paths = unstagedFiles().map((f) => f.path);
+    if (paths.length === 0) return;
+    await gitDiscard(wtId, paths);
+    await refreshStatus();
+  }
+
+  async function handlePull() {
+    const wtId = activeWorktreeId();
+    if (!wtId) return;
+    const ok = await gitPull(wtId);
+    if (ok) { showToast('Pulled', 'Up to date'); await refreshStatus(); }
+    else showWarningToast('Pull failed', 'Could not pull from remote');
+  }
+
+  async function handlePush() {
+    const wtId = activeWorktreeId();
+    if (!wtId) return;
+    const ok = await gitPush(wtId);
+    if (ok) { showToast('Pushed', 'Changes pushed to remote'); await refreshStatus(); }
+    else showWarningToast('Push failed', 'Could not push to remote');
+  }
+
   async function handleCommit() {
-    const msg = commitMessage().trim();
-    if (!msg || stagedChanges().length === 0) return;
-    // Stub: real implementation will call the git commit binding
-    console.info('[PhantomOS] Commit stub — message:', msg);
-    setCommitMessage('');
+    const msg   = commitMessage().trim();
+    const wtId  = activeWorktreeId();
+    if (!msg || stagedFiles().length === 0 || !wtId) return;
+    const ok = await gitCommit(wtId, msg);
+    if (ok) {
+      showToast('Committed', msg.substring(0, 50));
+      setCommitMessage('');
+      await refreshStatus();
+    } else {
+      showWarningToast('Commit failed', 'Could not commit staged changes');
+    }
   }
 
   function handleAiMessage() {
-    // Stub: real implementation will call an AI binding to generate commit message
+    // Stub: will call AI binding to generate commit message
     console.info('[PhantomOS] AI commit message stub');
   }
 
+  const hasFiles = () => stagedFiles().length > 0 || unstagedFiles().length > 0;
+
   return (
     <Show
-      when={gitChanges().length > 0}
+      when={hasFiles()}
       fallback={
         <div class={styles.emptyState}>
           <GitCommit size={24} />
@@ -84,67 +323,174 @@ export function ChangesView() {
         </div>
       }
     >
-      <div style={{ display: 'flex', 'flex-direction': 'column', flex: '1' }}>
-        {/* Staged section */}
-        <Show when={stagedChanges().length > 0}>
-          <div class={styles.changesSection}>
-            <div class={styles.changesSectionHeader}>
-              Staged ({stagedChanges().length})
-            </div>
-            <For each={stagedChanges()}>
-              {(change) => <ChangeItem change={change} />}
-            </For>
-          </div>
-        </Show>
+      <div style={{ display: 'flex', 'flex-direction': 'column', flex: '1', overflow: 'hidden', 'min-height': '0' }}>
 
-        {/* Unstaged section */}
-        <Show when={unstagedChanges().length > 0}>
-          <div class={styles.changesSection}>
-            <div class={styles.changesSectionHeader}>
-              Unstaged ({unstagedChanges().length})
-            </div>
-            <For each={unstagedChanges()}>
-              {(change) => <ChangeItem change={change} />}
-            </For>
-          </div>
-        </Show>
+        {/* ── Header bar ── */}
+        <div class={styles.changesHeader}>
+          <Show when={branchName()}>
+            <Tip label={branchName()} placement="bottom">
+              <span class={styles.branchLabel}>
+                <GitBranch size={11} />
+                <span class={styles.branchName}>{branchName()}</span>
+              </span>
+            </Tip>
+          </Show>
 
-        {/* Commit area */}
-        <div style={{ 'margin-top': 'auto' }}>
-          <div class={styles.commitArea}>
-            <TextField
-              value={commitMessage()}
-              onChange={setCommitMessage}
-              class={styles.commitInput}
-            >
-              <TextField.TextArea
-                placeholder="Commit message..."
-                rows={3}
-              />
-            </TextField>
-            <div class={styles.commitActions}>
+          <div style={{ 'margin-left': 'auto', display: 'flex', gap: '2px' }}>
+            <Tip label="Fetch & refresh" placement="bottom">
               <button
                 type="button"
-                class={styles.aiButton}
-                onClick={handleAiMessage}
-                title="Generate commit message with AI"
+                class={styles.changesHeaderButton}
+                onClick={() => refreshStatus(true)}
+                disabled={syncing()}
               >
-                <Sparkles size={12} />
-                AI
+                <RefreshCw size={12} class={syncing() ? styles.spinning : undefined} />
               </button>
+            </Tip>
+            <Tip label={needsPull() ? `Pull — ${behindBy()} commit${behindBy() > 1 ? 's' : ''} behind` : 'Pull from remote'} placement="bottom">
               <button
                 type="button"
-                class={styles.commitButton}
-                onClick={handleCommit}
-                disabled={!commitMessage().trim() || stagedChanges().length === 0}
-                title={stagedChanges().length === 0 ? 'Stage changes first' : 'Commit staged changes'}
+                class={needsPull() ? styles.changesHeaderButtonActive : styles.changesHeaderButton}
+                onClick={handlePull}
               >
-                <GitCommit size={12} />
-                Commit
+                <ArrowDownFromLine size={12} />
+                <Show when={needsPull()}>
+                  <span class={styles.changesHeaderBadge}>{behindBy()}</span>
+                </Show>
               </button>
-            </div>
+            </Tip>
+            <Tip label={needsPush() ? `Push — ${aheadBy()} commit${aheadBy() > 1 ? 's' : ''} ahead` : 'Push to remote'} placement="bottom">
+              <button
+                type="button"
+                class={needsPush() ? styles.changesHeaderButtonActive : styles.changesHeaderButton}
+                onClick={handlePush}
+              >
+                <ArrowUpFromLine size={12} />
+                <Show when={needsPush()}>
+                  <span class={styles.changesHeaderBadge}>{aheadBy()}</span>
+                </Show>
+              </button>
+            </Tip>
           </div>
         </div>
+
+        {/* ── Scrollable file list ── */}
+        <div style={{ 'overflow-y': 'auto', flex: '1', 'min-height': '0' }}>
+
+          {/* Staged section */}
+          <Show when={stagedFiles().length > 0}>
+            <Collapsible open={stagedOpen()} onOpenChange={setStagedOpen}>
+              <Collapsible.Trigger as="div" class={styles.sectionHeader}>
+                <Show when={stagedOpen()} fallback={<ChevronRight size={12} style={{ 'flex-shrink': 0, color: 'var(--color-text-disabled)' }} />}>
+                  <ChevronDown size={12} style={{ 'flex-shrink': 0, color: 'var(--color-text-disabled)' }} />
+                </Show>
+                <span class={styles.sectionLabelStaged}>
+                  STAGED ({stagedFiles().length})
+                </span>
+                <div class={styles.sectionActions} onClick={(e) => e.stopPropagation()}>
+                  <Tip label="Unstage all" placement="bottom">
+                    <button
+                      type="button"
+                      class={styles.sectionActionButton}
+                      onClick={handleUnstageAll}
+                    >
+                      <Minus size={12} />
+                    </button>
+                  </Tip>
+                </div>
+              </Collapsible.Trigger>
+              <Collapsible.Content>
+                <For each={stagedFiles()}>
+                  {(file) => (
+                    <StagedFileRow file={file} onUnstage={handleUnstage} />
+                  )}
+                </For>
+              </Collapsible.Content>
+            </Collapsible>
+          </Show>
+
+          {/* Unstaged / Changes section */}
+          <Show when={unstagedFiles().length > 0}>
+            <Collapsible open={changesOpen()} onOpenChange={setChangesOpen}>
+              <Collapsible.Trigger as="div" class={styles.sectionHeader}>
+                <Show when={changesOpen()} fallback={<ChevronRight size={12} style={{ 'flex-shrink': 0, color: 'var(--color-text-disabled)' }} />}>
+                  <ChevronDown size={12} style={{ 'flex-shrink': 0, color: 'var(--color-text-disabled)' }} />
+                </Show>
+                <span class={styles.sectionLabelChanges}>
+                  CHANGES ({unstagedFiles().length})
+                </span>
+                <div class={styles.sectionActions} onClick={(e) => e.stopPropagation()}>
+                  <Tip label="Discard all" placement="bottom">
+                    <button
+                      type="button"
+                      class={styles.sectionActionButton}
+                      onClick={handleDiscardAll}
+                    >
+                      <Undo2 size={12} />
+                    </button>
+                  </Tip>
+                  <Tip label="Stage all" placement="bottom">
+                    <button
+                      type="button"
+                      class={styles.sectionActionButton}
+                      onClick={handleStageAll}
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </Tip>
+                </div>
+              </Collapsible.Trigger>
+              <Collapsible.Content>
+                <For each={unstagedFiles()}>
+                  {(file) => (
+                    <UnstagedFileRow
+                      file={file}
+                      onDiscard={handleDiscard}
+                      onStage={handleStage}
+                    />
+                  )}
+                </For>
+              </Collapsible.Content>
+            </Collapsible>
+          </Show>
+
+        </div>
+
+        {/* ── Commit area (pinned bottom) ── */}
+        <div class={styles.commitArea} style={{ 'margin-top': 'auto' }}>
+          <TextField
+            value={commitMessage()}
+            onChange={setCommitMessage}
+            class={styles.commitInput}
+          >
+            <TextField.TextArea
+              placeholder="Commit message..."
+              rows={4}
+            />
+          </TextField>
+          <div class={styles.commitActions}>
+            <button
+              type="button"
+              class={styles.aiButton}
+              onClick={handleAiMessage}
+              title="Generate commit message with AI"
+            >
+              <Sparkles size={12} />
+              AI
+            </button>
+            <button
+              type="button"
+              class={styles.commitButton}
+              onClick={handleCommit}
+              disabled={!commitMessage().trim() || stagedFiles().length === 0}
+              title={stagedFiles().length === 0 ? 'Stage changes first' : 'Commit staged changes'}
+            >
+              <GitCommit size={12} />
+              Commit
+            </button>
+          </div>
+        </div>
+
       </div>
     </Show>
   );

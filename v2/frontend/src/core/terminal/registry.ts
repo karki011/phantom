@@ -7,6 +7,7 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
+import { getZoomConfig } from '../signals/zoom';
 
 export const MONO_FONT_FAMILY = '"JetBrains Mono", "Fira Code", "SF Mono", monospace';
 
@@ -44,7 +45,7 @@ export function createSession(
   if (sessions.has(sessionId)) return sessions.get(sessionId)!;
 
   const terminal = new Terminal({
-    fontSize: 14,
+    fontSize: getZoomConfig().terminalFontSize,
     fontFamily: opts?.fontFamily ?? MONO_FONT_FAMILY,
     lineHeight: 1.4,
     cursorBlink: true,
@@ -133,4 +134,8 @@ export function getSession(sessionId: string): TerminalSession | null {
 
 export function hasSession(sessionId: string): boolean {
   return sessions.has(sessionId);
+}
+
+export function getAllSessions(): TerminalSession[] {
+  return Array.from(sessions.values());
 }

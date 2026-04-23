@@ -73,7 +73,7 @@ export const checkboxControl = style({
 
 export const checkboxIndicator = style({
   color: vars.color.textInverse,
-  fontSize: '10px',
+  fontSize: vars.fontSize.xs,
   lineHeight: 1,
   fontWeight: 700,
 });

@@ -28,6 +28,13 @@ const (
 
 	EventTerminalData = "terminal:data"
 	EventTerminalExit = "terminal:exit"
+
+	EventGitStatus       = "git:status"
+	EventWorktreeCreated = "worktree:created"
+	EventWorktreeRemoved = "worktree:removed"
+	EventWorktreeUpdated = "worktree:updated"
+
+	EventPrCreated = "pr:created"
 )
 
 func EmitEvent(ctx context.Context, name string, data interface{}) {

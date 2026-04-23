@@ -42,8 +42,13 @@ const unstagedChanges = createMemo(() => gitChanges().filter((c) => !c.staged));
 // Activity
 const [recentCommits, setRecentCommits] = createSignal<CommitEntry[]>([]);
 
+// Tab badge counts (updated by each view on data load)
+const [filesCount, setFilesCount] = createSignal(0);
+const [changesCount, setChangesCount] = createSignal(0);
+const activityCount = createMemo(() => recentCommits().length);
+
 // Right sidebar UI state
-const [rightSidebarWidth, setRightSidebarWidth] = createSignal(280);
+const [rightSidebarWidth, setRightSidebarWidth] = createSignal(300);
 const [rightSidebarCollapsed, setRightSidebarCollapsed] = createSignal(false);
 const [rightSidebarTab, setRightSidebarTab] = createSignal<'files' | 'changes' | 'activity'>('files');
 
@@ -66,4 +71,9 @@ export {
   setRightSidebarCollapsed,
   rightSidebarTab,
   setRightSidebarTab,
+  filesCount,
+  setFilesCount,
+  changesCount,
+  setChangesCount,
+  activityCount,
 };

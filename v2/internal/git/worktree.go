@@ -5,9 +5,11 @@ package git
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -172,6 +174,29 @@ func List(ctx context.Context, repoPath string) ([]WorktreeInfo, error) {
 	}
 
 	return worktrees, nil
+}
+
+// Move relocates a worktree from oldPath to newPath.
+// It finds the main repo via git-common-dir and runs worktree move from there.
+func Move(ctx context.Context, oldPath, newPath string) error {
+	commonDir, err := runGit(ctx, oldPath, "rev-parse", "--git-common-dir")
+	if err != nil {
+		return fmt.Errorf("worktree move: cannot find main repo: %w", err)
+	}
+
+	absCommonDir, err := filepath.Abs(filepath.Join(oldPath, commonDir))
+	if err != nil {
+		return fmt.Errorf("worktree move: cannot resolve common dir: %w", err)
+	}
+	mainRepo := filepath.Dir(absCommonDir)
+
+	cmd := exec.CommandContext(ctx, "git", "-C", mainRepo, "worktree", "move", oldPath, newPath)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git worktree move: %w: %s", err, stderr.String())
+	}
+	return nil
 }
 
 // Discover walks the worktree root directory (or a specified rootDir) to find

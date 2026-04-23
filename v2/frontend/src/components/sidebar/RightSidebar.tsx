@@ -9,7 +9,11 @@ import {
   rightSidebarCollapsed,
   rightSidebarTab,
   setRightSidebarTab,
+  filesCount,
+  changesCount,
+  activityCount,
 } from '@/core/signals/files';
+import { prStatus, isCreatingPr } from '@/core/signals/activity';
 import { FilesView } from './FilesView';
 import { ChangesView } from './ChangesView';
 import { GitActivityPanel } from './GitActivityPanel';
@@ -26,13 +30,49 @@ export function RightSidebar() {
         <RightResizeHandle />
 
         <Tabs
+          class={styles.tabsRoot}
           value={rightSidebarTab()}
           onChange={setRightSidebarTab}
         >
           <Tabs.List class={styles.tabList} aria-label="Right sidebar">
-            <Tabs.Trigger value="files" class={styles.tab}>Files</Tabs.Trigger>
-            <Tabs.Trigger value="changes" class={styles.tab}>Changes</Tabs.Trigger>
-            <Tabs.Trigger value="activity" class={styles.tab}>Activity</Tabs.Trigger>
+            <Tabs.Trigger value="files" class={styles.tab}>
+              Files
+              <Show when={filesCount() > 0}>
+                <span class={styles.tabBadge}>{filesCount()}</span>
+              </Show>
+            </Tabs.Trigger>
+            <Tabs.Trigger value="changes" class={styles.tab}>
+              Changes
+              <Show when={changesCount() > 0}>
+                <span class={styles.tabBadgeChanges}>{changesCount()}</span>
+              </Show>
+            </Tabs.Trigger>
+            <Tabs.Trigger value="activity" class={styles.tab}>
+              Activity
+              <Show
+                when={isCreatingPr()}
+                fallback={
+                  <Show
+                    when={prStatus()?.state === 'OPEN'}
+                    fallback={
+                      <Show when={activityCount() > 0}>
+                        <span class={styles.tabBadge}>{activityCount()}</span>
+                      </Show>
+                    }
+                  >
+                    <span
+                      class={styles.activityDot}
+                      style={{ 'background-color': 'var(--color-success, #22c55e)' }}
+                    />
+                  </Show>
+                }
+              >
+                <span
+                  class={`${styles.activityDot} ${styles.activityDotPulse}`}
+                  style={{ 'background-color': 'var(--color-accent, #06b6d4)' }}
+                />
+              </Show>
+            </Tabs.Trigger>
           </Tabs.List>
 
           <Tabs.Content value="files" class={styles.tabPanel}>
