@@ -1,8 +1,13 @@
 // PhantomOS v2 — Home and Welcome page styles
 // Author: Subash Karki
 
-import { style, keyframes } from '@vanilla-extract/css';
+import { style, keyframes, globalKeyframes } from '@vanilla-extract/css';
 import { vars } from './theme.css';
+
+globalKeyframes('spin', {
+  from: { transform: 'rotate(0deg)' },
+  to: { transform: 'rotate(360deg)' },
+});
 
 const borderGlow = keyframes({
   '0%, 100%': {
@@ -147,8 +152,6 @@ export const statusCard = style({
   borderRadius: vars.radius.lg,
   border: `1px solid color-mix(in srgb, ${vars.color.accent} 20%, ${vars.color.border})`,
   fontFamily: vars.font.mono,
-  alignSelf: 'flex-start',
-  maxWidth: '480px',
 });
 
 export const statusHeader = style({
@@ -292,6 +295,183 @@ export const statusMeta = style({
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
   flex: 1,
+});
+
+// ── Activity Card ────────────────────────────────────────────────────────────
+
+export const activityCard = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.md,
+  padding: vars.space.lg,
+  background: vars.color.bgTertiary,
+  borderRadius: vars.radius.lg,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 20%, ${vars.color.border})`,
+  fontFamily: vars.font.mono,
+  alignSelf: 'flex-start',
+  maxWidth: '480px',
+  flex: 1,
+});
+
+export const activityCardHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+});
+
+export const activityCardTitle = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textSecondary,
+  textTransform: 'uppercase',
+  letterSpacing: '0.12em',
+  fontWeight: 400,
+});
+
+export const activityCardIcon = style({
+  color: vars.color.accent,
+  flexShrink: 0,
+  display: 'flex',
+  alignItems: 'center',
+});
+
+export const prCardCompact = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  borderRadius: vars.radius.md,
+  background: vars.color.bgPrimary,
+  border: `1px solid ${vars.color.border}`,
+  cursor: 'pointer',
+  transition: `all ${vars.animation.fast} ease`,
+  ':hover': {
+    borderColor: `color-mix(in srgb, ${vars.color.accent} 40%, ${vars.color.border})`,
+    boxShadow: `0 0 8px color-mix(in srgb, ${vars.color.accent} 12%, transparent)`,
+  },
+});
+
+export const prCardRow = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+});
+
+export const prCardTitle = style({
+  fontSize: '0.78rem',
+  fontWeight: 500,
+  color: vars.color.textPrimary,
+  fontFamily: vars.font.body,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  flex: 1,
+});
+
+export const prCardNumber = style({
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textDisabled,
+  flexShrink: 0,
+  fontFamily: vars.font.mono,
+});
+
+export const prCardBranch = style({
+  fontSize: '0.6rem',
+  color: vars.color.textDisabled,
+  fontFamily: vars.font.mono,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+});
+
+export const prStateDotSmall = style({
+  width: '6px',
+  height: '6px',
+  borderRadius: '50%',
+  flexShrink: 0,
+});
+
+export const prStateLabel = style({
+  fontSize: '0.6rem',
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.03em',
+  fontFamily: vars.font.mono,
+});
+
+export const activityEmpty = style({
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textDisabled,
+  fontFamily: vars.font.mono,
+});
+
+export const createPrButtonCompact = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `${vars.space.sm} ${vars.space.lg}`,
+  borderRadius: vars.radius.md,
+  background: vars.color.accent,
+  color: vars.color.textInverse,
+  border: 'none',
+  cursor: 'pointer',
+  fontFamily: vars.font.body,
+  fontSize: '0.73rem',
+  fontWeight: 600,
+  width: 'fit-content',
+  transition: `all ${vars.animation.fast} ease`,
+  ':hover': {
+    opacity: '0.9',
+    boxShadow: `0 0 12px color-mix(in srgb, ${vars.color.accent} 30%, transparent)`,
+  },
+});
+
+export const cardRow = style({
+  display: 'flex',
+  gap: vars.space.lg,
+  alignItems: 'stretch',
+});
+
+export const openPrCount = style({
+  fontFamily: vars.font.display,
+  fontSize: vars.fontSize.xl,
+  fontWeight: 700,
+  color: vars.color.accent,
+  lineHeight: 1,
+});
+
+export const openPrLabel = style({
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textSecondary,
+  fontFamily: vars.font.mono,
+});
+
+export const activityDividerHome = style({
+  width: '100%',
+  height: '1px',
+  background: `linear-gradient(90deg, transparent, ${vars.color.accent}, transparent)`,
+  opacity: 0.3,
+  margin: `${vars.space.sm} 0`,
+});
+
+export const prListScroll = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.xs,
+  maxHeight: '220px',
+  overflowY: 'auto',
+  '::-webkit-scrollbar': { width: '4px' },
+  '::-webkit-scrollbar-thumb': { background: vars.color.border, borderRadius: '2px' },
+  '::-webkit-scrollbar-track': { background: 'transparent' },
+});
+
+export const prCardMeta = style({
+  fontSize: '0.6rem',
+  color: vars.color.textDisabled,
+  fontFamily: vars.font.mono,
+  flexShrink: 0,
+  whiteSpace: 'nowrap',
+  marginLeft: 'auto',
 });
 
 export const hunterBanner = style({

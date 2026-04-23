@@ -125,6 +125,23 @@ func (a *App) GetBranchCommits(worktreeId string, branchOnly bool) []git.CommitI
 	return commits
 }
 
+// ListOpenPrsForWorkspace returns open PRs targeting the workspace's current branch.
+func (a *App) ListOpenPrsForWorkspace(worktreeId string, limit int) []git.PrStatus {
+	log.Info("app/ListOpenPrsForWorkspace: called", "worktreeId", worktreeId, "limit", limit)
+	repoPath, branch, err := a.resolveRepoBranch(worktreeId)
+	if err != nil {
+		log.Error("app/ListOpenPrsForWorkspace: resolve failed", "err", err)
+		return []git.PrStatus{}
+	}
+	prs, err := git.ListOpenPrsForBase(a.ctx, repoPath, branch, limit)
+	if err != nil || prs == nil {
+		log.Error("app/ListOpenPrsForWorkspace: failed", "err", err)
+		return []git.PrStatus{}
+	}
+	log.Info("app/ListOpenPrsForWorkspace: success", "count", len(prs))
+	return prs
+}
+
 // resolveBaseBranch returns the base branch for a workspace by consulting the project's
 // DefaultBranch field, falling back to git auto-detection.
 func resolveBaseBranch(a *App, worktreeId, repoPath string) string {

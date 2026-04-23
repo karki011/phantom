@@ -118,6 +118,7 @@ export function ProjectSection(props: ProjectSectionProps) {
                 <WorktreeItem
                   worktree={wt}
                   projectId={props.project.id}
+                  defaultBranch={props.project.default_branch ?? 'main'}
                   hasActiveSession={hasActiveSession(wt)}
                 />
               )}
@@ -128,6 +129,7 @@ export function ProjectSection(props: ProjectSectionProps) {
                 <WorktreeItem
                   worktree={wt}
                   projectId={props.project.id}
+                  defaultBranch={props.project.default_branch ?? 'main'}
                   hasActiveSession={hasActiveSession(wt)}
                 />
               )}

@@ -31,7 +31,7 @@ var branchVVRe = regexp.MustCompile(
 
 // ListBranches returns all local branches with tracking info.
 func ListBranches(ctx context.Context, repoPath string) ([]BranchInfo, error) {
-	out, err := runGit(ctx, repoPath, "branch", "-vv", "--no-color")
+	out, err := runGit(ctx, repoPath, "branch", "-vv", "--no-color", "--sort=-committerdate")
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func ListBranches(ctx context.Context, repoPath string) ([]BranchInfo, error) {
 
 // ListRemoteBranches returns all remote tracking branches.
 func ListRemoteBranches(ctx context.Context, repoPath string) ([]BranchInfo, error) {
-	out, err := runGit(ctx, repoPath, "branch", "-r", "--no-color")
+	out, err := runGit(ctx, repoPath, "branch", "-r", "--no-color", "--sort=-committerdate")
 	if err != nil {
 		return nil, err
 	}

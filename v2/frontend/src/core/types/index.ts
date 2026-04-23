@@ -172,6 +172,12 @@ export interface PrStatus {
   url: string;
   head_ref_name: string;
   base_ref_name: string;
+  author: string;
+  created_at: string;
+  checks_passed: number;
+  checks_failed: number;
+  checks_pending: number;
+  checks_total: number;
 }
 
 export interface CiRun {

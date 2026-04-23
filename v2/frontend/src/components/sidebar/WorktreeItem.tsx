@@ -21,6 +21,7 @@ import type { Workspace } from '@/core/types';
 interface WorktreeItemProps {
   worktree: Workspace;
   projectId: string;
+  defaultBranch?: string;
   hasActiveSession?: boolean;
 }
 
@@ -202,6 +203,7 @@ export function WorktreeItem(props: WorktreeItemProps) {
       open={showBranchPicker}
       onClose={() => setShowBranchPicker(false)}
       projectId={props.projectId}
+      defaultBranch={props.defaultBranch}
     />
     <Show when={props.worktree.type !== 'branch'}>
       <RenameWorktreeDialog

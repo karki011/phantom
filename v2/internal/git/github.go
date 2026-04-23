@@ -41,13 +41,43 @@ func GetRemoteURL(ctx context.Context, repoPath string) (string, error) {
 
 // ghPrJSON is the raw JSON shape returned by `gh pr view`.
 type ghPrJSON struct {
-	Number      int    `json:"number"`
-	Title       string `json:"title"`
-	State       string `json:"state"`
-	IsDraft     bool   `json:"isDraft"`
-	URL         string `json:"url"`
-	HeadRefName string `json:"headRefName"`
-	BaseRefName string `json:"baseRefName"`
+	Number             int              `json:"number"`
+	Title              string           `json:"title"`
+	State              string           `json:"state"`
+	IsDraft            bool             `json:"isDraft"`
+	URL                string           `json:"url"`
+	HeadRefName        string           `json:"headRefName"`
+	BaseRefName        string           `json:"baseRefName"`
+	Author             ghAuthorJSON     `json:"author"`
+	CreatedAt          string           `json:"createdAt"`
+	StatusCheckRollup  []ghCheckRunJSON `json:"statusCheckRollup"`
+}
+
+type ghAuthorJSON struct {
+	Login string `json:"login"`
+}
+
+type ghCheckRunJSON struct {
+	Conclusion string `json:"conclusion"`
+	Status     string `json:"status"`
+}
+
+func computeCheckSummary(checks []ghCheckRunJSON) (passed, failed, pending int) {
+	for _, c := range checks {
+		switch strings.ToUpper(c.Conclusion) {
+		case "SUCCESS":
+			passed++
+		case "FAILURE":
+			failed++
+		case "SKIPPED", "CANCELLED", "NEUTRAL":
+			// don't count
+		default:
+			if c.Status != "COMPLETED" {
+				pending++
+			}
+		}
+	}
+	return
 }
 
 // GetPrStatus returns the PR status for the given branch in repoPath.
@@ -56,7 +86,7 @@ func GetPrStatus(ctx context.Context, repoPath, branch string) (*PrStatus, error
 	log.Info("git/GetPrStatus: called", "repoPath", repoPath, "branch", branch)
 
 	cmd := exec.CommandContext(ctx, "gh", "pr", "view", branch,
-		"--json", "number,title,state,url,headRefName,baseRefName,isDraft",
+		"--json", "number,title,state,url,headRefName,baseRefName,isDraft,author,createdAt,statusCheckRollup",
 	)
 	cmd.Dir = repoPath
 	var stdout, stderr bytes.Buffer
@@ -74,17 +104,73 @@ func GetPrStatus(ctx context.Context, repoPath, branch string) (*PrStatus, error
 		return nil, fmt.Errorf("GetPrStatus: json: %w", err)
 	}
 
+	passed, failed, pending := computeCheckSummary(raw.StatusCheckRollup)
 	pr := &PrStatus{
-		Number:      raw.Number,
-		Title:       raw.Title,
-		State:       raw.State,
-		IsDraft:     raw.IsDraft,
-		URL:         raw.URL,
-		HeadRefName: raw.HeadRefName,
-		BaseRefName: raw.BaseRefName,
+		Number:        raw.Number,
+		Title:         raw.Title,
+		State:         raw.State,
+		IsDraft:       raw.IsDraft,
+		URL:           raw.URL,
+		HeadRefName:   raw.HeadRefName,
+		BaseRefName:   raw.BaseRefName,
+		Author:        raw.Author.Login,
+		CreatedAt:     raw.CreatedAt,
+		ChecksPassed:  passed,
+		ChecksFailed:  failed,
+		ChecksPending: pending,
+		ChecksTotal:   len(raw.StatusCheckRollup),
 	}
-	log.Info("git/GetPrStatus: success", "number", pr.Number, "state", pr.State)
+	log.Info("git/GetPrStatus: success", "number", pr.Number, "state", pr.State, "checks", pr.ChecksTotal)
 	return pr, nil
+}
+
+// ListOpenPrsForBase returns open PRs targeting the given base branch.
+func ListOpenPrsForBase(ctx context.Context, repoPath, baseBranch string, limit int) ([]PrStatus, error) {
+	log.Info("git/ListOpenPrsForBase: called", "repoPath", repoPath, "base", baseBranch, "limit", limit)
+
+	cmd := exec.CommandContext(ctx, "gh", "pr", "list",
+		"--base", baseBranch,
+		"--state", "open",
+		"--limit", fmt.Sprintf("%d", limit),
+		"--json", "number,title,state,url,headRefName,baseRefName,isDraft,author,createdAt,statusCheckRollup",
+	)
+	cmd.Dir = repoPath
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		log.Info("git/ListOpenPrsForBase: failed", "err", err, "stderr", stderr.String())
+		return nil, nil
+	}
+
+	var raw []ghPrJSON
+	if err := json.Unmarshal(stdout.Bytes(), &raw); err != nil {
+		log.Error("git/ListOpenPrsForBase: json parse failed", "err", err)
+		return nil, fmt.Errorf("ListOpenPrsForBase: json: %w", err)
+	}
+
+	prs := make([]PrStatus, 0, len(raw))
+	for _, r := range raw {
+		passed, failed, pending := computeCheckSummary(r.StatusCheckRollup)
+		prs = append(prs, PrStatus{
+			Number:        r.Number,
+			Title:         r.Title,
+			State:         r.State,
+			IsDraft:       r.IsDraft,
+			URL:           r.URL,
+			HeadRefName:   r.HeadRefName,
+			BaseRefName:   r.BaseRefName,
+			Author:        r.Author.Login,
+			CreatedAt:     r.CreatedAt,
+			ChecksPassed:  passed,
+			ChecksFailed:  failed,
+			ChecksPending: pending,
+			ChecksTotal:   len(r.StatusCheckRollup),
+		})
+	}
+	log.Info("git/ListOpenPrsForBase: success", "count", len(prs))
+	return prs, nil
 }
 
 // ghCheckJSON is the raw JSON shape returned by `gh pr checks`.

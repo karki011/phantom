@@ -119,3 +119,7 @@ export async function isGhCliAvailable(): Promise<boolean> {
 export async function getBranchCommits(worktreeId: string, branchOnly: boolean): Promise<CommitInfo[]> {
   try { return (await App()?.GetBranchCommits(worktreeId, branchOnly)) ?? []; } catch { return []; }
 }
+
+export async function listOpenPrs(worktreeId: string, limit: number = 5): Promise<PrStatus[]> {
+  try { return (await App()?.ListOpenPrsForWorkspace(worktreeId, limit)) ?? []; } catch { return []; }
+}

@@ -49,28 +49,32 @@ export const textFieldInput = style({
 export const branchList = style({
   display: 'flex',
   flexDirection: 'column',
-  gap: vars.space.xs,
-  maxHeight: '240px',
+  maxHeight: '300px',
   overflowY: 'auto',
   borderRadius: vars.radius.md,
-  border: `1px solid ${vars.color.border}`,
-  backgroundColor: vars.color.bgTertiary,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 15%, ${vars.color.border})`,
+  backgroundColor: vars.color.bgPrimary,
   padding: vars.space.xs,
+  '::-webkit-scrollbar': { width: '4px' },
+  '::-webkit-scrollbar-thumb': { background: vars.color.border, borderRadius: '2px' },
+  '::-webkit-scrollbar-track': { background: 'transparent' },
 });
 
-export const branchItem = style({
+const branchItemBase = style({
   display: 'flex',
   alignItems: 'center',
-  padding: `${vars.space.xs} ${vars.space.sm}`,
+  gap: vars.space.xs,
+  padding: `${vars.space.sm} ${vars.space.md}`,
   borderRadius: vars.radius.sm,
   fontFamily: vars.font.mono,
-  fontSize: vars.fontSize.sm,
+  fontSize: '0.78rem',
   color: vars.color.textPrimary,
   cursor: 'pointer',
   border: 'none',
   background: 'transparent',
   textAlign: 'left',
   width: '100%',
+  transition: `background ${vars.animation.fast} ease, color ${vars.animation.fast} ease`,
   selectors: {
     '&:hover': {
       backgroundColor: vars.color.bgHover,
@@ -80,6 +84,33 @@ export const branchItem = style({
       outline: `1px solid ${vars.color.borderFocus}`,
     },
   },
+});
+
+export const branchItem = branchItemBase;
+
+export const branchItemDefault = style([branchItemBase, {
+  borderBottom: `1px solid ${vars.color.divider}`,
+  marginBottom: vars.space.xs,
+  paddingBottom: vars.space.md,
+  color: vars.color.accent,
+  fontWeight: 600,
+}]);
+
+export const branchIcon = style({
+  color: vars.color.textDisabled,
+  flexShrink: 0,
+});
+
+export const branchName = style({
+  flex: 1,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+});
+
+export const defaultBadge = style({
+  color: vars.color.accent,
+  flexShrink: 0,
 });
 
 export const emptyState = style({

@@ -5,13 +5,19 @@ package git
 
 // PrStatus holds metadata for a GitHub pull request.
 type PrStatus struct {
-	Number      int    `json:"number"`
-	Title       string `json:"title"`
-	State       string `json:"state"`        // OPEN, MERGED, CLOSED
-	IsDraft     bool   `json:"is_draft"`
-	URL         string `json:"url"`
-	HeadRefName string `json:"head_ref_name"`
-	BaseRefName string `json:"base_ref_name"`
+	Number       int    `json:"number"`
+	Title        string `json:"title"`
+	State        string `json:"state"`        // OPEN, MERGED, CLOSED
+	IsDraft      bool   `json:"is_draft"`
+	URL          string `json:"url"`
+	HeadRefName  string `json:"head_ref_name"`
+	BaseRefName  string `json:"base_ref_name"`
+	Author       string `json:"author"`
+	CreatedAt    string `json:"created_at"`
+	ChecksPassed int    `json:"checks_passed"`
+	ChecksFailed int    `json:"checks_failed"`
+	ChecksPending int   `json:"checks_pending"`
+	ChecksTotal  int    `json:"checks_total"`
 }
 
 // CiRun holds metadata for a single CI check run on a pull request.

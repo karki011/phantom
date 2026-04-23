@@ -105,6 +105,32 @@ func (a *App) GitCheckoutBranch(projectId, branch string) error {
 		log.Error("app/GitCheckoutBranch: CheckoutBranch failed", "branch", branch, "err", err)
 		return err
 	}
+
+	wq := db.New(a.DB.Writer)
+	workspaces, _ := q.ListWorkspacesByProject(a.ctx, projectId)
+	for _, ws := range workspaces {
+		if ws.Type == "branch" {
+			ws.Branch = branch
+			ws.Name = branch
+			_ = wq.UpdateWorkspace(a.ctx, db.UpdateWorkspaceParams{
+				ID:           ws.ID,
+				Type:         ws.Type,
+				Name:         branch,
+				Branch:       branch,
+				WorktreePath: ws.WorktreePath,
+				PortBase:     ws.PortBase,
+				SectionID:    ws.SectionID,
+				BaseBranch:   ws.BaseBranch,
+				TabOrder:     ws.TabOrder,
+				IsActive:     ws.IsActive,
+				TicketUrl:    ws.TicketUrl,
+			})
+			log.Info("app/GitCheckoutBranch: updated workspace branch", "wsId", ws.ID, "branch", branch)
+			break
+		}
+	}
+
+	wailsRuntime.EventsEmit(a.ctx, EventWorktreeUpdated)
 	wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
 	log.Info("app/GitCheckoutBranch: success", "projectId", projectId, "branch", branch)
 	return nil

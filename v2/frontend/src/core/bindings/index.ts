@@ -32,5 +32,6 @@ export {
   createPrWithAI,
   isGhCliAvailable,
   getBranchCommits,
+  listOpenPrs,
 } from './git';
 export { revealInFinder, openInFinder, openInDefaultApp, openURL } from './shell';

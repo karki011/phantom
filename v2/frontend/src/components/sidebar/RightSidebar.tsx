@@ -1,7 +1,7 @@
 // PhantomOS v2 — Right sidebar with Files, Changes, and Activity tabs
 // Author: Subash Karki
 
-import { Show } from 'solid-js';
+import { Show, createEffect, on, onCleanup } from 'solid-js';
 import { Tabs } from '@kobalte/core/tabs';
 import { activeWorktreeId } from '@/core/signals/app';
 import {
@@ -13,14 +13,74 @@ import {
   changesCount,
   activityCount,
 } from '@/core/signals/files';
-import { prStatus, isCreatingPr } from '@/core/signals/activity';
+import {
+  prStatus, setPrStatus,
+  ciRuns, setCiRuns,
+  isCreatingPr,
+  ghAvailable, setGhAvailable,
+} from '@/core/signals/activity';
+import { getPrStatus, getCiRuns, isGhCliAvailable } from '@/core/bindings';
+import { onWailsEvent } from '@/core/events';
 import { FilesView } from './FilesView';
 import { ChangesView } from './ChangesView';
 import { GitActivityPanel } from './GitActivityPanel';
 import { RightResizeHandle } from './RightResizeHandle';
 import * as styles from '@/styles/right-sidebar.css';
 
+function setIfChanged<T>(current: () => T, setter: (v: T) => void, next: T) {
+  if (JSON.stringify(next) !== JSON.stringify(current())) setter(next);
+}
+
+let ghChecked = false;
+
 export function RightSidebar() {
+  createEffect(
+    on(activeWorktreeId, (wtId) => {
+      if (!wtId) return;
+
+      let cancelled = false;
+
+      setPrStatus(null);
+      setCiRuns(null);
+
+      if (!ghChecked) {
+        ghChecked = true;
+        isGhCliAvailable().then(setGhAvailable).catch(() => setGhAvailable(false));
+      }
+
+      function fetchPr() {
+        if (cancelled) return;
+        getPrStatus(wtId).then((v) => { if (!cancelled) setIfChanged(prStatus, setPrStatus, v); }).catch(() => {});
+      }
+
+      function fetchCi() {
+        if (cancelled) return;
+        getCiRuns(wtId).then((v) => { if (!cancelled) setIfChanged(ciRuns, setCiRuns, v); }).catch(() => {});
+      }
+
+      fetchPr();
+      fetchCi();
+
+      const prTimer = setInterval(fetchPr, 60_000);
+
+      let ciTimer: ReturnType<typeof setTimeout> | null = null;
+      function scheduleCi() {
+        if (cancelled) return;
+        const interval = ciRuns()?.some((r) => !r.conclusion || r.conclusion === '') ? 10_000 : 30_000;
+        ciTimer = setTimeout(() => { fetchCi(); scheduleCi(); }, interval);
+      }
+      scheduleCi();
+
+      onWailsEvent('pr:created', fetchPr);
+
+      onCleanup(() => {
+        cancelled = true;
+        clearInterval(prTimer);
+        if (ciTimer !== null) clearTimeout(ciTimer);
+      });
+    }),
+  );
+
   return (
     <Show when={activeWorktreeId() && !rightSidebarCollapsed()}>
       <div

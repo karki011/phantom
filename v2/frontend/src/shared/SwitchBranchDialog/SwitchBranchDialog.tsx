@@ -2,6 +2,7 @@
 // Author: Subash Karki
 
 import { createSignal, createEffect, For, Show } from 'solid-js';
+import { GitBranch, Star } from 'lucide-solid';
 import { TextField } from '@kobalte/core/text-field';
 import { PhantomModal, phantomModalStyles } from '@/shared/PhantomModal/PhantomModal';
 import { showToast, showWarningToast } from '@/shared/Toast/Toast';
@@ -14,6 +15,7 @@ interface SwitchBranchDialogProps {
   open: () => boolean;
   onClose: () => void;
   projectId: string;
+  defaultBranch?: string;
 }
 
 export function SwitchBranchDialog(props: SwitchBranchDialogProps) {
@@ -21,6 +23,8 @@ export function SwitchBranchDialog(props: SwitchBranchDialogProps) {
   const [filter, setFilter] = createSignal('');
   const [loading, setLoading] = createSignal(false);
   const [switching, setSwitching] = createSignal(false);
+
+  const defaultBranch = () => props.defaultBranch ?? 'main';
 
   createEffect(() => {
     if (props.open()) {
@@ -32,9 +36,17 @@ export function SwitchBranchDialog(props: SwitchBranchDialogProps) {
     }
   });
 
+  const sorted = () => {
+    const all = branches();
+    const def = defaultBranch();
+    const pinned = all.filter((b) => b === def);
+    const rest = all.filter((b) => b !== def);
+    return [...pinned, ...rest];
+  };
+
   const filtered = () => {
     const q = filter().toLowerCase();
-    return q ? branches().filter((b) => b.toLowerCase().includes(q)) : branches();
+    return q ? sorted().filter((b) => b.toLowerCase().includes(q)) : sorted();
   };
 
   async function handleSelect(branch: string) {
@@ -84,11 +96,15 @@ export function SwitchBranchDialog(props: SwitchBranchDialogProps) {
                 {(branch) => (
                   <button
                     type="button"
-                    class={styles.branchItem}
+                    class={branch === defaultBranch() ? styles.branchItemDefault : styles.branchItem}
                     onClick={() => handleSelect(branch)}
                     disabled={switching()}
                   >
-                    {branch}
+                    <GitBranch size={12} class={styles.branchIcon} />
+                    <span class={styles.branchName}>{branch}</span>
+                    <Show when={branch === defaultBranch()}>
+                      <Star size={10} class={styles.defaultBadge} />
+                    </Show>
                   </button>
                 )}
               </For>
