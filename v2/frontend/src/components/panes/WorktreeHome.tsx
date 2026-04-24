@@ -2,12 +2,15 @@
 // Author: Subash Karki
 
 import { createMemo, createSignal, createEffect, on, onCleanup, Show, For } from 'solid-js';
-import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw } from 'lucide-solid';
+import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw, Shield } from 'lucide-solid';
 import { activeWorktreeId } from '@/core/signals/app';
 import { worktreeMap } from '@/core/signals/worktrees';
 import { projects } from '@/core/signals/projects';
 import { addTabWithData } from '@/core/panes/signals';
+import { sessions } from '@/core/signals/sessions';
+import { getPref } from '@/core/signals/preferences';
 import { prStatus, setPrStatus, isCreatingPr, setIsCreatingPr, ghAvailable, setGhAvailable } from '@/core/signals/activity';
+import { SessionControls } from '@/shared/SessionControls/SessionControls';
 import { NewWorktreeDialog } from '@/shared/NewWorktreeDialog/NewWorktreeDialog';
 import { getWorkspaceStatus, gitPull, gitPush, getPrStatus, getCiRuns, getCiRunsForBranch, createPrWithAI, listOpenPrs, isGhCliAvailable, getCheckAnnotations, getFailedSteps } from '@/core/bindings';
 import { openURL } from '@/core/bindings/shell';
@@ -16,6 +19,38 @@ import { Tip } from '@/shared/Tip/Tip';
 import { vars } from '@/styles/theme.css';
 import type { RepoStatus, PrStatus as PrStatusType, CiRun, CheckAnnotation, FailedStep } from '@/core/types';
 import * as styles from '@/styles/home.css';
+
+function SessionGuardEmpty() {
+  return (
+    <div style={{
+      display: 'flex',
+      'flex-direction': 'column',
+      gap: vars.space.sm,
+      padding: vars.space.lg,
+      background: vars.color.bgTertiary,
+      'border-radius': vars.radius.lg,
+      border: `1px solid ${vars.color.border}`,
+      'font-family': vars.font.mono,
+    }}>
+      <div style={{ display: 'flex', 'align-items': 'center', gap: vars.space.xs }}>
+        <span style={{ color: vars.color.textDisabled, display: 'flex', 'align-items': 'center' }}>
+          <Shield size={14} />
+        </span>
+        <span style={{
+          'font-size': vars.fontSize.xs,
+          color: vars.color.textDisabled,
+          'text-transform': 'uppercase',
+          'letter-spacing': '0.12em',
+        }}>
+          Session Guard
+        </span>
+      </div>
+      <span style={{ 'font-size': vars.fontSize.xs, color: vars.color.textDisabled }}>
+        No active sessions in this worktree
+      </span>
+    </div>
+  );
+}
 
 export default function WorktreeHome() {
   const activeWorktree = createMemo(() => {
@@ -47,6 +82,18 @@ export default function WorktreeHome() {
     const proj = activeProject();
     if (!wt || !proj) return false;
     return wt.branch === (proj.default_branch ?? 'main');
+  });
+
+  const worktreeSessions = createMemo(() => {
+    const wt = activeWorktree();
+    if (!wt?.worktree_path) return [];
+    const wtPath = wt.worktree_path;
+    return sessions().filter(
+      (s) =>
+        (s.status === 'active' || s.status === 'paused') &&
+        s.cwd != null &&
+        (s.cwd === wtPath || s.cwd.startsWith(wtPath + '/')),
+    );
   });
 
   async function refreshAll() {
@@ -421,6 +468,15 @@ export default function WorktreeHome() {
 
       {/* Separator */}
       <div class={styles.sectionSeparator} />
+
+      {/* Session Guard — only visible when ward system is enabled */}
+      <Show when={getPref('wards_enabled') === 'true'}>
+        <Show when={worktreeSessions().length > 0} fallback={<SessionGuardEmpty />}>
+          <For each={worktreeSessions()}>
+            {(session) => <SessionControls session={session} />}
+          </For>
+        </Show>
+      </Show>
 
       {/* Quick Actions */}
       <div>

@@ -333,6 +333,8 @@ export const runMigrations = (sqlite: Database.Database): void => {
   `);
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_terminal_sessions_worktree ON terminal_sessions(worktree_id)`);
   sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_terminal_sessions_status ON terminal_sessions(status)`);
+  addColumn('terminal_sessions', 'session_id', 'TEXT', 'NULL');
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_terminal_sessions_session_id ON terminal_sessions(session_id)`);
 
   // ---------------------------------------------------------------------------
   // AI Engine: Graph Tables

@@ -2,7 +2,11 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -12,6 +16,7 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/git"
+	"github.com/subashkarki/phantom-os-v2/internal/linker"
 	"github.com/subashkarki/phantom-os-v2/internal/safety"
 	"github.com/subashkarki/phantom-os-v2/internal/session"
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
@@ -55,6 +60,7 @@ type App struct {
 	// Services — injected before Startup via setter methods.
 	DB                *db.DB
 	Terminal          *terminal.Manager
+	Linker            *linker.Linker
 	Stream            *stream.Service
 	SessionCtrl       *session.Controller
 	Safety            *safety.Service
@@ -72,6 +78,9 @@ func (a *App) SetDB(d *db.DB) { a.DB = d }
 
 // SetTerminal injects the terminal manager before Wails calls Startup.
 func (a *App) SetTerminal(t *terminal.Manager) { a.Terminal = t }
+
+// SetLinker injects the terminal-session linker before Wails calls Startup.
+func (a *App) SetLinker(l *linker.Linker) { a.Linker = l }
 
 // SetCollectorRegistry injects the collector registry before Wails calls Startup.
 func (a *App) SetCollectorRegistry(r *collector.Registry) { a.collectorRegistry = r }
@@ -135,6 +144,50 @@ func (a *App) Startup(ctx context.Context) {
 		}
 	}
 
+	// Mark orphaned terminals (active in DB but no live PTY) as ended.
+	// Handles crash recovery: terminals that were active when the app last exited.
+	if a.DB != nil {
+		q := db.New(a.DB.Writer)
+		now := time.Now().Unix()
+		if err := q.MarkOrphanedTerminalsEnded(a.ctx, sql.NullInt64{Int64: now, Valid: true}); err != nil {
+			log.Error("app: mark orphaned terminals", "err", err)
+		}
+	}
+
+	// Wire PID lookup so Controller can suspend/resume/kill Claude processes.
+	if a.SessionCtrl != nil && a.DB != nil {
+		a.SessionCtrl.SetPIDLookup(func(sessionID string) (int64, error) {
+			sess, err := db.New(a.DB.Reader).GetSession(context.Background(), sessionID)
+			if err != nil {
+				return 0, err
+			}
+			if !sess.Pid.Valid {
+				return 0, fmt.Errorf("no PID for session %s", sessionID)
+			}
+			return sess.Pid.Int64, nil
+		})
+	}
+
+	// Wire safety evaluation into the stream pipeline.
+	// Ward system is off by default — only evaluate when the user has opted in.
+	if a.Stream != nil && a.Safety != nil && a.SessionCtrl != nil {
+		a.Stream.SetEventHook(func(ctx context.Context, ev *stream.Event) {
+			if a.GetPreference("wards_enabled") != "true" {
+				return
+			}
+			evals := a.Safety.Evaluate(ctx, ev)
+			for _, eval := range evals {
+				log.Warn("app: ward triggered", "rule", eval.RuleID, "level", eval.Level, "session_id", ev.SessionID)
+				if eval.Level == safety.LevelBlock || eval.Level == safety.LevelConfirm {
+					if err := a.SessionCtrl.Pause(ctx, ev.SessionID); err != nil {
+						log.Error("app: safety pause failed", "session_id", ev.SessionID, "rule", eval.RuleID, "err", err)
+					}
+					break
+				}
+			}
+		})
+	}
+
 	// Start health pulse goroutine — emits every 5s.
 	go a.healthPulseLoop()
 
@@ -179,8 +232,13 @@ func (a *App) handleGitWatcherEvents() {
 }
 
 func (a *App) Shutdown(ctx context.Context) {
-	// Shutdown order: collectors → terminals → DB (reverse of startup).
-	// Collectors may flush writes during drain, so DB must stay open until last.
+	// Shutdown order: snapshots → collectors → terminals → DB (reverse of startup).
+
+	// Save terminal scrollback to BOTH file snapshots and DB before destroying.
+	if a.Terminal != nil {
+		a.saveTerminalSnapshots()
+		a.saveScrollbacksToDB()
+	}
 
 	if a.gitWatcher != nil {
 		a.gitWatcher.Stop()
@@ -220,6 +278,111 @@ func (a *App) Shutdown(ctx context.Context) {
 			log.Error("app: close db failed", "err", err)
 		}
 	}
+}
+
+func snapshotPath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".phantom-os", "terminal-snapshots.json")
+}
+
+func (a *App) saveTerminalSnapshots() {
+	snaps := a.Terminal.TakeSnapshots()
+	if len(snaps) == 0 {
+		_ = os.Remove(snapshotPath())
+		return
+	}
+	data, err := json.Marshal(snaps)
+	if err != nil {
+		log.Error("app: save terminal snapshots", "err", err)
+		return
+	}
+	// Atomic write: write to temp file then rename to prevent corruption
+	// if the app is killed mid-write.
+	tmpPath := snapshotPath() + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		log.Error("app: write terminal snapshots tmp", "err", err)
+		return
+	}
+	if err := os.Rename(tmpPath, snapshotPath()); err != nil {
+		log.Error("app: rename terminal snapshots", "err", err)
+	}
+}
+
+func (a *App) saveScrollbacksToDB() {
+	if a.DB == nil {
+		return
+	}
+	q := db.New(a.DB.Writer)
+	now := time.Now().Unix()
+	snaps := a.Terminal.TakeSnapshots()
+	for _, snap := range snaps {
+		scrollback := string(snap.Scrollback)
+		if err := q.UpdateTerminalScrollback(a.ctx, db.UpdateTerminalScrollbackParams{
+			Scrollback:   sql.NullString{String: scrollback, Valid: scrollback != ""},
+			LastActiveAt: sql.NullInt64{Int64: now, Valid: true},
+			PaneID:       snap.PaneID,
+		}); err != nil {
+			log.Error("app: save scrollback to DB", "pane_id", snap.PaneID, "err", err)
+		}
+	}
+}
+
+// GetTerminalSnapshots returns saved snapshots from the previous session.
+// The frontend calls this on startup to decide which terminals to restore.
+// Tries the snapshot file first; falls back to recently-ended DB records.
+func (a *App) GetTerminalSnapshots() []terminal.Snapshot {
+	// Try snapshot file first (saved on clean shutdown).
+	data, err := os.ReadFile(snapshotPath())
+	if err == nil {
+		_ = os.Remove(snapshotPath())
+		var snaps []terminal.Snapshot
+		if err := json.Unmarshal(data, &snaps); err != nil {
+			log.Error("app: load terminal snapshots", "err", err)
+		} else if len(snaps) > 0 {
+			return snaps
+		}
+	}
+
+	// Fallback: build snapshots from DB records that were just orphan-cleaned.
+	// These are terminals that were active before the app restarted.
+	if a.DB != nil {
+		q := db.New(a.DB.Reader)
+		cutoff := time.Now().Unix() - 300 // only terminals ended within last 5 minutes
+		ended, err := q.ListRecentlyEndedTerminals(a.ctx, sql.NullInt64{Int64: cutoff, Valid: true})
+		if err != nil {
+			log.Error("app: fallback terminal snapshots from DB", "err", err)
+			return nil
+		}
+		var snaps []terminal.Snapshot
+		for _, t := range ended {
+			snaps = append(snaps, terminal.Snapshot{
+				PaneID:     t.PaneID,
+				WorktreeID: stringOrEmpty(t.WorktreeID),
+				Shell:      stringOrEmpty(t.Shell),
+				CWD:        stringOrEmpty(t.Cwd),
+				Cols:       uint16OrDefault(t.Cols, 120),
+				Rows:       uint16OrDefault(t.Rows, 36),
+				Scrollback: []byte(stringOrEmpty(t.Scrollback)),
+			})
+		}
+		return snaps
+	}
+
+	return nil
+}
+
+func stringOrEmpty(s sql.NullString) string {
+	if s.Valid {
+		return s.String
+	}
+	return ""
+}
+
+func uint16OrDefault(n sql.NullInt64, def uint16) uint16 {
+	if n.Valid && n.Int64 > 0 {
+		return uint16(n.Int64)
+	}
+	return def
 }
 
 func (a *App) HealthCheck() HealthResponse {

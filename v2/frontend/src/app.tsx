@@ -9,6 +9,7 @@ import { bootstrapSessions } from './core/signals/sessions';
 import { bootstrapWards } from './core/signals/wards';
 import { bootstrapProjects } from './core/signals/projects';
 import { bootstrapApp, activeTopTab, activeWorktreeId } from './core/signals/app';
+import { worktreeMap } from './core/signals/worktrees';
 import { loadPref } from './core/signals/preferences';
 import { initTheme, initFontStyle } from './core/signals/theme';
 import { initZoom } from './core/signals/zoom';
@@ -53,7 +54,10 @@ export function App() {
     bootstrapApp();
     bootstrapSessions();
     bootstrapProjects();
-    bootstrapWards();
+
+    const wardsEnabled = await loadPref('wards_enabled');
+    if (wardsEnabled === 'true') bootstrapWards();
+
     setReady(true);
 
     const cleanupShortcuts = registerKeyboardShortcuts();
@@ -64,6 +68,7 @@ export function App() {
     const wtId = activeWorktreeId();
     if (wtId) untrack(() => switchWorkspace(wtId));
   });
+
 
   function handleOnboardingComplete() {
     setShowOnboarding(false);

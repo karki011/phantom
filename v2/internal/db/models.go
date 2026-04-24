@@ -207,6 +207,8 @@ type TerminalSession struct {
 	StartedAt    sql.NullInt64  `json:"started_at"`
 	LastActiveAt sql.NullInt64  `json:"last_active_at"`
 	EndedAt      sql.NullInt64  `json:"ended_at"`
+	SessionID    sql.NullString `json:"session_id"`
+	ProjectID    sql.NullString `json:"project_id"`
 }
 
 type UserPreference struct {

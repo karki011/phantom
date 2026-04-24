@@ -204,3 +204,26 @@ export interface FailedStep {
   number: number;
   errors: string[];
 }
+
+export interface SessionState {
+  session_id: string;
+  state: string;
+  policy: string;
+  paused_at: number;
+  resumed_at: number;
+  event_count: number;
+}
+
+export interface WardEvaluation {
+  rule_id: string;
+  rule_name: string;
+  level: 'block' | 'confirm' | 'warn' | 'log';
+  message: string;
+  matched: boolean;
+  timestamp: number;
+  session_id: string;
+  event_seq: number;
+  tool_name: string;
+  tool_input: string;
+  outcome: string;
+}

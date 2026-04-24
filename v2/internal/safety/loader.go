@@ -4,6 +4,7 @@ package safety
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -148,6 +149,104 @@ func (l *Loader) RuleByID(id string) *Rule {
 		}
 	}
 	return nil
+}
+
+// SaveRule adds or updates a rule in custom.yaml.
+func (l *Loader) SaveRule(rule Rule) error {
+	path := filepath.Join(l.dir, "custom.yaml")
+
+	var wf wardFile
+	data, err := os.ReadFile(path)
+	if err == nil {
+		_ = yaml.Unmarshal(data, &wf)
+	}
+
+	// Update existing or append.
+	updated := false
+	for i, r := range wf.Rules {
+		if r.ID == rule.ID {
+			wf.Rules[i] = rule
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		wf.Rules = append(wf.Rules, rule)
+	}
+
+	return l.writeWardFile(path, wf)
+}
+
+// DeleteRule removes a rule by ID from custom.yaml.
+func (l *Loader) DeleteRule(ruleID string) error {
+	path := filepath.Join(l.dir, "custom.yaml")
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+
+	var wf wardFile
+	if err := yaml.Unmarshal(data, &wf); err != nil {
+		return err
+	}
+
+	filtered := make([]Rule, 0, len(wf.Rules))
+	for _, r := range wf.Rules {
+		if r.ID != ruleID {
+			filtered = append(filtered, r)
+		}
+	}
+	wf.Rules = filtered
+
+	return l.writeWardFile(path, wf)
+}
+
+// ToggleRule enables or disables a rule. Works across all ward files.
+func (l *Loader) ToggleRule(ruleID string, enabled bool) error {
+	// Search all ward files for the rule.
+	entries, err := os.ReadDir(l.dir)
+	if err != nil {
+		return err
+	}
+
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		ext := filepath.Ext(e.Name())
+		if ext != ".yaml" && ext != ".yml" {
+			continue
+		}
+
+		path := filepath.Join(l.dir, e.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+
+		var wf wardFile
+		if err := yaml.Unmarshal(data, &wf); err != nil {
+			continue
+		}
+
+		for i, r := range wf.Rules {
+			if r.ID == ruleID {
+				wf.Rules[i].Enabled = enabled
+				return l.writeWardFile(path, wf)
+			}
+		}
+	}
+
+	return fmt.Errorf("rule %s not found", ruleID)
+}
+
+func (l *Loader) writeWardFile(path string, wf wardFile) error {
+	data, err := yaml.Marshal(wf)
+	if err != nil {
+		return fmt.Errorf("safety/loader: marshal: %w", err)
+	}
+	return os.WriteFile(path, data, 0o644)
 }
 
 const debounce = 500 * time.Millisecond

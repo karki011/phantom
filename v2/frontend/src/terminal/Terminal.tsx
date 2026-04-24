@@ -20,12 +20,27 @@ export interface TerminalProps {
 
 const WS_URL = 'ws://localhost:9741/ws';
 
+function waitForLayout(el: HTMLElement, maxMs = 500): Promise<void> {
+  return new Promise((resolve) => {
+    const start = performance.now();
+    const check = () => {
+      if (el.clientWidth > 200 || performance.now() - start > maxMs) {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(check);
+    };
+    requestAnimationFrame(check);
+  });
+}
+
 export function Terminal(props: TerminalProps) {
   let containerRef!: HTMLDivElement;
   let term: XTerm | undefined;
   let fitAddon: FitAddon | undefined;
   let ws: WebSocket | undefined;
   let resizeObserver: ResizeObserver | undefined;
+  let intersectionObserver: IntersectionObserver | undefined;
 
   onMount(async () => {
     // 1. Instantiate xterm with theme tokens
@@ -56,8 +71,9 @@ export function Terminal(props: TerminalProps) {
     webgl.onContextLoss(() => webgl.dispose());
     term.loadAddon(webgl);
 
-    // 3. Mount to DOM
+    // 3. Mount to DOM and wait for container to have real dimensions
     term.open(containerRef);
+    await waitForLayout(containerRef);
     fitAddon.fit();
 
     // 4. Cold restore: write scrollback before attaching PTY
@@ -66,8 +82,13 @@ export function Terminal(props: TerminalProps) {
       term.write(scrollback);
     }
 
-    // 5. Create PTY on the backend
+    // 5. Create PTY on the backend (cols/rows are now accurate)
     await createTerminal(props.sessionId, props.cwd, term.cols, term.rows);
+
+    // 5b. Safety refit — catch cases where layout settles after PTY creation
+    setTimeout(() => {
+      if (containerRef.clientWidth > 200) fitAddon?.fit();
+    }, 150);
 
     // 6. WebSocket connection
     ws = new WebSocket(WS_URL);
@@ -99,15 +120,31 @@ export function Terminal(props: TerminalProps) {
       void resizeTerminal(props.sessionId, cols, rows);
     });
 
-    // 9. ResizeObserver to refit when pane size changes
-    resizeObserver = new ResizeObserver(() => {
-      fitAddon?.fit();
-    });
+    // 9. ResizeObserver on both container and its parent (catches sidebar toggles)
+    let resizeRaf = 0;
+    const debouncedFit = () => {
+      cancelAnimationFrame(resizeRaf);
+      resizeRaf = requestAnimationFrame(() => fitAddon?.fit());
+    };
+    resizeObserver = new ResizeObserver(debouncedFit);
     resizeObserver.observe(containerRef);
+    if (containerRef.parentElement?.parentElement) {
+      resizeObserver.observe(containerRef.parentElement.parentElement);
+    }
+
+    // 10. IntersectionObserver — refit when tab becomes visible
+    intersectionObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) debouncedFit();
+      },
+      { threshold: 0.1 },
+    );
+    intersectionObserver.observe(containerRef);
   });
 
   onCleanup(() => {
     resizeObserver?.disconnect();
+    intersectionObserver?.disconnect();
     ws?.close();
     term?.dispose();
     // NOTE: Do NOT call DestroyTerminal — PTY stays alive for reattach

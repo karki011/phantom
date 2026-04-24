@@ -16,6 +16,7 @@ import {
   updateSplitAtPath,
   getLayoutPaneIds,
 } from './layout-utils';
+import { destroyTerminal } from '@/core/bindings';
 
 // ---------------------------------------------------------------------------
 // Factories
@@ -136,7 +137,19 @@ export function addTabWithData(
   queueMicrotask(() => setWorkspace('activeTabId', tab.id));
 }
 
+
 export function removeTab(tabId: string): void {
+  // Collect terminal pane IDs before the store mutation removes them.
+  const tab = workspace.tabs.find((t) => t.id === tabId);
+  const terminalPaneIds: string[] = [];
+  if (tab) {
+    for (const pane of Object.values(tab.panes)) {
+      if (pane.kind === 'terminal') {
+        terminalPaneIds.push(pane.id);
+      }
+    }
+  }
+
   setWorkspace(
     produce((s) => {
       if (s.tabs.length <= 1) return;
@@ -150,6 +163,11 @@ export function removeTab(tabId: string): void {
       }
     }),
   );
+
+  // Kill PTYs for all terminal panes in the removed tab.
+  for (const paneId of terminalPaneIds) {
+    void destroyTerminal(paneId);
+  }
 }
 
 export function setActiveTab(tabId: string): void {
@@ -172,6 +190,16 @@ export function setActivePaneInTab(paneId: string): void {
 }
 
 export function closePane(paneId: string): void {
+  // Capture pane metadata before the store mutation removes it.
+  let paneKind: PaneType | undefined;
+  for (const tab of workspace.tabs) {
+    const pane = tab.panes[paneId];
+    if (pane) {
+      paneKind = pane.kind;
+      break;
+    }
+  }
+
   setWorkspace(
     produce((s) => {
       const tab = s.tabs.find((t) => paneId in t.panes);
@@ -192,6 +220,11 @@ export function closePane(paneId: string): void {
       }
     }),
   );
+
+  // If the closed pane was a terminal, kill its PTY on the Go side.
+  if (paneKind === 'terminal') {
+    void destroyTerminal(paneId);
+  }
 }
 
 export function splitPane(

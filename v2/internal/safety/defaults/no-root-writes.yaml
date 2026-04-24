@@ -3,6 +3,7 @@ rules:
     name: no-root-writes
     level: block
     description: Blocks file writes to system root directories (/etc, /usr, /bin, /sbin).
+    event_type: tool_use
     path_pattern: "^/(etc|usr|bin|sbin)/"
     message: "Write to system root directory is not allowed"
     allow_bypass: false

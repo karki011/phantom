@@ -88,6 +88,30 @@ export function bootstrapSessions(): void {
       ),
     );
   });
+
+  onWailsEvent<{ session_id: string }>('session:paused', ({ session_id }) => {
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === session_id ? { ...s, status: 'paused' } : s,
+      ),
+    );
+  });
+
+  onWailsEvent<{ session_id: string }>('session:resumed', ({ session_id }) => {
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === session_id ? { ...s, status: 'active' } : s,
+      ),
+    );
+  });
+
+  onWailsEvent<{ session_id: string }>('session:killed', ({ session_id }) => {
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === session_id ? { ...s, status: 'completed', ended_at: Date.now() / 1000 } : s,
+      ),
+    );
+  });
 }
 
 // ── Exports ───────────────────────────────────────────────────────────────────

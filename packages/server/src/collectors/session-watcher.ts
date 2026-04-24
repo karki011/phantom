@@ -8,8 +8,8 @@ import { basename, join } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { watch } from 'chokidar';
-import { eq } from 'drizzle-orm';
-import { db, sessions } from '@phantom-os/db';
+import { eq, and, isNull } from 'drizzle-orm';
+import { db, sessions, terminalSessions } from '@phantom-os/db';
 import { SESSIONS_DIR, PROJECTS_DIR } from '@phantom-os/shared/constants-node';
 import { extractRepoName, isProcessAlive, safeReadJson } from '@phantom-os/shared/file-utils';
 
@@ -25,6 +25,42 @@ interface SessionFile {
 }
 
 type Broadcast = (event: string, data: unknown) => void;
+
+/** Link active terminals whose CWD matches (or is a parent of) the session's CWD */
+const linkTerminalsToSession = (sessionId: string, sessionCwd: string): void => {
+  try {
+    const activeTerminals = db
+      .select()
+      .from(terminalSessions)
+      .where(and(eq(terminalSessions.status, 'active'), isNull(terminalSessions.sessionId)))
+      .all();
+
+    for (const term of activeTerminals) {
+      if (!term.cwd) continue;
+      // Match if session CWD starts with the terminal's CWD (terminal is at or above project root)
+      if (sessionCwd.startsWith(term.cwd) || term.cwd.startsWith(sessionCwd)) {
+        db.update(terminalSessions)
+          .set({ sessionId })
+          .where(eq(terminalSessions.paneId, term.paneId))
+          .run();
+      }
+    }
+  } catch {
+    // Non-critical — linking is best-effort
+  }
+};
+
+/** Unlink all terminals tied to a completed session */
+const unlinkTerminalsFromSession = (sessionId: string): void => {
+  try {
+    db.update(terminalSessions)
+      .set({ sessionId: null })
+      .where(eq(terminalSessions.sessionId, sessionId))
+      .run();
+  } catch {
+    // Non-critical
+  }
+};
 
 const readContextBridge = (sessionId: string): number | null => {
   const bridgePath = join(homedir(), '.claude', 'phantom-os', 'context', `${sessionId}.json`);
@@ -65,6 +101,15 @@ const upsertSession = (
       .where(eq(sessions.id, id))
       .run();
 
+    // Link terminals if session just became active with a CWD
+    if (status === 'active' && data.cwd) {
+      linkTerminalsToSession(id, data.cwd);
+    }
+    // Unlink if session just completed
+    if (status === 'completed' && existing.status === 'active') {
+      unlinkTerminalsFromSession(id);
+    }
+
     broadcast('session:update', { id, status });
   } else {
     db.insert(sessions)
@@ -86,8 +131,9 @@ const upsertSession = (
 
     broadcast('session:new', { id, status, repo });
 
-    if (status === 'active' && onStart) {
-      onStart(id);
+    if (status === 'active') {
+      if (data.cwd) linkTerminalsToSession(id, data.cwd);
+      if (onStart) onStart(id);
     }
   }
 
@@ -110,6 +156,8 @@ const markCompleted = (filePath: string, broadcast: Broadcast, onEnd?: (id: stri
       .set({ status: 'completed', endedAt: Date.now() })
       .where(eq(sessions.id, existing.id))
       .run();
+
+    unlinkTerminalsFromSession(existing.id);
 
     broadcast('session:end', {
       id: existing.id,
@@ -193,6 +241,8 @@ const detectStaleSessions = (broadcast: Broadcast, onEnd?: (id: string) => void)
     const jsonlIdleAndNoPid = jsonlIdle && !alive;
 
     if (pidDead || noPidAndOld || jsonlIdleAndNoPid) {
+      unlinkTerminalsFromSession(session.id);
+
       db.update(sessions)
         .set({ status: 'completed', endedAt: Date.now() })
         .where(eq(sessions.id, session.id))

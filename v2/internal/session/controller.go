@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -22,6 +23,12 @@ type Controller struct {
 	pauses    sync.Map // sessionID -> *PauseBuffer
 	stream    *stream.Store
 	emitEvent func(string, interface{})
+	pidLookup func(sessionID string) (int64, error)
+}
+
+// SetPIDLookup registers a callback to resolve a session ID to its process PID.
+func (c *Controller) SetPIDLookup(fn func(string) (int64, error)) {
+	c.pidLookup = fn
 }
 
 // NewController creates a Controller wired to the given dependencies.
@@ -50,7 +57,7 @@ func (c *Controller) Init(ctx context.Context) error {
 	return nil
 }
 
-// Pause pauses a session, starting output buffering.
+// Pause pauses a session, starting output buffering and suspending the process via SIGTSTP.
 func (c *Controller) Pause(ctx context.Context, sessionID string) error {
 	pb := NewPauseBuffer()
 	pb.Pause()
@@ -60,10 +67,20 @@ func (c *Controller) Pause(ctx context.Context, sessionID string) error {
 		return fmt.Errorf("session/controller: pause %s: %w", sessionID, err)
 	}
 	c.emitEvent("session:paused", map[string]string{"session_id": sessionID})
+
+	// Attempt real process suspension via SIGTSTP.
+	if c.pidLookup != nil {
+		if pid, err := c.pidLookup(sessionID); err == nil && pid > 0 {
+			if suspendErr := SuspendProcess(int(pid)); suspendErr != nil {
+				log.Printf("session/controller: suspend process %d for %s: %v", pid, sessionID, suspendErr)
+			}
+		}
+	}
 	return nil
 }
 
-// Resume flushes buffered output via flushTo and transitions the session back to active.
+// Resume flushes buffered output via flushTo, transitions the session back to active,
+// and sends SIGCONT to the Claude process.
 func (c *Controller) Resume(ctx context.Context, sessionID string, flushTo func([]byte)) error {
 	if v, ok := c.pauses.Load(sessionID); ok {
 		pb := v.(*PauseBuffer)
@@ -75,6 +92,15 @@ func (c *Controller) Resume(ctx context.Context, sessionID string, flushTo func(
 		return fmt.Errorf("session/controller: resume %s: %w", sessionID, err)
 	}
 	c.emitEvent("session:resumed", map[string]string{"session_id": sessionID})
+
+	// Resume suspended process via SIGCONT.
+	if c.pidLookup != nil {
+		if pid, err := c.pidLookup(sessionID); err == nil && pid > 0 {
+			if resumeErr := ResumeProcess(int(pid)); resumeErr != nil {
+				log.Printf("session/controller: resume process %d for %s: %v", pid, sessionID, resumeErr)
+			}
+		}
+	}
 	return nil
 }
 
@@ -193,6 +219,30 @@ func (c *Controller) IsPaused(sessionID string) bool {
 		return v.(*PauseBuffer).IsPaused()
 	}
 	return false
+}
+
+// Kill terminates a session by sending SIGTERM to its process group and cleaning up state.
+func (c *Controller) Kill(ctx context.Context, sessionID string) error {
+	// Stop buffering.
+	if v, ok := c.pauses.LoadAndDelete(sessionID); ok {
+		pb := v.(*PauseBuffer)
+		pb.Resume(func([]byte) {})
+	}
+
+	// Kill process.
+	if c.pidLookup != nil {
+		if pid, err := c.pidLookup(sessionID); err == nil && pid > 0 {
+			if killErr := KillProcess(int(pid)); killErr != nil {
+				log.Printf("session/controller: kill process %d for %s: %v", pid, sessionID, killErr)
+			}
+		}
+	}
+
+	if err := c.states.SetState(ctx, sessionID, StateComplete); err != nil {
+		return fmt.Errorf("session/controller: kill %s: %w", sessionID, err)
+	}
+	c.emitEvent("session:killed", map[string]string{"session_id": sessionID})
+	return nil
 }
 
 // BufferIfPaused captures data if the session is paused. Returns true if buffered.

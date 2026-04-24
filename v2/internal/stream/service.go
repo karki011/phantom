@@ -10,11 +10,16 @@ import (
 	"sync"
 )
 
+// EventHook is called for every event during live tailing.
+// Implementations may trigger side effects like safety evaluation and session pausing.
+type EventHook func(ctx context.Context, ev *Event)
+
 // Service coordinates parsing, storage, and live tailing of session JSONL files.
 type Service struct {
 	store     *Store
 	tailers   sync.Map // sessionID (string) → context.CancelFunc
 	emitEvent func(name string, data interface{})
+	eventHook EventHook
 }
 
 // NewService creates a Service backed by the writer DB connection.
@@ -78,6 +83,9 @@ func (svc *Service) StartTailing(ctx context.Context, sessionID, jsonlPath strin
 				if err := svc.store.SaveEvent(tailCtx, &ev); err != nil {
 					log.Printf("stream/service: save event for %s: %v", sessionID, err)
 				}
+				if svc.eventHook != nil {
+					svc.eventHook(tailCtx, &ev)
+				}
 				svc.emitEvent("stream:event", ev)
 			}
 		}
@@ -112,6 +120,11 @@ func (svc *Service) StopAll() {
 		}
 		return true
 	})
+}
+
+// SetEventHook registers a callback invoked for every tailed event before it is emitted.
+func (svc *Service) SetEventHook(hook EventHook) {
+	svc.eventHook = hook
 }
 
 // GetEvents retrieves paginated events for a session from the store.

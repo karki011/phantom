@@ -3,6 +3,8 @@
 package app
 
 import (
+	"fmt"
+
 	"github.com/subashkarki/phantom-os-v2/internal/safety"
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
 )
@@ -55,6 +57,119 @@ func (a *App) GetWardStats() *safety.AuditStats {
 		return nil
 	}
 	return stats
+}
+
+// SaveWardRule creates or updates a custom ward rule.
+func (a *App) SaveWardRule(rule safety.Rule) error {
+	if a.Safety == nil {
+		return fmt.Errorf("safety service not initialised")
+	}
+	return a.Safety.SaveRule(rule)
+}
+
+// DeleteWardRule removes a custom ward rule by ID.
+func (a *App) DeleteWardRule(ruleID string) error {
+	if a.Safety == nil {
+		return fmt.Errorf("safety service not initialised")
+	}
+	return a.Safety.DeleteRule(ruleID)
+}
+
+// ToggleWardRule enables or disables a ward rule.
+func (a *App) ToggleWardRule(ruleID string, enabled bool) error {
+	if a.Safety == nil {
+		return fmt.Errorf("safety service not initialised")
+	}
+	return a.Safety.ToggleRule(ruleID, enabled)
+}
+
+// GetWardPresets returns available preset rule sets.
+func (a *App) GetWardPresets() []WardPreset {
+	return []WardPreset{
+		{
+			ID:          "strict",
+			Name:        "Strict",
+			Description: "Blocks destructive operations, requires confirmation for deploys",
+			RuleCount:   5,
+		},
+		{
+			ID:          "permissive",
+			Name:        "Permissive",
+			Description: "Warns on risky operations but never blocks",
+			RuleCount:   5,
+		},
+		{
+			ID:          "git-safe",
+			Name:        "Git Safe",
+			Description: "Blocks force push, reset --hard, branch -D",
+			RuleCount:   3,
+		},
+		{
+			ID:          "data-safe",
+			Name:        "Data Safe",
+			Description: "Blocks writes to data files, warns on database commands",
+			RuleCount:   3,
+		},
+	}
+}
+
+// ApplyWardPreset loads a preset rule set into custom.yaml.
+func (a *App) ApplyWardPreset(presetID string) error {
+	if a.Safety == nil {
+		return fmt.Errorf("safety service not initialised")
+	}
+	rules := getPresetRules(presetID)
+	if len(rules) == 0 {
+		return fmt.Errorf("unknown preset: %s", presetID)
+	}
+	for _, r := range rules {
+		if err := a.Safety.SaveRule(r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// WardPreset describes a template rule set.
+type WardPreset struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	RuleCount   int    `json:"rule_count"`
+}
+
+func getPresetRules(presetID string) []safety.Rule {
+	switch presetID {
+	case "strict":
+		return []safety.Rule{
+			{ID: "strict-block-deletes", Name: "Block deletes", Level: safety.LevelBlock, EventType: "tool_use", Tool: "Bash", Pattern: `(rm\s|rmdir\s|unlink\s)`, Message: "Delete command detected — session paused", Enabled: true, Audit: true},
+			{ID: "strict-block-force-push", Name: "Block force push", Level: safety.LevelBlock, EventType: "tool_use", Tool: "Bash", Pattern: `git\s+push.*--force`, Message: "Force push detected — session paused", Enabled: true, Audit: true},
+			{ID: "strict-block-drop-table", Name: "Block DROP TABLE", Level: safety.LevelBlock, EventType: "tool_use", Tool: "Bash", Pattern: `DROP\s+TABLE`, Message: "DROP TABLE detected — session paused", Enabled: true, Audit: true},
+			{ID: "strict-confirm-deploy", Name: "Confirm deploys", Level: safety.LevelConfirm, EventType: "tool_use", Tool: "Bash", Pattern: `(terraform apply|cdk deploy|sam deploy|kubectl apply)`, Message: "Deploy command — approve to continue", Enabled: true, Audit: true},
+			{ID: "strict-block-reset-hard", Name: "Block reset --hard", Level: safety.LevelBlock, EventType: "tool_use", Tool: "Bash", Pattern: `git\s+reset\s+--hard`, Message: "git reset --hard detected — session paused", Enabled: true, Audit: true},
+		}
+	case "permissive":
+		return []safety.Rule{
+			{ID: "perm-warn-deletes", Name: "Warn on deletes", Level: safety.LevelWarn, EventType: "tool_use", Tool: "Bash", Pattern: `(rm\s|rmdir\s)`, Message: "Delete command detected", Enabled: true, Audit: true},
+			{ID: "perm-warn-force", Name: "Warn on force ops", Level: safety.LevelWarn, EventType: "tool_use", Tool: "Bash", Pattern: `(--force|--hard|--no-verify)`, Message: "Force operation detected", Enabled: true, Audit: true},
+			{ID: "perm-warn-deploy", Name: "Warn on deploys", Level: safety.LevelWarn, EventType: "tool_use", Tool: "Bash", Pattern: `(terraform apply|cdk deploy|sam deploy|kubectl apply)`, Message: "Deploy command detected", Enabled: true, Audit: true},
+			{ID: "perm-warn-secrets", Name: "Warn on secrets", Level: safety.LevelWarn, Pattern: `(AKIA[0-9A-Z]{16}|ghp_[a-zA-Z0-9]{36}|sk-[a-zA-Z0-9]{20,})`, Message: "Possible secret detected", Enabled: true, Audit: true},
+			{ID: "perm-warn-root", Name: "Warn on root writes", Level: safety.LevelWarn, EventType: "tool_use", PathPattern: `^/(etc|usr|bin|sbin)/`, Message: "Write to system directory", Enabled: true, Audit: true},
+		}
+	case "git-safe":
+		return []safety.Rule{
+			{ID: "git-block-force-push", Name: "Block force push", Level: safety.LevelBlock, EventType: "tool_use", Tool: "Bash", Pattern: `git\s+push.*--force`, Message: "Force push blocked", Enabled: true, Audit: true},
+			{ID: "git-block-reset-hard", Name: "Block reset --hard", Level: safety.LevelBlock, EventType: "tool_use", Tool: "Bash", Pattern: `git\s+reset\s+--hard`, Message: "git reset --hard blocked", Enabled: true, Audit: true},
+			{ID: "git-block-branch-d", Name: "Block branch -D", Level: safety.LevelBlock, EventType: "tool_use", Tool: "Bash", Pattern: `git\s+branch\s+-D`, Message: "Force branch delete blocked", Enabled: true, Audit: true},
+		}
+	case "data-safe":
+		return []safety.Rule{
+			{ID: "data-block-data-files", Name: "Block data file writes", Level: safety.LevelBlock, EventType: "tool_use", PathPattern: `\.(csv|json|sql|parquet)$`, Message: "Write to data file blocked", Enabled: true, Audit: true},
+			{ID: "data-warn-db-commands", Name: "Warn on DB commands", Level: safety.LevelWarn, EventType: "tool_use", Tool: "Bash", Pattern: `(DROP|TRUNCATE|DELETE\s+FROM|ALTER\s+TABLE)`, Message: "Database command detected", Enabled: true, Audit: true},
+			{ID: "data-warn-exports", Name: "Warn on data exports", Level: safety.LevelWarn, EventType: "tool_use", Tool: "Bash", Pattern: `(pg_dump|mysqldump|mongodump|COPY\s+.*TO)`, Message: "Data export command detected", Enabled: true, Audit: true},
+		}
+	}
+	return nil
 }
 
 // DryRunWard evaluates a synthetic event against a specific rule without recording.

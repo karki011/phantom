@@ -12,11 +12,11 @@ import (
 
 const createTerminalSession = `-- name: CreateTerminalSession :exec
 INSERT INTO terminal_sessions (
-    pane_id, worktree_id, shell, cwd, env,
+    pane_id, worktree_id, project_id, session_id, shell, cwd, env,
     cols, rows, scrollback, status,
     started_at, last_active_at, ended_at
 ) VALUES (
-    ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?,
     ?, ?, ?
 )
@@ -25,6 +25,8 @@ INSERT INTO terminal_sessions (
 type CreateTerminalSessionParams struct {
 	PaneID       string         `json:"pane_id"`
 	WorktreeID   sql.NullString `json:"worktree_id"`
+	ProjectID    sql.NullString `json:"project_id"`
+	SessionID    sql.NullString `json:"session_id"`
 	Shell        sql.NullString `json:"shell"`
 	Cwd          sql.NullString `json:"cwd"`
 	Env          sql.NullString `json:"env"`
@@ -41,6 +43,8 @@ func (q *Queries) CreateTerminalSession(ctx context.Context, arg CreateTerminalS
 	_, err := q.db.ExecContext(ctx, createTerminalSession,
 		arg.PaneID,
 		arg.WorktreeID,
+		arg.ProjectID,
+		arg.SessionID,
 		arg.Shell,
 		arg.Cwd,
 		arg.Env,
@@ -72,9 +76,54 @@ func (q *Queries) EndTerminalSession(ctx context.Context, arg EndTerminalSession
 	return err
 }
 
+const endTerminalsByWorktree = `-- name: EndTerminalsByWorktree :exec
+UPDATE terminal_sessions SET status = 'ended', ended_at = ?, session_id = NULL WHERE worktree_id = ? AND status = 'active'
+`
+
+type EndTerminalsByWorktreeParams struct {
+	EndedAt    sql.NullInt64  `json:"ended_at"`
+	WorktreeID sql.NullString `json:"worktree_id"`
+}
+
+func (q *Queries) EndTerminalsByWorktree(ctx context.Context, arg EndTerminalsByWorktreeParams) error {
+	_, err := q.db.ExecContext(ctx, endTerminalsByWorktree, arg.EndedAt, arg.WorktreeID)
+	return err
+}
+
+const getTerminalForRestore = `-- name: GetTerminalForRestore :one
+SELECT pane_id, worktree_id, project_id, shell, cwd, cols, rows, scrollback FROM terminal_sessions WHERE pane_id = ? AND status IN ('ended', 'active')
+`
+
+type GetTerminalForRestoreRow struct {
+	PaneID     string         `json:"pane_id"`
+	WorktreeID sql.NullString `json:"worktree_id"`
+	ProjectID  sql.NullString `json:"project_id"`
+	Shell      sql.NullString `json:"shell"`
+	Cwd        sql.NullString `json:"cwd"`
+	Cols       sql.NullInt64  `json:"cols"`
+	Rows       sql.NullInt64  `json:"rows"`
+	Scrollback sql.NullString `json:"scrollback"`
+}
+
+func (q *Queries) GetTerminalForRestore(ctx context.Context, paneID string) (GetTerminalForRestoreRow, error) {
+	row := q.db.QueryRowContext(ctx, getTerminalForRestore, paneID)
+	var i GetTerminalForRestoreRow
+	err := row.Scan(
+		&i.PaneID,
+		&i.WorktreeID,
+		&i.ProjectID,
+		&i.Shell,
+		&i.Cwd,
+		&i.Cols,
+		&i.Rows,
+		&i.Scrollback,
+	)
+	return i, err
+}
+
 const getTerminalSession = `-- name: GetTerminalSession :one
 
-SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at FROM terminal_sessions WHERE pane_id = ?
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE pane_id = ?
 `
 
 // terminal.sql - CRUD operations for terminal_sessions table
@@ -95,12 +144,69 @@ func (q *Queries) GetTerminalSession(ctx context.Context, paneID string) (Termin
 		&i.StartedAt,
 		&i.LastActiveAt,
 		&i.EndedAt,
+		&i.SessionID,
+		&i.ProjectID,
 	)
 	return i, err
 }
 
+const getTerminalsBySessionId = `-- name: GetTerminalsBySessionId :many
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE session_id = ?
+`
+
+func (q *Queries) GetTerminalsBySessionId(ctx context.Context, sessionID sql.NullString) ([]TerminalSession, error) {
+	rows, err := q.db.QueryContext(ctx, getTerminalsBySessionId, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TerminalSession{}
+	for rows.Next() {
+		var i TerminalSession
+		if err := rows.Scan(
+			&i.PaneID,
+			&i.WorktreeID,
+			&i.Shell,
+			&i.Cwd,
+			&i.Env,
+			&i.Cols,
+			&i.Rows,
+			&i.Scrollback,
+			&i.Status,
+			&i.StartedAt,
+			&i.LastActiveAt,
+			&i.EndedAt,
+			&i.SessionID,
+			&i.ProjectID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const linkTerminalToSession = `-- name: LinkTerminalToSession :execresult
+UPDATE terminal_sessions SET session_id = ? WHERE pane_id = ? AND session_id IS NULL
+`
+
+type LinkTerminalToSessionParams struct {
+	SessionID sql.NullString `json:"session_id"`
+	PaneID    string         `json:"pane_id"`
+}
+
+func (q *Queries) LinkTerminalToSession(ctx context.Context, arg LinkTerminalToSessionParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, linkTerminalToSession, arg.SessionID, arg.PaneID)
+}
+
 const listActiveTerminals = `-- name: ListActiveTerminals :many
-SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at FROM terminal_sessions WHERE status = 'active' ORDER BY started_at DESC
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE status = 'active' ORDER BY started_at DESC
 `
 
 func (q *Queries) ListActiveTerminals(ctx context.Context) ([]TerminalSession, error) {
@@ -125,6 +231,8 @@ func (q *Queries) ListActiveTerminals(ctx context.Context) ([]TerminalSession, e
 			&i.StartedAt,
 			&i.LastActiveAt,
 			&i.EndedAt,
+			&i.SessionID,
+			&i.ProjectID,
 		); err != nil {
 			return nil, err
 		}
@@ -137,6 +245,258 @@ func (q *Queries) ListActiveTerminals(ctx context.Context) ([]TerminalSession, e
 		return nil, err
 	}
 	return items, nil
+}
+
+const listRecentlyEndedTerminals = `-- name: ListRecentlyEndedTerminals :many
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE status = 'ended' AND ended_at >= ? ORDER BY ended_at DESC
+`
+
+func (q *Queries) ListRecentlyEndedTerminals(ctx context.Context, endedAt sql.NullInt64) ([]TerminalSession, error) {
+	rows, err := q.db.QueryContext(ctx, listRecentlyEndedTerminals, endedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TerminalSession{}
+	for rows.Next() {
+		var i TerminalSession
+		if err := rows.Scan(
+			&i.PaneID,
+			&i.WorktreeID,
+			&i.Shell,
+			&i.Cwd,
+			&i.Env,
+			&i.Cols,
+			&i.Rows,
+			&i.Scrollback,
+			&i.Status,
+			&i.StartedAt,
+			&i.LastActiveAt,
+			&i.EndedAt,
+			&i.SessionID,
+			&i.ProjectID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTerminalsByProject = `-- name: ListTerminalsByProject :many
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE project_id = ? AND status = 'active' ORDER BY started_at DESC
+`
+
+func (q *Queries) ListTerminalsByProject(ctx context.Context, projectID sql.NullString) ([]TerminalSession, error) {
+	rows, err := q.db.QueryContext(ctx, listTerminalsByProject, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TerminalSession{}
+	for rows.Next() {
+		var i TerminalSession
+		if err := rows.Scan(
+			&i.PaneID,
+			&i.WorktreeID,
+			&i.Shell,
+			&i.Cwd,
+			&i.Env,
+			&i.Cols,
+			&i.Rows,
+			&i.Scrollback,
+			&i.Status,
+			&i.StartedAt,
+			&i.LastActiveAt,
+			&i.EndedAt,
+			&i.SessionID,
+			&i.ProjectID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTerminalsByWorktree = `-- name: ListTerminalsByWorktree :many
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE worktree_id = ? AND status = 'active' ORDER BY started_at DESC
+`
+
+func (q *Queries) ListTerminalsByWorktree(ctx context.Context, worktreeID sql.NullString) ([]TerminalSession, error) {
+	rows, err := q.db.QueryContext(ctx, listTerminalsByWorktree, worktreeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TerminalSession{}
+	for rows.Next() {
+		var i TerminalSession
+		if err := rows.Scan(
+			&i.PaneID,
+			&i.WorktreeID,
+			&i.Shell,
+			&i.Cwd,
+			&i.Env,
+			&i.Cols,
+			&i.Rows,
+			&i.Scrollback,
+			&i.Status,
+			&i.StartedAt,
+			&i.LastActiveAt,
+			&i.EndedAt,
+			&i.SessionID,
+			&i.ProjectID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUnlinkedActiveTerminals = `-- name: ListUnlinkedActiveTerminals :many
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE status = 'active' AND session_id IS NULL
+`
+
+func (q *Queries) ListUnlinkedActiveTerminals(ctx context.Context) ([]TerminalSession, error) {
+	rows, err := q.db.QueryContext(ctx, listUnlinkedActiveTerminals)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TerminalSession{}
+	for rows.Next() {
+		var i TerminalSession
+		if err := rows.Scan(
+			&i.PaneID,
+			&i.WorktreeID,
+			&i.Shell,
+			&i.Cwd,
+			&i.Env,
+			&i.Cols,
+			&i.Rows,
+			&i.Scrollback,
+			&i.Status,
+			&i.StartedAt,
+			&i.LastActiveAt,
+			&i.EndedAt,
+			&i.SessionID,
+			&i.ProjectID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUnlinkedActiveTerminalsByWorktree = `-- name: ListUnlinkedActiveTerminalsByWorktree :many
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE worktree_id = ? AND status = 'active' AND session_id IS NULL ORDER BY started_at DESC
+`
+
+func (q *Queries) ListUnlinkedActiveTerminalsByWorktree(ctx context.Context, worktreeID sql.NullString) ([]TerminalSession, error) {
+	rows, err := q.db.QueryContext(ctx, listUnlinkedActiveTerminalsByWorktree, worktreeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TerminalSession{}
+	for rows.Next() {
+		var i TerminalSession
+		if err := rows.Scan(
+			&i.PaneID,
+			&i.WorktreeID,
+			&i.Shell,
+			&i.Cwd,
+			&i.Env,
+			&i.Cols,
+			&i.Rows,
+			&i.Scrollback,
+			&i.Status,
+			&i.StartedAt,
+			&i.LastActiveAt,
+			&i.EndedAt,
+			&i.SessionID,
+			&i.ProjectID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markOrphanedTerminalsEnded = `-- name: MarkOrphanedTerminalsEnded :exec
+UPDATE terminal_sessions SET status = 'ended', ended_at = ?, session_id = NULL WHERE status = 'active'
+`
+
+func (q *Queries) MarkOrphanedTerminalsEnded(ctx context.Context, endedAt sql.NullInt64) error {
+	_, err := q.db.ExecContext(ctx, markOrphanedTerminalsEnded, endedAt)
+	return err
+}
+
+const reactivateTerminal = `-- name: ReactivateTerminal :exec
+UPDATE terminal_sessions SET status = 'active', ended_at = NULL, started_at = ?, last_active_at = ? WHERE pane_id = ?
+`
+
+type ReactivateTerminalParams struct {
+	StartedAt    sql.NullInt64 `json:"started_at"`
+	LastActiveAt sql.NullInt64 `json:"last_active_at"`
+	PaneID       string        `json:"pane_id"`
+}
+
+func (q *Queries) ReactivateTerminal(ctx context.Context, arg ReactivateTerminalParams) error {
+	_, err := q.db.ExecContext(ctx, reactivateTerminal, arg.StartedAt, arg.LastActiveAt, arg.PaneID)
+	return err
+}
+
+const unlinkAllTerminalsFromSession = `-- name: UnlinkAllTerminalsFromSession :exec
+UPDATE terminal_sessions SET session_id = NULL WHERE session_id = ?
+`
+
+func (q *Queries) UnlinkAllTerminalsFromSession(ctx context.Context, sessionID sql.NullString) error {
+	_, err := q.db.ExecContext(ctx, unlinkAllTerminalsFromSession, sessionID)
+	return err
+}
+
+const unlinkTerminal = `-- name: UnlinkTerminal :exec
+UPDATE terminal_sessions SET session_id = NULL WHERE pane_id = ?
+`
+
+func (q *Queries) UnlinkTerminal(ctx context.Context, paneID string) error {
+	_, err := q.db.ExecContext(ctx, unlinkTerminal, paneID)
+	return err
 }
 
 const updateTerminalLastActive = `-- name: UpdateTerminalLastActive :exec

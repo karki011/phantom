@@ -91,3 +91,80 @@ func TestRule_CompileError(t *testing.T) {
 		t.Error("expected compile error for invalid regex")
 	}
 }
+
+func TestRule_MatchEventType(t *testing.T) {
+	r := Rule{ID: "et1", EventType: "tool_use", Tool: "Bash", Enabled: true}
+	_ = r.Compile()
+
+	// Matches tool_use event
+	if !r.Match(&stream.Event{Type: stream.EventToolUse, ToolName: "Bash", ToolInput: "ls"}) {
+		t.Error("expected match for tool_use event")
+	}
+
+	// Does not match user event
+	if r.Match(&stream.Event{Type: stream.EventUser, Content: "hello"}) {
+		t.Error("expected no match for user event with tool_use rule")
+	}
+}
+
+func TestRule_MatchUserEvent(t *testing.T) {
+	r := Rule{ID: "et2", EventType: "user", Pattern: `AKIA[0-9A-Z]{16}`, Enabled: true}
+	_ = r.Compile()
+
+	if !r.Match(&stream.Event{Type: stream.EventUser, Content: "use key AKIAIOSFODNN7EXAMPLE"}) {
+		t.Error("expected match for user event with API key")
+	}
+	if r.Match(&stream.Event{Type: stream.EventAssistant, Content: "use key AKIAIOSFODNN7EXAMPLE"}) {
+		t.Error("expected no match for assistant event with user rule")
+	}
+}
+
+func TestRule_MatchNoEventType(t *testing.T) {
+	// Rule with no EventType matches all event types (backwards compatible)
+	r := Rule{ID: "et3", Pattern: `secret`, Enabled: true}
+	_ = r.Compile()
+
+	if !r.Match(&stream.Event{Type: stream.EventUser, Content: "my secret"}) {
+		t.Error("expected match for user event with no event_type filter")
+	}
+	if !r.Match(&stream.Event{Type: stream.EventToolUse, ToolInput: "echo secret"}) {
+		t.Error("expected match for tool_use event with no event_type filter")
+	}
+}
+
+func TestRule_MatchAssistantEvent(t *testing.T) {
+	r := Rule{ID: "et4", EventType: "assistant", Pattern: `--force`, Enabled: true}
+	_ = r.Compile()
+
+	if !r.Match(&stream.Event{Type: stream.EventAssistant, Content: "run git push --force"}) {
+		t.Error("expected match for assistant response with --force")
+	}
+	if r.Match(&stream.Event{Type: stream.EventAssistant, Content: "run git push"}) {
+		t.Error("expected no match without --force")
+	}
+}
+
+func TestRule_MatchSessionScope(t *testing.T) {
+	r := Rule{ID: "s1", SessionIDs: []string{"sess-abc", "sess-def"}, Pattern: "test", Enabled: true}
+	_ = r.Compile()
+
+	// Matches when session is in scope.
+	if !r.Match(&stream.Event{SessionID: "sess-abc", ToolInput: "test"}) {
+		t.Error("expected match for scoped session")
+	}
+
+	// Does not match when session is out of scope.
+	if r.Match(&stream.Event{SessionID: "sess-xyz", ToolInput: "test"}) {
+		t.Error("expected no match for out-of-scope session")
+	}
+}
+
+func TestRule_MatchNoSessionScope(t *testing.T) {
+	// Empty SessionIDs = matches all sessions (backwards compatible).
+	r := Rule{ID: "s2", Pattern: "test", Enabled: true}
+	_ = r.Compile()
+
+	if !r.Match(&stream.Event{SessionID: "any-session", ToolInput: "test"}) {
+		t.Error("expected match for unscoped rule")
+	}
+}

@@ -187,6 +187,7 @@ export const paneStates = sqliteTable('pane_states', {
 export const terminalSessions = sqliteTable('terminal_sessions', {
   paneId: text('pane_id').primaryKey(),
   worktreeId: text('worktree_id'),
+  sessionId: text('session_id'),                       // linked Claude session id (CWD-matched)
   shell: text('shell'),
   cwd: text('cwd'),
   env: text('env'),                                    // JSON-serialized env vars

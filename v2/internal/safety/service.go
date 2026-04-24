@@ -94,6 +94,21 @@ func (s *Service) GetRules() []Rule {
 	return s.loader.Rules()
 }
 
+// SaveRule adds or updates a rule in the custom.yaml file.
+func (s *Service) SaveRule(rule Rule) error {
+	return s.loader.SaveRule(rule)
+}
+
+// DeleteRule removes a rule by ID from custom.yaml.
+func (s *Service) DeleteRule(ruleID string) error {
+	return s.loader.DeleteRule(ruleID)
+}
+
+// ToggleRule enables or disables a rule in custom.yaml.
+func (s *Service) ToggleRule(ruleID string, enabled bool) error {
+	return s.loader.ToggleRule(ruleID, enabled)
+}
+
 // GetAuditTrail returns audit entries matching the given options.
 func (s *Service) GetAuditTrail(ctx context.Context, opts AuditQueryOpts) ([]Evaluation, error) {
 	return s.audit.Query(ctx, opts)

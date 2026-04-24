@@ -32,7 +32,9 @@ type Rule struct {
 	AllowBypass bool     `yaml:"allow_bypass" json:"allow_bypass"`
 	Enabled     bool     `yaml:"enabled" json:"enabled"`
 	Audit       bool     `yaml:"audit" json:"audit"`
-	Tags        []string `yaml:"tags,omitempty" json:"tags"`
+	Tags       []string `yaml:"tags,omitempty" json:"tags"`
+	EventType  string   `yaml:"event_type,omitempty" json:"event_type,omitempty"`
+	SessionIDs []string `yaml:"session_ids,omitempty" json:"session_ids,omitempty"`
 
 	compiledPat  *regexp.Regexp
 	compiledPath *regexp.Regexp
@@ -64,6 +66,25 @@ func (r *Rule) Compile() error {
 func (r *Rule) Match(ev *stream.Event) bool {
 	if !r.Enabled {
 		return false
+	}
+
+	// EventType filter: if set, the event must match. Empty means match all.
+	if r.EventType != "" && r.EventType != string(ev.Type) {
+		return false
+	}
+
+	// Session scope: if SessionIDs is set, the event's session must be in the list.
+	if len(r.SessionIDs) > 0 {
+		found := false
+		for _, sid := range r.SessionIDs {
+			if sid == ev.SessionID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
 	}
 
 	// Tool filter: case-insensitive comparison.

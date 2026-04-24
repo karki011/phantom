@@ -15,4 +15,8 @@ const (
 	EventJSONLScanDone  = "jsonl:scan-complete"
 	EventTaskNew        = "task:new"
 	EventTaskUpdate     = "task:update"
+
+	// Terminal lifecycle events (emitted by linker, listed here for discoverability).
+	EventTerminalLinked   = "terminal:linked"
+	EventTerminalUnlinked = "terminal:unlinked"
 )

@@ -1,14 +1,16 @@
 // PhantomOS v2 — Individual pane wrapper with header + content
 // Author: Subash Karki
 
-import { Show } from 'solid-js';
+import { Show, createSignal, lazy } from 'solid-js';
 import { Suspense, Dynamic } from 'solid-js/web';
-import { Columns2, Rows2, X } from 'lucide-solid';
+import { Columns2, Rows2, X, Settings2 } from 'lucide-solid';
 import { Skeleton } from '@kobalte/core/skeleton';
 import * as styles from '@/styles/panes.css';
 import { activeTab, setActivePaneInTab, splitPane, closePane, activePaneId } from '@/core/panes/signals';
 import { getPaneComponent } from './PaneRegistry';
 import type { PaneLeaf } from '@/core/panes/types';
+
+const TerminalSettings = lazy(() => import('./TerminalSettings'));
 
 interface PaneContainerProps {
   pane: PaneLeaf;
@@ -28,6 +30,8 @@ export function PaneContainer(props: PaneContainerProps) {
   const paneData = () => activeTab()?.panes[props.pane.id];
   const isActive = () => activePaneId() === props.pane.id;
   const PaneComponent = () => getPaneComponent(props.pane.paneType);
+  const [showSettings, setShowSettings] = createSignal(false);
+  const isTerminal = () => props.pane.paneType === 'terminal';
 
   const handleClick = () => {
     setActivePaneInTab(props.pane.id);
@@ -63,6 +67,16 @@ export function PaneContainer(props: PaneContainerProps) {
           </Show>
           <Show when={props.pane.paneType !== 'home'}>
             <div class={styles.paneHeaderActions}>
+              <Show when={isTerminal()}>
+                <button
+                  class={styles.paneHeaderButton}
+                  title="Terminal settings"
+                  onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings()); }}
+                  type="button"
+                >
+                  <Settings2 size={12} />
+                </button>
+              </Show>
               <button
                 class={styles.paneHeaderButton}
                 title="Split horizontally"
@@ -92,12 +106,19 @@ export function PaneContainer(props: PaneContainerProps) {
         </div>
       </Show>
 
+      {/* Terminal settings popover */}
+      <Show when={showSettings() && isTerminal()}>
+        <Suspense>
+          <TerminalSettings paneId={props.pane.id} onClose={() => setShowSettings(false)} />
+        </Suspense>
+      </Show>
+
       {/* Content */}
       <div class={styles.paneContent}>
         <Show when={PaneComponent()} fallback={<PlaceholderContent kind={props.pane.paneType} />}>
           {(Comp) => (
             <Suspense fallback={<PlaceholderContent />}>
-              <Dynamic component={Comp()} paneId={props.pane.id} cwd={paneData()?.data?.cwd as string ?? ''} sessionId={paneData()?.data?.sessionId as string ?? ''} command={paneData()?.data?.command as string ?? ''} />
+              <Dynamic component={Comp()} paneId={props.pane.id} cwd={paneData()?.data?.cwd as string ?? ''} worktreeId={paneData()?.data?.worktreeId as string ?? ''} projectId={paneData()?.data?.projectId as string ?? ''} sessionId={paneData()?.data?.sessionId as string ?? ''} command={paneData()?.data?.command as string ?? ''} restore={!!paneData()?.data?.restore} />
             </Suspense>
           )}
         </Show>

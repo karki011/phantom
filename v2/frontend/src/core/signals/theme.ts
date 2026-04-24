@@ -88,17 +88,17 @@ const [activeFontStyle, setActiveFontStyle] = createSignal<FontStyleId>('system'
 const fontStyleMap: Record<FontStyleId, { body: string; mono: string; display: string }> = {
   system: {
     body: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
-    mono: '"JetBrains Mono", "Fira Code", "SF Mono", monospace',
+    mono: '"Hack", "JetBrains Mono", "Fira Code", "SF Mono", monospace',
     display: '"SF Pro Display", system-ui, sans-serif',
   },
   mono: {
     body: '"JetBrains Mono", "Fira Code", monospace',
-    mono: '"JetBrains Mono", "Fira Code", "SF Mono", monospace',
+    mono: '"Hack", "JetBrains Mono", "Fira Code", "SF Mono", monospace',
     display: '"JetBrains Mono", "Fira Code", monospace',
   },
   gaming: {
     body: '"Orbitron", "Rajdhani", system-ui, sans-serif',
-    mono: '"Share Tech Mono", "JetBrains Mono", monospace',
+    mono: '"Hack", "Share Tech Mono", "JetBrains Mono", monospace',
     display: '"Orbitron", "Rajdhani", system-ui, sans-serif',
   },
 };

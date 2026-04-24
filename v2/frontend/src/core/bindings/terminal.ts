@@ -2,9 +2,16 @@
 
 const App = () => (window as any).go?.['app']?.App;
 
-export async function createTerminal(id: string, cwd: string, cols: number, rows: number): Promise<void> {
+export async function createTerminal(
+  id: string,
+  worktreeId: string,
+  projectId: string,
+  cwd: string,
+  cols: number,
+  rows: number,
+): Promise<void> {
   try {
-    await App()?.CreateTerminal(id, cwd, cols, rows);
+    await App()?.CreateTerminal(id, worktreeId, projectId, cwd, cols, rows);
   } catch (error) {
     console.error('[terminal] createTerminal failed', { id, error });
   }
@@ -28,6 +35,49 @@ export async function destroyTerminal(id: string): Promise<void> {
   try {
     await App()?.DestroyTerminal(id);
   } catch {}
+}
+
+export async function restoreTerminal(paneId: string): Promise<void> {
+  try {
+    await App()?.RestoreTerminal(paneId);
+  } catch (error) {
+    console.error('[terminal] restoreTerminal failed', { paneId, error });
+  }
+}
+
+export async function destroyTerminalsForWorktree(worktreeId: string): Promise<void> {
+  try {
+    await App()?.DestroyTerminalsForWorktree(worktreeId);
+  } catch (error) {
+    console.error('[terminal] destroyTerminalsForWorktree failed', { worktreeId, error });
+  }
+}
+
+export async function listTerminalsForWorktree(worktreeId: string): Promise<unknown[]> {
+  try {
+    return (await App()?.ListTerminalsForWorktree(worktreeId)) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export interface TerminalSnapshot {
+  pane_id: string;
+  worktree_id: string;
+  shell: string;
+  cwd: string;
+  cols: number;
+  rows: number;
+  scrollback: string;
+  last_active_at: number;
+}
+
+export async function getTerminalSnapshots(): Promise<TerminalSnapshot[]> {
+  try {
+    return (await App()?.GetTerminalSnapshots()) ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export async function getTerminalScrollback(id: string): Promise<string> {

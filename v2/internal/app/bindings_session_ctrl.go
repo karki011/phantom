@@ -73,3 +73,12 @@ func (a *App) GetSessionBranches(sessionID string) []session.BranchInfo {
 	}
 	return branches
 }
+
+// KillSession terminates a running Claude session by sending SIGTERM to its process group.
+func (a *App) KillSession(sessionID string) error {
+	if err := a.SessionCtrl.Kill(context.Background(), sessionID); err != nil {
+		log.Printf("app: KillSession %s: %v", sessionID, err)
+		return err
+	}
+	return nil
+}

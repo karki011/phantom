@@ -1,6 +1,6 @@
 // Author: Subash Karki
 
-import type { Session, Task, ActivityLog } from '../types';
+import type { Session, Task, ActivityLog, SessionState } from '../types';
 import { normalize } from './_normalize';
 
 const App = () => (window as any).go?.['app']?.App;
@@ -55,5 +55,30 @@ export async function getActivityLog(sessionId: string, limit: number): Promise<
     return normalize<ActivityLog[]>(raw);
   } catch {
     return [];
+  }
+}
+
+export async function pauseSession(sessionId: string): Promise<void> {
+  await App()?.PauseSession(sessionId);
+}
+
+export async function resumeSession(sessionId: string): Promise<void> {
+  await App()?.ResumeSession(sessionId);
+}
+
+export async function killSession(sessionId: string): Promise<void> {
+  await App()?.KillSession(sessionId);
+}
+
+export async function setSessionPolicy(sessionId: string, policy: string): Promise<void> {
+  await App()?.SetSessionPolicy(sessionId, policy);
+}
+
+export async function getSessionState(sessionId: string): Promise<SessionState | null> {
+  try {
+    const raw = await App()?.GetSessionState(sessionId);
+    return raw ? normalize<SessionState>(raw) : null;
+  } catch {
+    return null;
   }
 }

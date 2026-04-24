@@ -3,12 +3,14 @@
 
 import { createSignal, onMount } from 'solid-js';
 import { Switch as KobalteSwitch } from '@kobalte/core/switch';
-import { getPreference, setPreference } from '../../../core/bindings';
+import { getPreference } from '../../../core/bindings';
+import { setPref } from '../../../core/signals/preferences';
 import * as styles from '../SettingsDialog.css';
 
 export default function FeaturesSection() {
   const [gamification, setGamification] = createSignal(false);
   const [conciseMode, setConciseMode] = createSignal(false);
+  const [wardsEnabled, setWardsEnabled] = createSignal(false);
 
   onMount(async () => {
     const savedGamification = await getPreference('gamification');
@@ -16,16 +18,24 @@ export default function FeaturesSection() {
 
     const savedCaveman = await getPreference('caveman');
     if (savedCaveman === 'true') setConciseMode(true);
+
+    const savedWards = await getPreference('wards_enabled');
+    if (savedWards === 'true') setWardsEnabled(true);
   });
 
   function handleGamificationChange(checked: boolean) {
     setGamification(checked);
-    void setPreference('gamification', String(checked));
+    void setPref('gamification', String(checked));
   }
 
   function handleConciseModeChange(checked: boolean) {
     setConciseMode(checked);
-    void setPreference('caveman', String(checked));
+    void setPref('caveman', String(checked));
+  }
+
+  function handleWardsChange(checked: boolean) {
+    setWardsEnabled(checked);
+    void setPref('wards_enabled', String(checked));
   }
 
   return (
@@ -65,6 +75,28 @@ export default function FeaturesSection() {
             class={styles.switchRoot}
             checked={conciseMode()}
             onChange={handleConciseModeChange}
+          >
+            <KobalteSwitch.Input />
+            <KobalteSwitch.Control class={styles.switchControl}>
+              <KobalteSwitch.Thumb class={styles.switchThumb} />
+            </KobalteSwitch.Control>
+          </KobalteSwitch>
+        </div>
+      </div>
+
+      {/* Ward System */}
+      <div class={styles.settingGroup}>
+        <div class={styles.settingRow}>
+          <div>
+            <div class={styles.settingLabel}>Ward System</div>
+            <div class={styles.settingDescription}>
+              Evaluate safety rules against Claude tool calls — block, confirm, or warn on risky operations
+            </div>
+          </div>
+          <KobalteSwitch
+            class={styles.switchRoot}
+            checked={wardsEnabled()}
+            onChange={handleWardsChange}
           >
             <KobalteSwitch.Input />
             <KobalteSwitch.Control class={styles.switchControl}>

@@ -15,11 +15,15 @@ interface Window {
         GetSession(id: string): Promise<import('./core/types').Session>;
         GetSessionTasks(sessionId: string): Promise<import('./core/types').Task[]>;
         GetActivityLog(sessionId: string, limit: number): Promise<import('./core/types').ActivityLog[]>;
-        CreateTerminal(id: string, cwd: string, cols: number, rows: number): Promise<void>;
+        CreateTerminal(id: string, worktreeId: string, projectId: string, cwd: string, cols: number, rows: number): Promise<void>;
         WriteTerminal(id: string, data: string): Promise<void>;
         ResizeTerminal(id: string, cols: number, rows: number): Promise<void>;
         DestroyTerminal(id: string): Promise<void>;
+        RestoreTerminal(paneId: string): Promise<void>;
+        DestroyTerminalsForWorktree(worktreeId: string): Promise<void>;
+        ListTerminalsForWorktree(worktreeId: string): Promise<unknown[]>;
         GetTerminalScrollback(id: string): Promise<string>;
+        GetTerminalSnapshots(): Promise<Array<{ pane_id: string; worktree_id: string; shell: string; cwd: string; cols: number; rows: number; scrollback: string; last_active_at: number }>>;
         GetProjects(): Promise<import('./core/types').Project[]>;
         AddProject(repoPath: string): Promise<import('./core/types').Project>;
         DetectProject(repoPath: string): Promise<import('./core/types').ProjectProfile>;

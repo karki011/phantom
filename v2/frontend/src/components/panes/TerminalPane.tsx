@@ -8,7 +8,6 @@ import { onMount, onCleanup, createSignal, createEffect, Show } from 'solid-js';
 import { TextField } from '@kobalte/core/text-field';
 import '@xterm/xterm/css/xterm.css';
 import * as termStyles from '@/styles/terminal.css';
-import { PhantomLoader } from '@/shared/PhantomLoader/PhantomLoader';
 import {
   createSession,
   attachSession,
@@ -18,6 +17,7 @@ import {
 } from '@/core/terminal/registry';
 import {
   createTerminal as createBackendTerminal,
+  restoreTerminal as restoreBackendTerminal,
   writeTerminal,
   writeBubbleteaProgram,
   resizeTerminal,
@@ -25,15 +25,20 @@ import {
   runTerminalCommand,
 } from '@/core/bindings';
 import { vars } from '@/styles/theme.css';
-import { currentMonoFont, activeFontStyle } from '@/core/signals/theme';
 
 interface TerminalPaneProps {
   paneId: string;
   cwd?: string;
+  /** Worktree ID this terminal belongs to (for session linking). */
+  worktreeId?: string;
+  /** Project ID this terminal belongs to (for session linking). */
+  projectId?: string;
   /** Present when rendered for a TUI pane — the Go-side session already exists. */
   sessionId?: string;
   /** Initial command to execute after the PTY is ready (plain terminal panes only). */
   command?: string;
+  /** When true, restore from saved scrollback instead of creating fresh PTY. */
+  restore?: boolean;
 }
 
 export default function TerminalPane(props: TerminalPaneProps) {
@@ -46,7 +51,6 @@ export default function TerminalPane(props: TerminalPaneProps) {
   const [showSearch, setShowSearch] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
   const isReattach = hasSession(sessionId);
-  const [loading, setLoading] = createSignal(!isReattach);
 
   onMount(async () => {
     // --- Reattach path: session already lives in the registry ---
@@ -73,10 +77,9 @@ export default function TerminalPane(props: TerminalPaneProps) {
     };
 
     const session = createSession(sessionId, {
-      fontFamily: currentMonoFont(),
       theme: {
         background: resolve(vars.color.terminalBg, '#0a0a1a'),
-        foreground: resolve(vars.color.terminalText, '#e0def4'),
+        foreground: resolve(vars.color.terminalText, '#c8c5d4'),
         cursor: resolve(vars.color.terminalCursor, '#b794f6'),
         selectionBackground: resolve(vars.color.terminalSelection, 'rgba(139,92,255,0.3)'),
       },
@@ -86,7 +89,30 @@ export default function TerminalPane(props: TerminalPaneProps) {
     attachSession(sessionId, containerRef);
 
     const { WebLinksAddon } = await import('@xterm/addon-web-links');
-    session.terminal.loadAddon(new WebLinksAddon());
+    const { openURL } = await import('@/core/bindings');
+    const linkTooltip = document.createElement('div');
+    Object.assign(linkTooltip.style, {
+      position: 'fixed', background: 'rgba(0,0,0,0.85)', color: '#e0def4',
+      padding: '3px 8px', borderRadius: '4px', fontSize: '12px',
+      pointerEvents: 'none', zIndex: '9999', display: 'none',
+      maxWidth: '400px', wordBreak: 'break-all',
+    });
+    document.body.appendChild(linkTooltip);
+    onCleanup(() => linkTooltip.remove());
+    session.terminal.loadAddon(new WebLinksAddon(
+      (_event, url) => openURL(url),
+      {
+        hover(event: MouseEvent, text: string) {
+          linkTooltip.textContent = text;
+          linkTooltip.style.display = 'block';
+          linkTooltip.style.left = `${event.clientX + 12}px`;
+          linkTooltip.style.top = `${event.clientY - 28}px`;
+        },
+        leave() {
+          linkTooltip.style.display = 'none';
+        },
+      },
+    ));
 
     const { SearchAddon } = await import('@xterm/addon-search');
     const searchAddon = new SearchAddon();
@@ -107,10 +133,39 @@ export default function TerminalPane(props: TerminalPaneProps) {
       void resizeTerminal(sessionId, cols, rows);
     });
 
-    // Create PTY on the Go side — skipped for TUI panes (PTY already exists)
+    // Wait for the container to be visible (non-zero dimensions) before
+    // creating the PTY. When a tab is created, SolidJS may render it with
+    // display:none initially — creating the PTY at that point gives wrong
+    // cols/rows and the terminal appears oversized.
+    const waitForVisible = (): Promise<void> => {
+      return new Promise((resolve) => {
+        if (containerRef.offsetWidth > 0 && containerRef.offsetHeight > 0) {
+          resolve();
+          return;
+        }
+        const io = new IntersectionObserver((entries) => {
+          if (entries.some((e) => e.isIntersecting)) {
+            io.disconnect();
+            requestAnimationFrame(() => resolve());
+          }
+        });
+        io.observe(containerRef);
+      });
+    };
+
+    await waitForVisible();
+
+    // Fit now that the container has real dimensions
+    try { session.fitAddon.fit(); } catch {}
+
+    // Create or restore PTY on the Go side — skipped for TUI panes (PTY already exists)
     if (!isTui) {
-      const { cols, rows } = session.terminal;
-      await createBackendTerminal(sessionId, props.cwd ?? '', cols, rows);
+      if (props.restore) {
+        await restoreBackendTerminal(sessionId);
+      } else {
+        const { cols, rows } = session.terminal;
+        await createBackendTerminal(sessionId, props.worktreeId ?? '', props.projectId ?? '', props.cwd ?? '', cols, rows);
+      }
     }
 
     // Subscribe to terminal output events emitted from Go via Wails runtime
@@ -120,8 +175,6 @@ export default function TerminalPane(props: TerminalPaneProps) {
         `terminal:${sessionId}:data`,
         (data: string) => {
           try {
-            // Go sends base64-encoded bytes — decode to Uint8Array so xterm
-            // receives raw bytes (UTF-8, ANSI sequences) without Latin1 corruption.
             const binary = atob(data);
             const bytes = new Uint8Array(binary.length);
             for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -131,7 +184,6 @@ export default function TerminalPane(props: TerminalPaneProps) {
           }
         },
       );
-      // Wails EventsOn returns a cleanup function
       if (typeof cleanup === 'function') {
         session.unsubscribe = cleanup;
       }
@@ -147,26 +199,44 @@ export default function TerminalPane(props: TerminalPaneProps) {
       /* first launch — no scrollback to restore */
     }
 
-    // Final fit, focus, and reveal (minimum 600ms so the loader animation is visible).
-    // Double-rAF ensures the browser has finished layout so xterm measures full width.
-    const mountedAt = performance.now();
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        try {
-          session.fitAddon.fit();
-          session.terminal.focus();
-        } catch {}
-        const elapsed = performance.now() - mountedAt;
-        const remaining = Math.max(0, 600 - elapsed);
-        setTimeout(async () => {
-          setLoading(false);
-          try { session.fitAddon.fit(); } catch {}
-          if (props.command) {
-            await runTerminalCommand(sessionId, props.command);
-          }
-        }, remaining);
-      }),
-    );
+    // Final fit, focus, and reveal
+    requestAnimationFrame(() => {
+      try {
+        session.fitAddon.fit();
+        session.terminal.focus();
+      } catch {}
+    });
+
+    // Wait for shell readiness before sending initial command.
+    // Matches v1 pattern: wait for prompt regex, 3 output chunks, or 2s timeout.
+    if (props.command) {
+      const command = props.command;
+      let outputCount = 0;
+      let sent = false;
+      const promptPattern = /[$#%>❯➜]\s*$/;
+
+      const sendCommand = () => {
+        if (sent) return;
+        sent = true;
+        session.terminal.onData(() => {}); // no-op to avoid leak
+        void runTerminalCommand(sessionId, command);
+      };
+
+      const disposable = session.terminal.onData((data: string) => {
+        if (sent) return;
+        outputCount++;
+        if (outputCount >= 3 || promptPattern.test(data)) {
+          disposable.dispose();
+          setTimeout(sendCommand, 100);
+        }
+      });
+
+      // Fallback: send after 2s regardless
+      setTimeout(() => {
+        disposable.dispose();
+        sendCommand();
+      }, 2000);
+    }
   });
 
   // ResizeObserver: refit xterm whenever the pane container resizes
@@ -183,15 +253,28 @@ export default function TerminalPane(props: TerminalPaneProps) {
     onCleanup(() => ro.disconnect());
   });
 
-  // Live font update: when the user switches font styles, push the new mono
-  // font-family directly into xterm.js options so the change is instant.
-  createEffect(() => {
-    const font = currentMonoFont(); // reactive — re-runs when activeFontStyle changes
-    const session = getSession(sessionId);
-    if (session) {
-      session.terminal.options.fontFamily = font;
-    }
+  // IntersectionObserver: refit when the terminal becomes visible (tab switch).
+  // Hides the container briefly to prevent a flash of wrong-sized content,
+  // then reveals after fit completes.
+  onMount(() => {
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          const session = getSession(sessionId);
+          if (session) {
+            containerRef.style.visibility = 'hidden';
+            requestAnimationFrame(() => {
+              try { session.fitAddon.fit(); } catch {}
+              containerRef.style.visibility = '';
+            });
+          }
+        }
+      }
+    });
+    io.observe(containerRef);
+    onCleanup(() => io.disconnect());
   });
+
 
   // Cmd+F: toggle search bar
   onMount(() => {
@@ -266,9 +349,6 @@ export default function TerminalPane(props: TerminalPaneProps) {
 
   return (
     <div class={termStyles.terminalWrapper}>
-      <Show when={loading()}>
-        <PhantomLoader message="Initializing terminal…" />
-      </Show>
       <div class={termStyles.terminalContainer} ref={containerRef!} />
       <Show when={showSearch()}>
         <div class={termStyles.searchBar}>

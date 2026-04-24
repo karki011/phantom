@@ -29,6 +29,9 @@ importers:
       '@xterm/xterm':
         specifier: ^6.0.0
         version: 6.0.0
+      hack-font:
+        specifier: ^3.3.0
+        version: 3.3.0
       lucide-solid:
         specifier: ^1.8.0
         version: 1.8.0(solid-js@1.9.12)
@@ -1031,6 +1034,9 @@ packages:
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
+
+  hack-font@3.3.0:
+    resolution: {integrity: sha512-RohrcAr3UaKiIoxDlOytCjObcUAucfFc6V5fKu6gBrvmvTfIXeBqZwR0Q5kb9qpbluThJWt326LClLKIGiFyug==}
 
   hey-listen@1.0.8:
     resolution: {integrity: sha512-COpmrF2NOg4TBWUJ5UVyaCU2A88wEMkUPK4hNqyCkqHbxT92BbvfjoSozkAIIm6XhicGlJHhFdullInrdhwU8Q==}
@@ -2265,6 +2271,8 @@ snapshots:
     optional: true
 
   gensync@1.0.0-beta.2: {}
+
+  hack-font@3.3.0: {}
 
   hey-listen@1.0.8: {}
 

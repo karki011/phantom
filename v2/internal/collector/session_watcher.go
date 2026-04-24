@@ -20,6 +20,14 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 )
 
+// terminalLinker is the subset of linker.Linker used by SessionWatcher.
+// Defined as an interface to avoid circular imports (collector → linker is fine,
+// but linker does not import collector).
+type terminalLinker interface {
+	LinkSessionToUnlinkedTerminals(ctx context.Context, sessionID, sessionCwd string, sessionPID int64) error
+	UnlinkSession(ctx context.Context, sessionID string) error
+}
+
 // SessionWatcher watches ~/.claude/sessions/ for session lifecycle events.
 type SessionWatcher struct {
 	queries   *db.Queries
@@ -27,6 +35,8 @@ type SessionWatcher struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	emitEvent func(name string, data interface{})
+	onActive  func(sessionID, jsonlPath string)
+	linker    terminalLinker
 
 	// debounce per-file fsnotify events
 	mu       sync.Mutex
@@ -52,6 +62,18 @@ func NewSessionWatcher(queries *db.Queries, emitEvent func(string, interface{}))
 
 func (sw *SessionWatcher) Name() string { return "session-watcher" }
 
+// SetOnActive registers a callback invoked when a session becomes active.
+// Used to auto-start JSONL tailing for safety evaluation.
+func (sw *SessionWatcher) SetOnActive(fn func(sessionID, jsonlPath string)) {
+	sw.onActive = fn
+}
+
+// SetLinker injects the terminal linker so the watcher can auto-link/unlink
+// terminals when sessions start, stop, or go stale.
+func (sw *SessionWatcher) SetLinker(l terminalLinker) {
+	sw.linker = l
+}
+
 // Start begins watching the sessions directory and launches background goroutines.
 func (sw *SessionWatcher) Start(ctx context.Context) error {
 	sw.ctx, sw.cancel = context.WithCancel(ctx)
@@ -74,6 +96,10 @@ func (sw *SessionWatcher) Start(ctx context.Context) error {
 
 	// Scan existing files on startup
 	sw.scanExisting(sessDir)
+
+	// Resurrect sessions whose PID is still alive but DB says completed.
+	// This handles app restarts where the Claude process outlived PhantomOS.
+	sw.resurrectAlive()
 
 	// fsnotify event loop
 	go sw.eventLoop()
@@ -335,6 +361,18 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 			"status":    status,
 		})
 	}
+
+	// Auto-start JSONL tailing for active sessions so the safety pipeline fires.
+	if status == "active" && sw.onActive != nil {
+		sw.onActive(sessionID, "")
+	}
+
+	// Best-effort: link unlinked terminals whose CWD matches this session.
+	if status == "active" && raw.Cwd != "" && sw.linker != nil {
+		if err := sw.linker.LinkSessionToUnlinkedTerminals(sw.ctx, sessionID, raw.Cwd, pid); err != nil {
+			slog.Warn("session_watcher: link terminals", "session_id", sessionID, "err", err)
+		}
+	}
 }
 
 // handleRemove marks a session as completed when its JSON file is removed.
@@ -353,6 +391,14 @@ func (sw *SessionWatcher) handleRemove(path string) {
 		slog.Error("session_watcher: mark removed session", "session_id", sessionID, "err", err)
 		return
 	}
+
+	// Unlink any terminals that were linked to this session.
+	if sw.linker != nil {
+		if err := sw.linker.UnlinkSession(sw.ctx, sessionID); err != nil {
+			slog.Warn("session_watcher: unlink terminals on remove", "session_id", sessionID, "err", err)
+		}
+	}
+
 	sw.emitEvent(EventSessionEnd, map[string]interface{}{
 		"sessionId": sessionID,
 		"reason":    "file_removed",
@@ -420,6 +466,14 @@ func (sw *SessionWatcher) checkStale() {
 				slog.Error("session_watcher: mark stale session", "session_id", s.ID, "err", err)
 				continue
 			}
+
+			// Unlink any terminals that were linked to this stale session.
+			if sw.linker != nil {
+				if err := sw.linker.UnlinkSession(sw.ctx, s.ID); err != nil {
+					slog.Warn("session_watcher: unlink terminals on stale", "session_id", s.ID, "err", err)
+				}
+			}
+
 			sw.emitEvent(EventSessionStale, map[string]interface{}{
 				"sessionId": s.ID,
 				"reason":    "pid_dead",
@@ -487,6 +541,48 @@ func (sw *SessionWatcher) pollContext() {
 			"sessionId":      s.ID,
 			"contextUsedPct": ctxData.ContextUsedPct,
 		})
+	}
+}
+
+// resurrectAlive re-checks recently completed sessions whose PIDs are still alive.
+// Handles the case where a Claude process outlives a PhantomOS restart.
+func (sw *SessionWatcher) resurrectAlive() {
+	completed, err := sw.queries.ListSessionsByStatus(sw.ctx, nullString("completed"))
+	if err != nil {
+		slog.Error("session_watcher: resurrectAlive: list completed", "err", err)
+		return
+	}
+
+	now := time.Now().Unix()
+	cutoff := now - 3600 // only check sessions completed within the last hour
+
+	for _, s := range completed {
+		if s.EndedAt.Valid && s.EndedAt.Int64 < cutoff {
+			continue
+		}
+		if !s.Pid.Valid || s.Pid.Int64 <= 0 {
+			continue
+		}
+		if err := syscall.Kill(int(s.Pid.Int64), 0); err != nil {
+			continue
+		}
+		// PID is alive — resurrect
+		slog.Info("session_watcher: resurrecting session", "session_id", s.ID, "pid", s.Pid.Int64)
+		if err := sw.queries.UpdateSessionStatus(sw.ctx, db.UpdateSessionStatusParams{
+			ID:      s.ID,
+			Status:  nullString("active"),
+			EndedAt: sql.NullInt64{},
+		}); err != nil {
+			slog.Error("session_watcher: resurrectAlive: update", "session_id", s.ID, "err", err)
+			continue
+		}
+		sw.emitEvent(EventSessionUpdate, map[string]interface{}{
+			"sessionId": s.ID,
+			"status":    "active",
+		})
+		if sw.onActive != nil {
+			sw.onActive(s.ID, "")
+		}
 	}
 }
 

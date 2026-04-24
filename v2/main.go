@@ -9,10 +9,13 @@ import (
 
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 
 	"github.com/subashkarki/phantom-os-v2/internal/app"
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
+	"github.com/subashkarki/phantom-os-v2/internal/linker"
 	"github.com/subashkarki/phantom-os-v2/internal/safety"
 	"github.com/subashkarki/phantom-os-v2/internal/session"
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
@@ -53,6 +56,12 @@ func main() {
 	a.SetDB(database)
 	a.SetTerminal(term)
 
+	// 5b. Create terminal-session linker.
+	lnk := linker.New(queries, term, func(name string, data interface{}) {
+		app.EmitEvent(a.Ctx(), name, data)
+	})
+	a.SetLinker(lnk)
+
 	// 6. Build collector registry with all 5 collectors.
 	//    emitEvent is a closure; it captures `a` but only calls EmitEvent after
 	//    Wails has called Startup (which sets a.Ctx()). Collectors are started
@@ -64,9 +73,11 @@ func main() {
 		log.Printf("phantomos: task completed session=%s task=%s", sessionID, taskID)
 	}
 
-	registry.Register(collector.NewSessionWatcher(queries, func(name string, data interface{}) {
+	sessionWatcher := collector.NewSessionWatcher(queries, func(name string, data interface{}) {
 		app.EmitEvent(a.Ctx(), name, data)
-	}))
+	})
+	sessionWatcher.SetLinker(lnk)
+	registry.Register(sessionWatcher)
 	registry.Register(collector.NewJSONLScanner(queries, func(name string, data interface{}) {
 		app.EmitEvent(a.Ctx(), name, data)
 	}))
@@ -90,10 +101,49 @@ func main() {
 	streamSvc := stream.NewService(database.Writer, emitFn)
 	a.SetStream(streamSvc)
 
+	// Auto-start JSONL tailing when session watcher discovers active sessions.
+	tailedSessions := make(map[string]bool)
+	var tailedMu sync.Mutex
+	sessionWatcher.SetOnActive(func(sessionID, _ string) {
+		tailedMu.Lock()
+		if tailedSessions[sessionID] {
+			tailedMu.Unlock()
+			return
+		}
+		tailedSessions[sessionID] = true
+		tailedMu.Unlock()
+
+		h, _ := os.UserHomeDir()
+		projectsRoot := filepath.Join(h, ".claude", "projects")
+		target := sessionID + ".jsonl"
+		var jsonlPath string
+		_ = filepath.WalkDir(projectsRoot, func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			if strings.EqualFold(d.Name(), target) {
+				jsonlPath = p
+				return filepath.SkipAll
+			}
+			return nil
+		})
+		if jsonlPath == "" {
+			tailedMu.Lock()
+			delete(tailedSessions, sessionID)
+			tailedMu.Unlock()
+			return
+		}
+		log.Printf("phantomos: auto-tailing session %s", sessionID)
+		if err := streamSvc.StartTailing(a.Ctx(), sessionID, jsonlPath); err != nil {
+			log.Printf("phantomos: auto-tail %s: %v", sessionID, err)
+		}
+	})
+
 	// 8. Create safety service (YAML ward rules + audit).
 	home, _ := os.UserHomeDir()
 	wardsDir := filepath.Join(home, ".phantom-os", "wards")
 	os.MkdirAll(wardsDir, 0o755)
+	safety.InstallDefaults(wardsDir)
 	safetySvc, err := safety.NewService(wardsDir, database.Writer, emitFn)
 	if err != nil {
 		log.Printf("phantomos: safety service warning: %v", err)

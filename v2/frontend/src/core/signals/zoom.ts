@@ -7,10 +7,10 @@ import { setPref, loadPref } from './preferences';
 export const ZOOM_LEVELS = [
   { id: 'tiny',        label: 'Tiny',        scale: 0.75, terminalFontSize: 10 },
   { id: 'small',       label: 'Small',       scale: 0.85, terminalFontSize: 11 },
-  { id: 'default',     label: 'Default',     scale: 1.0,  terminalFontSize: 13 },
-  { id: 'large',       label: 'Large',       scale: 1.15, terminalFontSize: 15 },
-  { id: 'extra-large', label: 'Extra Large', scale: 1.3,  terminalFontSize: 17 },
-  { id: 'huge',        label: 'Huge',        scale: 1.5,  terminalFontSize: 19 },
+  { id: 'default',     label: 'Default',     scale: 1.0,  terminalFontSize: 12 },
+  { id: 'large',       label: 'Large',       scale: 1.15, terminalFontSize: 13 },
+  { id: 'extra-large', label: 'Extra Large', scale: 1.3,  terminalFontSize: 15 },
+  { id: 'huge',        label: 'Huge',        scale: 1.5,  terminalFontSize: 17 },
 ] as const;
 
 export type ZoomLevelId = typeof ZOOM_LEVELS[number]['id'];

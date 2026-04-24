@@ -9,7 +9,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { getZoomConfig } from '../signals/zoom';
 
-export const MONO_FONT_FAMILY = '"JetBrains Mono", "Fira Code", "SF Mono", monospace';
+export const MONO_FONT_FAMILY = '"Hack", monospace';
 
 export interface TerminalSession {
   terminal: Terminal;
@@ -47,18 +47,21 @@ export function createSession(
   const terminal = new Terminal({
     fontSize: getZoomConfig().terminalFontSize,
     fontFamily: opts?.fontFamily ?? MONO_FONT_FAMILY,
-    lineHeight: 1.4,
+    fontWeight: '300',
+    fontWeightBold: '400',
+    lineHeight: 1.18,
+    letterSpacing: 0.2,
     cursorBlink: true,
     cursorStyle: 'bar',
     allowTransparency: true,
     theme: opts?.theme ?? {},
-    scrollback: 10000,
+    scrollback: 500,
   });
 
   const fitAddon = new FitAddon();
   terminal.loadAddon(fitAddon);
 
-  // Try WebGL renderer; fall back to canvas silently
+  // WebGL renderer for smooth scrolling and GPU-accelerated rendering.
   try {
     const webgl = new WebglAddon();
     webgl.onContextLoss(() => webgl.dispose());

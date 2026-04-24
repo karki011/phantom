@@ -3,6 +3,7 @@ rules:
     name: rm-outside-worktree
     level: block
     description: Prevents recursive deletion that escapes the worktree root via relative paths.
+    event_type: tool_use
     tool: Bash
     pattern: "rm\\s+-rf?\\s+\\.\\."
     message: "Delete escapes worktree root"
