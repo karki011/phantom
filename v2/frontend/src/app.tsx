@@ -6,13 +6,14 @@ import { shadowMonarchDarkTheme } from './styles/theme.css';
 import * as styles from './styles/app.css';
 import * as shellStyles from './styles/app-shell.css';
 import { bootstrapSessions } from './core/signals/sessions';
+import { bootstrapWards } from './core/signals/wards';
 import { bootstrapProjects } from './core/signals/projects';
 import { bootstrapApp, activeTopTab, activeWorktreeId } from './core/signals/app';
 import { loadPref } from './core/signals/preferences';
 import { initTheme, initFontStyle } from './core/signals/theme';
 import { initZoom } from './core/signals/zoom';
 import { OnboardingFlow } from './screens/onboarding';
-import { BootCeremony } from './screens/boot';
+import { BootScreen } from './screens/boot';
 import { playSound } from './core/audio/engine';
 import { SystemHeader } from './components/layout/SystemHeader';
 import { TopTabBar } from './components/layout/TopTabBar';
@@ -26,6 +27,7 @@ import { waitForWails } from './core/bindings/ready';
 import { ToastRegion } from './shared/Toast/Toast';
 import { SettingsDialog } from './shared/SettingsDialog/SettingsDialog';
 import { QuickOpen } from './shared/QuickOpen/QuickOpen';
+import { ApprovalModal } from './shared/ApprovalModal/ApprovalModal';
 
 export function App() {
   const [ready, setReady] = createSignal(false);
@@ -51,6 +53,7 @@ export function App() {
     bootstrapApp();
     bootstrapSessions();
     bootstrapProjects();
+    bootstrapWards();
     setReady(true);
 
     const cleanupShortcuts = registerKeyboardShortcuts();
@@ -73,6 +76,7 @@ export function App() {
   return (
     <div class={styles.appShell}>
       <ToastRegion />
+      <ApprovalModal />
       <SettingsDialog />
       <QuickOpen />
       <Show when={showOnboarding()}>
@@ -86,7 +90,7 @@ export function App() {
       </Show>
 
       <Show when={!showOnboarding() && !bootCeremonyDone()}>
-        <BootCeremony ready={ready} onComplete={() => setBootCeremonyDone(true)} />
+        <BootScreen ready={ready} onComplete={() => setBootCeremonyDone(true)} />
       </Show>
 
       <Show when={ready() && !showOnboarding() && bootCeremonyDone()}>
