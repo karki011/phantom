@@ -648,6 +648,58 @@ export const ciAnnotationMessage = style({
   overflow: 'hidden',
 });
 
+const aiGlow = keyframes({
+  '0%, 100%': {
+    textShadow: `0 0 8px ${vars.color.accentGlow}`,
+    opacity: 0.7,
+  },
+  '50%': {
+    textShadow: `0 0 20px ${vars.color.accent}, 0 0 40px ${vars.color.accentGlow}`,
+    opacity: 1,
+  },
+});
+
+const dotCycle = keyframes({
+  '0%': { content: '' },
+  '25%': { content: '.' },
+  '50%': { content: '..' },
+  '75%': { content: '...' },
+});
+
+export const aiCreatingPr = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  padding: `${vars.space.md} ${vars.space.lg}`,
+  borderRadius: vars.radius.md,
+  background: `color-mix(in srgb, ${vars.color.accent} 6%, ${vars.color.bgPrimary})`,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 25%, ${vars.color.border})`,
+  animation: `${aiGlow} 3s ease-in-out infinite`,
+});
+
+export const aiCreatingPrIcon = style({
+  fontSize: vars.fontSize.md,
+  filter: `drop-shadow(0 0 6px ${vars.color.accent})`,
+});
+
+export const aiCreatingPrText = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.accent,
+  letterSpacing: '0.06em',
+  fontWeight: 600,
+});
+
+export const aiCreatingPrDots = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.accent,
+  '::after': {
+    content: '',
+    animation: `${dotCycle} 1.5s steps(4, end) infinite`,
+  },
+});
+
 export const hunterBanner = style({
   display: 'flex',
   flexDirection: 'row',
