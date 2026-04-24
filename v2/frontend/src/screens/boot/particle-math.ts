@@ -1,5 +1,7 @@
 export type BootPhase = 'BURST' | 'CONVERGE' | 'CONFIRM' | 'DISMISS';
 
+export type ParticleColor = 'cyan' | 'green';
+
 export interface Particle {
   x: number;
   y: number;
@@ -8,6 +10,7 @@ export interface Particle {
   opacity: number;
   targetX: number;
   targetY: number;
+  color: ParticleColor;
 }
 
 const SPRING_STIFFNESS = 12;
@@ -18,7 +21,7 @@ const DISMISS_FADE = 2.5;
 export function createParticles(count: number): Particle[] {
   return Array.from({ length: count }, () => {
     const angle = Math.random() * Math.PI * 2;
-    const speed = 1.5 + Math.random() * 2.5;
+    const speed = 4 + Math.random() * 6;
     return {
       x: 0.5,
       y: 0.5,
@@ -27,6 +30,7 @@ export function createParticles(count: number): Particle[] {
       opacity: 1,
       targetX: 0.5,
       targetY: 0.5,
+      color: Math.random() < 0.3 ? 'green' : 'cyan',
     };
   });
 }
@@ -34,7 +38,7 @@ export function createParticles(count: number): Particle[] {
 export function computeGridTargets(count: number): Array<{ x: number; y: number }> {
   const cols = Math.ceil(Math.sqrt(count * 1.5));
   const rows = Math.ceil(count / cols);
-  const padding = 0.2;
+  const padding = 0.08;
   const xStep = (1 - 2 * padding) / Math.max(cols - 1, 1);
   const yStep = (1 - 2 * padding) / Math.max(rows - 1, 1);
   const targets: Array<{ x: number; y: number }> = [];

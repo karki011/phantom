@@ -73,6 +73,11 @@ export function ParticleCanvas(props: ParticleCanvasProps) {
         const px = p.x * w;
         const py = p.y * h;
 
+        const isCyan = p.color === 'cyan';
+        const core = isCyan ? '#00d4ff' : '#22c55e';
+        const glowInner = isCyan ? 'rgba(0, 212, 255, 0.4)' : 'rgba(34, 197, 94, 0.4)';
+        const glowOuter = isCyan ? 'rgba(0, 212, 255, 0)' : 'rgba(34, 197, 94, 0)';
+
         ctx!.globalAlpha = p.opacity * 0.25;
         ctx!.beginPath();
         ctx!.arc(px, py, radius * 3, 0, Math.PI * 2);
@@ -80,15 +85,15 @@ export function ParticleCanvas(props: ParticleCanvasProps) {
           px, py, radius,
           px, py, radius * 3,
         );
-        grad.addColorStop(0, 'rgba(0, 212, 255, 0.4)');
-        grad.addColorStop(1, 'rgba(0, 212, 255, 0)');
+        grad.addColorStop(0, glowInner);
+        grad.addColorStop(1, glowOuter);
         ctx!.fillStyle = grad;
         ctx!.fill();
 
         ctx!.globalAlpha = p.opacity;
         ctx!.beginPath();
         ctx!.arc(px, py, radius, 0, Math.PI * 2);
-        ctx!.fillStyle = '#00d4ff';
+        ctx!.fillStyle = core;
         ctx!.fill();
       }
       ctx!.globalAlpha = 1;
