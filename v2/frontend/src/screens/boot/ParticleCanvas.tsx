@@ -58,6 +58,20 @@ export function ParticleCanvas(props: ParticleCanvasProps) {
       p.targetY = targets[i].y;
     });
 
+    let mouseX = -1;
+    let mouseY = -1;
+    const REPEL_RADIUS = 0.08;
+    const REPEL_STRENGTH = 0.3;
+
+    function onMouseMove(e: MouseEvent) {
+      const rect = ref.getBoundingClientRect();
+      mouseX = (e.clientX - rect.left) / rect.width;
+      mouseY = (e.clientY - rect.top) / rect.height;
+    }
+    function onMouseLeave() { mouseX = -1; mouseY = -1; }
+    ref.addEventListener('mousemove', onMouseMove);
+    ref.addEventListener('mouseleave', onMouseLeave);
+
     let lastTime = performance.now();
     let animId = 0;
 
@@ -66,6 +80,19 @@ export function ParticleCanvas(props: ParticleCanvasProps) {
       lastTime = time;
 
       updateParticles(particles, props.phase(), dt);
+
+      if (mouseX >= 0 && (props.phase() === 'CONFIRM' || props.phase() === 'CONVERGE')) {
+        for (const p of particles) {
+          const dx = p.x - mouseX;
+          const dy = p.y - mouseY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < REPEL_RADIUS && dist > 0.001) {
+            const force = (1 - dist / REPEL_RADIUS) * REPEL_STRENGTH * dt;
+            p.x += (dx / dist) * force;
+            p.y += (dy / dist) * force;
+          }
+        }
+      }
 
       ctx!.clearRect(0, 0, w, h);
       for (const p of particles) {
@@ -106,6 +133,8 @@ export function ParticleCanvas(props: ParticleCanvasProps) {
     onCleanup(() => {
       cancelAnimationFrame(animId);
       ro.disconnect();
+      ref.removeEventListener('mousemove', onMouseMove);
+      ref.removeEventListener('mouseleave', onMouseLeave);
     });
   });
 

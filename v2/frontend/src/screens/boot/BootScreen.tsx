@@ -8,6 +8,7 @@ import { ConfirmationPanel } from './ConfirmationPanel';
 import {
   overlay,
   overlayDismiss,
+  greetingLine,
   nominalLine,
 } from './boot-screen.css';
 
@@ -16,11 +17,33 @@ interface BootScreenProps {
   onComplete: () => void;
 }
 
+const GREETINGS_DAY = [
+  'Systems primed. Ready for operations.',
+  'An operator returns.',
+  'All channels open. Standing by.',
+  'Diagnostics clear. Awaiting command.',
+  'Welcome back, Operator.',
+];
+const GREETINGS_NIGHT = [
+  'Night ops protocol engaged.',
+  'Running dark. All systems quiet.',
+  'Late shift detected. Minimal lighting.',
+  'Shadow mode active.',
+  'The system never sleeps.',
+];
+
+function pickGreeting(): string {
+  const hour = new Date().getHours();
+  const pool = hour >= 6 && hour < 22 ? GREETINGS_DAY : GREETINGS_NIGHT;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 export function BootScreen(props: BootScreenProps) {
   const [phase, setPhase] = createSignal<BootPhase>('BURST');
   const [scanResults, setScanResults] = createSignal<ScanResult[]>([]);
   const [confirmsDone, setConfirmsDone] = createSignal(false);
   const [showNominal, setShowNominal] = createSignal(false);
+  const [greeting] = createSignal(pickGreeting());
   const audio = useBootAudio();
 
   createEffect(() => {
@@ -47,6 +70,7 @@ export function BootScreen(props: BootScreenProps) {
   createEffect(() => {
     if (phase() === 'CONFIRM' && confirmsDone() && props.ready()) {
       setShowNominal(true);
+      audio.nominalChime();
       setTimeout(() => setPhase('DISMISS'), 800);
     }
   });
@@ -61,10 +85,12 @@ export function BootScreen(props: BootScreenProps) {
     <div class={phase() === 'DISMISS' ? overlayDismiss : overlay}>
       <ParticleCanvas phase={phase} />
       <Show when={phase() === 'CONFIRM' || phase() === 'DISMISS'}>
+        <div class={greetingLine}>{greeting()}</div>
         <ConfirmationPanel
           lines={confirmLines}
           active={() => phase() === 'CONFIRM'}
           onAllShown={() => setConfirmsDone(true)}
+          onLineShown={() => audio.scanBlip()}
         />
         <Show when={showNominal()}>
           <div class={nominalLine}>All systems nominal</div>

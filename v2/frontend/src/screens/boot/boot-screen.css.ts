@@ -91,6 +91,18 @@ export const pulsing = style({
   animation: `${pulse} 2s ease-in-out infinite`,
 });
 
+export const greetingLine = style({
+  position: 'relative',
+  zIndex: 1,
+  marginBottom: vars.space.sm,
+  fontFamily: vars.font.mono,
+  fontSize: `clamp(0.65rem, 1vw, 0.85rem)`,
+  color: vars.color.accentMuted,
+  textAlign: 'center',
+  letterSpacing: '0.05em',
+  animation: `${lineSlideIn} 400ms ease-out both`,
+});
+
 export const nominalLine = style({
   position: 'relative',
   zIndex: 1,

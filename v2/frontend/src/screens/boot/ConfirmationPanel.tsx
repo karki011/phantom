@@ -15,6 +15,7 @@ interface ConfirmationPanelProps {
   lines: () => ScanResult[];
   active: () => boolean;
   onAllShown: () => void;
+  onLineShown?: () => void;
 }
 
 function dotClass(status: ScanResult['status']): string {
@@ -40,6 +41,7 @@ export function ConfirmationPanel(props: ConfirmationPanelProps) {
     const interval = setInterval(() => {
       count++;
       setVisibleCount(count);
+      props.onLineShown?.();
       if (count >= total) {
         clearInterval(interval);
         props.onAllShown();
