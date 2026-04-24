@@ -2,6 +2,7 @@ import { createSignal, createEffect, onMount, Show } from 'solid-js';
 import type { BootPhase } from './particle-math';
 import type { ScanResult } from './scan-system';
 import { runSystemScans } from './scan-system';
+import { useBootAudio } from './use-boot-audio';
 import { ParticleCanvas } from './ParticleCanvas';
 import { ConfirmationPanel } from './ConfirmationPanel';
 import {
@@ -20,6 +21,11 @@ export function BootScreen(props: BootScreenProps) {
   const [scanResults, setScanResults] = createSignal<ScanResult[]>([]);
   const [confirmsDone, setConfirmsDone] = createSignal(false);
   const [showNominal, setShowNominal] = createSignal(false);
+  const audio = useBootAudio();
+
+  createEffect(() => {
+    audio.onPhase(phase());
+  });
 
   const confirmLines = (): ScanResult[] => [
     ...scanResults(),
