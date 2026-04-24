@@ -175,11 +175,12 @@ func ListOpenPrsForBase(ctx context.Context, repoPath, baseBranch string, limit 
 
 // ghCheckJSON is the raw JSON shape returned by `gh pr checks`.
 type ghCheckJSON struct {
-	Name     string `json:"name"`
-	State    string `json:"state"`    // SUCCESS, FAILURE, SKIPPED, PENDING, etc.
-	Bucket   string `json:"bucket"`   // pass, fail, pending, skipping
-	Link     string `json:"link"`
-	Workflow string `json:"workflow"`
+	Name        string `json:"name"`
+	State       string `json:"state"`    // SUCCESS, FAILURE, SKIPPED, PENDING, etc.
+	Bucket      string `json:"bucket"`   // pass, fail, pending, skipping
+	Link        string `json:"link"`
+	Workflow    string `json:"workflow"`
+	Description string `json:"description"`
 }
 
 // GetCiRuns returns CI check runs for the given branch's PR.
@@ -188,7 +189,7 @@ func GetCiRuns(ctx context.Context, repoPath, branch string) ([]CiRun, error) {
 	log.Info("git/GetCiRuns: called", "repoPath", repoPath, "branch", branch)
 
 	cmd := exec.CommandContext(ctx, "gh", "pr", "checks", branch,
-		"--json", "name,state,bucket,link,workflow",
+		"--json", "name,state,bucket,link,workflow,description",
 	)
 	cmd.Dir = repoPath
 	var stdout, stderr bytes.Buffer
@@ -215,15 +216,201 @@ func GetCiRuns(ctx context.Context, repoPath, branch string) ([]CiRun, error) {
 	for _, r := range raw {
 		conclusion := mapStateToConclusion(r.State)
 		runs = append(runs, CiRun{
-			Name:       r.Name,
-			Status:     mapBucketToStatus(r.Bucket),
-			Conclusion: conclusion,
-			URL:        r.Link,
-			Bucket:     r.Bucket,
+			Name:        r.Name,
+			Status:      mapBucketToStatus(r.Bucket),
+			Conclusion:  conclusion,
+			URL:         r.Link,
+			Bucket:      r.Bucket,
+			Workflow:    r.Workflow,
+			Description: r.Description,
 		})
 	}
 	log.Info("git/GetCiRuns: success", "count", len(runs))
 	return runs, nil
+}
+
+// GetCheckAnnotations fetches GitHub check annotations for a named check on the current HEAD commit.
+func GetCheckAnnotations(ctx context.Context, repoPath, branch, checkName string) ([]CheckAnnotation, error) {
+	log.Info("git/GetCheckAnnotations: called", "repoPath", repoPath, "checkName", checkName)
+
+	remote, err := GetRemoteURL(ctx, repoPath)
+	if err != nil {
+		return nil, fmt.Errorf("GetCheckAnnotations: remote: %w", err)
+	}
+	ownerRepo := parseOwnerRepo(remote)
+	if ownerRepo == "" {
+		return nil, fmt.Errorf("GetCheckAnnotations: cannot parse owner/repo from %s", remote)
+	}
+
+	sha, err := runGit(ctx, repoPath, "rev-parse", "HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("GetCheckAnnotations: rev-parse: %w", err)
+	}
+
+	apiPath := fmt.Sprintf("repos/%s/commits/%s/check-runs", ownerRepo, sha)
+	cmd := exec.CommandContext(ctx, "gh", "api", apiPath, "--jq",
+		fmt.Sprintf(".check_runs[] | select(.name == \"%s\") | .id", checkName))
+	cmd.Dir = repoPath
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		return nil, nil
+	}
+
+	checkRunID := strings.TrimSpace(stdout.String())
+	if checkRunID == "" {
+		return nil, nil
+	}
+
+	annotationsPath := fmt.Sprintf("repos/%s/check-runs/%s/annotations", ownerRepo, checkRunID)
+	annoCmd := exec.CommandContext(ctx, "gh", "api", annotationsPath)
+	annoCmd.Dir = repoPath
+	var annoOut bytes.Buffer
+	annoCmd.Stdout = &annoOut
+	if err := annoCmd.Run(); err != nil {
+		return nil, nil
+	}
+
+	var raw []CheckAnnotation
+	if err := json.Unmarshal(annoOut.Bytes(), &raw); err != nil {
+		return nil, fmt.Errorf("GetCheckAnnotations: json: %w", err)
+	}
+
+	log.Info("git/GetCheckAnnotations: success", "checkName", checkName, "count", len(raw))
+	return raw, nil
+}
+
+// GetFailedSteps extracts the run ID from a check's URL and fetches the failed step names.
+// URL format: https://github.com/{owner}/{repo}/actions/runs/{runId}/job/{jobId}
+func GetFailedSteps(ctx context.Context, repoPath, checkURL string) ([]FailedStep, error) {
+	log.Info("git/GetFailedSteps: called", "url", checkURL)
+
+	remote, err := GetRemoteURL(ctx, repoPath)
+	if err != nil {
+		return nil, fmt.Errorf("GetFailedSteps: remote: %w", err)
+	}
+	ownerRepo := parseOwnerRepo(remote)
+	if ownerRepo == "" {
+		return nil, nil
+	}
+
+	// Extract run ID and job ID from URL
+	// e.g., .../actions/runs/24844931140/job/72730063822
+	runID, jobID := parseRunJobFromURL(checkURL)
+	if runID == "" {
+		return nil, nil
+	}
+
+	apiPath := fmt.Sprintf("repos/%s/actions/runs/%s/jobs?per_page=100&filter=latest", ownerRepo, runID)
+	cmd := exec.CommandContext(ctx, "gh", "api", apiPath)
+	cmd.Dir = repoPath
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		log.Error("git/GetFailedSteps: api call failed", "err", err)
+		return nil, nil
+	}
+
+	var result struct {
+		Jobs []struct {
+			ID    int64 `json:"id"`
+			Steps []struct {
+				Name       string `json:"name"`
+				Number     int    `json:"number"`
+				Conclusion string `json:"conclusion"`
+			} `json:"steps"`
+		} `json:"jobs"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		return nil, nil
+	}
+
+	var matchedJobID int64
+	var steps []FailedStep
+	for _, job := range result.Jobs {
+		if jobID != "" && fmt.Sprintf("%d", job.ID) != jobID {
+			continue
+		}
+		matchedJobID = job.ID
+		for _, step := range job.Steps {
+			if step.Conclusion == "failure" {
+				steps = append(steps, FailedStep{Name: step.Name, Number: step.Number})
+			}
+		}
+		if jobID != "" {
+			break
+		}
+	}
+
+	if matchedJobID != 0 && len(steps) > 0 {
+		errors := fetchJobErrors(ctx, repoPath, ownerRepo, matchedJobID)
+		if len(errors) > 0 {
+			for i := range steps {
+				steps[i].Errors = errors
+			}
+		}
+	}
+
+	log.Info("git/GetFailedSteps: success", "count", len(steps))
+	return steps, nil
+}
+
+func fetchJobErrors(ctx context.Context, repoPath, ownerRepo string, jobID int64) []string {
+	logsPath := fmt.Sprintf("repos/%s/actions/jobs/%d/logs", ownerRepo, jobID)
+	cmd := exec.CommandContext(ctx, "gh", "api", logsPath)
+	cmd.Dir = repoPath
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		return nil
+	}
+
+	var errors []string
+	for _, line := range strings.Split(stdout.String(), "\n") {
+		if strings.Contains(line, "##[error]") {
+			msg := line[strings.Index(line, "##[error]")+9:]
+			msg = strings.TrimSpace(msg)
+			if msg != "" && !strings.HasPrefix(msg, "Process completed with exit code") {
+				errors = append(errors, msg)
+			}
+		}
+	}
+	if len(errors) > 5 {
+		errors = errors[:5]
+	}
+	return errors
+}
+
+func parseRunJobFromURL(checkURL string) (runID, jobID string) {
+	// .../actions/runs/12345/job/67890
+	idx := strings.Index(checkURL, "/actions/runs/")
+	if idx < 0 {
+		return "", ""
+	}
+	rest := checkURL[idx+len("/actions/runs/"):]
+	parts := strings.SplitN(rest, "/", 3)
+	runID = parts[0]
+	if len(parts) >= 3 && parts[1] == "job" {
+		jobID = parts[2]
+	}
+	return
+}
+
+func parseOwnerRepo(remoteURL string) string {
+	remoteURL = strings.TrimSuffix(remoteURL, ".git")
+	if strings.Contains(remoteURL, "github.com:") {
+		parts := strings.SplitN(remoteURL, "github.com:", 2)
+		if len(parts) == 2 {
+			return parts[1]
+		}
+	}
+	if strings.Contains(remoteURL, "github.com/") {
+		parts := strings.SplitN(remoteURL, "github.com/", 2)
+		if len(parts) == 2 {
+			return parts[1]
+		}
+	}
+	return ""
 }
 
 func mapStateToConclusion(state string) string {
@@ -252,34 +439,48 @@ func mapBucketToStatus(bucket string) string {
 	}
 }
 
-// CreatePrWithAI creates a GitHub PR using an AI-generated title and body.
-// It uses claude --print to generate the PR description from the diff and commits.
-// Falls back to the first commit message if claude is unavailable.
-// After creation, it fetches and returns the full PrStatus.
+// CreatePrWithAI stages uncommitted changes, commits with an AI message,
+// pushes to remote, and creates a GitHub PR with AI-generated title and body.
 func CreatePrWithAI(ctx context.Context, repoPath, branch, baseBranch string) (*PrStatus, error) {
 	log.Info("git/CreatePrWithAI: called", "repoPath", repoPath, "branch", branch, "baseBranch", baseBranch)
 
-	// Step 1: Get diff, truncated to 8000 chars.
+	// Step 1: Stage and commit any uncommitted changes.
+	status, _ := runGit(ctx, repoPath, "status", "--porcelain")
+	if strings.TrimSpace(status) != "" {
+		log.Info("git/CreatePrWithAI: staging uncommitted changes")
+		if _, err := runGit(ctx, repoPath, "add", "-A"); err != nil {
+			return nil, fmt.Errorf("CreatePrWithAI: git add: %w", err)
+		}
+
+		diffForCommit, _ := runGit(ctx, repoPath, "diff", "--cached", "--stat")
+		commitMsg := generateCommitMessage(ctx, diffForCommit)
+		if _, err := runGit(ctx, repoPath, "commit", "-m", commitMsg); err != nil {
+			return nil, fmt.Errorf("CreatePrWithAI: git commit: %w", err)
+		}
+		log.Info("git/CreatePrWithAI: committed", "msg", commitMsg)
+	}
+
+	// Step 2: Push to remote (set upstream if needed).
+	log.Info("git/CreatePrWithAI: pushing to remote")
+	if _, err := runGit(ctx, repoPath, "push", "-u", "origin", branch); err != nil {
+		return nil, fmt.Errorf("CreatePrWithAI: git push: %w", err)
+	}
+
+	// Step 3: Get diff and commits for PR content.
 	diffOut, err := runGit(ctx, repoPath, "diff", baseBranch+"...HEAD")
 	if err != nil {
-		log.Error("git/CreatePrWithAI: diff failed", "err", err)
 		diffOut = ""
 	}
 	if len(diffOut) > 8000 {
 		diffOut = diffOut[:8000]
 	}
 
-	// Step 2: Get commit log.
-	commitsOut, err := runGit(ctx, repoPath, "log", baseBranch+"..HEAD", "--oneline")
-	if err != nil {
-		log.Error("git/CreatePrWithAI: log failed", "err", err)
-		commitsOut = ""
-	}
+	commitsOut, _ := runGit(ctx, repoPath, "log", baseBranch+"..HEAD", "--oneline")
 
-	// Step 3: Generate PR content via claude.
+	// Step 4: Generate PR content via Claude.
 	title, body := generatePRContent(ctx, commitsOut, diffOut)
 
-	// Step 4: Create the PR via gh.
+	// Step 5: Create the PR.
 	log.Info("git/CreatePrWithAI: creating PR", "title", title, "baseBranch", baseBranch)
 	createCmd := exec.CommandContext(ctx, "gh", "pr", "create",
 		"--title", title,
@@ -297,21 +498,47 @@ func CreatePrWithAI(ctx context.Context, repoPath, branch, baseBranch string) (*
 	}
 	log.Info("git/CreatePrWithAI: PR created", "output", strings.TrimSpace(createStdout.String()))
 
-	// Step 5: Fetch and return full PR info.
+	// Step 6: Fetch and return full PR info.
 	pr, err := GetPrStatus(ctx, repoPath, branch)
 	if err != nil {
-		log.Error("git/CreatePrWithAI: GetPrStatus failed after create", "err", err)
 		return nil, fmt.Errorf("CreatePrWithAI: GetPrStatus: %w", err)
 	}
 	log.Info("git/CreatePrWithAI: success", "number", pr.Number)
 	return pr, nil
 }
 
-// generatePRContent uses claude --print to generate a PR title and body.
-// Falls back to first commit + full log if claude is unavailable or fails.
+func generateCommitMessage(ctx context.Context, diffStat string) string {
+	prompt := `Output ONLY a conventional commit message (type: description). No preamble, no explanation, no quotes. Examples: "feat: add user auth", "fix: resolve null pointer in parser", "chore: update dependencies"
+
+Changes:
+` + diffStat
+
+	cmd := exec.CommandContext(ctx, "claude", "--print", "-p", prompt)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &bytes.Buffer{}
+
+	if err := cmd.Run(); err != nil {
+		return "chore: update"
+	}
+	msg := strings.TrimSpace(strings.SplitN(out.String(), "\n", 2)[0])
+	if msg == "" {
+		return "chore: update"
+	}
+	return msg
+}
+
 func generatePRContent(ctx context.Context, commits, diff string) (title, body string) {
-	prompt := "Given these git changes, generate a PR title on the first line and a markdown PR body below. Be concise.\n\nCommits:\n" +
-		commits + "\n\nDiff (truncated):\n" + diff
+	prompt := `Output a GitHub PR title on line 1 and a markdown body starting on line 3. No preamble, no "Here's", no explanation — just the title and body directly.
+
+Title rules: under 70 chars, conventional format (feat/fix/chore: description), no quotes.
+Body rules: 2-5 bullet points summarizing what changed and why.
+
+Commits:
+` + commits + `
+
+Diff (truncated):
+` + diff
 
 	claudeCmd := exec.CommandContext(ctx, "claude", "--print", "-p", prompt)
 	var out bytes.Buffer
@@ -333,7 +560,6 @@ func generatePRContent(ctx context.Context, commits, diff string) (title, body s
 	}
 
 	if title == "" {
-		log.Info("git/generatePRContent: empty claude output, using fallback")
 		return fallbackPRContent(commits)
 	}
 

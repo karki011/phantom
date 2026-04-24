@@ -24,9 +24,14 @@ export const content = style({
   boxShadow: vars.shadow.md,
   zIndex: 200,
   animation: `${fadeIn} 150ms ease`,
-  maxWidth: '240px',
+  maxWidth: '300px',
+  maxHeight: '280px',
+  overflowY: 'auto',
   lineHeight: 1.4,
   whiteSpace: 'pre-line',
+  '::-webkit-scrollbar': { width: '4px' },
+  '::-webkit-scrollbar-thumb': { background: vars.color.border, borderRadius: '2px' },
+  '::-webkit-scrollbar-track': { background: 'transparent' },
 });
 
 export const arrow = style({

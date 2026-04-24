@@ -11,6 +11,30 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+// WatchWorktree sets the worktree the GitHub poller should track.
+// Called by the frontend whenever the active worktree changes.
+func (a *App) WatchWorktree(worktreeId string) {
+	a.watchedMu.Lock()
+	old := a.watchedWorktree
+	a.watchedWorktree = worktreeId
+	a.watchedMu.Unlock()
+
+	log.Info("app/WatchWorktree: watching", "worktreeId", worktreeId)
+
+	if a.gitWatcher != nil {
+		if old != "" && old != worktreeId {
+			if oldPath, err := a.resolveWorkspacePath(old); err == nil {
+				a.gitWatcher.UnwatchRepo(oldPath)
+			}
+		}
+		if worktreeId != "" {
+			if newPath, err := a.resolveWorkspacePath(worktreeId); err == nil {
+				a.gitWatcher.WatchRepo(newPath)
+			}
+		}
+	}
+}
+
 // IsGhAvailable returns true if the gh CLI is authenticated on this machine.
 func (a *App) IsGhAvailable() bool {
 	log.Info("app/IsGhAvailable: called")
@@ -64,6 +88,44 @@ func (a *App) GetCiRunsForWorkspace(worktreeId string) []git.CiRun {
 	return runs
 }
 
+func (a *App) GetCiRunsForBranch(worktreeId string, branch string) []git.CiRun {
+	log.Info("app/GetCiRunsForBranch: called", "worktreeId", worktreeId, "branch", branch)
+	repoPath, err := a.resolveWorkspacePath(worktreeId)
+	if err != nil {
+		log.Error("app/GetCiRunsForBranch: resolve failed", "err", err)
+		return nil
+	}
+	runs, err := git.GetCiRuns(a.ctx, repoPath, branch)
+	if err != nil {
+		log.Error("app/GetCiRunsForBranch: failed", "branch", branch, "err", err)
+		return nil
+	}
+	if runs == nil {
+		return []git.CiRun{}
+	}
+	log.Info("app/GetCiRunsForBranch: success", "branch", branch, "count", len(runs))
+	return runs
+}
+
+func (a *App) GetFailedSteps(worktreeId string, checkURL string) []git.FailedStep {
+	log.Info("app/GetFailedSteps: called", "worktreeId", worktreeId)
+	repoPath, err := a.resolveWorkspacePath(worktreeId)
+	if err != nil {
+		log.Error("app/GetFailedSteps: resolve failed", "err", err)
+		return []git.FailedStep{}
+	}
+	steps, err := git.GetFailedSteps(a.ctx, repoPath, checkURL)
+	if err != nil {
+		log.Error("app/GetFailedSteps: failed", "err", err)
+		return []git.FailedStep{}
+	}
+	if steps == nil {
+		return []git.FailedStep{}
+	}
+	log.Info("app/GetFailedSteps: success", "count", len(steps))
+	return steps
+}
+
 // CreatePrWithAIForWorkspace creates a GitHub PR for the workspace branch using AI-generated content.
 // On success, emits EventPrCreated and returns the new PrStatus.
 // Returns nil on error.
@@ -83,6 +145,11 @@ func (a *App) CreatePrWithAIForWorkspace(worktreeId string) *git.PrStatus {
 	}
 
 	wailsRuntime.EventsEmit(a.ctx, EventPrCreated, pr)
+	// Signal the poller to fetch immediately instead of waiting for the next tick.
+	select {
+	case a.prRefresh <- struct{}{}:
+	default:
+	}
 	log.Info("app/CreatePrWithAIForWorkspace: success", "worktreeId", worktreeId, "number", pr.Number)
 	return pr
 }
@@ -140,6 +207,26 @@ func (a *App) ListOpenPrsForWorkspace(worktreeId string, limit int) []git.PrStat
 	}
 	log.Info("app/ListOpenPrsForWorkspace: success", "count", len(prs))
 	return prs
+}
+
+// GetCheckAnnotations returns GitHub check annotations for a named check on the workspace's HEAD commit.
+func (a *App) GetCheckAnnotations(worktreeId string, checkName string) []git.CheckAnnotation {
+	log.Info("app/GetCheckAnnotations: called", "worktreeId", worktreeId, "checkName", checkName)
+	repoPath, branch, err := a.resolveRepoBranch(worktreeId)
+	if err != nil {
+		log.Error("app/GetCheckAnnotations: resolve failed", "err", err)
+		return []git.CheckAnnotation{}
+	}
+	annotations, err := git.GetCheckAnnotations(a.ctx, repoPath, branch, checkName)
+	if err != nil {
+		log.Error("app/GetCheckAnnotations: failed", "err", err)
+		return []git.CheckAnnotation{}
+	}
+	if annotations == nil {
+		return []git.CheckAnnotation{}
+	}
+	log.Info("app/GetCheckAnnotations: success", "count", len(annotations))
+	return annotations
 }
 
 // resolveBaseBranch returns the base branch for a workspace by consulting the project's

@@ -177,6 +177,34 @@ export const statusTitle = style({
   fontWeight: 400,
 });
 
+export const statusRefreshButton = style({
+  marginLeft: 'auto',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '5px',
+  padding: '3px 8px',
+  borderRadius: vars.radius.sm,
+  border: 'none',
+  background: 'transparent',
+  color: vars.color.textSecondary,
+  cursor: 'pointer',
+  transition: `all ${vars.animation.fast} ease`,
+  ':hover': {
+    color: vars.color.accent,
+    background: `color-mix(in srgb, ${vars.color.accent} 12%, transparent)`,
+  },
+  ':disabled': {
+    cursor: 'default',
+    opacity: 0.5,
+  },
+});
+
+export const statusRefreshLabel = style({
+  fontSize: vars.fontSize.xs,
+  fontFamily: vars.font.mono,
+  letterSpacing: '0.04em',
+});
+
 export const statusBranch = style({
   display: 'flex',
   flexDirection: 'row',
@@ -472,6 +500,152 @@ export const prCardMeta = style({
   flexShrink: 0,
   whiteSpace: 'nowrap',
   marginLeft: 'auto',
+});
+
+export const prCiIcon = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  flexShrink: 0,
+  cursor: 'default',
+});
+
+export const ciTooltipList = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '3px',
+});
+
+export const ciTooltipHeader = style({
+  fontSize: vars.fontSize.xs,
+  fontWeight: 600,
+  color: vars.color.textSecondary,
+  textTransform: 'uppercase',
+  letterSpacing: '0.08em',
+  marginBottom: '2px',
+});
+
+export const ciTooltipRow = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  fontSize: '0.65rem',
+  color: vars.color.textPrimary,
+  fontFamily: vars.font.mono,
+});
+
+export const ciTooltipName = style({
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  flex: 1,
+});
+
+export const ciTooltipStatus = style({
+  fontSize: '0.6rem',
+  color: vars.color.textDisabled,
+  flexShrink: 0,
+  whiteSpace: 'nowrap',
+});
+
+export const ciTooltipWorkflow = style({
+  fontSize: '0.6rem',
+  fontWeight: 600,
+  color: vars.color.textDisabled,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  marginTop: '4px',
+  paddingBottom: '2px',
+  borderBottom: `1px solid color-mix(in srgb, ${vars.color.border} 50%, transparent)`,
+});
+
+export const ciDescription = style({
+  fontSize: '0.6rem',
+  color: vars.color.textDisabled,
+  fontFamily: vars.font.mono,
+  fontStyle: 'italic',
+  paddingLeft: '16px',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+});
+
+export const ciFailureSection = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  borderRadius: vars.radius.md,
+  background: `color-mix(in srgb, ${vars.color.danger} 6%, ${vars.color.bgPrimary})`,
+  border: `1px solid color-mix(in srgb, ${vars.color.danger} 20%, ${vars.color.border})`,
+});
+
+export const ciFailureToggle = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  cursor: 'pointer',
+  fontSize: '0.65rem',
+  color: vars.color.danger,
+  fontFamily: vars.font.mono,
+  fontWeight: 600,
+  border: 'none',
+  background: 'none',
+  padding: 0,
+  width: '100%',
+  textAlign: 'left',
+});
+
+export const ciFailureChevron = style({
+  transition: `transform ${vars.animation.fast} ease`,
+  flexShrink: 0,
+});
+
+export const ciFailureChevronOpen = style({
+  transform: 'rotate(90deg)',
+});
+
+export const ciFailureItem = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '2px',
+  padding: `${vars.space.xs} 0`,
+  borderBottom: `1px solid color-mix(in srgb, ${vars.color.border} 30%, transparent)`,
+  selectors: {
+    '&:last-child': { borderBottom: 'none' },
+  },
+});
+
+export const ciFailureItemHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  fontSize: '0.65rem',
+  fontFamily: vars.font.mono,
+  color: vars.color.textPrimary,
+});
+
+export const ciAnnotation = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '1px',
+  paddingLeft: '16px',
+  fontSize: '0.6rem',
+  fontFamily: vars.font.mono,
+});
+
+export const ciAnnotationPath = style({
+  color: vars.color.accent,
+  cursor: 'pointer',
+  ':hover': {
+    textDecoration: 'underline',
+  },
+});
+
+export const ciAnnotationMessage = style({
+  color: vars.color.textSecondary,
+  whiteSpace: 'pre-wrap',
+  maxHeight: '60px',
+  overflow: 'hidden',
 });
 
 export const hunterBanner = style({

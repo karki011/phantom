@@ -11,6 +11,7 @@ import (
 
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
+	"github.com/subashkarki/phantom-os-v2/internal/git"
 	"github.com/subashkarki/phantom-os-v2/internal/safety"
 	"github.com/subashkarki/phantom-os-v2/internal/session"
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
@@ -36,6 +37,20 @@ type App struct {
 	// tuiSessions holds active Bubbletea PTY sessions keyed by session ID.
 	tuiSessions   map[string]*tui.Session
 	tuiSessionsMu sync.RWMutex
+
+	// watchedWorktree is the worktree ID the GitHub poller should track.
+	// Set by WatchWorktree when the frontend switches active worktree.
+	watchedWorktree string
+	watchedMu       sync.RWMutex
+
+	// prRefresh signals the GitHub poller to immediately re-fetch (e.g. on pr:created).
+	prRefresh chan struct{}
+
+	// branchRefresh signals the GitHub poller to immediately re-poll on branch change.
+	branchRefresh chan struct{}
+
+	// gitWatcher provides instant change detection via .git file watching.
+	gitWatcher *git.Watcher
 
 	// Services — injected before Startup via setter methods.
 	DB                *db.DB
@@ -87,6 +102,8 @@ func (a *App) Startup(ctx context.Context) {
 	a.ctx, a.cancel = context.WithCancel(ctx)
 	a.terminalSubs = make(map[string]context.CancelFunc)
 	a.tuiSessions = make(map[string]*tui.Session)
+	a.prRefresh = make(chan struct{}, 1)
+	a.branchRefresh = make(chan struct{}, 1)
 
 	// Start WebSocket hub and server.
 	a.wsHub = ws.NewHub()
@@ -123,6 +140,17 @@ func (a *App) Startup(ctx context.Context) {
 
 	// Start background git fetch — polls origin every 5 minutes.
 	go a.startBackgroundFetch()
+
+	// Start GitHub poller — emits pr:updated / ci:updated / prs:list-updated on change.
+	go a.startGitHubPoller()
+
+	// Start git filesystem watcher for instant change detection.
+	if gw, err := git.NewWatcher(a.ctx); err == nil {
+		a.gitWatcher = gw
+		go a.handleGitWatcherEvents()
+	} else {
+		log.Error("app: git watcher start failed", "err", err)
+	}
 }
 
 func (a *App) DomReady(ctx context.Context) {
@@ -132,9 +160,31 @@ func (a *App) DomReady(ctx context.Context) {
 	})
 }
 
+func (a *App) handleGitWatcherEvents() {
+	for event := range a.gitWatcher.Events() {
+		switch event.Type {
+		case git.GitEventBranchChanged:
+			wailsRuntime.EventsEmit(a.ctx, EventGitBranchChanged)
+			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+			select {
+			case a.branchRefresh <- struct{}{}:
+			default:
+			}
+		case git.GitEventIndexChanged:
+			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+		case git.GitEventStatusChanged:
+			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+		}
+	}
+}
+
 func (a *App) Shutdown(ctx context.Context) {
 	// Shutdown order: collectors → terminals → DB (reverse of startup).
 	// Collectors may flush writes during drain, so DB must stay open until last.
+
+	if a.gitWatcher != nil {
+		a.gitWatcher.Stop()
+	}
 
 	if a.collectorRegistry != nil {
 		a.collectorRegistry.StopAll()

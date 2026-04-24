@@ -1,7 +1,7 @@
 // PhantomOS v2 — Right sidebar with Files, Changes, and Activity tabs
 // Author: Subash Karki
 
-import { Show, createEffect, on, onCleanup } from 'solid-js';
+import { Show, createEffect, on } from 'solid-js';
 import { Tabs } from '@kobalte/core/tabs';
 import { activeWorktreeId } from '@/core/signals/app';
 import {
@@ -19,8 +19,9 @@ import {
   isCreatingPr,
   ghAvailable, setGhAvailable,
 } from '@/core/signals/activity';
-import { getPrStatus, getCiRuns, isGhCliAvailable } from '@/core/bindings';
+import { isGhCliAvailable, watchWorktree } from '@/core/bindings';
 import { onWailsEvent } from '@/core/events';
+import type { PrStatus, CiRun } from '@/core/types';
 import { FilesView } from './FilesView';
 import { ChangesView } from './ChangesView';
 import { GitActivityPanel } from './GitActivityPanel';
@@ -34,52 +35,24 @@ function setIfChanged<T>(current: () => T, setter: (v: T) => void, next: T) {
 let ghChecked = false;
 
 export function RightSidebar() {
-  createEffect(
-    on(activeWorktreeId, (wtId) => {
-      if (!wtId) return;
+  // Tell the Go poller which worktree to watch whenever it changes.
+  createEffect(on(activeWorktreeId, (wtId) => {
+    if (wtId) watchWorktree(wtId);
+  }));
 
-      let cancelled = false;
+  // One-shot gh CLI availability check.
+  if (!ghChecked) {
+    ghChecked = true;
+    isGhCliAvailable().then(setGhAvailable).catch(() => setGhAvailable(false));
+  }
 
-      setPrStatus(null);
-      setCiRuns(null);
-
-      if (!ghChecked) {
-        ghChecked = true;
-        isGhCliAvailable().then(setGhAvailable).catch(() => setGhAvailable(false));
-      }
-
-      function fetchPr() {
-        if (cancelled) return;
-        getPrStatus(wtId).then((v) => { if (!cancelled) setIfChanged(prStatus, setPrStatus, v); }).catch(() => {});
-      }
-
-      function fetchCi() {
-        if (cancelled) return;
-        getCiRuns(wtId).then((v) => { if (!cancelled) setIfChanged(ciRuns, setCiRuns, v); }).catch(() => {});
-      }
-
-      fetchPr();
-      fetchCi();
-
-      const prTimer = setInterval(fetchPr, 60_000);
-
-      let ciTimer: ReturnType<typeof setTimeout> | null = null;
-      function scheduleCi() {
-        if (cancelled) return;
-        const interval = ciRuns()?.some((r) => !r.conclusion || r.conclusion === '') ? 10_000 : 30_000;
-        ciTimer = setTimeout(() => { fetchCi(); scheduleCi(); }, interval);
-      }
-      scheduleCi();
-
-      onWailsEvent('pr:created', fetchPr);
-
-      onCleanup(() => {
-        cancelled = true;
-        clearInterval(prTimer);
-        if (ciTimer !== null) clearTimeout(ciTimer);
-      });
-    }),
-  );
+  // Backend pushes updates only when data changes.
+  onWailsEvent<PrStatus | null>('pr:updated', (pr) => {
+    setIfChanged(prStatus, setPrStatus, pr);
+  });
+  onWailsEvent<CiRun[]>('ci:updated', (runs) => {
+    setIfChanged(ciRuns, setCiRuns, runs);
+  });
 
   return (
     <Show when={activeWorktreeId() && !rightSidebarCollapsed()}>

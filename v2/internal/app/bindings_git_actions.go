@@ -277,6 +277,8 @@ func (a *App) RenameWorktree(worktreeId, newName string) error {
 }
 
 // GetWorkspaceStatus returns the full working-tree status for the workspace.
+// If the actual git branch differs from the DB record (e.g. branch switched via CLI),
+// it updates the DB and emits a worktree:updated event so the sidebar refreshes.
 func (a *App) GetWorkspaceStatus(workspaceId string) *git.RepoStatus {
 	log.Info("app/GetWorkspaceStatus: called", "workspaceId", workspaceId)
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
@@ -290,6 +292,28 @@ func (a *App) GetWorkspaceStatus(workspaceId string) *git.RepoStatus {
 		log.Error("app/GetWorkspaceStatus: GetRepoStatus error", "repoPath", repoPath, "err", err)
 		return nil
 	}
+
+	q := db.New(a.DB.Reader)
+	ws, dbErr := q.GetWorkspace(a.ctx, workspaceId)
+	if dbErr == nil && rs.Branch != "" && ws.Branch != rs.Branch {
+		log.Info("app/GetWorkspaceStatus: branch changed externally, updating DB", "old", ws.Branch, "new", rs.Branch)
+		wq := db.New(a.DB.Writer)
+		_ = wq.UpdateWorkspace(a.ctx, db.UpdateWorkspaceParams{
+			ID:           workspaceId,
+			Type:         ws.Type,
+			Name:         ws.Name,
+			Branch:       rs.Branch,
+			WorktreePath: ws.WorktreePath,
+			PortBase:     ws.PortBase,
+			SectionID:    ws.SectionID,
+			BaseBranch:   ws.BaseBranch,
+			TabOrder:     ws.TabOrder,
+			IsActive:     ws.IsActive,
+			TicketUrl:    ws.TicketUrl,
+		})
+		wailsRuntime.EventsEmit(a.ctx, EventWorktreeUpdated)
+	}
+
 	log.Info("app/GetWorkspaceStatus: success", "branch", rs.Branch, "staged", len(rs.Staged), "unstaged", len(rs.Unstaged), "untracked", len(rs.Untracked))
 	return rs
 }

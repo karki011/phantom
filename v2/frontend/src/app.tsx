@@ -12,6 +12,7 @@ import { loadPref } from './core/signals/preferences';
 import { initTheme, initFontStyle } from './core/signals/theme';
 import { initZoom } from './core/signals/zoom';
 import { OnboardingFlow } from './screens/onboarding';
+import { BootCeremony } from './screens/boot';
 import { playSound } from './core/audio/engine';
 import { SystemHeader } from './components/layout/SystemHeader';
 import { TopTabBar } from './components/layout/TopTabBar';
@@ -30,6 +31,7 @@ export function App() {
   const [ready, setReady] = createSignal(false);
   const [showOnboarding, setShowOnboarding] = createSignal(false);
   const [bootingUp, setBootingUp] = createSignal(false);
+  const [bootCeremonyDone, setBootCeremonyDone] = createSignal(false);
 
   onMount(async () => {
     document.body.classList.add(shadowMonarchDarkTheme);
@@ -62,6 +64,7 @@ export function App() {
 
   function handleOnboardingComplete() {
     setShowOnboarding(false);
+    setBootCeremonyDone(true);
     setBootingUp(true);
     playSound('reveal');
     setTimeout(() => setBootingUp(false), 1500);
@@ -82,7 +85,11 @@ export function App() {
         </div>
       </Show>
 
-      <Show when={ready() && !showOnboarding()}>
+      <Show when={!showOnboarding() && !bootCeremonyDone()}>
+        <BootCeremony ready={ready} onComplete={() => setBootCeremonyDone(true)} />
+      </Show>
+
+      <Show when={ready() && !showOnboarding() && bootCeremonyDone()}>
         <SystemHeader />
         <TopTabBar />
 
