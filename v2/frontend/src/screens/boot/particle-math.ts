@@ -21,7 +21,7 @@ const DISMISS_FADE = 2.5;
 export function createParticles(count: number): Particle[] {
   return Array.from({ length: count }, () => {
     const angle = Math.random() * Math.PI * 2;
-    const speed = 4 + Math.random() * 6;
+    const speed = 2 + Math.random() * 3;
     return {
       x: 0.5,
       y: 0.5,

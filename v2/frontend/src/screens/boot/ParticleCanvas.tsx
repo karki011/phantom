@@ -75,10 +75,10 @@ export function ParticleCanvas(props: ParticleCanvasProps) {
 
         const isCyan = p.color === 'cyan';
         const core = isCyan ? '#00d4ff' : '#22c55e';
-        const glowInner = isCyan ? 'rgba(0, 212, 255, 0.4)' : 'rgba(34, 197, 94, 0.4)';
+        const glowInner = isCyan ? 'rgba(0, 212, 255, 0.15)' : 'rgba(34, 197, 94, 0.15)';
         const glowOuter = isCyan ? 'rgba(0, 212, 255, 0)' : 'rgba(34, 197, 94, 0)';
 
-        ctx!.globalAlpha = p.opacity * 0.25;
+        ctx!.globalAlpha = p.opacity * 0.12;
         ctx!.beginPath();
         ctx!.arc(px, py, radius * 3, 0, Math.PI * 2);
         const grad = ctx!.createRadialGradient(
@@ -90,7 +90,7 @@ export function ParticleCanvas(props: ParticleCanvasProps) {
         ctx!.fillStyle = grad;
         ctx!.fill();
 
-        ctx!.globalAlpha = p.opacity;
+        ctx!.globalAlpha = p.opacity * 0.5;
         ctx!.beginPath();
         ctx!.arc(px, py, radius, 0, Math.PI * 2);
         ctx!.fillStyle = core;
