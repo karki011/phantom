@@ -333,9 +333,10 @@ export default function WorktreeHome() {
           {/* Feature branch: single PR or create button */}
           <Show when={!activityLoading() && !isDefaultBranch()}>
             <Show when={isCreatingPr()}>
-              <div class={styles.prCardRow}>
-                <LoaderCircle size={14} style={{ color: vars.color.accent, animation: 'spin 1s linear infinite' }} />
-                <span style={{ 'font-size': vars.fontSize.xs, color: vars.color.textSecondary }}>Claude is creating PR...</span>
+              <div class={styles.aiCreatingPr}>
+                <span class={styles.aiCreatingPrIcon}>⚡</span>
+                <span class={styles.aiCreatingPrText}>Claude is preparing your PR</span>
+                <span class={styles.aiCreatingPrDots} />
               </div>
             </Show>
 
@@ -395,8 +396,10 @@ export default function WorktreeHome() {
               </Show>
             </Show>
 
-            <Show when={!isCreatingPr() && !prStatus()}>
-              <span class={styles.activityEmpty}>No pull request for this branch</span>
+            <Show when={!isCreatingPr() && (!prStatus() || prStatus()?.state === 'MERGED' || prStatus()?.state === 'CLOSED')}>
+              <Show when={!prStatus()}>
+                <span class={styles.activityEmpty}>No pull request for this branch</span>
+              </Show>
               <button
                 type="button"
                 class={styles.createPrButtonCompact}
@@ -409,7 +412,7 @@ export default function WorktreeHome() {
                 }}
               >
                 <GitPullRequest size={12} />
-                Create PR with Claude
+                {prStatus()?.state === 'MERGED' || prStatus()?.state === 'CLOSED' ? 'Create New PR with Claude' : 'Create PR with Claude'}
               </button>
             </Show>
           </Show>
