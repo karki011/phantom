@@ -29,12 +29,17 @@ const (
 	EventTerminalData = "terminal:data"
 	EventTerminalExit = "terminal:exit"
 
-	EventGitStatus       = "git:status"
+	EventGitStatus        = "git:status"
+	EventGitBranchChanged = "git:branch-changed"
 	EventWorktreeCreated = "worktree:created"
 	EventWorktreeRemoved = "worktree:removed"
 	EventWorktreeUpdated = "worktree:updated"
 
 	EventPrCreated = "pr:created"
+
+	EventPrUpdated      = "pr:updated"       // payload: *git.PrStatus (nil if no PR)
+	EventCiUpdated      = "ci:updated"       // payload: []git.CiRun
+	EventPrsListUpdated = "prs:list-updated" // payload: []git.PrStatus
 )
 
 func EmitEvent(ctx context.Context, name string, data interface{}) {

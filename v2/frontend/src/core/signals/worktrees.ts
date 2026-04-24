@@ -88,6 +88,7 @@ export async function bootstrapWorktrees(): Promise<void> {
   onWailsEvent('worktree:removed', () => refreshAllWorktrees());
   onWailsEvent('worktree:updated', () => refreshAllWorktrees());
   onWailsEvent('git:status', () => refreshAllWorktrees());
+  onWailsEvent('git:branch-changed', () => refreshAllWorktrees());
 }
 
 // Toggle a project's expanded state
@@ -133,9 +134,14 @@ export async function removeWorktreeById(
 ): Promise<boolean> {
   const isActive = activeWorktreeId() === worktreeId;
 
+  if (isActive) {
+    setActiveWorktreeId(null);
+  }
+
   const ok = await removeWorktree(worktreeId);
   if (!ok) {
     console.error('[worktrees] removeWorktree failed for', worktreeId);
+    if (isActive) setActiveWorktreeId(worktreeId);
     return false;
   }
   clearWorktreeCache(worktreeId);

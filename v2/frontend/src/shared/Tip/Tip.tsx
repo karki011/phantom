@@ -6,7 +6,8 @@ import type { JSX } from 'solid-js';
 import * as styles from './Tip.css';
 
 interface TipProps {
-  label: string;
+  label?: string;
+  content?: JSX.Element;
   children: JSX.Element;
   openDelay?: number;
   placement?: 'top' | 'bottom' | 'left' | 'right';
@@ -21,7 +22,7 @@ export function Tip(props: TipProps) {
       <Tooltip.Portal>
         <Tooltip.Content class={styles.content}>
           <Tooltip.Arrow class={styles.arrow} />
-          {props.label}
+          {props.content ?? props.label}
         </Tooltip.Content>
       </Tooltip.Portal>
     </Tooltip>

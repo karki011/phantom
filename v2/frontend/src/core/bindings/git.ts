@@ -1,6 +1,6 @@
 // Author: Subash Karki
 
-import type { Workspace, RepoStatus, FileStatus, CommitInfo, FileEntry, PrStatus, CiRun } from '../types';
+import type { Workspace, RepoStatus, FileStatus, CommitInfo, FileEntry, PrStatus, CiRun, CheckAnnotation } from '../types';
 import { normalize } from './_normalize';
 
 const App = () => (window as any).go?.['app']?.App;
@@ -108,6 +108,18 @@ export async function getCiRuns(worktreeId: string): Promise<CiRun[] | null> {
   try { return (await App()?.GetCiRunsForWorkspace(worktreeId)) ?? null; } catch { return null; }
 }
 
+export async function getCiRunsForBranch(worktreeId: string, branch: string): Promise<CiRun[]> {
+  try { return (await App()?.GetCiRunsForBranch(worktreeId, branch)) ?? []; } catch { return []; }
+}
+
+export async function getCheckAnnotations(worktreeId: string, checkName: string): Promise<CheckAnnotation[]> {
+  try { return (await App()?.GetCheckAnnotations(worktreeId, checkName)) ?? []; } catch { return []; }
+}
+
+export async function getFailedSteps(worktreeId: string, checkURL: string): Promise<import('../types').FailedStep[]> {
+  try { return (await App()?.GetFailedSteps(worktreeId, checkURL)) ?? []; } catch { return []; }
+}
+
 export async function createPrWithAI(worktreeId: string): Promise<PrStatus | null> {
   try { return (await App()?.CreatePrWithAIForWorkspace(worktreeId)) ?? null; } catch { return null; }
 }
@@ -122,4 +134,8 @@ export async function getBranchCommits(worktreeId: string, branchOnly: boolean):
 
 export async function listOpenPrs(worktreeId: string, limit: number = 5): Promise<PrStatus[]> {
   try { return (await App()?.ListOpenPrsForWorkspace(worktreeId, limit)) ?? []; } catch { return []; }
+}
+
+export async function watchWorktree(worktreeId: string): Promise<void> {
+  try { await App()?.WatchWorktree(worktreeId); } catch {}
 }

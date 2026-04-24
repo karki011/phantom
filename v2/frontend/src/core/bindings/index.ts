@@ -29,9 +29,13 @@ export {
   searchWorkspaceFiles,
   getPrStatus,
   getCiRuns,
+  getCiRunsForBranch,
+  getCheckAnnotations,
+  getFailedSteps,
   createPrWithAI,
   isGhCliAvailable,
   getBranchCommits,
   listOpenPrs,
+  watchWorktree,
 } from './git';
 export { revealInFinder, openInFinder, openInDefaultApp, openURL } from './shell';

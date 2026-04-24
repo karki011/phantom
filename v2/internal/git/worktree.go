@@ -110,15 +110,15 @@ func Remove(ctx context.Context, worktreePath string) error {
 
 	// Try force remove
 	_, removeErr := runGit(ctx, mainRepo, "worktree", "remove", worktreePath, "--force")
-	if removeErr == nil {
-		return nil
+	if removeErr != nil {
+		// Fallback: manual directory removal
+		if err := os.RemoveAll(worktreePath); err != nil {
+			return fmt.Errorf("failed to remove worktree directory %s: %w (original error: %v)", worktreePath, err, removeErr)
+		}
 	}
 
-	// Fallback: prune + manual removal
+	// Always prune to clean up stale git worktree metadata
 	_, _ = runGit(ctx, mainRepo, "worktree", "prune")
-	if err := os.RemoveAll(worktreePath); err != nil {
-		return fmt.Errorf("failed to remove worktree directory %s: %w (original error: %v)", worktreePath, err, removeErr)
-	}
 
 	return nil
 }

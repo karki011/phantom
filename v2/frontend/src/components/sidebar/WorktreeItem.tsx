@@ -3,8 +3,8 @@
 
 import { Show, createSignal } from 'solid-js';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { Terminal, Trash2, GitBranch, GitFork, FolderOpen, ExternalLink, Clipboard, Pencil, RefreshCw, ArrowDownFromLine, ArrowUpFromLine, X } from 'lucide-solid';
-import { Tip } from '@/shared/Tip/Tip';
+import { Terminal, Trash2, GitBranch, GitFork, FolderOpen, ExternalLink, Clipboard, Pencil, RefreshCw, ArrowDownFromLine, ArrowUpFromLine, X, LoaderCircle } from 'lucide-solid';
+
 import * as styles from '@/styles/sidebar.css';
 import { activeWorktreeId } from '@/core/signals/app';
 import { selectWorktree, removeWorktreeById } from '@/core/signals/worktrees';
@@ -66,11 +66,14 @@ export function WorktreeItem(props: WorktreeItemProps) {
     }
   }
 
+  const [deleting, setDeleting] = createSignal(false);
+
   async function doDelete() {
     setShowDeleteConfirm(false);
-    console.log('[WorktreeItem] doDelete called', { projectId: props.projectId, worktreeId: props.worktree.id });
+    setDeleting(true);
+    showToast('Closing worktree', `Removing ${props.worktree.name}...`);
     const ok = await removeWorktreeById(props.projectId, props.worktree.id);
-    console.log('[WorktreeItem] removeWorktreeById result:', ok);
+    setDeleting(false);
     if (ok) {
       showToast('Worktree closed', props.worktree.name);
     } else {
@@ -79,23 +82,25 @@ export function WorktreeItem(props: WorktreeItemProps) {
   }
 
   return (
-    <Tip openDelay={400} label={tooltipLabel()}>
+    <>
     <ContextMenu>
       <ContextMenu.Trigger
         as="div"
         class={`${styles.worktreeItem}${isActive() ? ` ${styles.worktreeItemActive}` : ''}`}
         onClick={handleClick}
       >
-        {props.worktree.type === 'branch' ? (
-          <Tip label="Local branch"><GitBranch size={13} class={styles.worktreeIcon} /></Tip>
+        {deleting() ? (
+          <LoaderCircle size={13} class={styles.worktreeIcon} style={{ animation: 'spin 1s linear infinite' }} />
+        ) : props.worktree.type === 'branch' ? (
+          <GitBranch size={13} class={styles.worktreeIcon} />
         ) : (
-          <Tip label="Git worktree"><GitFork size={13} class={styles.worktreeIcon} /></Tip>
+          <GitFork size={13} class={styles.worktreeIcon} />
         )}
         <span class={styles.branchName}>
           {props.worktree.branch}
         </span>
         {props.hasActiveSession && (
-          <Tip label="Active session"><span class={styles.sessionDot} /></Tip>
+          <span class={styles.sessionDot} />
         )}
       </ContextMenu.Trigger>
 
@@ -232,6 +237,6 @@ export function WorktreeItem(props: WorktreeItemProps) {
         </button>
       </div>
     </PhantomModal>
-    </Tip>
+    </>
   );
 }

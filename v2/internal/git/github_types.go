@@ -22,9 +22,28 @@ type PrStatus struct {
 
 // CiRun holds metadata for a single CI check run on a pull request.
 type CiRun struct {
-	Name       string `json:"name"`
-	Status     string `json:"status"`     // in_progress, completed, queued
-	Conclusion string `json:"conclusion"` // success, failure, cancelled, ""
-	URL        string `json:"url"`
-	Bucket     string `json:"bucket"` // pass, fail, pending, skipping
+	Name        string `json:"name"`
+	Status      string `json:"status"`      // in_progress, completed, queued
+	Conclusion  string `json:"conclusion"`  // success, failure, cancelled, ""
+	URL         string `json:"url"`
+	Bucket      string `json:"bucket"`      // pass, fail, pending, skipping
+	Workflow    string `json:"workflow"`    // parent workflow name
+	Description string `json:"description"` // short failure reason from check
+}
+
+// CheckAnnotation holds a single annotation from a GitHub check run.
+type CheckAnnotation struct {
+	Path            string `json:"path"`
+	StartLine       int    `json:"start_line"`
+	EndLine         int    `json:"end_line"`
+	AnnotationLevel string `json:"annotation_level"` // warning, failure, notice
+	Title           string `json:"title"`
+	Message         string `json:"message"`
+}
+
+// FailedStep holds the name, number, and error lines of a failed step within a CI job.
+type FailedStep struct {
+	Name   string   `json:"name"`
+	Number int      `json:"number"`
+	Errors []string `json:"errors"`
 }

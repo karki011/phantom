@@ -186,4 +186,21 @@ export interface CiRun {
   conclusion: string;
   url: string;
   bucket: string;
+  workflow: string;
+  description: string;
+}
+
+export interface CheckAnnotation {
+  path: string;
+  start_line: number;
+  end_line: number;
+  annotation_level: string;
+  title: string;
+  message: string;
+}
+
+export interface FailedStep {
+  name: string;
+  number: number;
+  errors: string[];
 }

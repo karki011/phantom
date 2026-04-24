@@ -2,18 +2,19 @@
 // Author: Subash Karki
 
 import { createMemo, createSignal, createEffect, on, onCleanup, Show, For } from 'solid-js';
-import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle } from 'lucide-solid';
+import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw } from 'lucide-solid';
 import { activeWorktreeId } from '@/core/signals/app';
 import { worktreeMap } from '@/core/signals/worktrees';
 import { projects } from '@/core/signals/projects';
 import { addTabWithData } from '@/core/panes/signals';
 import { prStatus, setPrStatus, isCreatingPr, setIsCreatingPr, ghAvailable, setGhAvailable } from '@/core/signals/activity';
 import { NewWorktreeDialog } from '@/shared/NewWorktreeDialog/NewWorktreeDialog';
-import { getWorkspaceStatus, gitPull, gitPush, getPrStatus, getCiRuns, createPrWithAI, listOpenPrs, isGhCliAvailable } from '@/core/bindings';
+import { getWorkspaceStatus, gitPull, gitPush, getPrStatus, getCiRuns, getCiRunsForBranch, createPrWithAI, listOpenPrs, isGhCliAvailable, getCheckAnnotations, getFailedSteps } from '@/core/bindings';
 import { openURL } from '@/core/bindings/shell';
 import { showToast, showWarningToast } from '@/shared/Toast/Toast';
+import { Tip } from '@/shared/Tip/Tip';
 import { vars } from '@/styles/theme.css';
-import type { RepoStatus, PrStatus as PrStatusType, CiRun } from '@/core/types';
+import type { RepoStatus, PrStatus as PrStatusType, CiRun, CheckAnnotation, FailedStep } from '@/core/types';
 import * as styles from '@/styles/home.css';
 
 export default function WorktreeHome() {
@@ -39,6 +40,7 @@ export default function WorktreeHome() {
   const [ciSummary, setCiSummary] = createSignal<CiRun[] | null>(null);
   const [statusLoading, setStatusLoading] = createSignal(true);
   const [activityLoading, setActivityLoading] = createSignal(true);
+  const [refreshing, setRefreshing] = createSignal(false);
 
   const isDefaultBranch = createMemo(() => {
     const wt = activeWorktree();
@@ -46,6 +48,28 @@ export default function WorktreeHome() {
     if (!wt || !proj) return false;
     return wt.branch === (proj.default_branch ?? 'main');
   });
+
+  async function refreshAll() {
+    const wtId = activeWorktreeId();
+    if (!wtId || refreshing()) return;
+    setRefreshing(true);
+
+    const statusPromise = getWorkspaceStatus(wtId).then(setRepoStatus);
+
+    const activityPromise = (async () => {
+      if (isDefaultBranch()) {
+        const prs = await listOpenPrs(wtId, 20);
+        setOpenPrs(prs);
+      } else {
+        const [pr, ci] = await Promise.all([getPrStatus(wtId), getCiRuns(wtId)]);
+        setPrStatus(pr);
+        setCiSummary(ci);
+      }
+    })();
+
+    await Promise.all([statusPromise, activityPromise]);
+    setRefreshing(false);
+  }
 
   createEffect(on(activeWorktreeId, (wtId) => {
     if (!wtId) { setRepoStatus(null); return; }
@@ -89,6 +113,77 @@ export default function WorktreeHome() {
     return `${days}d ago`;
   }
 
+  function ciStatusLabel(run: CiRun): string {
+    if (run.conclusion === 'success') return 'Passed';
+    if (run.conclusion === 'failure') return 'Failed';
+    if (run.conclusion === 'cancelled') return 'Cancelled';
+    if (run.conclusion === 'skipped') return 'Skipped';
+    if (run.status === 'in_progress') return 'Running';
+    if (run.status === 'queued') return 'Queued';
+    return 'Pending';
+  }
+
+  function ciRunColor(run: CiRun): string {
+    if (run.conclusion === 'success') return vars.color.success;
+    if (run.conclusion === 'failure') return vars.color.danger;
+    if (run.conclusion === 'skipped' || run.conclusion === 'cancelled') return vars.color.textDisabled;
+    return vars.color.warning;
+  }
+
+  function ciRunIcon(run: CiRun) {
+    if (run.conclusion === 'success') return CheckCircle;
+    if (run.conclusion === 'failure') return XCircle;
+    return LoaderCircle;
+  }
+
+  function buildCiTooltip(runs: CiRun[]) {
+    const grouped = new Map<string, CiRun[]>();
+    for (const run of runs) {
+      const wf = run.workflow || 'Checks';
+      if (!grouped.has(wf)) grouped.set(wf, []);
+      grouped.get(wf)!.push(run);
+    }
+    const singleWorkflow = grouped.size <= 1;
+
+    return (
+      <div class={styles.ciTooltipList}>
+        <span class={styles.ciTooltipHeader}>CI/CD Checks</span>
+        <For each={[...grouped.entries()]}>
+          {([workflow, wfRuns]) => (
+            <>
+              <Show when={!singleWorkflow}>
+                <span class={styles.ciTooltipWorkflow}>{workflow}</span>
+              </Show>
+              <For each={wfRuns}>
+                {(run) => {
+                  const Icon = ciRunIcon(run);
+                  const color = ciRunColor(run);
+                  const spinning = !run.conclusion || run.conclusion === '';
+                  return (
+                    <>
+                      <div class={styles.ciTooltipRow}>
+                        <Icon size={10} style={{
+                          color,
+                          'flex-shrink': '0',
+                          ...(spinning ? { animation: 'spin 1s linear infinite' } : {}),
+                        }} />
+                        <span class={styles.ciTooltipName}>{run.name}</span>
+                        <span class={styles.ciTooltipStatus} style={{ color }}>{ciStatusLabel(run)}</span>
+                      </div>
+                      <Show when={run.conclusion === 'failure' && run.description}>
+                        <div class={styles.ciDescription}>{run.description}</div>
+                      </Show>
+                    </>
+                  );
+                }}
+              </For>
+            </>
+          )}
+        </For>
+      </div>
+    );
+  }
+
   function prStateColor(pr: PrStatusType): string {
     if (pr.is_draft) return vars.color.textDisabled;
     if (pr.state === 'OPEN') return vars.color.success;
@@ -103,6 +198,17 @@ export default function WorktreeHome() {
         <div class={styles.statusHeader}>
           <span class={styles.statusIcon}><GitBranch size={14} /></span>
           <span class={styles.statusTitle}>Workspace Status</span>
+          <Tip label={refreshing() ? 'Refreshing...' : 'Refresh workspace status, PR, and CI data'} placement="bottom">
+            <button
+              type="button"
+              class={styles.statusRefreshButton}
+              onClick={refreshAll}
+              disabled={refreshing()}
+            >
+              <RefreshCw size={12} style={refreshing() ? { animation: 'spin 1s linear infinite' } : {}} />
+              <span class={styles.statusRefreshLabel}>{refreshing() ? 'Refreshing' : 'Refresh'}</span>
+            </button>
+          </Tip>
         </div>
 
         <div class={styles.statusBranch}>
@@ -151,12 +257,50 @@ export default function WorktreeHome() {
               <span class={styles.statusClean}>Clean · In sync</span>
             </Show>
           </div>
+
+          <Show when={!isDefaultBranch() && ciSummary()}>
+            {(runs) => {
+              const passed = () => runs().filter((r) => r.conclusion === 'success').length;
+              const failed = () => runs().filter((r) => r.conclusion === 'failure').length;
+              const pending = () => runs().filter((r) => !r.conclusion || r.conclusion === '').length;
+
+              return (
+                <div class={styles.statusGitInfo}>
+                  <Show when={failed() > 0}>
+                    <Tip content={buildCiTooltip(runs())}>
+                      <span class={styles.statusBadge} style={{ color: vars.color.danger, 'background-color': `color-mix(in srgb, ${vars.color.danger} 15%, transparent)` }}>
+                        <XCircle size={11} />{failed()} failed
+                      </span>
+                    </Tip>
+                  </Show>
+                  <Show when={failed() === 0 && pending() > 0}>
+                    <Tip content={buildCiTooltip(runs())}>
+                      <span class={styles.statusBadge} style={{ color: vars.color.warning, 'background-color': `color-mix(in srgb, ${vars.color.warning} 15%, transparent)` }}>
+                        <LoaderCircle size={11} style={{ animation: 'spin 1s linear infinite' }} />{pending()} pending
+                      </span>
+                    </Tip>
+                  </Show>
+                  <Show when={failed() === 0 && pending() === 0 && passed() > 0}>
+                    <Tip content={buildCiTooltip(runs())}>
+                      <span class={styles.statusBadge} style={{ color: vars.color.success, 'background-color': `color-mix(in srgb, ${vars.color.success} 15%, transparent)` }}>
+                        <CheckCircle size={11} />{passed()} passed
+                      </span>
+                    </Tip>
+                  </Show>
+                </div>
+              );
+            }}
+          </Show>
         </Show>
 
         <div class={styles.statusMeta}>
           {activeWorktree()?.type === 'branch' ? 'Local' : 'Worktree'}
+          <Show when={activeWorktree()?.base_branch}>
+            {' · from '}
+            <span style={{ color: vars.color.accent }}>{activeWorktree()!.base_branch}</span>
+          </Show>
           {' · '}
-          <span title={activeWorktree()?.worktree_path ?? ''}>{activeWorktree()?.worktree_path ?? '—'}</span>
+          <span>{activeWorktree()?.worktree_path ?? '—'}</span>
         </div>
 
         <Show when={ghAvailable()}>
@@ -180,33 +324,7 @@ export default function WorktreeHome() {
             >
               <div class={styles.prListScroll}>
                 <For each={openPrs()}>
-                  {(pr) => (
-                    <div class={styles.prCardCompact} onClick={() => openURL(pr.url)}>
-                      <div class={styles.prCardRow}>
-                        <span class={styles.prStateDotSmall} style={{ background: prStateColor(pr) }} />
-                        <span class={styles.prCardTitle}>{pr.title}</span>
-                        <span class={styles.prCardNumber}>#{pr.number}</span>
-                        <ExternalLink size={10} style={{ color: vars.color.textDisabled, 'flex-shrink': '0' }} />
-                      </div>
-                      <div class={styles.prCardRow}>
-                        <span class={styles.prCardBranch}>{pr.head_ref_name}</span>
-                        <span class={styles.prCardMeta}>
-                          <Show when={pr.checks_total > 0}>
-                            <span title={`${pr.checks_passed} passed · ${pr.checks_failed} failed · ${pr.checks_pending} pending`}>
-                              {pr.checks_failed > 0
-                                ? <XCircle size={9} style={{ color: vars.color.danger }} />
-                                : pr.checks_pending > 0
-                                ? <LoaderCircle size={9} style={{ color: vars.color.warning, animation: 'spin 1s linear infinite' }} />
-                                : <CheckCircle size={9} style={{ color: vars.color.success }} />
-                              }
-                            </span>
-                            {' · '}
-                          </Show>
-                          {pr.author} · {prAge(pr.created_at)}
-                        </span>
-                      </div>
-                    </div>
-                  )}
+                  {(pr) => <OpenPrCard pr={pr} prStateColor={prStateColor} prAge={prAge} buildCiTooltip={buildCiTooltip} />}
                 </For>
               </div>
             </Show>
@@ -245,21 +363,33 @@ export default function WorktreeHome() {
                   const passed = () => runs().filter((r) => r.conclusion === 'success').length;
                   const failed = () => runs().filter((r) => r.conclusion === 'failure').length;
                   const pending = () => runs().filter((r) => !r.conclusion || r.conclusion === '').length;
+                  const failedRuns = () => runs().filter((r) => r.conclusion === 'failure');
+                  const [expanded, setExpanded] = createSignal(false);
+
                   return (
-                    <div class={styles.prCardRow} style={{ 'margin-top': vars.space.xs }}>
-                      <Show when={failed() > 0}>
-                        <XCircle size={12} style={{ color: vars.color.danger }} />
-                        <span style={{ 'font-size': '0.65rem', color: vars.color.danger }}>{failed()} failed</span>
+                    <>
+                      <Show when={failedRuns().length > 0}>
+                        <div class={styles.ciFailureSection}>
+                          <button
+                            type="button"
+                            class={styles.ciFailureToggle}
+                            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded()); }}
+                          >
+                            <ChevronRight size={12}
+                              class={`${styles.ciFailureChevron} ${expanded() ? styles.ciFailureChevronOpen : ''}`}
+                            />
+                            <XCircle size={11} style={{ color: vars.color.danger }} />
+                            {failedRuns().length} failed check{failedRuns().length > 1 ? 's' : ''}
+                          </button>
+
+                          <Show when={expanded()}>
+                            <For each={failedRuns()}>
+                              {(run) => <FailedCheckItem run={run} />}
+                            </For>
+                          </Show>
+                        </div>
                       </Show>
-                      <Show when={failed() === 0 && pending() > 0}>
-                        <LoaderCircle size={12} style={{ color: vars.color.warning, animation: 'spin 1s linear infinite' }} />
-                        <span style={{ 'font-size': '0.65rem', color: vars.color.warning }}>{pending()} pending</span>
-                      </Show>
-                      <Show when={failed() === 0 && pending() === 0 && passed() > 0}>
-                        <CheckCircle size={12} style={{ color: vars.color.success }} />
-                        <span style={{ 'font-size': '0.65rem', color: vars.color.success }}>{passed()} passed</span>
-                      </Show>
-                    </div>
+                    </>
                   );
                 }}
               </Show>
@@ -367,6 +497,180 @@ export default function WorktreeHome() {
           defaultBranch={activeProject()!.default_branch ?? 'main'}
         />
       )}
+    </div>
+  );
+}
+
+function OpenPrCard(props: {
+  pr: PrStatusType;
+  prStateColor: (pr: PrStatusType) => string;
+  prAge: (iso: string) => string;
+  buildCiTooltip: (runs: CiRun[]) => any;
+}) {
+  const { pr } = props;
+  const [expanded, setExpanded] = createSignal(false);
+  const [failedRuns, setFailedRuns] = createSignal<CiRun[]>([]);
+  const [loadingRuns, setLoadingRuns] = createSignal(false);
+
+  async function toggleExpand(e: MouseEvent) {
+    e.stopPropagation();
+    if (expanded()) {
+      setExpanded(false);
+      return;
+    }
+    if (failedRuns().length === 0 && !loadingRuns()) {
+      setLoadingRuns(true);
+      const wtId = activeWorktreeId();
+      if (wtId) {
+        const runs = await getCiRunsForBranch(wtId, pr.head_ref_name);
+        setFailedRuns(runs.filter((r) => r.conclusion === 'failure'));
+      }
+      setLoadingRuns(false);
+    }
+    setExpanded(true);
+  }
+
+  return (
+    <div class={styles.prCardCompact}>
+      <div class={styles.prCardRow} onClick={() => openURL(pr.url)}>
+        <span class={styles.prStateDotSmall} style={{ background: props.prStateColor(pr) }} />
+        <Show when={pr.checks_total > 0}>
+          <Tip content={
+            <div class={styles.ciTooltipList}>
+              <span class={styles.ciTooltipHeader}>CI/CD Checks</span>
+              <Show when={pr.checks_passed > 0}>
+                <div class={styles.ciTooltipRow}>
+                  <CheckCircle size={10} style={{ color: vars.color.success, 'flex-shrink': '0' }} />
+                  <span class={styles.ciTooltipName}>{pr.checks_passed} passed</span>
+                </div>
+              </Show>
+              <Show when={pr.checks_failed > 0}>
+                <div class={styles.ciTooltipRow}>
+                  <XCircle size={10} style={{ color: vars.color.danger, 'flex-shrink': '0' }} />
+                  <span class={styles.ciTooltipName}>{pr.checks_failed} failed</span>
+                </div>
+              </Show>
+              <Show when={pr.checks_pending > 0}>
+                <div class={styles.ciTooltipRow}>
+                  <LoaderCircle size={10} style={{ color: vars.color.warning, 'flex-shrink': '0', animation: 'spin 1s linear infinite' }} />
+                  <span class={styles.ciTooltipName}>{pr.checks_pending} pending</span>
+                </div>
+              </Show>
+              <div class={styles.ciTooltipRow} style={{ 'margin-top': '2px', color: vars.color.textDisabled }}>
+                <span style={{ 'font-size': '0.55rem' }}>{pr.checks_total} total checks</span>
+              </div>
+            </div>
+          }>
+            <span class={styles.prCiIcon}>
+              {pr.checks_failed > 0
+                ? <XCircle size={10} style={{ color: vars.color.danger }} />
+                : pr.checks_pending > 0
+                ? <LoaderCircle size={10} style={{ color: vars.color.warning, animation: 'spin 1s linear infinite' }} />
+                : <CheckCircle size={10} style={{ color: vars.color.success }} />
+              }
+            </span>
+          </Tip>
+        </Show>
+        <span class={styles.prCardTitle}>{pr.title}</span>
+        <span class={styles.prCardNumber}>#{pr.number}</span>
+        <ExternalLink size={10} style={{ color: vars.color.textDisabled, 'flex-shrink': '0' }} />
+      </div>
+      <div class={styles.prCardRow} onClick={() => openURL(pr.url)}>
+        <span class={styles.prCardBranch}>{pr.head_ref_name}</span>
+        <span class={styles.prCardMeta}>{pr.author} · {props.prAge(pr.created_at)}</span>
+      </div>
+
+      <Show when={pr.checks_failed > 0}>
+        <div class={styles.ciFailureSection}>
+          <button
+            type="button"
+            class={styles.ciFailureToggle}
+            onClick={toggleExpand}
+          >
+            <ChevronRight size={12}
+              class={`${styles.ciFailureChevron} ${expanded() ? styles.ciFailureChevronOpen : ''}`}
+            />
+            <XCircle size={11} style={{ color: vars.color.danger }} />
+            {pr.checks_failed} failed check{pr.checks_failed > 1 ? 's' : ''}
+            <Show when={loadingRuns()}>
+              <LoaderCircle size={10} style={{ color: vars.color.textDisabled, animation: 'spin 1s linear infinite', 'margin-left': 'auto' }} />
+            </Show>
+          </button>
+
+          <Show when={expanded() && failedRuns().length > 0}>
+            <For each={failedRuns()}>
+              {(run) => <FailedCheckItem run={run} />}
+            </For>
+          </Show>
+        </div>
+      </Show>
+    </div>
+  );
+}
+
+function FailedCheckItem(props: { run: CiRun }) {
+  const [failedSteps, setFailedSteps] = createSignal<FailedStep[]>([]);
+  const [loaded, setLoaded] = createSignal(false);
+
+  const loadDetails = async () => {
+    if (loaded()) return;
+    const wtId = activeWorktreeId();
+    if (!wtId || !props.run.url) return;
+    const steps = await getFailedSteps(wtId, props.run.url);
+    setFailedSteps(steps);
+    setLoaded(true);
+  };
+
+  loadDetails();
+
+  return (
+    <div class={styles.ciFailureItem}>
+      <div
+        class={styles.ciFailureItemHeader}
+        style={{ cursor: props.run.url ? 'pointer' : 'default' }}
+        onClick={(e) => { e.stopPropagation(); if (props.run.url) openURL(props.run.url); }}
+      >
+        <XCircle size={10} style={{ color: vars.color.danger, 'flex-shrink': '0' }} />
+        <span style={{ flex: '1', overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap' }}>
+          {props.run.name}
+        </span>
+        <Show when={props.run.workflow}>
+          <span style={{ color: vars.color.textDisabled, 'font-size': '0.55rem' }}>{props.run.workflow}</span>
+        </Show>
+        <Show when={props.run.url}>
+          <ExternalLink size={9} style={{ color: vars.color.textDisabled, 'flex-shrink': '0' }} />
+        </Show>
+      </div>
+
+      <Show when={props.run.description}>
+        <div class={styles.ciDescription}>{props.run.description}</div>
+      </Show>
+
+      <Show when={failedSteps().length > 0}>
+        <div class={styles.ciAnnotation}>
+          <For each={failedSteps()}>
+            {(step) => (
+              <>
+                <div class={styles.ciTooltipRow}>
+                  <XCircle size={8} style={{ color: vars.color.danger, 'flex-shrink': '0' }} />
+                  <span style={{ 'font-size': '0.6rem', color: vars.color.textPrimary }}>Step {step.number}: {step.name}</span>
+                </div>
+                <Show when={step.errors?.length > 0}>
+                  <For each={step.errors}>
+                    {(err) => (
+                      <div class={styles.ciAnnotationMessage}>{err}</div>
+                    )}
+                  </For>
+                </Show>
+              </>
+            )}
+          </For>
+        </div>
+      </Show>
+
+      <Show when={loaded() && failedSteps().length === 0 && !props.run.description}>
+        <div class={styles.ciDescription}>Failed — open in GitHub for details</div>
+      </Show>
     </div>
   );
 }
