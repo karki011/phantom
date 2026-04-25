@@ -12,6 +12,8 @@ import { bootstrapApp, activeTopTab, activeWorktreeId } from './core/signals/app
 import { worktreeMap } from './core/signals/worktrees';
 import { loadPref } from './core/signals/preferences';
 import { initTheme, initFontStyle } from './core/signals/theme';
+import { initTerminalTheme } from './core/terminal/theme-manager';
+import { initTerminalPrefs } from './core/terminal/registry';
 import { initZoom } from './core/signals/zoom';
 import { OnboardingFlow } from './screens/onboarding';
 import { BootScreen } from './screens/boot';
@@ -45,6 +47,8 @@ export function App() {
     const savedFont = await loadPref('font_style');
     if (savedFont) initFontStyle(savedFont);
 
+    await initTerminalPrefs();
+    await initTerminalTheme();
     await initZoom();
 
     const onboardingDone = await loadPref('onboarding_completed');

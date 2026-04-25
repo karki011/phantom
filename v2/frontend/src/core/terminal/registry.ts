@@ -8,8 +8,36 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { getZoomConfig } from '../signals/zoom';
+import { loadPref } from '../signals/preferences';
 
 export const MONO_FONT_FAMILY = '"Hack", monospace';
+
+// Cached user terminal display prefs — loaded once at startup, applied to every new session.
+let userPrefs: {
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: string;
+  fontWeightBold?: string;
+  lineHeight?: number;
+  letterSpacing?: number;
+} = {};
+
+export async function initTerminalPrefs(): Promise<void> {
+  const [family, size, weight, bold, lh, ls] = await Promise.all([
+    loadPref('terminal_fontFamily'),
+    loadPref('terminal_fontSize'),
+    loadPref('terminal_fontWeight'),
+    loadPref('terminal_fontWeightBold'),
+    loadPref('terminal_lineHeight'),
+    loadPref('terminal_letterSpacing'),
+  ]);
+  if (family) userPrefs.fontFamily = `"${family}", monospace`;
+  if (size) userPrefs.fontSize = Number(size);
+  if (weight) userPrefs.fontWeight = weight;
+  if (bold) userPrefs.fontWeightBold = bold;
+  if (lh) userPrefs.lineHeight = Number(lh);
+  if (ls) userPrefs.letterSpacing = Number(ls);
+}
 
 export interface TerminalSession {
   terminal: Terminal;
@@ -45,12 +73,12 @@ export function createSession(
   if (sessions.has(sessionId)) return sessions.get(sessionId)!;
 
   const terminal = new Terminal({
-    fontSize: getZoomConfig().terminalFontSize,
-    fontFamily: opts?.fontFamily ?? MONO_FONT_FAMILY,
-    fontWeight: '300',
-    fontWeightBold: '400',
-    lineHeight: 1.18,
-    letterSpacing: 0.2,
+    fontSize: userPrefs.fontSize ?? getZoomConfig().terminalFontSize,
+    fontFamily: userPrefs.fontFamily ?? opts?.fontFamily ?? MONO_FONT_FAMILY,
+    fontWeight: userPrefs.fontWeight ?? '300',
+    fontWeightBold: userPrefs.fontWeightBold ?? '400',
+    lineHeight: userPrefs.lineHeight ?? 1.18,
+    letterSpacing: userPrefs.letterSpacing ?? 0.2,
     cursorBlink: true,
     cursorStyle: 'bar',
     allowTransparency: true,

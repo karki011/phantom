@@ -16,6 +16,7 @@ import {
   nordLightTheme,
 } from '../../styles/theme.css';
 import { getPref, setPref } from './preferences';
+import { vars } from '../../styles/theme.css';
 
 export type ThemeId =
   | 'system-core-dark'
@@ -56,6 +57,30 @@ export function applyTheme(theme: ThemeId): void {
   document.body.classList.add(themeClassMap[theme]);
   setActiveTheme(theme);
   void setPref('theme', theme);
+
+  // When the terminal is using "Use App Theme", re-resolve CSS vars after the
+  // theme class swap so existing terminals pick up the new app theme colors.
+  requestAnimationFrame(() => {
+    // Lazy import to avoid circular dependency at module init time
+    import('../terminal/theme-manager').then(({ refreshAppThemeTerminals, activeTerminalThemeId }) => {
+      // Import the constant separately to avoid pulling in the generated data eagerly
+      const APP_THEME_ID = '__app_theme__';
+      if (activeTerminalThemeId() !== APP_THEME_ID) return;
+
+      const cs = getComputedStyle(document.body);
+      const resolve = (cssVar: string, fallback: string): string => {
+        const raw = cssVar.replace(/^var\(/, '').replace(/\)$/, '');
+        return cs.getPropertyValue(raw).trim() || fallback;
+      };
+
+      refreshAppThemeTerminals({
+        background: resolve(vars.color.terminalBg, '#0a0a1a'),
+        foreground: resolve(vars.color.terminalText, '#e0def4'),
+        cursor: resolve(vars.color.terminalCursor, '#b794f6'),
+        selectionBackground: resolve(vars.color.terminalSelection, 'rgba(139,92,255,0.3)'),
+      });
+    });
+  });
 }
 
 export function initTheme(savedTheme: string): void {

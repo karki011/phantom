@@ -15,6 +15,7 @@ import {
   hasSession,
   getSession,
 } from '@/core/terminal/registry';
+import { activeTerminalThemeId, resolveTerminalTheme } from '@/core/terminal/theme-manager';
 import {
   createTerminal as createBackendTerminal,
   restoreTerminal as restoreBackendTerminal,
@@ -76,8 +77,9 @@ export default function TerminalPane(props: TerminalPaneProps) {
       return cs.getPropertyValue(raw).trim() || fallback;
     };
 
+    const explicitTheme = resolveTerminalTheme(activeTerminalThemeId());
     const session = createSession(sessionId, {
-      theme: {
+      theme: explicitTheme ?? {
         background: resolve(vars.color.terminalBg, '#0a0a1a'),
         foreground: resolve(vars.color.terminalText, '#c8c5d4'),
         cursor: resolve(vars.color.terminalCursor, '#b794f6'),

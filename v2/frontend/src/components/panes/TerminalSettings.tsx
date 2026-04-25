@@ -3,6 +3,8 @@
 import { createSignal } from 'solid-js';
 import { getSession } from '@/core/terminal/registry';
 import { setPref } from '@/core/signals/preferences';
+import { TERMINAL_THEMES, APP_THEME_DEFAULT_ID } from '@/core/terminal/themes';
+import { activeTerminalThemeId, applyTerminalTheme } from '@/core/terminal/theme-manager';
 
 interface TerminalSettingsProps {
   paneId: string;
@@ -58,6 +60,20 @@ export default function TerminalSettings(props: TerminalSettingsProps) {
   const session = () => getSession(props.paneId);
   const opts = () => session()?.terminal.options;
 
+  // Theme cycling — "Use App Theme" first, then all downloaded themes alphabetically
+  const themeList = [
+    { id: APP_THEME_DEFAULT_ID, name: 'Use App Theme' },
+    ...TERMINAL_THEMES.map((t) => ({ id: t.id, name: t.name })),
+  ];
+  const [themeIdx, setThemeIdx] = createSignal(
+    Math.max(0, themeList.findIndex((t) => t.id === activeTerminalThemeId())),
+  );
+  const cycleTheme = (dir: number) => {
+    const next = (themeIdx() + dir + themeList.length) % themeList.length;
+    setThemeIdx(next);
+    applyTerminalTheme(themeList[next].id);
+  };
+
   const FONTS = ['Hack', 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Menlo', 'Cascadia Code'] as const;
 
   const currentFont = () => {
@@ -70,6 +86,7 @@ export default function TerminalSettings(props: TerminalSettingsProps) {
   const [fontWeightBold, setFontWeightBold] = createSignal(Number(opts()?.fontWeightBold ?? DEFAULTS.fontWeightBold));
   const [lineHeight, setLineHeight] = createSignal(opts()?.lineHeight ?? DEFAULTS.lineHeight);
   const [letterSpacing, setLetterSpacing] = createSignal(opts()?.letterSpacing ?? DEFAULTS.letterSpacing);
+  const [brightness, setBrightness] = createSignal(90);
 
   const cycleFont = (dir: number) => {
     const next = (fontIdx() + dir + FONTS.length) % FONTS.length;
@@ -92,12 +109,23 @@ export default function TerminalSettings(props: TerminalSettingsProps) {
 
   const set = (setter: (v: number) => void, key: string) => (v: number) => { setter(v); apply(key, v); };
 
+  const applyBrightness = (pct: number) => {
+    setBrightness(pct);
+    const s = session();
+    if (!s) return;
+    const ratio = pct / 100;
+    const fg = `rgb(${Math.round(255 * ratio)}, ${Math.round(255 * ratio)}, ${Math.round(255 * ratio)})`;
+    s.terminal.options.theme = { ...s.terminal.options.theme, foreground: fg };
+    void setPref('terminal_brightness', String(pct));
+  };
+
   const reset = () => {
     set(setFontSize, 'fontSize')(DEFAULTS.fontSize);
     set(setFontWeight, 'fontWeight')(DEFAULTS.fontWeight);
     set(setFontWeightBold, 'fontWeightBold')(DEFAULTS.fontWeightBold);
     set(setLineHeight, 'lineHeight')(DEFAULTS.lineHeight);
     set(setLetterSpacing, 'letterSpacing')(DEFAULTS.letterSpacing);
+    applyBrightness(90);
   };
 
   type Row = { label: string; value: () => number; fmt: (v: number) => string; dec: () => void; inc: () => void };
@@ -133,6 +161,12 @@ export default function TerminalSettings(props: TerminalSettingsProps) {
       dec: () => set(setLetterSpacing, 'letterSpacing')(Math.max(-1, +(letterSpacing() - 0.1).toFixed(1))),
       inc: () => set(setLetterSpacing, 'letterSpacing')(Math.min(3, +(letterSpacing() + 0.1).toFixed(1))),
     },
+    {
+      label: 'Brightness', value: brightness,
+      fmt: (v) => `${v}%`,
+      dec: () => applyBrightness(Math.max(40, brightness() - 5)),
+      inc: () => applyBrightness(Math.min(100, brightness() + 5)),
+    },
   ];
 
   return (
@@ -140,6 +174,14 @@ export default function TerminalSettings(props: TerminalSettingsProps) {
       <div style={headerStyle}>
         <span>Terminal Display</span>
         <button style={resetStyle} onClick={reset} type="button">Reset</button>
+      </div>
+      <div style={rowStyle}>
+        <span>Theme</span>
+        <div style={controlStyle}>
+          <button style={btnStyle} onClick={() => cycleTheme(-1)} type="button">&#x2039;</button>
+          <span style={{ ...valStyle, 'min-width': '120px', 'font-size': '10px' }}>{themeList[themeIdx()].name}</span>
+          <button style={btnStyle} onClick={() => cycleTheme(1)} type="button">&#x203A;</button>
+        </div>
       </div>
       <div style={rowStyle}>
         <span>Font</span>
