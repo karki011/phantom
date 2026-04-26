@@ -207,7 +207,8 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
                   >
                     {type() === 'file' ? <FileText size={14} class={styles.fileIcon} /> : <Folder size={14} class={styles.fileIcon} />}
                     <input
-                      ref={(el: HTMLInputElement) => { inputRef = el; setTimeout(() => el.focus(), 0); }}
+                      autofocus
+                      ref={(el: HTMLInputElement) => { inputRef = el; requestAnimationFrame(() => requestAnimationFrame(() => el.focus())); }}
                       type="text"
                       placeholder={type() === 'file' ? 'filename' : 'folder name'}
                       style={{ background: 'var(--color-bg-input, #1a1a2e)', border: '1px solid var(--color-border-focus, #4a9eff)', color: 'inherit', 'font-size': '12px', padding: '1px 4px', 'border-radius': '3px', outline: 'none', flex: '1', 'min-width': '0' }}
