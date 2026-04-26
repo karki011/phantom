@@ -357,9 +357,9 @@ func (se *SessionEnricher) upsertDailyStats(ctx context.Context, date string, se
 	}
 	rows.Close()
 
-	// Determine project_id from session repo (nullable).
-	projectID := ""
-	if session.Repo.Valid {
+	// Determine project_id from session repo (default to '__global__').
+	projectID := "__global__"
+	if session.Repo.Valid && session.Repo.String != "" {
 		projectID = session.Repo.String
 	}
 
@@ -367,7 +367,7 @@ func (se *SessionEnricher) upsertDailyStats(ctx context.Context, date string, se
 	_, err = se.rawDB.ExecContext(ctx,
 		`INSERT INTO daily_stats (date, project_id, session_count, total_duration_secs, total_cost_micros, total_input_tokens, total_output_tokens, total_tool_calls, total_commits)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (date, COALESCE(project_id, '__global__')) DO UPDATE SET
+		ON CONFLICT (date, project_id) DO UPDATE SET
 			session_count = excluded.session_count,
 			total_duration_secs = excluded.total_duration_secs,
 			total_cost_micros = excluded.total_cost_micros,

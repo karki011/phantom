@@ -88,7 +88,7 @@ func sessionToJournalEntry(s db.Session) JournalEntry {
 func dailyStatsToEntry(s db.DailyStat) DailyStatsEntry {
 	return DailyStatsEntry{
 		Date:              s.Date,
-		ProjectID:         stringOrEmpty(s.ProjectID),
+		ProjectID:         s.ProjectID,
 		SessionCount:      int64OrZero(s.SessionCount),
 		TotalDuration:     int64OrZero(s.TotalDurationSecs),
 		TotalCostMicros:   int64OrZero(s.TotalCostMicros),
@@ -187,7 +187,7 @@ func (a *App) GetDailyStatsRangeByProject(startDate, endDate, projectId string) 
 	stats, err := q.ListDailyStatsRangeByProject(a.ctx, db.ListDailyStatsRangeByProjectParams{
 		Date:      startDate,
 		Date_2:    endDate,
-		ProjectID: sql.NullString{String: projectId, Valid: true},
+		ProjectID: projectId,
 	})
 	if err != nil {
 		log.Error("app/bindings_journal: ListDailyStatsRangeByProject", "start", startDate, "end", endDate, "project", projectId, "err", err)

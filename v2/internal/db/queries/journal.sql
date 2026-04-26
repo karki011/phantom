@@ -30,7 +30,7 @@ WHERE id = ?;
 -- name: UpsertDailyStats :exec
 INSERT INTO daily_stats (date, project_id, session_count, total_duration_secs, total_cost_micros, total_input_tokens, total_output_tokens, total_tool_calls, total_commits, pr_count, top_files)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (date, COALESCE(project_id, '__global__'))
+ON CONFLICT (date, project_id)
 DO UPDATE SET
     session_count = excluded.session_count,
     total_duration_secs = excluded.total_duration_secs,
@@ -43,10 +43,10 @@ DO UPDATE SET
     top_files = excluded.top_files;
 
 -- name: GetDailyStats :one
-SELECT * FROM daily_stats WHERE date = ? AND COALESCE(project_id, '__global__') = COALESCE(?, '__global__');
+SELECT * FROM daily_stats WHERE date = ? AND project_id = ?;
 
 -- name: ListDailyStatsRange :many
-SELECT * FROM daily_stats WHERE date BETWEEN ? AND ? AND project_id IS NULL ORDER BY date;
+SELECT * FROM daily_stats WHERE date BETWEEN ? AND ? AND project_id = '__global__' ORDER BY date;
 
 -- name: ListDailyStatsRangeByProject :many
 SELECT * FROM daily_stats WHERE date BETWEEN ? AND ? AND project_id = ? ORDER BY date;

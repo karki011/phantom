@@ -14,9 +14,10 @@ ALTER TABLE sessions ADD COLUMN pr_url TEXT;
 ALTER TABLE sessions ADD COLUMN pr_status TEXT;
 
 -- Daily stats for calendar view and rollups
+-- project_id defaults to '__global__' for app-wide rollups (SQLite disallows expressions in PK)
 CREATE TABLE IF NOT EXISTS daily_stats (
     date TEXT NOT NULL,
-    project_id TEXT,
+    project_id TEXT NOT NULL DEFAULT '__global__',
     session_count INTEGER DEFAULT 0,
     total_duration_secs INTEGER DEFAULT 0,
     total_cost_micros INTEGER DEFAULT 0,
@@ -26,7 +27,7 @@ CREATE TABLE IF NOT EXISTS daily_stats (
     total_commits INTEGER DEFAULT 0,
     pr_count INTEGER DEFAULT 0,
     top_files TEXT,
-    PRIMARY KEY (date, COALESCE(project_id, '__global__'))
+    PRIMARY KEY (date, project_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
