@@ -7,26 +7,16 @@ import {
   bootstrapJournal,
   daySessions,
   selectedDate,
-  setSelectedDate,
-  monthStats,
   resumeSession,
   loadDaySessions,
-  loadMonthStats,
   formatCost,
   formatDuration,
   parseFilesTouched,
 } from '@/core/signals/journal';
-import type { JournalEntry, DailyStats } from '@/core/types';
+import type { JournalEntry } from '@/core/types';
 import * as styles from '@/styles/journal.css';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-
-const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
-
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-] as const;
 
 const formatTime = (epochSecs: number | null): string => {
   if (!epochSecs) return '--:--';
@@ -71,15 +61,23 @@ const shortRepo = (repo: string | null): string => {
   return parts[parts.length - 1] ?? repo;
 };
 
-// ── Calendar helpers ────────────────────────────────────────────────────────
+// ── Date helpers ───────────────────────────────────────────────────────────
 
-const getDaysInMonth = (year: number, month: number): number =>
-  new Date(year, month, 0).getDate();
+const addDays = (dateStr: string, days: number): string => {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+};
 
-/** Monday-based day-of-week (0=Mon, 6=Sun) */
-const getStartDayOfMonth = (year: number, month: number): number => {
-  const d = new Date(year, month - 1, 1).getDay();
-  return d === 0 ? 6 : d - 1;
+const todayStr = (): string => new Date().toISOString().slice(0, 10);
+
+const formatDateLabel = (dateStr: string): string => {
+  const today = todayStr();
+  const yesterday = addDays(today, -1);
+  if (dateStr === today) return 'Today';
+  if (dateStr === yesterday) return 'Yesterday';
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 };
 
 // ── ResumeBar ───────────────────────────────────────────────────────────────
@@ -147,102 +145,44 @@ function ResumeBar() {
   );
 }
 
-// ── CalendarNav ─────────────────────────────────────────────────────────────
+// ── DatePagination ──────────────────────────────────────────────────────────
 
-function CalendarNav() {
-  const today = new Date();
-  const [viewYear, setViewYear] = createSignal(today.getFullYear());
-  const [viewMonth, setViewMonth] = createSignal(today.getMonth() + 1);
+function DatePagination() {
+  const isFuture = () => selectedDate() >= todayStr();
 
-  const todayStr = today.toISOString().slice(0, 10);
-
-  // Set of dates that have activity
-  const activeDates = createMemo(() => {
-    const set = new Set<string>();
-    for (const stat of monthStats()) {
-      if (stat.session_count > 0) set.add(stat.date);
-    }
-    return set;
-  });
-
-  const daysInMonth = createMemo(() => getDaysInMonth(viewYear(), viewMonth()));
-  const startDay = createMemo(() => getStartDayOfMonth(viewYear(), viewMonth()));
-
-  const navigate = (delta: number) => {
-    let m = viewMonth() + delta;
-    let y = viewYear();
-    if (m < 1) { m = 12; y -= 1; }
-    if (m > 12) { m = 1; y += 1; }
-    setViewMonth(m);
-    setViewYear(y);
-    void loadMonthStats(y, m);
-  };
-
-  const selectDay = (day: number) => {
-    const dateStr = `${viewYear()}-${String(viewMonth()).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    void loadDaySessions(dateStr);
-  };
+  const goBack = () => void loadDaySessions(addDays(selectedDate(), -1));
+  const goForward = () => { if (!isFuture()) void loadDaySessions(addDays(selectedDate(), 1)); };
+  const goToday = () => void loadDaySessions(todayStr());
 
   return (
-    <div class={styles.calendarContainer}>
-      {/* Month header with navigation */}
-      <div class={styles.calendarHeader}>
-        <button
-          class={styles.calendarNavButton}
-          type="button"
-          onClick={() => navigate(-1)}
-          aria-label="Previous month"
-        >
-          <ChevronLeft size={16} />
-        </button>
-        <span class={styles.calendarTitle}>
-          {MONTH_NAMES[viewMonth() - 1]} {viewYear()}
-        </span>
-        <button
-          class={styles.calendarNavButton}
-          type="button"
-          onClick={() => navigate(1)}
-          aria-label="Next month"
-        >
-          <ChevronRight size={16} />
-        </button>
-      </div>
-
-      {/* Weekday header */}
-      <div class={styles.calendarGrid}>
-        <For each={[...WEEKDAYS]}>
-          {(day) => <div class={styles.calendarWeekday}>{day}</div>}
-        </For>
-
-        {/* Empty cells before first day */}
-        <For each={Array.from({ length: startDay() })}>
-          {() => <div class={styles.calendarDayEmpty} />}
-        </For>
-
-        {/* Day cells */}
-        <For each={Array.from({ length: daysInMonth() }, (_, i) => i + 1)}>
-          {(day) => {
-            const dateStr = () =>
-              `${viewYear()}-${String(viewMonth()).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const isToday = () => dateStr() === todayStr;
-            const isSelected = () => dateStr() === selectedDate();
-            const hasActivity = () => activeDates().has(dateStr());
-            const isFuture = () => dateStr() > todayStr;
-
-            return (
-              <div
-                class={`${styles.calendarDay}${isToday() ? ` ${styles.calendarDayToday}` : ''}${isSelected() ? ` ${styles.calendarDaySelected}` : ''}${isFuture() ? ` ${styles.calendarDayDimmed}` : ''}${!hasActivity() && !isToday() && !isSelected() ? ` ${styles.calendarDayDimmed}` : ''}`}
-                onClick={() => !isFuture() && selectDay(day)}
-              >
-                {day}
-                <Show when={hasActivity()}>
-                  <span class={styles.calendarDayDot} />
-                </Show>
-              </div>
-            );
-          }}
-        </For>
-      </div>
+    <div class={styles.calendarHeader}>
+      <button class={styles.calendarNavButton} type="button" onClick={goBack} aria-label="Previous day">
+        <ChevronLeft size={16} />
+      </button>
+      <button
+        class={styles.calendarTitle}
+        type="button"
+        onClick={goToday}
+        title="Go to today"
+        style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'inherit', font: 'inherit' }}
+      >
+        {formatDateLabel(selectedDate())}
+        <Show when={selectedDate() !== todayStr()}>
+          <span style={{ 'font-size': '10px', opacity: '0.5', 'margin-left': '6px' }}>
+            {formatFullDate(selectedDate())}
+          </span>
+        </Show>
+      </button>
+      <button
+        class={styles.calendarNavButton}
+        type="button"
+        onClick={goForward}
+        aria-label="Next day"
+        style={{ opacity: isFuture() ? '0.3' : '1' }}
+        disabled={isFuture()}
+      >
+        <ChevronRight size={16} />
+      </button>
     </div>
   );
 }
@@ -497,8 +437,8 @@ export default function JournalPane() {
       {/* Resume Bar */}
       <ResumeBar />
 
-      {/* Calendar Navigation */}
-      <CalendarNav />
+      {/* Date Pagination */}
+      <DatePagination />
 
       {/* Day Header */}
       <DayHeader />
