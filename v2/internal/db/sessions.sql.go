@@ -98,7 +98,7 @@ func (q *Queries) DeleteSession(ctx context.Context, id string) error {
 
 const getSession = `-- name: GetSession :one
 
-SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct FROM sessions WHERE id = ?
+SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct, date, summary, outcome, files_touched, git_commits, git_lines_added, git_lines_removed, branch, pr_url, pr_status FROM sessions WHERE id = ?
 `
 
 // sessions.sql - CRUD operations for sessions table
@@ -132,12 +132,22 @@ func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 		&i.ToolBreakdown,
 		&i.LastInputTokens,
 		&i.ContextUsedPct,
+		&i.Date,
+		&i.Summary,
+		&i.Outcome,
+		&i.FilesTouched,
+		&i.GitCommits,
+		&i.GitLinesAdded,
+		&i.GitLinesRemoved,
+		&i.Branch,
+		&i.PrUrl,
+		&i.PrStatus,
 	)
 	return i, err
 }
 
 const listActiveSessions = `-- name: ListActiveSessions :many
-SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct FROM sessions WHERE status = 'active' ORDER BY started_at DESC
+SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct, date, summary, outcome, files_touched, git_commits, git_lines_added, git_lines_removed, branch, pr_url, pr_status FROM sessions WHERE status = 'active' ORDER BY started_at DESC
 `
 
 func (q *Queries) ListActiveSessions(ctx context.Context) ([]Session, error) {
@@ -175,6 +185,16 @@ func (q *Queries) ListActiveSessions(ctx context.Context) ([]Session, error) {
 			&i.ToolBreakdown,
 			&i.LastInputTokens,
 			&i.ContextUsedPct,
+			&i.Date,
+			&i.Summary,
+			&i.Outcome,
+			&i.FilesTouched,
+			&i.GitCommits,
+			&i.GitLinesAdded,
+			&i.GitLinesRemoved,
+			&i.Branch,
+			&i.PrUrl,
+			&i.PrStatus,
 		); err != nil {
 			return nil, err
 		}
@@ -190,7 +210,7 @@ func (q *Queries) ListActiveSessions(ctx context.Context) ([]Session, error) {
 }
 
 const listSessions = `-- name: ListSessions :many
-SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct FROM sessions ORDER BY started_at DESC
+SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct, date, summary, outcome, files_touched, git_commits, git_lines_added, git_lines_removed, branch, pr_url, pr_status FROM sessions ORDER BY started_at DESC
 `
 
 func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
@@ -228,6 +248,16 @@ func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
 			&i.ToolBreakdown,
 			&i.LastInputTokens,
 			&i.ContextUsedPct,
+			&i.Date,
+			&i.Summary,
+			&i.Outcome,
+			&i.FilesTouched,
+			&i.GitCommits,
+			&i.GitLinesAdded,
+			&i.GitLinesRemoved,
+			&i.Branch,
+			&i.PrUrl,
+			&i.PrStatus,
 		); err != nil {
 			return nil, err
 		}
@@ -243,7 +273,7 @@ func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
 }
 
 const listSessionsByStatus = `-- name: ListSessionsByStatus :many
-SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct FROM sessions WHERE status = ? ORDER BY started_at DESC
+SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct, date, summary, outcome, files_touched, git_commits, git_lines_added, git_lines_removed, branch, pr_url, pr_status FROM sessions WHERE status = ? ORDER BY started_at DESC
 `
 
 func (q *Queries) ListSessionsByStatus(ctx context.Context, status sql.NullString) ([]Session, error) {
@@ -281,6 +311,16 @@ func (q *Queries) ListSessionsByStatus(ctx context.Context, status sql.NullStrin
 			&i.ToolBreakdown,
 			&i.LastInputTokens,
 			&i.ContextUsedPct,
+			&i.Date,
+			&i.Summary,
+			&i.Outcome,
+			&i.FilesTouched,
+			&i.GitCommits,
+			&i.GitLinesAdded,
+			&i.GitLinesRemoved,
+			&i.Branch,
+			&i.PrUrl,
+			&i.PrStatus,
 		); err != nil {
 			return nil, err
 		}

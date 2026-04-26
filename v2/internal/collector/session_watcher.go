@@ -37,6 +37,7 @@ type SessionWatcher struct {
 	emitEvent func(name string, data interface{})
 	onActive  func(sessionID, jsonlPath string)
 	linker    terminalLinker
+	enricher  *SessionEnricher
 
 	// debounce per-file fsnotify events
 	mu       sync.Mutex
@@ -72,6 +73,12 @@ func (sw *SessionWatcher) SetOnActive(fn func(sessionID, jsonlPath string)) {
 // terminals when sessions start, stop, or go stale.
 func (sw *SessionWatcher) SetLinker(l terminalLinker) {
 	sw.linker = l
+}
+
+// SetEnricher injects the session enricher so completed sessions get
+// journal data (summary, files touched, git stats, daily aggregates).
+func (sw *SessionWatcher) SetEnricher(e *SessionEnricher) {
+	sw.enricher = e
 }
 
 // Start begins watching the sessions directory and launches background goroutines.
@@ -399,6 +406,11 @@ func (sw *SessionWatcher) handleRemove(path string) {
 		}
 	}
 
+	// Enrich session with journal data (summary, files, git stats).
+	if sw.enricher != nil {
+		go sw.enricher.EnrichSession(sw.ctx, sessionID)
+	}
+
 	sw.emitEvent(EventSessionEnd, map[string]interface{}{
 		"sessionId": sessionID,
 		"reason":    "file_removed",
@@ -472,6 +484,11 @@ func (sw *SessionWatcher) checkStale() {
 				if err := sw.linker.UnlinkSession(sw.ctx, s.ID); err != nil {
 					slog.Warn("session_watcher: unlink terminals on stale", "session_id", s.ID, "err", err)
 				}
+			}
+
+			// Enrich session with journal data (summary, files, git stats).
+			if sw.enricher != nil {
+				go sw.enricher.EnrichSession(sw.ctx, s.ID)
 			}
 
 			sw.emitEvent(EventSessionStale, map[string]interface{}{

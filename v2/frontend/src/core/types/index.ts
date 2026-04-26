@@ -241,3 +241,44 @@ export interface WardEvaluation {
   tool_input: string;
   outcome: string;
 }
+
+export interface JournalEntry {
+  id: string;
+  date: string | null;
+  summary: string | null;
+  outcome: string | null;
+  files_touched: string | null;
+  git_commits: number | null;
+  git_lines_added: number | null;
+  git_lines_removed: number | null;
+  branch: string | null;
+  pr_url: string | null;
+  pr_status: string | null;
+  model: string | null;
+  repo: string | null;
+  cwd: string | null;
+  started_at: number | null;
+  ended_at: number | null;
+  status: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  estimated_cost_micros: number | null;
+  message_count: number | null;
+  tool_use_count: number | null;
+  first_prompt: string | null;
+  tool_breakdown: string | null;
+}
+
+export interface DailyStats {
+  date: string;
+  project_id: string | null;
+  session_count: number;
+  total_duration_secs: number;
+  total_cost_micros: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_tool_calls: number;
+  total_commits: number;
+  pr_count: number;
+  top_files: string | null;
+}

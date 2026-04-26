@@ -16,6 +16,9 @@ const (
 	EventTaskNew        = "task:new"
 	EventTaskUpdate     = "task:update"
 
+	// Journal enrichment events.
+	EventJournalEnriched = "journal:enriched"
+
 	// Terminal lifecycle events (emitted by linker, listed here for discoverability).
 	EventTerminalLinked   = "terminal:linked"
 	EventTerminalUnlinked = "terminal:unlinked"

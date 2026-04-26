@@ -77,6 +77,10 @@ func main() {
 		app.EmitEvent(a.Ctx(), name, data)
 	})
 	sessionWatcher.SetLinker(lnk)
+	enricher := collector.NewSessionEnricher(queries, database.Writer, func(name string, data interface{}) {
+		app.EmitEvent(a.Ctx(), name, data)
+	})
+	sessionWatcher.SetEnricher(enricher)
 	registry.Register(sessionWatcher)
 	registry.Register(collector.NewJSONLScanner(queries, func(name string, data interface{}) {
 		app.EmitEvent(a.Ctx(), name, data)

@@ -57,6 +57,20 @@ type DailyQuest struct {
 	XpReward  sql.NullInt64 `json:"xp_reward"`
 }
 
+type DailyStat struct {
+	Date              string         `json:"date"`
+	ProjectID         sql.NullString `json:"project_id"`
+	SessionCount      sql.NullInt64  `json:"session_count"`
+	TotalDurationSecs sql.NullInt64  `json:"total_duration_secs"`
+	TotalCostMicros   sql.NullInt64  `json:"total_cost_micros"`
+	TotalInputTokens  sql.NullInt64  `json:"total_input_tokens"`
+	TotalOutputTokens sql.NullInt64  `json:"total_output_tokens"`
+	TotalToolCalls    sql.NullInt64  `json:"total_tool_calls"`
+	TotalCommits      sql.NullInt64  `json:"total_commits"`
+	PrCount           sql.NullInt64  `json:"pr_count"`
+	TopFiles          sql.NullString `json:"top_files"`
+}
+
 type GraphEdge struct {
 	ID        string         `json:"id"`
 	ProjectID string         `json:"project_id"`
@@ -162,6 +176,16 @@ type Session struct {
 	ToolBreakdown       sql.NullString `json:"tool_breakdown"`
 	LastInputTokens     sql.NullInt64  `json:"last_input_tokens"`
 	ContextUsedPct      sql.NullInt64  `json:"context_used_pct"`
+	Date                sql.NullString `json:"date"`
+	Summary             sql.NullString `json:"summary"`
+	Outcome             sql.NullString `json:"outcome"`
+	FilesTouched        sql.NullString `json:"files_touched"`
+	GitCommits          sql.NullInt64  `json:"git_commits"`
+	GitLinesAdded       sql.NullInt64  `json:"git_lines_added"`
+	GitLinesRemoved     sql.NullInt64  `json:"git_lines_removed"`
+	Branch              sql.NullString `json:"branch"`
+	PrUrl               sql.NullString `json:"pr_url"`
+	PrStatus            sql.NullString `json:"pr_status"`
 }
 
 type SessionEvent struct {
