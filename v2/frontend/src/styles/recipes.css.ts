@@ -12,8 +12,19 @@ export const buttonRecipe = recipe({
     padding: `${vars.space.sm} ${vars.space.md}`,
     transition: `all ${vars.animation.fast} ease`,
     outline: 'none',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: vars.space.xs,
     ':focus-visible': {
       boxShadow: `0 0 0 2px ${vars.color.borderFocus}`,
+    },
+    selectors: {
+      '&:disabled': {
+        opacity: '0.4',
+        cursor: 'not-allowed',
+        pointerEvents: 'none',
+      },
     },
   },
   variants: {

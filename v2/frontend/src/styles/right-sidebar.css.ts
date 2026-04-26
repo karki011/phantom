@@ -377,12 +377,23 @@ globalStyle(`${commitInput} textarea::placeholder`, {
 
 export const commitActions = style({
   display: 'flex',
-  gap: vars.space.xs,
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: vars.space.sm,
 });
 
-export const commitButton = buttonRecipe({ variant: 'primary', size: 'sm' });
+export const commitButton = buttonRecipe({ variant: 'ghost', size: 'sm' });
 
-export const aiButton = buttonRecipe({ variant: 'ghost', size: 'sm' });
+export const aiButton = buttonRecipe({ variant: 'primary', size: 'sm' });
+
+const aiPulse = keyframes({
+  '0%, 100%': { opacity: 1, boxShadow: `0 0 8px ${vars.color.accentMuted}` },
+  '50%': { opacity: 0.7, boxShadow: `0 0 20px ${vars.color.accentMuted}` },
+});
+
+export const aiButtonGenerating = style({
+  animation: `${aiPulse} 1.5s ease-in-out infinite`,
+});
 
 // ── Changes header bar ────────────────────────────────────────────────────────
 

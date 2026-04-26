@@ -15,6 +15,8 @@ import {
   insertPaneAdjacentTo,
   updateSplitAtPath,
   getLayoutPaneIds,
+  countPanes,
+  MAX_PANES_PER_TAB,
 } from './layout-utils';
 import { destroyTerminal } from '@/core/bindings';
 
@@ -236,6 +238,7 @@ export function splitPane(
     produce((s) => {
       const tab = s.tabs.find((t) => t.id === s.activeTabId);
       if (!tab || !(paneId in tab.panes)) return;
+      if (countPanes(tab.layout) >= MAX_PANES_PER_TAB) return;
 
       const newPane = makePane(newPaneType);
       const newLeaf: PaneLeaf = { type: 'leaf', id: newPane.id, paneType: newPaneType };
@@ -263,6 +266,30 @@ export function resizeSplit(path: number[], percentage: number): void {
 
 export function clearWorktreeCache(worktreeId: string): void {
   stateCache.delete(worktreeId);
+}
+
+// ---------------------------------------------------------------------------
+// Pane color assignment — each split terminal gets a unique border color
+// ---------------------------------------------------------------------------
+
+const PANE_COLORS = [
+  '#56CCFF', // cyan (accent)
+  '#2EE6A6', // green
+  '#FFB84D', // amber
+  '#FF627E', // coral
+  '#8B5CFF', // purple
+  '#EC4899', // pink
+];
+
+const paneColorMap = new Map<string, string>();
+let colorIndex = 0;
+
+export function getPaneColor(paneId: string): string {
+  if (!paneColorMap.has(paneId)) {
+    paneColorMap.set(paneId, PANE_COLORS[colorIndex % PANE_COLORS.length]);
+    colorIndex++;
+  }
+  return paneColorMap.get(paneId)!;
 }
 
 export { workspace, tabs, activeTab, activePaneId };

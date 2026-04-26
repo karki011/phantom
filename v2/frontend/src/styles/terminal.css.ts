@@ -187,31 +187,32 @@ export const settingsControl = style({
   display: 'flex',
   alignItems: 'center',
   gap: vars.space.xs,
-  selectors: {
-    '& button': {
-      background: 'transparent',
-      border: `1px solid ${vars.color.border}`,
-      borderRadius: vars.radius.sm,
-      color: vars.color.textSecondary,
-      width: '20px',
-      height: '20px',
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: '12px',
-      lineHeight: 1,
-      padding: 0,
-    },
-    '& button:hover': {
-      background: vars.color.bgHover,
-      color: vars.color.textPrimary,
-      borderColor: vars.color.borderHover,
-    },
-    '& span': {
-      minWidth: '40px',
-      textAlign: 'center',
-      fontSize: vars.fontSize.xs,
-    },
-  },
+});
+
+globalStyle(`${settingsControl} button`, {
+  background: 'transparent',
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.sm,
+  color: vars.color.textSecondary,
+  width: '20px',
+  height: '20px',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: '12px',
+  lineHeight: 1,
+  padding: 0,
+});
+
+globalStyle(`${settingsControl} button:hover`, {
+  background: vars.color.bgHover,
+  color: vars.color.textPrimary,
+  borderColor: vars.color.borderHover,
+});
+
+globalStyle(`${settingsControl} span`, {
+  minWidth: '40px',
+  textAlign: 'center',
+  fontSize: vars.fontSize.xs,
 });

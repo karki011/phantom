@@ -22,7 +22,7 @@
     },
     "apps/desktop": {
       "name": "@phantom-os/desktop",
-      "version": "1.0.0",
+      "version": "0.0.1",
       "dependencies": {
         "@electron-toolkit/preload": "^3.0.2",
         "@electron-toolkit/utils": "^4.0.0",
@@ -58,7 +58,7 @@
     },
     "packages/ai-engine": {
       "name": "@phantom-os/ai-engine",
-      "version": "1.0.0",
+      "version": "0.0.1",
       "dependencies": {
         "@phantom-os/db": "workspace:*",
         "@phantom-os/shared": "workspace:*",
@@ -74,7 +74,7 @@
     },
     "packages/db": {
       "name": "@phantom-os/db",
-      "version": "1.0.0",
+      "version": "0.0.1",
       "dependencies": {
         "@phantom-os/shared": "workspace:*",
         "better-sqlite3": "^12.8.0",
@@ -87,7 +87,7 @@
     },
     "packages/editor": {
       "name": "@phantom-os/editor",
-      "version": "1.0.0",
+      "version": "0.0.1",
       "dependencies": {
         "@monaco-editor/react": "^4.7.0",
         "monaco-editor": "^0.52.2",
@@ -98,7 +98,7 @@
     },
     "packages/gamification": {
       "name": "@phantom-os/gamification",
-      "version": "1.0.0",
+      "version": "0.0.1",
       "dependencies": {
         "@phantom-os/db": "workspace:*",
         "@phantom-os/shared": "workspace:*",
@@ -107,7 +107,7 @@
     },
     "packages/panes": {
       "name": "@phantom-os/panes",
-      "version": "1.0.0",
+      "version": "0.0.1",
       "dependencies": {
         "jotai": "^2.12.0",
       },
@@ -123,7 +123,7 @@
     },
     "packages/server": {
       "name": "@phantom-os/server",
-      "version": "1.0.0",
+      "version": "0.0.1",
       "dependencies": {
         "@hono/node-server": "^1.19.13",
         "@modelcontextprotocol/sdk": "^1.29.0",
@@ -148,14 +148,14 @@
     },
     "packages/shared": {
       "name": "@phantom-os/shared",
-      "version": "1.0.0",
+      "version": "0.0.1",
       "devDependencies": {
         "@types/node": "^25.5.2",
       },
     },
     "packages/terminal": {
       "name": "@phantom-os/terminal",
-      "version": "1.0.0",
+      "version": "0.0.1",
       "dependencies": {
         "@xterm/addon-fit": "^0.10.0",
         "@xterm/addon-web-links": "^0.11.0",
@@ -172,14 +172,14 @@
     },
     "packages/theme": {
       "name": "@phantom-os/theme",
-      "version": "1.0.0",
+      "version": "0.0.1",
       "dependencies": {
         "@mantine/core": "9.0.1",
       },
     },
     "packages/ui": {
       "name": "@phantom-os/ui",
-      "version": "1.0.0",
+      "version": "0.0.1",
       "dependencies": {
         "@mantine/core": "^9.0.1",
       },

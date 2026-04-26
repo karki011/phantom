@@ -20,7 +20,11 @@ import {
   gitDiscard, gitPull, gitPush, getWorkspaceStatus,
   refreshWorkspaceStatus,
   revealInFinder,
+  readFileContents, getFileAtRevision,
 } from '@/core/bindings';
+import { showFileDiff } from '@/core/editor/diff-utils';
+import { openFileInEditor } from '@/core/editor/open-file';
+import { removeTab, tabs } from '@/core/panes/signals';
 import { showToast, showWarningToast } from '@/shared/Toast/Toast';
 import { Tip } from '@/shared/Tip/Tip';
 import { onWailsEvent } from '@/core/events';
@@ -56,7 +60,11 @@ function FileStatusIcon(props: { status: string }) {
 
 // ── Individual file row ───────────────────────────────────────────────────────
 
-function StagedFileRow(props: { file: FileStatus; onUnstage: (path: string) => void }) {
+function StagedFileRow(props: {
+  file: FileStatus;
+  onUnstage: (path: string) => void;
+  onFileClick: (file: FileStatus) => void;
+}) {
   const name = () => props.file.path.split('/').pop() ?? props.file.path;
   const absolutePath = () => {
     const base = getBasePath();
@@ -65,7 +73,7 @@ function StagedFileRow(props: { file: FileStatus; onUnstage: (path: string) => v
 
   return (
     <ContextMenu>
-      <ContextMenu.Trigger as="div" class={styles.fileRow}>
+      <ContextMenu.Trigger as="div" class={styles.fileRow} onClick={() => props.onFileClick(props.file)}>
         <FileStatusIcon status={props.file.status} />
         <span class={styles.fileRowName} title={props.file.path}>{name()}</span>
         <div class={styles.fileRowActions}>
@@ -82,6 +90,10 @@ function StagedFileRow(props: { file: FileStatus; onUnstage: (path: string) => v
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
         <ContextMenu.Content class={styles.contextMenuContent}>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => props.onFileClick(props.file)}>
+            <Eye size={13} />
+            Open Diff
+          </ContextMenu.Item>
           <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => props.onUnstage(props.file.path)}>
             <Minus size={13} />
             Unstage
@@ -111,6 +123,7 @@ function UnstagedFileRow(props: {
   file: FileStatus;
   onDiscard: (path: string) => void;
   onStage: (path: string) => void;
+  onFileClick: (file: FileStatus) => void;
 }) {
   const name = () => props.file.path.split('/').pop() ?? props.file.path;
   const absolutePath = () => {
@@ -121,7 +134,7 @@ function UnstagedFileRow(props: {
 
   return (
     <ContextMenu>
-      <ContextMenu.Trigger as="div" class={styles.fileRow}>
+      <ContextMenu.Trigger as="div" class={styles.fileRow} onClick={() => props.onFileClick(props.file)}>
         <FileStatusIcon status={props.file.status} />
         <span class={styles.fileRowName} title={props.file.path}>{name()}</span>
         <div class={styles.fileRowActions}>
@@ -147,6 +160,10 @@ function UnstagedFileRow(props: {
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
         <ContextMenu.Content class={styles.contextMenuContent}>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => props.onFileClick(props.file)}>
+            <Eye size={13} />
+            {isUntracked() ? 'Open File' : 'Open Diff'}
+          </ContextMenu.Item>
           <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => props.onStage(props.file.path)}>
             <Plus size={13} />
             Stage
@@ -257,10 +274,19 @@ export function ChangesView() {
     await refreshStatus();
   }
 
+  function closeDiffTabForFile(filePath: string) {
+    const diffTab = tabs().find((t) => {
+      const panes = Object.values(t.panes);
+      return panes.some((p) => p.kind === 'diff' && p.data?.filePath === filePath);
+    });
+    if (diffTab) removeTab(diffTab.id);
+  }
+
   async function handleDiscard(path: string) {
     const wtId = activeWorktreeId();
     if (!wtId) return;
     await gitDiscard(wtId, [path]);
+    closeDiffTabForFile(path);
     await refreshStatus();
   }
 
@@ -303,9 +329,63 @@ export function ChangesView() {
     }
   }
 
-  function handleAiMessage() {
-    // Stub: will call AI binding to generate commit message
-    console.info('[PhantomOS] AI commit message stub');
+  const [aiGenerating, setAiGenerating] = createSignal(false);
+
+  async function handleAiMessage() {
+    const wtId = activeWorktreeId();
+    if (!wtId || aiGenerating()) return;
+    setAiGenerating(true);
+    try {
+      const msg = await (window as any).go.app.App.GenerateCommitMessage(wtId);
+      if (msg) setCommitMessage(msg);
+    } catch (err) {
+      showWarningToast('AI failed', 'Could not generate commit message');
+    } finally {
+      setAiGenerating(false);
+    }
+  }
+
+  async function handleFileClick(file: FileStatus) {
+    const wtId = activeWorktreeId();
+    if (!wtId) return;
+
+    // Untracked files have no git history — just open in editor
+    if (file.status === '?') {
+      openFileInEditor({ workspaceId: wtId, filePath: file.path });
+      return;
+    }
+
+    // Deleted files — show HEAD content vs empty
+    if (file.status === 'D') {
+      const originalContent = await getFileAtRevision(wtId, file.path, 'HEAD');
+      showFileDiff({
+        workspaceId: wtId,
+        filePath: file.path,
+        originalContent,
+        modifiedContent: '',
+        originalLabel: `${file.path} (HEAD)`,
+        modifiedLabel: `${file.path} (deleted)`,
+        readOnly: true,
+      });
+      return;
+    }
+
+    // Modified / Added / Renamed — show HEAD vs working copy
+    // getFileAtRevision returns '' on error (new file not in HEAD) — that's fine
+    const [originalContent, modifiedContent] = await Promise.all([
+      getFileAtRevision(wtId, file.path, 'HEAD'),
+      readFileContents(wtId, file.path),
+    ]);
+    console.log('[ChangesView] diff data:', file.path, 'original:', originalContent.length, 'bytes, modified:', modifiedContent.length, 'bytes');
+    showFileDiff({
+      workspaceId: wtId,
+      filePath: file.path,
+      originalContent,
+      modifiedContent,
+      originalLabel: originalContent ? `${file.path} (HEAD)` : '(new file)',
+      modifiedLabel: `${file.path} (working copy)`,
+      readOnly: true,
+    });
   }
 
   const hasFiles = () => stagedFiles().length > 0 || unstagedFiles().length > 0;
@@ -402,7 +482,7 @@ export function ChangesView() {
               <Collapsible.Content>
                 <For each={stagedFiles()}>
                   {(file) => (
-                    <StagedFileRow file={file} onUnstage={handleUnstage} />
+                    <StagedFileRow file={file} onUnstage={handleUnstage} onFileClick={handleFileClick} />
                   )}
                 </For>
               </Collapsible.Content>
@@ -447,6 +527,7 @@ export function ChangesView() {
                       file={file}
                       onDiscard={handleDiscard}
                       onStage={handleStage}
+                      onFileClick={handleFileClick}
                     />
                   )}
                 </For>
@@ -471,18 +552,19 @@ export function ChangesView() {
           <div class={styles.commitActions}>
             <button
               type="button"
-              class={styles.aiButton}
+              class={`${styles.aiButton} ${aiGenerating() ? styles.aiButtonGenerating : ''}`}
               onClick={handleAiMessage}
+              disabled={stagedFiles().length === 0 || aiGenerating()}
               title="Generate commit message with AI"
             >
               <Sparkles size={12} />
-              AI
+              {aiGenerating() ? 'Generating...' : 'Generate with AI'}
             </button>
             <button
               type="button"
               class={styles.commitButton}
               onClick={handleCommit}
-              disabled={!commitMessage().trim() || stagedFiles().length === 0}
+              disabled={!commitMessage().trim() || stagedFiles().length === 0 || aiGenerating()}
               title={stagedFiles().length === 0 ? 'Stage changes first' : 'Commit staged changes'}
             >
               <GitCommit size={12} />

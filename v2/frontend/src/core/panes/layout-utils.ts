@@ -39,6 +39,8 @@ export function getLayoutPaneIds(node: LayoutNode): string[] {
   return [...getLayoutPaneIds(node.first), ...getLayoutPaneIds(node.second)];
 }
 
+export const MAX_PANES_PER_TAB = 6;
+
 /** Count the total number of pane leaves. */
 export function countPanes(node: LayoutNode): number {
   if (node.type === 'leaf') return 1;

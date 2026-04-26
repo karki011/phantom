@@ -17,9 +17,10 @@ import (
 type GitEventType int
 
 const (
-	GitEventBranchChanged GitEventType = iota
+	GitEventBranchChanged      GitEventType = iota
 	GitEventIndexChanged
 	GitEventStatusChanged
+	GitEventWorkingTreeChanged
 )
 
 type GitEvent struct {
@@ -87,7 +88,51 @@ func (w *Watcher) WatchRepo(repoPath string) error {
 		}
 	}
 
+	// Watch working tree root for file changes (like VS Code's ** watcher).
+	// fsnotify is non-recursive, so we watch top-level dirs only.
+	// This catches most edits (Claude writes to src/, etc.)
+	w.watcher.Add(repoPath)
+	w.watchWorkingTreeDirs(repoPath, 0)
+
 	return nil
+}
+
+// watchWorkingTreeDirs recursively watches subdirectories up to maxDepth.
+// Skips .git, node_modules, dist, and other heavy/irrelevant dirs.
+func (w *Watcher) watchWorkingTreeDirs(root string, depth int) {
+	const maxDepth = 4
+	if depth > maxDepth {
+		return
+	}
+
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return
+	}
+
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if isIgnoredDir(name) {
+			continue
+		}
+		dir := filepath.Join(root, name)
+		w.watcher.Add(dir)
+		w.watchWorkingTreeDirs(dir, depth+1)
+	}
+}
+
+var ignoredDirs = map[string]bool{
+	".git": true, "node_modules": true, "dist": true, ".turbo": true,
+	".next": true, ".nuxt": true, "__pycache__": true, ".venv": true,
+	"vendor": true, ".idea": true, ".vscode": true, "build": true,
+	".cache": true, "coverage": true,
+}
+
+func isIgnoredDir(name string) bool {
+	return ignoredDirs[name]
 }
 
 func (w *Watcher) UnwatchRepo(repoPath string) {
@@ -141,20 +186,32 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 	name := filepath.Base(event.Name)
 	dir := filepath.Dir(event.Name)
 
-	switch {
-	case name == "HEAD":
-		w.emitDebounced("HEAD:"+dir, GitEventBranchChanged, 0)
-	case name == "index":
-		w.emitDebounced("index:"+dir, GitEventIndexChanged, 1000*time.Millisecond)
-	case name == "FETCH_HEAD":
-		w.emitDebounced("FETCH_HEAD:"+dir, GitEventStatusChanged, 500*time.Millisecond)
-	case name == "MERGE_HEAD" || name == "REBASE_HEAD" || name == "CHERRY_PICK_HEAD":
-		w.emitDebounced("merge:"+dir, GitEventStatusChanged, 0)
-	case strings.Contains(event.Name, "refs/heads"):
-		w.emitDebounced("refs-heads:"+dir, GitEventStatusChanged, 500*time.Millisecond)
-	case strings.Contains(event.Name, "refs/remotes"):
-		w.emitDebounced("refs-remotes:"+dir, GitEventStatusChanged, 500*time.Millisecond)
+	// .git internal events
+	if strings.Contains(event.Name, ".git") {
+		switch {
+		case name == "HEAD":
+			w.emitDebounced("HEAD:"+dir, GitEventBranchChanged, 0)
+		case name == "index":
+			w.emitDebounced("index:"+dir, GitEventIndexChanged, 1000*time.Millisecond)
+		case name == "FETCH_HEAD":
+			w.emitDebounced("FETCH_HEAD:"+dir, GitEventStatusChanged, 500*time.Millisecond)
+		case name == "MERGE_HEAD" || name == "REBASE_HEAD" || name == "CHERRY_PICK_HEAD":
+			w.emitDebounced("merge:"+dir, GitEventStatusChanged, 0)
+		case strings.Contains(event.Name, "refs/heads"):
+			w.emitDebounced("refs-heads:"+dir, GitEventStatusChanged, 500*time.Millisecond)
+		case strings.Contains(event.Name, "refs/remotes"):
+			w.emitDebounced("refs-remotes:"+dir, GitEventStatusChanged, 500*time.Millisecond)
+		}
+		return
 	}
+
+	// Skip lock files and temp files
+	if strings.HasSuffix(name, ".lock") || strings.HasSuffix(name, "~") || strings.HasPrefix(name, ".#") {
+		return
+	}
+
+	// Working tree file change — 1s debounce like VS Code
+	w.emitDebounced("worktree:"+dir, GitEventWorkingTreeChanged, 1000*time.Millisecond)
 }
 
 func (w *Watcher) emitDebounced(key string, eventType GitEventType, delay time.Duration) {

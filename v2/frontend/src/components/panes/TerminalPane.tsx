@@ -121,6 +121,15 @@ export default function TerminalPane(props: TerminalPaneProps) {
     session.terminal.loadAddon(searchAddon);
     session.searchAddon = searchAddon;
 
+    // Shift+Enter → send CSI u sequence so Claude Code recognizes it as newline
+    session.terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+      if (e.type === 'keydown' && e.key === 'Enter' && e.shiftKey) {
+        void writeTerminal(sessionId, '\x1b[13;2u');
+        return false;
+      }
+      return true;
+    });
+
     // Wire user input to Go backend — TUI panes use WriteBubbleteaProgram
     session.terminal.onData((data: string) => {
       if (isTui) {
@@ -349,8 +358,33 @@ export default function TerminalPane(props: TerminalPaneProps) {
     detachSession(sessionId);
   });
 
+  const handleTerminalDrop = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Internal sidebar drag
+    const phantomPath = e.dataTransfer?.getData('text/phantom-path');
+    if (phantomPath) {
+      void writeTerminal(sessionId, phantomPath + ' ');
+      return;
+    }
+
+    // External file drop from Finder
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      const paths = Array.from(files)
+        .map((f) => (f as any).path ?? f.name)
+        .join(' ');
+      void writeTerminal(sessionId, paths + ' ');
+    }
+  };
+
   return (
-    <div class={termStyles.terminalWrapper}>
+    <div
+      class={termStyles.terminalWrapper}
+      onDragOver={(e: DragEvent) => e.preventDefault()}
+      onDrop={handleTerminalDrop}
+    >
       <div class={termStyles.terminalContainer} ref={containerRef!} />
       <Show when={showSearch()}>
         <div class={termStyles.searchBar}>

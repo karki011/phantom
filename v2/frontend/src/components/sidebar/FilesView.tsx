@@ -18,6 +18,7 @@ import { activeWorktreeId } from '@/core/signals/app';
 import { worktreeMap } from '@/core/signals/worktrees';
 import { listWorkspaceFiles, listWorkspaceDir, searchWorkspaceFiles, revealInFinder, openInFinder, openInDefaultApp } from '@/core/bindings';
 import { addTabWithData } from '@/core/panes/signals';
+import { openFileInEditor } from '@/core/editor/open-file';
 import { showToast } from '@/shared/Toast/Toast';
 import type { FileEntry } from '@/core/types';
 
@@ -99,8 +100,17 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
           as="div"
           class={`${styles.fileItem} ${isSelected() ? styles.fileItemSelected : ''} ${isIgnored() ? styles.fileItemIgnored : ''}`}
           style={{ 'padding-left': `${indent() + 8}px` }}
-          onClick={() => setSelectedFile(props.node.path)}
+          onClick={() => {
+            setSelectedFile(props.node.path);
+            const wtId = activeWorktreeId();
+            if (wtId) openFileInEditor({ workspaceId: wtId, filePath: props.node.path });
+          }}
           title={props.node.path}
+          draggable={true}
+          onDragStart={(e: DragEvent) => {
+            e.dataTransfer?.setData('text/phantom-path', absolutePath());
+            e.dataTransfer?.setData('text/plain', absolutePath());
+          }}
         >
           <FileText size={14} class={styles.fileIcon} />
           <span class={styles.fileName}>{props.node.name}</span>

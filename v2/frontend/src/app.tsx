@@ -30,7 +30,11 @@ import { waitForWails } from './core/bindings/ready';
 import { ToastRegion } from './shared/Toast/Toast';
 import { SettingsDialog } from './shared/SettingsDialog/SettingsDialog';
 import { QuickOpen } from './shared/QuickOpen/QuickOpen';
+import { CommandPalette } from './shared/CommandPalette';
 import { ApprovalModal } from './shared/ApprovalModal/ApprovalModal';
+import { PromptComposer } from './shared/PromptComposer';
+import { composerVisible, closeComposer } from './core/signals/composer';
+import { DocsScreen } from './screens/docs';
 
 export function App() {
   const [ready, setReady] = createSignal(false);
@@ -63,10 +67,11 @@ export function App() {
     if (wardsEnabled === 'true') bootstrapWards();
 
     setReady(true);
-
-    const cleanupShortcuts = registerKeyboardShortcuts();
-    onCleanup(cleanupShortcuts);
   });
+
+  // Register keyboard shortcuts synchronously so onCleanup works on HMR re-mount
+  const cleanupShortcuts = registerKeyboardShortcuts();
+  onCleanup(cleanupShortcuts);
 
   createEffect(() => {
     const wtId = activeWorktreeId();
@@ -88,6 +93,9 @@ export function App() {
       <ApprovalModal />
       <SettingsDialog />
       <QuickOpen />
+      <CommandPalette />
+      <DocsScreen />
+      <PromptComposer visible={composerVisible()} onClose={closeComposer} />
       <Show when={showOnboarding()}>
         <OnboardingFlow onComplete={handleOnboardingComplete} />
       </Show>

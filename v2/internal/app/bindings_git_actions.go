@@ -5,6 +5,7 @@ package app
 import (
 	"database/sql"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -381,6 +382,45 @@ func (a *App) GetWorkspaceChanges(workspaceId string) []git.FileStatus {
 // GetWorkspaceCommitLog returns commit history for the workspace.
 // For the default branch it returns full history (up to limit).
 // For feature branches it returns only commits unique to that branch (branch..base).
+// GenerateCommitMessage uses Claude to generate a conventional commit message
+// from the staged diff. Returns the message string.
+func (a *App) GenerateCommitMessage(workspaceId string) (string, error) {
+	log.Info("app/GenerateCommitMessage: called", "workspaceId", workspaceId)
+	repoPath, err := a.resolveWorkspacePath(workspaceId)
+	if err != nil {
+		log.Error("app/GenerateCommitMessage: resolve failed", "err", err)
+		return "", err
+	}
+
+	// Get stat summary first (concise overview of all files)
+	statCmd := exec.CommandContext(a.ctx, "git", "-C", repoPath, "diff", "--cached", "--stat", "--shortstat")
+	statOut, _ := statCmd.Output()
+	stat := strings.TrimSpace(string(statOut))
+
+	// Get actual patch for content-level detail
+	patchCmd := exec.CommandContext(a.ctx, "git", "-C", repoPath, "diff", "--cached", "-p", "-U3")
+	patchOut, _ := patchCmd.Output()
+	patch := string(patchOut)
+
+	if stat == "" && patch == "" {
+		log.Warn("app/GenerateCommitMessage: no staged diff")
+		return "", fmt.Errorf("no staged changes to describe")
+	}
+
+	// Build context: stat (always full) + patch (truncated to fit)
+	diff := "File summary:\n" + stat + "\n\nDetailed changes:\n"
+	remaining := 12000 - len(diff)
+	if len(patch) > remaining {
+		diff += patch[:remaining] + "\n... (patch truncated, see stat summary above for full file list)"
+	} else {
+		diff += patch
+	}
+
+	msg := git.GenerateCommitMessage(a.ctx, diff)
+	log.Info("app/GenerateCommitMessage: success", "message", msg)
+	return msg, nil
+}
+
 func (a *App) GetWorkspaceCommitLog(workspaceId string, limit int) []git.CommitInfo {
 	log.Info("app/GetWorkspaceCommitLog: called", "workspaceId", workspaceId, "limit", limit)
 	q := db.New(a.DB.Reader)

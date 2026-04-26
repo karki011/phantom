@@ -4,9 +4,31 @@
 import { createMemo } from 'solid-js';
 import { sessions } from '@/core/signals/sessions';
 import { openSettings } from '@/core/signals/settings';
+import { toggleDocs } from '@/core/signals/docs';
 import * as shellStyles from '@/styles/app-shell.css';
 
 // Inline SVG icons — no icon library dependency
+
+function BookIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2V3ZM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7V3Z"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+  );
+}
 
 function GearIcon() {
   return (
@@ -141,6 +163,15 @@ export function SystemHeader() {
           aria-label="Open command palette"
         >
           <CommandIcon />
+        </button>
+        <button
+          class={shellStyles.headerIconButton}
+          type="button"
+          title="Documentation"
+          aria-label="Open documentation"
+          onClick={() => toggleDocs()}
+        >
+          <BookIcon />
         </button>
         <button
           class={shellStyles.headerIconButton}

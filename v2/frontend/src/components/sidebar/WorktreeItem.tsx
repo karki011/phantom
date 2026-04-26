@@ -88,6 +88,12 @@ export function WorktreeItem(props: WorktreeItemProps) {
         as="div"
         class={`${styles.worktreeItem}${isActive() ? ` ${styles.worktreeItemActive}` : ''}`}
         onClick={handleClick}
+        draggable={true}
+        onDragStart={(e: DragEvent) => {
+          const path = props.worktree.worktree_path ?? '';
+          e.dataTransfer?.setData('text/phantom-path', path);
+          e.dataTransfer?.setData('text/plain', path);
+        }}
       >
         {deleting() ? (
           <LoaderCircle size={13} class={styles.worktreeIcon} style={{ animation: 'spin 1s linear infinite' }} />

@@ -453,7 +453,7 @@ func CreatePrWithAI(ctx context.Context, repoPath, branch, baseBranch string) (*
 		}
 
 		diffForCommit, _ := runGit(ctx, repoPath, "diff", "--cached", "--stat")
-		commitMsg := generateCommitMessage(ctx, diffForCommit)
+		commitMsg := GenerateCommitMessage(ctx, diffForCommit)
 		if _, err := runGit(ctx, repoPath, "commit", "-m", commitMsg); err != nil {
 			return nil, fmt.Errorf("CreatePrWithAI: git commit: %w", err)
 		}
@@ -507,8 +507,15 @@ func CreatePrWithAI(ctx context.Context, repoPath, branch, baseBranch string) (*
 	return pr, nil
 }
 
-func generateCommitMessage(ctx context.Context, diffStat string) string {
-	prompt := `Output ONLY a conventional commit message (type: description). No preamble, no explanation, no quotes. Examples: "feat: add user auth", "fix: resolve null pointer in parser", "chore: update dependencies"
+func GenerateCommitMessage(ctx context.Context, diffStat string) string {
+	prompt := `Write a git commit message for the following changes. Format:
+
+Line 1: conventional commit type and short summary (under 72 chars)
+Line 2: blank
+Lines 3+: bullet points describing what changed and why (2-6 bullets)
+
+Types: feat, fix, refactor, chore, docs, style, test, perf
+No quotes around the message. No preamble like "Here's". Just the commit message directly.
 
 Changes:
 ` + diffStat
@@ -521,7 +528,7 @@ Changes:
 	if err := cmd.Run(); err != nil {
 		return "chore: update"
 	}
-	msg := strings.TrimSpace(strings.SplitN(out.String(), "\n", 2)[0])
+	msg := strings.TrimSpace(out.String())
 	if msg == "" {
 		return "chore: update"
 	}

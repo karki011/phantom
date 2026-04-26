@@ -6,6 +6,7 @@ import { Portal } from 'solid-js/web';
 import { quickOpenVisible, closeQuickOpen } from '@/core/signals/quickopen';
 import { activeWorktreeId } from '@/core/signals/app';
 import { searchWorkspaceFiles } from '@/core/bindings';
+import { openFileInEditor } from '@/core/editor/open-file';
 import type { FileEntry } from '@/core/types';
 import * as styles from './QuickOpen.css';
 
@@ -126,8 +127,10 @@ export function QuickOpen() {
   }
 
   function selectFile(file: FileEntry) {
-    // For now, log the selection. This will be wired to open-in-editor when the editor pane lands.
-    console.log('[QuickOpen] Selected file:', file.path);
+    const wtId = activeWorktreeId();
+    if (wtId) {
+      openFileInEditor({ workspaceId: wtId, filePath: file.path });
+    }
     closeQuickOpen();
   }
 

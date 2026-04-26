@@ -214,6 +214,20 @@ export interface SessionState {
   event_count: number;
 }
 
+/** Per-line git blame metadata from the Go backend. */
+export interface BlameLine {
+  /** Full commit SHA */
+  commit: string;
+  /** Author name */
+  author: string;
+  /** Unix timestamp (seconds) */
+  date: number;
+  /** 1-based line number */
+  line_num: number;
+  /** Line content (without leading tab) */
+  content: string;
+}
+
 export interface WardEvaluation {
   rule_id: string;
   rule_name: string;

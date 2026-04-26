@@ -9,7 +9,8 @@ const registry: Partial<Record<PaneType, Component<any>>> = {
   // TUI programs (Bubbletea) render inside xterm.js — same component as terminal
   tui: lazy(() => import('./TerminalPane')),
   home: lazy(() => import('./WorktreeHome')),
-  // editor, chat, diff, journal — placeholders for Wave 4+
+  editor: lazy(() => import('./EditorPane')),
+  diff: lazy(() => import('./DiffPane')),
 };
 
 export function getPaneComponent(kind: string): Component<any> | undefined {

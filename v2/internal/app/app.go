@@ -197,6 +197,7 @@ func (a *App) Startup(ctx context.Context) {
 	// Start GitHub poller — emits pr:updated / ci:updated / prs:list-updated on change.
 	go a.startGitHubPoller()
 
+
 	// Start git filesystem watcher for instant change detection.
 	if gw, err := git.NewWatcher(a.ctx); err == nil {
 		a.gitWatcher = gw
@@ -226,6 +227,8 @@ func (a *App) handleGitWatcherEvents() {
 		case git.GitEventIndexChanged:
 			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
 		case git.GitEventStatusChanged:
+			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+		case git.GitEventWorkingTreeChanged:
 			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
 		}
 	}
