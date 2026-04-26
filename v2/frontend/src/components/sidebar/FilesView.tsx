@@ -60,6 +60,7 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
   const [expanded, setExpanded] = createSignal(props.node.expanded ?? false);
   const [children, setChildren] = createSignal<FileNode[]>(props.node.children ?? []);
   const [loaded, setLoaded] = createSignal(false);
+  const [creating, setCreating] = createSignal<'file' | 'folder' | null>(null);
 
   const indent = () => props.depth * 12;
   const isSelected = () => !props.node.isDir && selectedFile() === props.node.path;
@@ -130,7 +131,6 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
             </ContextMenu.Item>
             <ContextMenu.Separator class={styles.contextMenuSeparator} />
             <ContextMenu.Item class={styles.contextMenuItem} onSelect={async () => {
-              if (!window.confirm(`Delete "${props.node.name}"?`)) return;
               const wtId = activeWorktreeId();
               if (!wtId) return;
               const ok = await deleteFile(wtId, props.node.path);
@@ -180,6 +180,44 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
           </Collapsible.Trigger>
 
           <Collapsible.Content>
+            <Show when={creating()}>
+              {(type) => {
+                let inputRef!: HTMLInputElement;
+                const handleSubmit = async () => {
+                  const name = inputRef.value.trim();
+                  setCreating(null);
+                  if (!name) return;
+                  const wtId = activeWorktreeId();
+                  if (!wtId) return;
+                  const newPath = props.node.path ? `${props.node.path}/${name}` : name;
+                  const ok = type() === 'file'
+                    ? await createFile(wtId, newPath)
+                    : await createFolder(wtId, newPath);
+                  if (ok) {
+                    showToast('Created', newPath);
+                    setLoaded(false);
+                    handleExpand(true);
+                    if (type() === 'file') openFileInEditor({ workspaceId: wtId, filePath: newPath });
+                  }
+                };
+                return (
+                  <div
+                    class={styles.fileItem}
+                    style={{ 'padding-left': `${(props.depth + 1) * 12 + 8}px` }}
+                  >
+                    {type() === 'file' ? <FileText size={14} class={styles.fileIcon} /> : <Folder size={14} class={styles.fileIcon} />}
+                    <input
+                      ref={(el: HTMLInputElement) => { inputRef = el; setTimeout(() => el.focus(), 0); }}
+                      type="text"
+                      placeholder={type() === 'file' ? 'filename' : 'folder name'}
+                      style={{ background: 'var(--color-bg-input, #1a1a2e)', border: '1px solid var(--color-border-focus, #4a9eff)', color: 'inherit', 'font-size': '12px', padding: '1px 4px', 'border-radius': '3px', outline: 'none', flex: '1', 'min-width': '0' }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); if (e.key === 'Escape') setCreating(null); }}
+                      onFocusOut={handleSubmit}
+                    />
+                  </div>
+                );
+              }}
+            </Show>
             <Show when={children().length > 0}>
               <For each={children()}>
                 {(child) => <FileTreeItem node={child} depth={props.depth + 1} />}
@@ -190,38 +228,13 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
         <ContextMenu.Content class={styles.contextMenuContent}>
-          <ContextMenu.Item class={styles.contextMenuItem} onSelect={async () => {
-            const name = window.prompt('File name:');
-            if (!name?.trim()) return;
-            const wtId = activeWorktreeId();
-            if (!wtId) return;
-            const newPath = props.node.path ? `${props.node.path}/${name.trim()}` : name.trim();
-            const ok = await createFile(wtId, newPath);
-            if (ok) {
-              openFileInEditor({ workspaceId: wtId, filePath: newPath });
-              showToast('Created', newPath);
-              setLoaded(false);
-              handleExpand(true);
-            }
-          }}>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { setCreating('file'); if (!expanded()) handleExpand(true); }}>
             <FilePlus size={13} />
-            New File...
+            New File
           </ContextMenu.Item>
-          <ContextMenu.Item class={styles.contextMenuItem} onSelect={async () => {
-            const name = window.prompt('Folder name:');
-            if (!name?.trim()) return;
-            const wtId = activeWorktreeId();
-            if (!wtId) return;
-            const newPath = props.node.path ? `${props.node.path}/${name.trim()}` : name.trim();
-            const ok = await createFolder(wtId, newPath);
-            if (ok) {
-              showToast('Created', newPath);
-              setLoaded(false);
-              handleExpand(true);
-            }
-          }}>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { setCreating('folder'); if (!expanded()) handleExpand(true); }}>
             <FolderPlus size={13} />
-            New Folder...
+            New Folder
           </ContextMenu.Item>
           <ContextMenu.Separator class={styles.contextMenuSeparator} />
           <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => openInFinder(absolutePath())}>
@@ -234,7 +247,6 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
           </ContextMenu.Item>
           <ContextMenu.Separator class={styles.contextMenuSeparator} />
           <ContextMenu.Item class={styles.contextMenuItem} onSelect={async () => {
-            if (!window.confirm(`Delete folder "${props.node.name}"? (must be empty)`)) return;
             const wtId = activeWorktreeId();
             if (!wtId) return;
             const ok = await deleteFile(wtId, props.node.path);
