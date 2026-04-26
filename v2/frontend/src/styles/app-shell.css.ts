@@ -210,6 +210,19 @@ export const sessionDot = style({
   flexShrink: 0,
 });
 
+export const statDivider = style({
+  color: vars.color.textDisabled,
+  margin: `0 ${vars.space.sm}`,
+  fontSize: vars.fontSize.xs,
+  userSelect: 'none',
+});
+
+export const statItem = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textSecondary,
+});
+
 export const headerActions = style({
   display: 'flex',
   alignItems: 'center',

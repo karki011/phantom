@@ -1,11 +1,17 @@
 // PhantomOS v2 — System header bar
 // Author: Subash Karki
 
-import { createMemo } from 'solid-js';
+import { createMemo, onCleanup, onMount, Show } from 'solid-js';
 import { sessions } from '@/core/signals/sessions';
+import {
+  systemStats,
+  startSystemStatsPoll,
+  stopSystemStatsPoll,
+} from '@/core/signals/system-stats';
 import { openSettings } from '@/core/signals/settings';
 import { toggleDocs } from '@/core/signals/docs';
-import { addTabWithData } from '@/core/panes/signals';
+import { focusOrCreateTab } from '@/core/panes/signals';
+import { Tip } from '@/shared/Tip/Tip';
 import * as shellStyles from '@/styles/app-shell.css';
 
 // Inline SVG icons — no icon library dependency
@@ -162,6 +168,13 @@ function TerminalIcon() {
 }
 
 export function SystemHeader() {
+  onMount(() => {
+    startSystemStatsPoll();
+  });
+  onCleanup(() => {
+    stopSystemStatsPoll();
+  });
+
   const activeCount = createMemo(() =>
     sessions().filter((s) => s.status === 'active' || s.status === 'running').length
   );
@@ -171,6 +184,8 @@ export function SystemHeader() {
     return count === 1 ? '1 session active' : `${count} sessions active`;
   });
 
+  const stats = systemStats;
+
   return (
     <header class={shellStyles.header}>
       {/* Left: Logo */}
@@ -178,59 +193,55 @@ export function SystemHeader() {
         PhantomOS
       </button>
 
-      {/* Center: Session count */}
+      {/* Center: System stats bar */}
       <div class={shellStyles.headerCenter}>
         <span class={shellStyles.sessionIndicator}>
           <span class={shellStyles.sessionDot} />
           {sessionLabel()}
         </span>
+        <span class={shellStyles.statDivider}>|</span>
+        <span class={shellStyles.statItem}>
+          CPU {Math.round(stats().cpu_percent)}%
+        </span>
+        <span class={shellStyles.statDivider}>|</span>
+        <span class={shellStyles.statItem}>
+          RAM {stats().mem_used_gb.toFixed(1)}/{stats().mem_total_gb.toFixed(1)} GB
+        </span>
+        <Show when={stats().battery_percent >= 0}>
+          <span class={shellStyles.statDivider}>|</span>
+          <span class={shellStyles.statItem}>
+            {stats().battery_charging ? '⚡' : '🔋'} {stats().battery_percent}%
+          </span>
+        </Show>
       </div>
 
       {/* Right: Action buttons */}
       <div class={shellStyles.headerActions}>
-        <button
-          class={shellStyles.headerIconButton}
-          type="button"
-          title="Terminal"
-          aria-label="Open terminal"
-        >
-          <TerminalIcon />
-        </button>
-        <button
-          class={shellStyles.headerIconButton}
-          type="button"
-          title="Command palette (Cmd+K)"
-          aria-label="Open command palette"
-        >
-          <CommandIcon />
-        </button>
-        <button
-          class={shellStyles.headerIconButton}
-          type="button"
-          title="Documentation"
-          aria-label="Open documentation"
-          onClick={() => toggleDocs()}
-        >
-          <BookIcon />
-        </button>
-        <button
-          class={shellStyles.headerIconButton}
-          type="button"
-          title="Journal"
-          aria-label="Open journal"
-          onClick={() => addTabWithData('journal', 'Journal', {})}
-        >
-          <JournalIcon />
-        </button>
-        <button
-          class={shellStyles.headerIconButton}
-          type="button"
-          title="Settings"
-          aria-label="Open settings"
-          onClick={() => openSettings()}
-        >
-          <GearIcon />
-        </button>
+        <Tip label="Terminal" placement="bottom">
+          <button class={shellStyles.headerIconButton} type="button" aria-label="Open terminal">
+            <TerminalIcon />
+          </button>
+        </Tip>
+        <Tip label="Command Palette" placement="bottom">
+          <button class={shellStyles.headerIconButton} type="button" aria-label="Open command palette">
+            <CommandIcon />
+          </button>
+        </Tip>
+        <Tip label="Docs" placement="bottom">
+          <button class={shellStyles.headerIconButton} type="button" aria-label="Open documentation" onClick={() => toggleDocs()}>
+            <BookIcon />
+          </button>
+        </Tip>
+        <Tip label="Journal" placement="bottom">
+          <button class={shellStyles.headerIconButton} type="button" aria-label="Open journal" onClick={() => focusOrCreateTab('journal', 'Journal')}>
+            <JournalIcon />
+          </button>
+        </Tip>
+        <Tip label="Settings" placement="bottom">
+          <button class={shellStyles.headerIconButton} type="button" aria-label="Open settings" onClick={() => openSettings()}>
+            <GearIcon />
+          </button>
+        </Tip>
       </div>
     </header>
   );

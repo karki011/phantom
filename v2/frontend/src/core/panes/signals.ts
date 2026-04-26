@@ -114,6 +114,21 @@ export function switchWorkspace(worktreeId: string): void {
 // Tab actions
 // ---------------------------------------------------------------------------
 
+export function focusOrCreateTab(paneType: PaneType, label?: string, data?: Record<string, unknown>): void {
+  const existing = workspace.tabs.find((t) =>
+    Object.values(t.panes).some((p) => p.kind === paneType)
+  );
+  if (existing) {
+    setWorkspace('activeTabId', existing.id);
+    return;
+  }
+  if (data) {
+    addTabWithData(paneType, label ?? paneType, data);
+  } else {
+    addTab(paneType);
+  }
+}
+
 export function addTab(paneType: PaneType = 'terminal'): void {
   const tab = makeTab(paneType);
   setWorkspace(produce((s) => { s.tabs.push(tab); }));

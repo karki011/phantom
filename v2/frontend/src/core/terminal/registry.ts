@@ -128,13 +128,15 @@ export function attachSession(
   container.appendChild(session.wrapper);
   session.attached = true;
 
-  // Fit after a frame — container must have real dimensions by then
+  // Double-rAF: first frame triggers layout, second reads resolved dimensions
   requestAnimationFrame(() => {
-    try {
-      session.fitAddon.fit();
-    } catch {
-      /* ignore fit errors on zero-size containers */
-    }
+    requestAnimationFrame(() => {
+      try {
+        session.fitAddon.fit();
+      } catch {
+        /* ignore fit errors on zero-size containers */
+      }
+    });
   });
 
   return session;

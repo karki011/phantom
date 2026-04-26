@@ -2,12 +2,12 @@
 // Author: Subash Karki
 
 import { onMount, For, Show, createSignal, createMemo } from 'solid-js';
-import { Play, ChevronLeft, ChevronRight, FileEdit, GitBranch, Calendar, FolderOpen } from 'lucide-solid';
+import { ChevronLeft, ChevronRight, FileEdit, GitBranch, Calendar, BookOpen } from 'lucide-solid';
+import { vars } from '@/styles/theme.css';
 import {
   bootstrapJournal,
   daySessions,
   selectedDate,
-  resumeSession,
   loadDaySessions,
   formatCost,
   formatDuration,
@@ -80,71 +80,6 @@ const formatDateLabel = (dateStr: string): string => {
   return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 };
 
-// ── ResumeBar ───────────────────────────────────────────────────────────────
-
-function ResumeBar() {
-  const session = resumeSession;
-
-  return (
-    <Show when={session()}>
-      {(s) => {
-        const files = () => parseFilesTouched(s().files_touched);
-        const endedAt = () => s().ended_at ?? Math.floor(Date.now() / 1000);
-
-        return (
-          <div class={styles.resumeBar}>
-            {/* Header */}
-            <div class={styles.resumeBarHeader}>
-              <span class={styles.resumeBarIcon}>
-                <Play size={14} />
-              </span>
-              <span class={styles.resumeBarTitle}>Pick up where you left off</span>
-            </div>
-
-            {/* First prompt */}
-            <Show when={s().first_prompt}>
-              <div class={styles.resumeBarPrompt}>"{s().first_prompt}"</div>
-            </Show>
-
-            {/* Meta line */}
-            <div class={styles.resumeBarMeta}>
-              <Show when={s().repo}>
-                <span>{shortRepo(s().repo)}</span>
-                <span class={styles.dot}>&middot;</span>
-              </Show>
-              <Show when={s().model}>
-                <span>{shortModel(s().model)}</span>
-                <span class={styles.dot}>&middot;</span>
-              </Show>
-              <span>{timeAgo(endedAt())}</span>
-              <span class={styles.dot}>&middot;</span>
-              <span>{formatCost(s().estimated_cost_micros)}</span>
-            </div>
-
-            {/* Outcome */}
-            <Show when={s().outcome}>
-              <div class={styles.resumeBarOutcome}>
-                Last: {s().outcome}
-              </div>
-            </Show>
-
-            {/* Actions */}
-            <div class={styles.resumeBarActions}>
-              <button class={styles.resumeBarButton} type="button">
-                Resume Session
-              </button>
-              <button class={styles.resumeBarButtonSecondary} type="button">
-                <FolderOpen size={14} />
-                Open Project
-              </button>
-            </div>
-          </div>
-        );
-      }}
-    </Show>
-  );
-}
-
 // ── DatePagination ──────────────────────────────────────────────────────────
 
 function DatePagination() {
@@ -167,11 +102,6 @@ function DatePagination() {
         style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'inherit', font: 'inherit' }}
       >
         {formatDateLabel(selectedDate())}
-        <Show when={selectedDate() !== todayStr()}>
-          <span style={{ 'font-size': '10px', opacity: '0.5', 'margin-left': '6px' }}>
-            {formatFullDate(selectedDate())}
-          </span>
-        </Show>
       </button>
       <button
         class={styles.calendarNavButton}
@@ -189,8 +119,8 @@ function DatePagination() {
 
 // ── DayHeader ───────────────────────────────────────────────────────────────
 
-function DayHeader() {
-  const sessions = daySessions;
+function DayHeader(props: { sessions: () => JournalEntry[] }) {
+  const sessions = props.sessions;
 
   const totalDuration = createMemo(() => {
     let secs = 0;
@@ -428,40 +358,144 @@ function SessionCard(props: { session: JournalEntry }) {
 // ── JournalPane (Main) ──────────────────────────────────────────────────────
 
 export default function JournalPane() {
+  const [projectFilter, setProjectFilter] = createSignal<string | null>(null);
+
+  const projects = createMemo(() => {
+    const repos = new Set<string>();
+    for (const s of daySessions()) {
+      if (s.repo) repos.add(s.repo);
+    }
+    return [...repos];
+  });
+
+  const filteredSessions = createMemo(() => {
+    const filter = projectFilter();
+    if (!filter) return daySessions();
+    return daySessions().filter((s) => s.repo === filter);
+  });
+
   onMount(() => {
     void bootstrapJournal();
   });
 
   return (
     <div class={styles.journalContainer}>
-      {/* Resume Bar */}
-      <ResumeBar />
-
       {/* Date Pagination */}
       <DatePagination />
 
+      {/* Project Filter */}
+      <Show when={projects().length > 1}>
+        <div style={{
+          display: 'flex',
+          gap: vars.space.xs,
+          padding: `0 ${vars.space.lg}`,
+          'flex-wrap': 'wrap',
+        }}>
+          <button
+            type="button"
+            style={{
+              'font-family': vars.font.mono,
+              'font-size': vars.fontSize.xs,
+              padding: `2px ${vars.space.sm}`,
+              background: vars.color.bgTertiary,
+              border: `1px solid ${!projectFilter() ? vars.color.accent : vars.color.border}`,
+              'border-radius': vars.radius.sm,
+              color: !projectFilter() ? vars.color.textPrimary : vars.color.textSecondary,
+              cursor: 'pointer',
+            }}
+            onClick={() => setProjectFilter(null)}
+          >
+            All
+          </button>
+          <For each={projects()}>
+            {(repo) => {
+              const name = repo.split('/').pop() ?? repo;
+              return (
+                <button
+                  type="button"
+                  style={{
+                    'font-family': vars.font.mono,
+                    'font-size': vars.fontSize.xs,
+                    padding: `2px ${vars.space.sm}`,
+                    background: vars.color.bgTertiary,
+                    border: `1px solid ${projectFilter() === repo ? vars.color.accent : vars.color.border}`,
+                    'border-radius': vars.radius.sm,
+                    color: projectFilter() === repo ? vars.color.textPrimary : vars.color.textSecondary,
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => setProjectFilter(repo)}
+                >
+                  {name}
+                </button>
+              );
+            }}
+          </For>
+        </div>
+      </Show>
+
       {/* Day Header */}
-      <DayHeader />
+      <DayHeader sessions={filteredSessions} />
 
       {/* Section divider */}
-      <Show when={daySessions().length > 0}>
+      <Show when={filteredSessions().length > 0}>
         <div class={styles.sectionDivider} />
       </Show>
 
       {/* Session Cards */}
       <Show
-        when={daySessions().length > 0}
+        when={filteredSessions().length > 0}
         fallback={
-          <div class={styles.emptyState}>
-            <span class={styles.emptyStateIcon}>
-              <Calendar size={32} />
-            </span>
-            <span>No sessions recorded for this day</span>
+          <div style={{
+            display: 'flex',
+            'flex-direction': 'column',
+            'align-items': 'center',
+            'justify-content': 'center',
+            flex: '1',
+            gap: vars.space.lg,
+            padding: vars.space.xxl,
+          }}>
+            <div style={{
+              display: 'flex',
+              'flex-direction': 'column',
+              'align-items': 'center',
+              gap: vars.space.md,
+              'max-width': '360px',
+              'text-align': 'center',
+            }}>
+              <span style={{
+                color: vars.color.accent,
+                opacity: '0.4',
+              }}>
+                <BookOpen size={40} />
+              </span>
+              <div style={{
+                width: '80px',
+                height: '1px',
+                background: `linear-gradient(90deg, transparent, ${vars.color.accent}, transparent)`,
+                opacity: '0.4',
+              }} />
+              <span style={{
+                'font-family': vars.font.mono,
+                'font-size': vars.fontSize.sm,
+                color: vars.color.textSecondary,
+              }}>
+                No activity on {formatDateLabel(selectedDate()).toLowerCase()}
+              </span>
+              <span style={{
+                'font-family': vars.font.mono,
+                'font-size': vars.fontSize.xs,
+                color: vars.color.textDisabled,
+                'line-height': '1.6',
+              }}>
+                Sessions will appear here as you work with Claude.
+                Navigate to a different day or start a new session.
+              </span>
+            </div>
           </div>
         }
       >
         <div class={styles.sessionList}>
-          <For each={daySessions()}>
+          <For each={filteredSessions()}>
             {(session) => <SessionCard session={session} />}
           </For>
         </div>

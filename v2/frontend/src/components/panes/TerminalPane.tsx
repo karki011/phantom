@@ -218,6 +218,11 @@ export default function TerminalPane(props: TerminalPaneProps) {
       } catch {}
     });
 
+    // Safety net: refit after flex layout fully settles
+    setTimeout(() => {
+      try { session.fitAddon.fit(); } catch {}
+    }, 250);
+
     // Wait for shell readiness before sending initial command.
     // Matches v1 pattern: wait for prompt regex, 3 output chunks, or 2s timeout.
     if (props.command) {

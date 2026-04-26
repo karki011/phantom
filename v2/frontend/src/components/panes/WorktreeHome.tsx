@@ -12,12 +12,13 @@ import { getPref } from '@/core/signals/preferences';
 import { prStatus, setPrStatus, isCreatingPr, setIsCreatingPr, ghAvailable, setGhAvailable } from '@/core/signals/activity';
 import { SessionControls } from '@/shared/SessionControls/SessionControls';
 import { NewWorktreeDialog } from '@/shared/NewWorktreeDialog/NewWorktreeDialog';
-import { getWorkspaceStatus, gitPull, gitPush, getPrStatus, getCiRuns, getCiRunsForBranch, createPrWithAI, listOpenPrs, isGhCliAvailable, getCheckAnnotations, getFailedSteps } from '@/core/bindings';
+import { getWorkspaceStatus, gitPull, gitPush, getPrStatus, getCiRuns, getCiRunsForBranch, createPrWithAI, listOpenPrs, isGhCliAvailable, getCheckAnnotations, getFailedSteps, getSessionsByProject } from '@/core/bindings';
 import { openURL } from '@/core/bindings/shell';
 import { showToast, showWarningToast } from '@/shared/Toast/Toast';
 import { Tip } from '@/shared/Tip/Tip';
 import { vars } from '@/styles/theme.css';
-import type { RepoStatus, PrStatus as PrStatusType, CiRun, CheckAnnotation, FailedStep } from '@/core/types';
+import { formatCost, formatDuration } from '@/core/signals/journal';
+import type { RepoStatus, PrStatus as PrStatusType, CiRun, CheckAnnotation, FailedStep, JournalEntry } from '@/core/types';
 import * as styles from '@/styles/home.css';
 
 function SessionGuardEmpty() {
@@ -49,6 +50,143 @@ function SessionGuardEmpty() {
         No active sessions in this worktree
       </span>
     </div>
+  );
+}
+
+function RecentSessions(props: { repoPath: string | null }) {
+  const [recentSessions, setRecentSessions] = createSignal<JournalEntry[]>([]);
+
+  createEffect(on(() => props.repoPath, (repo) => {
+    if (!repo) { setRecentSessions([]); return; }
+    let cancelled = false;
+    getSessionsByProject(repo, 5).then((sessions) => {
+      if (!cancelled) setRecentSessions(sessions);
+    });
+    onCleanup(() => { cancelled = true; });
+  }));
+
+  const timeAgo = (epochSecs: number | null): string => {
+    if (!epochSecs) return '';
+    const diffMins = Math.round((Date.now() / 1000 - epochSecs) / 60);
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const hrs = Math.floor(diffMins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+  };
+
+  const statusColor = (status: string | null): string => {
+    const st = (status ?? '').toLowerCase();
+    if (st === 'active' || st === 'running') return vars.color.warning;
+    if (st === 'interrupted' || st === 'error') return vars.color.danger;
+    return vars.color.success;
+  };
+
+  const statusLabel = (status: string | null): string => {
+    const st = (status ?? '').toLowerCase();
+    if (st === 'completed' || st === 'done') return 'Done';
+    if (st === 'active' || st === 'running') return 'Active';
+    if (st === 'interrupted') return 'Interrupted';
+    if (st === 'error') return 'Error';
+    return st || 'Done';
+  };
+
+  return (
+    <Show when={recentSessions().length > 0}>
+      <div>
+        <div style={{
+          'font-family': vars.font.mono,
+          'font-size': vars.fontSize.xs,
+          'text-transform': 'uppercase',
+          'letter-spacing': '0.12em',
+          color: vars.color.textDisabled,
+          'margin-bottom': vars.space.sm,
+        }}>
+          Recent Sessions
+        </div>
+        <div style={{
+          display: 'flex',
+          'flex-direction': 'column',
+          gap: '1px',
+          background: vars.color.bgTertiary,
+          'border-radius': vars.radius.lg,
+          border: `1px solid ${vars.color.border}`,
+          overflow: 'hidden',
+        }}>
+          <For each={recentSessions()}>
+            {(session) => {
+              const prompt = () => {
+                const fp = session.first_prompt;
+                if (!fp) return '';
+                return fp.length > 50 ? fp.slice(0, 47) + '...' : fp;
+              };
+              return (
+                <div style={{
+                  display: 'flex',
+                  'align-items': 'center',
+                  gap: vars.space.sm,
+                  padding: `${vars.space.xs} ${vars.space.sm}`,
+                  'font-family': vars.font.mono,
+                  'font-size': vars.fontSize.xs,
+                  background: vars.color.bgSecondary,
+                }}>
+                  <span style={{
+                    color: vars.color.textDisabled,
+                    'min-width': '52px',
+                    'text-align': 'right',
+                    'flex-shrink': '0',
+                  }}>
+                    {timeAgo(session.started_at)}
+                  </span>
+                  <span style={{ color: vars.color.textDisabled }}>&middot;</span>
+                  <span style={{
+                    color: vars.color.textSecondary,
+                    'min-width': '32px',
+                    'flex-shrink': '0',
+                  }}>
+                    {formatDuration(session.started_at, session.ended_at)}
+                  </span>
+                  <span style={{ color: vars.color.textDisabled }}>&middot;</span>
+                  <Show when={prompt()}>
+                    <span style={{
+                      color: vars.color.textSecondary,
+                      flex: '1',
+                      overflow: 'hidden',
+                      'text-overflow': 'ellipsis',
+                      'white-space': 'nowrap',
+                    }}>
+                      "{prompt()}"
+                    </span>
+                  </Show>
+                  <span style={{
+                    color: vars.color.textSecondary,
+                    'flex-shrink': '0',
+                  }}>
+                    {formatCost(session.estimated_cost_micros)}
+                  </span>
+                  <span style={{
+                    display: 'flex',
+                    'align-items': 'center',
+                    gap: '3px',
+                    color: statusColor(session.status),
+                    'flex-shrink': '0',
+                  }}>
+                    <span style={{
+                      width: '5px',
+                      height: '5px',
+                      'border-radius': '50%',
+                      background: statusColor(session.status),
+                    }} />
+                    {statusLabel(session.status)}
+                  </span>
+                </div>
+              );
+            }}
+          </For>
+        </div>
+      </div>
+    </Show>
   );
 }
 
@@ -477,6 +615,9 @@ export default function WorktreeHome() {
           </For>
         </Show>
       </Show>
+
+      {/* Recent Sessions */}
+      <RecentSessions repoPath={activeProject()?.repo_path ?? null} />
 
       {/* Quick Actions */}
       <div>
