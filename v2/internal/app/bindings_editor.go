@@ -81,6 +81,97 @@ func (a *App) WriteFileContents(workspaceId, relativePath, content string) error
 	return nil
 }
 
+// CreateFile creates an empty file in the workspace.
+// The relativePath is resolved against the workspace root and validated.
+func (a *App) CreateFile(workspaceId, relativePath string) error {
+	log.Info("app/CreateFile: called", "workspaceId", workspaceId, "relativePath", relativePath)
+
+	repoPath, err := a.resolveWorkspacePath(workspaceId)
+	if err != nil {
+		log.Error("app/CreateFile: resolve failed", "workspaceId", workspaceId, "err", err)
+		return err
+	}
+
+	// Security: validate path does not escape workspace root
+	absPath := filepath.Join(repoPath, filepath.Clean(relativePath))
+	if !strings.HasPrefix(absPath, filepath.Clean(repoPath)+string(filepath.Separator)) &&
+		absPath != filepath.Clean(repoPath) {
+		log.Warn("app/CreateFile: path traversal attempt", "relativePath", relativePath)
+		return fmt.Errorf("path traversal attempt: %s", relativePath)
+	}
+
+	// Ensure parent directory exists
+	dir := filepath.Dir(absPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		log.Error("app/CreateFile: mkdir failed", "dir", dir, "err", err)
+		return err
+	}
+
+	if err := os.WriteFile(absPath, []byte{}, 0644); err != nil {
+		log.Error("app/CreateFile: write failed", "absPath", absPath, "err", err)
+		return err
+	}
+
+	log.Info("app/CreateFile: success", "absPath", absPath)
+	return nil
+}
+
+// CreateFolder creates a directory in the workspace.
+// The relativePath is resolved against the workspace root and validated.
+func (a *App) CreateFolder(workspaceId, relativePath string) error {
+	log.Info("app/CreateFolder: called", "workspaceId", workspaceId, "relativePath", relativePath)
+
+	repoPath, err := a.resolveWorkspacePath(workspaceId)
+	if err != nil {
+		log.Error("app/CreateFolder: resolve failed", "workspaceId", workspaceId, "err", err)
+		return err
+	}
+
+	// Security: validate path does not escape workspace root
+	absPath := filepath.Join(repoPath, filepath.Clean(relativePath))
+	if !strings.HasPrefix(absPath, filepath.Clean(repoPath)+string(filepath.Separator)) &&
+		absPath != filepath.Clean(repoPath) {
+		log.Warn("app/CreateFolder: path traversal attempt", "relativePath", relativePath)
+		return fmt.Errorf("path traversal attempt: %s", relativePath)
+	}
+
+	if err := os.MkdirAll(absPath, 0755); err != nil {
+		log.Error("app/CreateFolder: mkdir failed", "absPath", absPath, "err", err)
+		return err
+	}
+
+	log.Info("app/CreateFolder: success", "absPath", absPath)
+	return nil
+}
+
+// DeleteFile deletes a file or empty directory from the workspace.
+// Uses os.Remove (not os.RemoveAll) to prevent accidental recursive deletion.
+func (a *App) DeleteFile(workspaceId, relativePath string) error {
+	log.Info("app/DeleteFile: called", "workspaceId", workspaceId, "relativePath", relativePath)
+
+	repoPath, err := a.resolveWorkspacePath(workspaceId)
+	if err != nil {
+		log.Error("app/DeleteFile: resolve failed", "workspaceId", workspaceId, "err", err)
+		return err
+	}
+
+	// Security: validate path does not escape workspace root
+	absPath := filepath.Join(repoPath, filepath.Clean(relativePath))
+	if !strings.HasPrefix(absPath, filepath.Clean(repoPath)+string(filepath.Separator)) &&
+		absPath != filepath.Clean(repoPath) {
+		log.Warn("app/DeleteFile: path traversal attempt", "relativePath", relativePath)
+		return fmt.Errorf("path traversal attempt: %s", relativePath)
+	}
+
+	if err := os.Remove(absPath); err != nil {
+		log.Error("app/DeleteFile: remove failed", "absPath", absPath, "err", err)
+		return err
+	}
+
+	log.Info("app/DeleteFile: success", "absPath", absPath)
+	return nil
+}
+
 // GetWorkspaceBlame returns per-line blame for a file in a workspace.
 // Resolves the workspace ID to a repo path, then delegates to git.Blame.
 func (a *App) GetWorkspaceBlame(workspaceId, relativePath string) ([]git.BlameLine, error) {

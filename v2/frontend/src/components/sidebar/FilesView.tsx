@@ -4,7 +4,7 @@
 import { For, Show, createSignal, createEffect, on, onCleanup } from 'solid-js';
 import { Collapsible } from '@kobalte/core/collapsible';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { ChevronRight, Folder, FolderOpen, FileText, Search, X, Eye, AppWindow, Terminal, Clipboard } from 'lucide-solid';
+import { ChevronRight, Folder, FolderOpen, FileText, Search, X, Eye, AppWindow, Terminal, Clipboard, FilePlus, FolderPlus, Trash2 } from 'lucide-solid';
 import * as styles from '@/styles/right-sidebar.css';
 import {
   fileTree,
@@ -16,7 +16,7 @@ import {
 } from '@/core/signals/files';
 import { activeWorktreeId } from '@/core/signals/app';
 import { worktreeMap } from '@/core/signals/worktrees';
-import { listWorkspaceFiles, listWorkspaceDir, searchWorkspaceFiles, revealInFinder, openInFinder, openInDefaultApp } from '@/core/bindings';
+import { listWorkspaceFiles, listWorkspaceDir, searchWorkspaceFiles, revealInFinder, openInFinder, openInDefaultApp, createFile, createFolder, deleteFile } from '@/core/bindings';
 import { addTabWithData } from '@/core/panes/signals';
 import { openFileInEditor } from '@/core/editor/open-file';
 import { showToast } from '@/shared/Toast/Toast';
@@ -129,6 +129,19 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
               Open File
             </ContextMenu.Item>
             <ContextMenu.Separator class={styles.contextMenuSeparator} />
+            <ContextMenu.Item class={styles.contextMenuItem} onSelect={async () => {
+              if (!window.confirm(`Delete "${props.node.name}"?`)) return;
+              const wtId = activeWorktreeId();
+              if (!wtId) return;
+              const ok = await deleteFile(wtId, props.node.path);
+              if (ok) {
+                showToast('Deleted', props.node.name);
+              }
+            }}>
+              <Trash2 size={13} />
+              Delete
+            </ContextMenu.Item>
+            <ContextMenu.Separator class={styles.contextMenuSeparator} />
             <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.node.name); showToast('Copied', props.node.name); }}>
               <Clipboard size={13} />
               Copy File Name
@@ -177,6 +190,40 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
         <ContextMenu.Content class={styles.contextMenuContent}>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={async () => {
+            const name = window.prompt('File name:');
+            if (!name?.trim()) return;
+            const wtId = activeWorktreeId();
+            if (!wtId) return;
+            const newPath = props.node.path ? `${props.node.path}/${name.trim()}` : name.trim();
+            const ok = await createFile(wtId, newPath);
+            if (ok) {
+              openFileInEditor({ workspaceId: wtId, filePath: newPath });
+              showToast('Created', newPath);
+              setLoaded(false);
+              handleExpand(true);
+            }
+          }}>
+            <FilePlus size={13} />
+            New File...
+          </ContextMenu.Item>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={async () => {
+            const name = window.prompt('Folder name:');
+            if (!name?.trim()) return;
+            const wtId = activeWorktreeId();
+            if (!wtId) return;
+            const newPath = props.node.path ? `${props.node.path}/${name.trim()}` : name.trim();
+            const ok = await createFolder(wtId, newPath);
+            if (ok) {
+              showToast('Created', newPath);
+              setLoaded(false);
+              handleExpand(true);
+            }
+          }}>
+            <FolderPlus size={13} />
+            New Folder...
+          </ContextMenu.Item>
+          <ContextMenu.Separator class={styles.contextMenuSeparator} />
           <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => openInFinder(absolutePath())}>
             <FolderOpen size={13} />
             Open in Finder
@@ -184,6 +231,19 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
           <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => addTabWithData('terminal', 'Terminal', { cwd: absolutePath() })}>
             <Terminal size={13} />
             Open in Terminal
+          </ContextMenu.Item>
+          <ContextMenu.Separator class={styles.contextMenuSeparator} />
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={async () => {
+            if (!window.confirm(`Delete folder "${props.node.name}"? (must be empty)`)) return;
+            const wtId = activeWorktreeId();
+            if (!wtId) return;
+            const ok = await deleteFile(wtId, props.node.path);
+            if (ok) {
+              showToast('Deleted', props.node.name);
+            }
+          }}>
+            <Trash2 size={13} />
+            Delete Folder
           </ContextMenu.Item>
           <ContextMenu.Separator class={styles.contextMenuSeparator} />
           <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.node.name); showToast('Copied', props.node.name); }}>

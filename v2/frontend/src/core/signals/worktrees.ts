@@ -68,18 +68,16 @@ export async function bootstrapWorktrees(): Promise<void> {
     if (!Number.isNaN(parsed)) setLeftSidebarWidth(parsed);
   }
 
-  // Restore active worktree
+  // Auto-expand only the project containing the last active worktree
   const savedWt = await loadPref('active_worktree_id');
-  if (savedWt) setActiveWorktreeId(savedWt);
-
-  // Restore expanded projects
-  const savedExpanded = await loadPref('expanded_projects');
-  if (savedExpanded) {
-    try {
-      const ids: string[] = JSON.parse(savedExpanded);
-      setExpandedProjects(new Set(ids));
-    } catch {
-      // ignore malformed pref
+  if (savedWt) {
+    setActiveWorktreeId(savedWt);
+    const map = worktreeMap();
+    for (const [projectId, wts] of Object.entries(map)) {
+      if (wts.some((w: Workspace) => w.id === savedWt)) {
+        setExpandedProjects(new Set([projectId]));
+        break;
+      }
     }
   }
 
@@ -106,10 +104,25 @@ export function toggleProject(projectId: string): void {
   });
 }
 
-// Select the active worktree and persist
+// Select the active worktree, persist, and auto-expand its parent project
 export function selectWorktree(worktreeId: string): void {
   setActiveWorktreeId(worktreeId);
   setPref('active_worktree_id', worktreeId);
+
+  // Auto-expand the parent project when selecting a worktree
+  const map = worktreeMap();
+  for (const [projectId, wts] of Object.entries(map)) {
+    if (wts.some((w: Workspace) => w.id === worktreeId)) {
+      setExpandedProjects((prev) => {
+        if (prev.has(projectId)) return prev;
+        const next = new Set(prev);
+        next.add(projectId);
+        setPref('expanded_projects', JSON.stringify([...next]));
+        return next;
+      });
+      break;
+    }
+  }
 }
 
 // Persist sidebar width to prefs

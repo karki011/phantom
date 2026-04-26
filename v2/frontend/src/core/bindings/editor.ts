@@ -64,6 +64,51 @@ export const getFileAtRevision = async (
  * @param workspaceId — workspace/worktree identifier
  * @param relativePath — path relative to workspace root
  */
+/**
+ * Create an empty file in a workspace.
+ * @param workspaceId — workspace/worktree identifier
+ * @param relativePath — path relative to workspace root
+ */
+export const createFile = async (workspaceId: string, relativePath: string): Promise<boolean> => {
+  try {
+    await App()?.CreateFile(workspaceId, relativePath);
+    return true;
+  } catch (err) {
+    console.error('[bindings] createFile error:', err);
+    return false;
+  }
+};
+
+/**
+ * Create a directory in a workspace.
+ * @param workspaceId — workspace/worktree identifier
+ * @param relativePath — path relative to workspace root
+ */
+export const createFolder = async (workspaceId: string, relativePath: string): Promise<boolean> => {
+  try {
+    await App()?.CreateFolder(workspaceId, relativePath);
+    return true;
+  } catch (err) {
+    console.error('[bindings] createFolder error:', err);
+    return false;
+  }
+};
+
+/**
+ * Delete a file or empty directory from a workspace.
+ * @param workspaceId — workspace/worktree identifier
+ * @param relativePath — path relative to workspace root
+ */
+export const deleteFile = async (workspaceId: string, relativePath: string): Promise<boolean> => {
+  try {
+    await App()?.DeleteFile(workspaceId, relativePath);
+    return true;
+  } catch (err) {
+    console.error('[bindings] deleteFile error:', err);
+    return false;
+  }
+};
+
 export const getWorkspaceBlame = async (
   workspaceId: string,
   relativePath: string,
