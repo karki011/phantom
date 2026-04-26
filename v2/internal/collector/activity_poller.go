@@ -17,11 +17,20 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 )
 
-// ActivityPoller polls active sessions' JSONL files every 5 seconds,
+const (
+	activityPollInterval     = 5 * time.Second
+	activityDebounce         = 500 * time.Millisecond
+	activityFallbackInterval = 30 * time.Second
+	activityRewatchInterval  = 60 * time.Second
+)
+
+// ActivityPoller watches active sessions' JSONL files for changes via fsnotify,
 // extracts tool calls / git operations / messages, and inserts activity events.
+// Falls back to 5s polling if fsnotify is unavailable.
 type ActivityPoller struct {
 	queries   *db.Queries
 	ctx       context.Context
@@ -30,6 +39,9 @@ type ActivityPoller struct {
 
 	mu          sync.Mutex
 	fileOffsets map[string]int64 // byte offset per JSONL file path
+
+	debounceMu     sync.Mutex
+	debounceTimers map[string]*time.Timer
 }
 
 // activityEvent is a single parsed activity entry emitted per poll tick.
@@ -55,10 +67,65 @@ func (p *ActivityPoller) Name() string { return "activity-poller" }
 
 func (p *ActivityPoller) Start(ctx context.Context) error {
 	p.ctx, p.cancel = context.WithCancel(ctx)
-	ticker := time.NewTicker(5 * time.Second)
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		slog.Warn("activity-poller: fsnotify unavailable, polling", "err", err)
+		return p.pollLoop()
+	}
+	defer watcher.Close()
+
+	p.debounceTimers = make(map[string]*time.Timer)
+	p.watchProjectDirs(watcher)
+
+	fallback := time.NewTicker(activityFallbackInterval)
+	defer fallback.Stop()
+
+	rewatch := time.NewTicker(activityRewatchInterval)
+	defer rewatch.Stop()
+
+	slog.Info("activity-poller started (fsnotify)")
+
+	for {
+		select {
+		case <-p.ctx.Done():
+			p.stopDebounceTimers()
+			slog.Info("activity-poller stopped")
+			return nil
+
+		case ev, ok := <-watcher.Events:
+			if !ok {
+				return nil
+			}
+			if !strings.HasSuffix(ev.Name, ".jsonl") {
+				continue
+			}
+			if !ev.Has(fsnotify.Write) && !ev.Has(fsnotify.Create) {
+				continue
+			}
+			p.debouncedProcessFile(ev.Name)
+
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return nil
+			}
+			slog.Error("activity-poller: watcher error", "err", err)
+
+		case <-fallback.C:
+			p.poll()
+
+		case <-rewatch.C:
+			p.watchProjectDirs(watcher)
+		}
+	}
+}
+
+// pollLoop is the legacy polling fallback when fsnotify is unavailable.
+func (p *ActivityPoller) pollLoop() error {
+	ticker := time.NewTicker(activityPollInterval)
 	defer ticker.Stop()
 
-	slog.Info("activity-poller started")
+	slog.Info("activity-poller started (polling)")
 
 	for {
 		select {
@@ -68,6 +135,63 @@ func (p *ActivityPoller) Start(ctx context.Context) error {
 		case <-ticker.C:
 			p.poll()
 		}
+	}
+}
+
+// watchProjectDirs adds fsnotify watches on ~/.claude/projects/ subdirectories.
+func (p *ActivityPoller) watchProjectDirs(watcher *fsnotify.Watcher) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	root := filepath.Join(home, ".claude", "projects")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			_ = watcher.Add(filepath.Join(root, e.Name()))
+		}
+	}
+}
+
+// debouncedProcessFile schedules processing for a JSONL file change after 500ms.
+func (p *ActivityPoller) debouncedProcessFile(jsonlPath string) {
+	p.debounceMu.Lock()
+	defer p.debounceMu.Unlock()
+
+	if t, ok := p.debounceTimers[jsonlPath]; ok {
+		t.Stop()
+	}
+	p.debounceTimers[jsonlPath] = time.AfterFunc(activityDebounce, func() {
+		p.processFileChange(jsonlPath)
+		p.debounceMu.Lock()
+		delete(p.debounceTimers, jsonlPath)
+		p.debounceMu.Unlock()
+	})
+}
+
+// processFileChange reads new lines from a single JSONL file and emits activity events.
+func (p *ActivityPoller) processFileChange(jsonlPath string) {
+	sessionID := sessionIDFromPath(jsonlPath)
+	if sessionID == "" {
+		return
+	}
+	events := p.readNewLines(jsonlPath, sessionID)
+	if len(events) == 0 {
+		return
+	}
+	p.persistAndEmit(events)
+}
+
+// stopDebounceTimers cancels all pending debounce timers during shutdown.
+func (p *ActivityPoller) stopDebounceTimers() {
+	p.debounceMu.Lock()
+	defer p.debounceMu.Unlock()
+	for k, t := range p.debounceTimers {
+		t.Stop()
+		delete(p.debounceTimers, k)
 	}
 }
 
@@ -112,14 +236,20 @@ func (p *ActivityPoller) poll() {
 	}
 	p.mu.Unlock()
 
-	// Cap at 100 events per tick.
-	if len(allEvents) > 100 {
-		allEvents = allEvents[len(allEvents)-100:]
+	p.persistAndEmit(allEvents)
+}
+
+// persistAndEmit stores activity events in the DB and emits a Wails event.
+func (p *ActivityPoller) persistAndEmit(events []activityEvent) {
+	if len(events) == 0 {
+		return
+	}
+	if len(events) > 100 {
+		events = events[len(events)-100:]
 	}
 
-	// Persist to DB.
 	now := time.Now().UnixMilli()
-	for _, ev := range allEvents {
+	for _, ev := range events {
 		meta, _ := json.Marshal(map[string]string{
 			"icon":     ev.Icon,
 			"category": ev.Category,
@@ -133,9 +263,8 @@ func (p *ActivityPoller) poll() {
 		})
 	}
 
-	// Emit single Wails event per tick.
-	if len(allEvents) > 0 && p.emitEvent != nil {
-		p.emitEvent(EventActivity, allEvents)
+	if p.emitEvent != nil {
+		p.emitEvent(EventActivity, events)
 	}
 }
 

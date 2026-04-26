@@ -482,8 +482,78 @@ func (sw *SessionWatcher) checkStale() {
 	}
 }
 
-// contextBridge reads context data for active sessions every 10 seconds.
+// contextBridge watches ~/.claude/phantom-os/context/ for session context JSON
+// updates via fsnotify. Falls back to 10s polling if fsnotify fails.
 func (sw *SessionWatcher) contextBridge() {
+	home, _ := os.UserHomeDir()
+	ctxDir := filepath.Join(home, ".claude", "phantom-os", "context")
+	_ = os.MkdirAll(ctxDir, 0o755)
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		slog.Warn("session_watcher: context bridge fsnotify unavailable, polling", "err", err)
+		sw.contextBridgePoll()
+		return
+	}
+	defer watcher.Close()
+
+	if err := watcher.Add(ctxDir); err != nil {
+		slog.Warn("session_watcher: context bridge watch failed, polling", "err", err)
+		sw.contextBridgePoll()
+		return
+	}
+
+	const debounceInterval = 2 * time.Second
+	var debounceTimer *time.Timer
+	debounceCh := make(chan struct{}, 1)
+	fallback := time.NewTicker(30 * time.Second)
+	defer fallback.Stop()
+
+	for {
+		select {
+		case <-sw.ctx.Done():
+			if debounceTimer != nil {
+				debounceTimer.Stop()
+			}
+			return
+
+		case ev, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			if !strings.HasSuffix(ev.Name, ".json") {
+				continue
+			}
+			if !ev.Has(fsnotify.Write) && !ev.Has(fsnotify.Create) {
+				continue
+			}
+			if debounceTimer != nil {
+				debounceTimer.Stop()
+			}
+			debounceTimer = time.AfterFunc(debounceInterval, func() {
+				select {
+				case debounceCh <- struct{}{}:
+				default:
+				}
+			})
+
+		case <-debounceCh:
+			sw.pollContext()
+
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			slog.Error("session_watcher: context bridge watcher error", "err", err)
+
+		case <-fallback.C:
+			sw.pollContext()
+		}
+	}
+}
+
+// contextBridgePoll is the legacy 10s polling fallback for the context bridge.
+func (sw *SessionWatcher) contextBridgePoll() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 

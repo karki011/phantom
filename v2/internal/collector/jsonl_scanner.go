@@ -16,8 +16,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/pricing"
+)
+
+const (
+	activeContextDebounce         = 2 * time.Second
+	activeContextFallbackInterval = 30 * time.Second
+	activeContextRewatchInterval  = 60 * time.Second
 )
 
 
@@ -442,8 +449,75 @@ func findJSONLFile(root, sessionID string) string {
 	return found
 }
 
-// activeContextPoller tail-reads JSONL files for active sessions every 10s.
+// activeContextPoller watches project dirs for JSONL changes via fsnotify and
+// re-scans token/cost data. Falls back to 10s polling if fsnotify fails.
 func (js *JSONLScanner) activeContextPoller() {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Printf("jsonl_scanner: fsnotify unavailable for active context, polling: %v", err)
+		js.activeContextPoll()
+		return
+	}
+	defer watcher.Close()
+
+	js.watchProjectDirs(watcher)
+
+	var debounceTimer *time.Timer
+	debounceCh := make(chan struct{}, 1)
+	fallback := time.NewTicker(activeContextFallbackInterval)
+	defer fallback.Stop()
+
+	rewatch := time.NewTicker(activeContextRewatchInterval)
+	defer rewatch.Stop()
+
+	for {
+		select {
+		case <-js.ctx.Done():
+			if debounceTimer != nil {
+				debounceTimer.Stop()
+			}
+			return
+
+		case ev, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			if !strings.HasSuffix(ev.Name, ".jsonl") {
+				continue
+			}
+			if !ev.Has(fsnotify.Write) && !ev.Has(fsnotify.Create) {
+				continue
+			}
+			if debounceTimer != nil {
+				debounceTimer.Stop()
+			}
+			debounceTimer = time.AfterFunc(activeContextDebounce, func() {
+				select {
+				case debounceCh <- struct{}{}:
+				default:
+				}
+			})
+
+		case <-debounceCh:
+			js.pollActiveContext()
+
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Printf("jsonl_scanner: active context watcher error: %v", err)
+
+		case <-fallback.C:
+			js.pollActiveContext()
+
+		case <-rewatch.C:
+			js.watchProjectDirs(watcher)
+		}
+	}
+}
+
+// activeContextPoll is the legacy 10s polling fallback.
+func (js *JSONLScanner) activeContextPoll() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -453,6 +527,20 @@ func (js *JSONLScanner) activeContextPoller() {
 			return
 		case <-ticker.C:
 			js.pollActiveContext()
+		}
+	}
+}
+
+// watchProjectDirs adds fsnotify watches on ~/.claude/projects/ subdirectories.
+func (js *JSONLScanner) watchProjectDirs(watcher *fsnotify.Watcher) {
+	root := projectsDir()
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			_ = watcher.Add(filepath.Join(root, e.Name()))
 		}
 	}
 }
