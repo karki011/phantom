@@ -2,11 +2,13 @@
 // Author: Subash Karki
 
 import { createSignal, createEffect, Show, For } from 'solid-js';
-import { Shield, Plus, Trash2, ShieldAlert } from 'lucide-solid';
-import { showToast, showWarningToast } from '@/shared/Toast/Toast';
+import { Shield, Plus, Trash2, ShieldAlert, Pencil } from 'lucide-solid';
+import { Checkbox } from '@kobalte/core/checkbox';
+import { showWarningToast } from '@/shared/Toast/Toast';
 import { getWards, saveWardRule, deleteWardRule, toggleWardRule, getWardPresets, applyWardPreset } from '@/core/bindings/wards';
 import type { WardRule, WardPreset } from '@/core/bindings/wards';
 import { sessions } from '@/core/signals/sessions';
+import { onWailsEvent } from '@/core/events';
 import * as styles from './WardManager.css';
 
 function levelBadgeClass(level: string): string {
@@ -32,6 +34,7 @@ export function WardManager() {
   const [scopeToSession, setScopeToSession] = createSignal(false);
   const [selectedSessionId, setSelectedSessionId] = createSignal('');
   const [activePreset, setActivePreset] = createSignal('');
+  const [isEditing, setIsEditing] = createSignal(false);
 
   async function refresh() {
     setRules(await getWards());
@@ -39,11 +42,11 @@ export function WardManager() {
   }
 
   createEffect(() => { refresh(); });
+  onWailsEvent('ward:rules_reloaded', () => { refresh(); });
 
   async function handleToggle(ruleID: string, enabled: boolean) {
     try {
       await toggleWardRule(ruleID, enabled);
-      showToast('Rule updated', `${ruleID} ${enabled ? 'enabled' : 'disabled'}`);
       await refresh();
     } catch (e) {
       showWarningToast('Error', String(e));
@@ -73,8 +76,8 @@ export function WardManager() {
     }
     try {
       await saveWardRule(toSave);
-      showToast('Rule saved', toSave.name);
       setShowCreator(false);
+      setIsEditing(false);
       setEditRule({ ...emptyRule });
       setScopeToSession(false);
       await refresh();
@@ -87,7 +90,6 @@ export function WardManager() {
     try {
       await applyWardPreset(presetID);
       setActivePreset(presetID);
-      showToast('Preset applied', presetID);
       await refresh();
     } catch (e) {
       showWarningToast('Error', String(e));
@@ -97,6 +99,17 @@ export function WardManager() {
   function openCreator() {
     setEditRule({ ...emptyRule });
     setScopeToSession(false);
+    setIsEditing(false);
+    setShowCreator(true);
+  }
+
+  function openEditor(rule: WardRule) {
+    setEditRule({ ...rule });
+    setScopeToSession(rule.session_ids?.length > 0);
+    if (rule.session_ids?.length > 0) {
+      setSelectedSessionId(rule.session_ids[0]);
+    }
+    setIsEditing(true);
     setShowCreator(true);
   }
 
@@ -131,12 +144,16 @@ export function WardManager() {
       {/* Inline creator form — between sticky header and scroll area */}
       <Show when={showCreator()}>
         <div class={styles.inlineForm}>
-          <span class={styles.inlineFormTitle}>New Rule</span>
+          <span class={styles.inlineFormTitle}>{isEditing() ? 'Edit Rule' : 'New Rule'}</span>
 
           <div class={styles.formRow}>
             <div class={styles.formField} style={{ flex: '1' }}>
               <label class={styles.formLabel}>ID</label>
-              <input class={styles.formInput} value={editRule().id} onInput={(e) => setEditRule(r => ({ ...r, id: e.currentTarget.value }))} placeholder="my-rule-id" />
+              <input class={styles.formInput} value={editRule().id}
+                onInput={(e) => setEditRule(r => ({ ...r, id: e.currentTarget.value }))}
+                placeholder="my-rule-id"
+                readOnly={isEditing()}
+                style={isEditing() ? { opacity: '0.6' } : {}} />
             </div>
             <div class={styles.formField} style={{ flex: '1' }}>
               <label class={styles.formLabel}>Name</label>
@@ -181,6 +198,12 @@ export function WardManager() {
               <label class={styles.formLabel}>Pattern (regex)</label>
               <input class={styles.formInput} value={editRule().pattern} onInput={(e) => setEditRule(r => ({ ...r, pattern: e.currentTarget.value }))} placeholder="rm\s+-rf|DROP\s+TABLE" />
             </div>
+            <div class={styles.formField} style={{ flex: '1' }}>
+              <label class={styles.formLabel}>Path Pattern (regex)</label>
+              <input class={styles.formInput} value={editRule().path_pattern}
+                onInput={(e) => setEditRule(r => ({ ...r, path_pattern: e.currentTarget.value }))}
+                placeholder="^/(etc|usr)/" />
+            </div>
           </div>
 
           <div class={styles.formField}>
@@ -188,10 +211,44 @@ export function WardManager() {
             <input class={styles.formInput} value={editRule().message} onInput={(e) => setEditRule(r => ({ ...r, message: e.currentTarget.value }))} placeholder="What to show when this rule triggers" />
           </div>
 
-          <div class={styles.formRow} style={{ 'align-items': 'center' }}>
-            <input type="checkbox" checked={scopeToSession()} onChange={(e) => setScopeToSession(e.currentTarget.checked)} />
-            <label class={styles.formLabel} style={{ margin: '0', 'text-transform': 'none', 'letter-spacing': '0' }}>Scope to specific session</label>
+          <div class={styles.formField}>
+            <label class={styles.formLabel}>Description</label>
+            <input class={styles.formInput} value={editRule().description}
+              onInput={(e) => setEditRule(r => ({ ...r, description: e.currentTarget.value }))}
+              placeholder="Internal note about this rule" />
           </div>
+
+          <div class={styles.formRow} style={{ 'align-items': 'center', gap: '16px' }}>
+            <Checkbox class={styles.checkboxRoot} checked={editRule().allow_bypass} onChange={(checked) => setEditRule(r => ({ ...r, allow_bypass: checked }))}>
+              <Checkbox.Input />
+              <Checkbox.Control class={styles.checkboxControl}>
+                <Checkbox.Indicator class={styles.checkboxIndicator}>✓</Checkbox.Indicator>
+              </Checkbox.Control>
+              <Checkbox.Label class={styles.formLabel} style={{ margin: '0', 'text-transform': 'none', 'letter-spacing': '0' }}>Allow bypass</Checkbox.Label>
+            </Checkbox>
+            <Checkbox class={styles.checkboxRoot} checked={editRule().audit} onChange={(checked) => setEditRule(r => ({ ...r, audit: checked }))}>
+              <Checkbox.Input />
+              <Checkbox.Control class={styles.checkboxControl}>
+                <Checkbox.Indicator class={styles.checkboxIndicator}>✓</Checkbox.Indicator>
+              </Checkbox.Control>
+              <Checkbox.Label class={styles.formLabel} style={{ margin: '0', 'text-transform': 'none', 'letter-spacing': '0' }}>Audit trail</Checkbox.Label>
+            </Checkbox>
+          </div>
+
+          <div class={styles.formField}>
+            <label class={styles.formLabel}>Tags</label>
+            <input class={styles.formInput} value={editRule().tags?.join(', ') ?? ''}
+              onInput={(e) => setEditRule(r => ({ ...r, tags: e.currentTarget.value.split(',').map(t => t.trim()).filter(Boolean) }))}
+              placeholder="filesystem, destructive, git" />
+          </div>
+
+          <Checkbox class={styles.checkboxRoot} checked={scopeToSession()} onChange={(checked) => setScopeToSession(checked)}>
+            <Checkbox.Input />
+            <Checkbox.Control class={styles.checkboxControl}>
+              <Checkbox.Indicator class={styles.checkboxIndicator}>✓</Checkbox.Indicator>
+            </Checkbox.Control>
+            <Checkbox.Label class={styles.formLabel} style={{ margin: '0', 'text-transform': 'none', 'letter-spacing': '0' }}>Scope to specific session</Checkbox.Label>
+          </Checkbox>
 
           <Show when={scopeToSession()}>
             <div class={styles.formField}>
@@ -229,10 +286,16 @@ export function WardManager() {
             {(rule) => (
               <div class={styles.ruleItem}>
                 <div class={styles.ruleRow}>
-                  <input type="checkbox" checked={rule.enabled} onChange={(e) => handleToggle(rule.id, e.currentTarget.checked)} class={styles.toggleSwitch} />
+                  <Checkbox class={styles.checkboxRoot} checked={rule.enabled} onChange={(checked) => handleToggle(rule.id, checked)}>
+                    <Checkbox.Input />
+                    <Checkbox.Control class={styles.checkboxControl}>
+                      <Checkbox.Indicator class={styles.checkboxIndicator}>✓</Checkbox.Indicator>
+                    </Checkbox.Control>
+                  </Checkbox>
                   <span class={styles.ruleName}>{rule.name}</span>
                   <span class={levelBadgeClass(rule.level)}>{rule.level}</span>
                   <Show when={rule.event_type}><span class={styles.sessionBadge}>{rule.event_type}</span></Show>
+                  <button class={styles.editButton} onClick={() => openEditor(rule)}><Pencil size={12} /></button>
                   <button class={styles.deleteButton} onClick={() => handleDelete(rule.id)}><Trash2 size={12} /></button>
                 </div>
                 <div class={styles.ruleDesc}>

@@ -8,7 +8,6 @@ export type PhaseId =
   | 'domain-select'
   | 'domain-link'
   | 'ability-awaken'
-  | 'ward-config'
   | 'complete';
 
 export type LineStyle =
@@ -64,4 +63,3 @@ export interface PhaseContext {
   config: PhaseConfig;
 }
 
-export type WardLevel = 'strict' | 'balanced' | 'relaxed';

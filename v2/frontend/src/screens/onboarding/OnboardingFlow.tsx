@@ -12,7 +12,6 @@ import { IdentityBind } from './phases/IdentityBind';
 import { DomainSelect } from './phases/DomainSelect';
 import { DomainLink } from './phases/DomainLink';
 import { AbilityAwaken } from './phases/AbilityAwaken';
-import { WardConfig } from './phases/WardConfig';
 import { Awakening } from './phases/Awakening';
 import * as styles from './styles/flow.css';
 
@@ -76,9 +75,6 @@ export function OnboardingFlow(props: OnboardingFlowProps) {
             <Match when={phase() === 'ability-awaken'}>
               <AbilityAwaken onComplete={handlePhaseComplete} />
             </Match>
-            <Match when={phase() === 'ward-config'}>
-              <WardConfig onComplete={handlePhaseComplete} />
-            </Match>
           </Switch>
         </div>
       </Show>
@@ -89,7 +85,7 @@ export function OnboardingFlow(props: OnboardingFlowProps) {
 
       <Show when={isMiddlePhase()}>
         <div class={styles.progressBar}>
-          <HexProgress total={5} current={completedPhases()} />
+          <HexProgress total={4} current={completedPhases()} />
         </div>
       </Show>
     </div>

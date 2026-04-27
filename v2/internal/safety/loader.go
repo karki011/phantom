@@ -177,6 +177,12 @@ func (l *Loader) SaveRule(rule Rule) error {
 	return l.writeWardFile(path, wf)
 }
 
+// ReplaceCustomRules replaces all rules in custom.yaml with the given set.
+func (l *Loader) ReplaceCustomRules(rules []Rule) error {
+	path := filepath.Join(l.dir, "custom.yaml")
+	return l.writeWardFile(path, wardFile{Rules: rules})
+}
+
 // DeleteRule removes a rule by ID from custom.yaml.
 func (l *Loader) DeleteRule(ruleID string) error {
 	path := filepath.Join(l.dir, "custom.yaml")
@@ -246,7 +252,12 @@ func (l *Loader) writeWardFile(path string, wf wardFile) error {
 	if err != nil {
 		return fmt.Errorf("safety/loader: marshal: %w", err)
 	}
-	return os.WriteFile(path, data, 0o644)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return err
+	}
+	// Reload in-memory state immediately so callers get fresh data
+	// without waiting for the fsnotify debounce.
+	return l.Load()
 }
 
 const debounce = 500 * time.Millisecond

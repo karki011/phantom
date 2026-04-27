@@ -8,7 +8,6 @@ export const phaseOrder: PhaseId[] = [
   'domain-select',
   'domain-link',
   'ability-awaken',
-  'ward-config',
   'complete',
 ];
 
@@ -173,23 +172,6 @@ export const phaseConfigs: Record<PhaseId, PhaseConfig> = {
     },
     persistKeys: [],
   },
-  'ward-config': {
-    id: 'ward-config',
-    title: 'Ward Configuration',
-    subtitle: 'Power without control leads to instability.',
-    announcement: {
-      text: 'Calibrating defense wards...',
-      speech: 'Choose your level of control.',
-      sound: 'scan',
-    },
-    autoResolve: {
-      timeout: 5000,
-      defaultKey: 'ward_level',
-      defaultValue: 'balanced',
-      message: 'No selection made. Balanced configuration applied.',
-    },
-    persistKeys: ['ward_level'],
-  },
   'complete': {
     id: 'complete',
     title: 'Awakening Complete',
@@ -250,12 +232,6 @@ export const abilities: Ability[] = [
     revealDelay: 800,
   },
 ];
-
-export const wardOptions = [
-  { value: 'strict', label: 'Strict', desc: 'Maximum control. Limited flexibility.' },
-  { value: 'balanced', label: 'Balanced', desc: 'Stable and adaptive.' },
-  { value: 'relaxed', label: 'Relaxed', desc: 'Minimal restriction. Greater freedom.' },
-] as const;
 
 export const themeDescriptions: Record<string, string> = {
   'system-core-dark': 'Primary command interface',

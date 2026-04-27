@@ -12,8 +12,12 @@ import { getPref } from '@/core/signals/preferences';
 import { prStatus, setPrStatus, isCreatingPr, setIsCreatingPr, ghAvailable, setGhAvailable } from '@/core/signals/activity';
 import { SessionControls } from '@/shared/SessionControls/SessionControls';
 import { NewWorktreeDialog } from '@/shared/NewWorktreeDialog/NewWorktreeDialog';
+import { WardManager } from '@/shared/WardManager/WardManager';
 import { getWorkspaceStatus, gitPull, gitPush, getPrStatus, getCiRuns, getCiRunsForBranch, createPrWithAI, listOpenPrs, isGhCliAvailable, getCheckAnnotations, getFailedSteps, getSessionsByProject } from '@/core/bindings';
 import { openURL } from '@/core/bindings/shell';
+import { getWards } from '@/core/bindings/wards';
+import type { WardRule } from '@/core/bindings/wards';
+import { onWailsEvent } from '@/core/events';
 import { showToast, showWarningToast } from '@/shared/Toast/Toast';
 import { Tip } from '@/shared/Tip/Tip';
 import { vars } from '@/styles/theme.css';
@@ -21,35 +25,167 @@ import { formatCost, formatDuration } from '@/core/signals/journal';
 import type { RepoStatus, PrStatus as PrStatusType, CiRun, CheckAnnotation, FailedStep, JournalEntry } from '@/core/types';
 import * as styles from '@/styles/home.css';
 
-function SessionGuardEmpty() {
+
+function WardSummaryCard() {
+  const [rules, setRules] = createSignal<WardRule[]>([]);
+  const [showManager, setShowManager] = createSignal(false);
+
+  async function refresh() {
+    setRules(await getWards());
+  }
+
+  createEffect(() => { refresh(); });
+  onWailsEvent('ward:rules_reloaded', () => { refresh(); });
+
+  const enabledRules = () => rules().filter((r) => r.enabled);
+  const blockCount = () => enabledRules().filter((r) => r.level === 'block').length;
+  const warnCount = () => enabledRules().filter((r) => r.level === 'warn').length;
+  const confirmCount = () => enabledRules().filter((r) => r.level === 'confirm').length;
+
   return (
-    <div style={{
-      display: 'flex',
-      'flex-direction': 'column',
-      gap: vars.space.sm,
-      padding: vars.space.lg,
-      background: vars.color.bgTertiary,
-      'border-radius': vars.radius.lg,
-      border: `1px solid ${vars.color.border}`,
-      'font-family': vars.font.mono,
-    }}>
-      <div style={{ display: 'flex', 'align-items': 'center', gap: vars.space.xs }}>
-        <span style={{ color: vars.color.textDisabled, display: 'flex', 'align-items': 'center' }}>
-          <Shield size={14} />
-        </span>
-        <span style={{
-          'font-size': vars.fontSize.xs,
-          color: vars.color.textDisabled,
-          'text-transform': 'uppercase',
-          'letter-spacing': '0.12em',
-        }}>
-          Session Guard
-        </span>
+    <>
+      <div style={{
+        display: 'flex',
+        'flex-direction': 'column',
+        gap: vars.space.sm,
+        padding: vars.space.lg,
+        background: vars.color.bgTertiary,
+        'border-radius': vars.radius.lg,
+        border: `1px solid ${vars.color.border}`,
+        'font-family': vars.font.mono,
+      }}>
+        {/* Header */}
+        <div style={{ display: 'flex', 'align-items': 'center', 'justify-content': 'space-between' }}>
+          <div style={{ display: 'flex', 'align-items': 'center', gap: vars.space.xs }}>
+            <span style={{ color: vars.color.accent, display: 'flex', 'align-items': 'center' }}>
+              <Shield size={14} />
+            </span>
+            <span style={{
+              'font-size': vars.fontSize.xs,
+              color: vars.color.textSecondary,
+              'text-transform': 'uppercase',
+              'letter-spacing': '0.12em',
+            }}>
+              Session Guard
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowManager(true)}
+            style={{
+              background: 'none',
+              border: `1px solid ${vars.color.border}`,
+              'border-radius': vars.radius.md,
+              color: vars.color.textSecondary,
+              'font-family': vars.font.mono,
+              'font-size': vars.fontSize.xs,
+              padding: `2px ${vars.space.sm}`,
+              cursor: 'pointer',
+              transition: `all ${vars.animation.fast} ease`,
+            }}
+          >
+            Manage Wards
+          </button>
+        </div>
+
+        {/* Summary */}
+        <Show
+          when={enabledRules().length > 0}
+          fallback={
+            <span style={{ 'font-size': vars.fontSize.xs, color: vars.color.textDisabled }}>
+              No ward rules defined — create rules to protect your sessions
+            </span>
+          }
+        >
+          <div style={{ display: 'flex', 'align-items': 'center', gap: vars.space.sm, 'flex-wrap': 'wrap' }}>
+            <span style={{ 'font-size': vars.fontSize.xs, color: vars.color.textSecondary }}>
+              {enabledRules().length} rule{enabledRules().length !== 1 ? 's' : ''} active
+            </span>
+            <Show when={blockCount() > 0}>
+              <span style={{
+                'font-size': '10px',
+                padding: `1px ${vars.space.xs}`,
+                'border-radius': vars.radius.sm,
+                background: `color-mix(in srgb, ${vars.color.danger} 18%, transparent)`,
+                color: vars.color.danger,
+                border: `1px solid color-mix(in srgb, ${vars.color.danger} 35%, transparent)`,
+              }}>
+                {blockCount()} block
+              </span>
+            </Show>
+            <Show when={warnCount() > 0}>
+              <span style={{
+                'font-size': '10px',
+                padding: `1px ${vars.space.xs}`,
+                'border-radius': vars.radius.sm,
+                background: `color-mix(in srgb, ${vars.color.warning} 18%, transparent)`,
+                color: vars.color.warning,
+                border: `1px solid color-mix(in srgb, ${vars.color.warning} 35%, transparent)`,
+              }}>
+                {warnCount()} warn
+              </span>
+            </Show>
+            <Show when={confirmCount() > 0}>
+              <span style={{
+                'font-size': '10px',
+                padding: `1px ${vars.space.xs}`,
+                'border-radius': vars.radius.sm,
+                background: `color-mix(in srgb, ${vars.color.accent} 18%, transparent)`,
+                color: vars.color.accent,
+                border: `1px solid color-mix(in srgb, ${vars.color.accent} 35%, transparent)`,
+              }}>
+                {confirmCount()} confirm
+              </span>
+            </Show>
+          </div>
+        </Show>
       </div>
-      <span style={{ 'font-size': vars.fontSize.xs, color: vars.color.textDisabled }}>
-        No active sessions in this worktree
-      </span>
-    </div>
+
+      {/* WardManager drawer overlay */}
+      <Show when={showManager()}>
+        <div
+          style={{
+            position: 'fixed',
+            inset: '0',
+            'z-index': '100',
+            display: 'flex',
+            'align-items': 'stretch',
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowManager(false); }}
+        >
+          <div style={{ flex: 1, background: 'rgba(0,0,0,0.45)' }} />
+          <div style={{
+            width: '480px',
+            'max-width': '90vw',
+            background: vars.color.bgSecondary,
+            'border-left': `1px solid ${vars.color.border}`,
+            overflow: 'auto',
+            'box-shadow': `-8px 0 32px rgba(0,0,0,0.4)`,
+            padding: vars.space.xl,
+          }}>
+            <div style={{ display: 'flex', 'align-items': 'center', 'justify-content': 'space-between', 'margin-bottom': vars.space.lg }}>
+              <span style={{ 'font-family': vars.font.mono, 'font-size': vars.fontSize.sm, color: vars.color.textPrimary }}>Ward Manager</span>
+              <button
+                type="button"
+                onClick={() => setShowManager(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: vars.color.textDisabled,
+                  cursor: 'pointer',
+                  'font-size': vars.fontSize.md,
+                  'line-height': '1',
+                  padding: vars.space.xs,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <WardManager />
+          </div>
+        </div>
+      </Show>
+    </>
   );
 }
 
@@ -607,9 +743,10 @@ export default function WorktreeHome() {
       {/* Separator */}
       <div class={styles.sectionSeparator} />
 
-      {/* Session Guard — only visible when ward system is enabled */}
+      {/* Session Guard — visible whenever wards are enabled, regardless of active sessions */}
       <Show when={getPref('wards_enabled') === 'true'}>
-        <Show when={worktreeSessions().length > 0} fallback={<SessionGuardEmpty />}>
+        <WardSummaryCard />
+        <Show when={worktreeSessions().length > 0}>
           <For each={worktreeSessions()}>
             {(session) => <SessionControls session={session} />}
           </For>

@@ -113,7 +113,7 @@ func (a *App) GetWardPresets() []WardPreset {
 	}
 }
 
-// ApplyWardPreset loads a preset rule set into custom.yaml.
+// ApplyWardPreset replaces custom.yaml with a preset rule set.
 func (a *App) ApplyWardPreset(presetID string) error {
 	if a.Safety == nil {
 		return fmt.Errorf("safety service not initialised")
@@ -122,12 +122,7 @@ func (a *App) ApplyWardPreset(presetID string) error {
 	if len(rules) == 0 {
 		return fmt.Errorf("unknown preset: %s", presetID)
 	}
-	for _, r := range rules {
-		if err := a.Safety.SaveRule(r); err != nil {
-			return err
-		}
-	}
-	return nil
+	return a.Safety.ReplaceCustomRules(rules)
 }
 
 // WardPreset describes a template rule set.

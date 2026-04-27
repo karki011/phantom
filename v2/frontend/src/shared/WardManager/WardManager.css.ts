@@ -189,6 +189,52 @@ export const toggleSwitch = style({
   flexShrink: 0,
 });
 
+export const checkboxRoot = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  cursor: 'pointer',
+});
+
+export const checkboxControl = style({
+  width: '16px',
+  height: '16px',
+  minWidth: '16px',
+  borderRadius: vars.radius.sm,
+  border: `1px solid ${vars.color.border}`,
+  backgroundColor: vars.color.bgSecondary,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: `all ${vars.animation.fast} ease`,
+  selectors: {
+    '[data-checked] &': {
+      backgroundColor: vars.color.accent,
+      borderColor: vars.color.accent,
+    },
+  },
+});
+
+export const checkboxIndicator = style({
+  color: vars.color.textInverse,
+  fontSize: vars.fontSize.xs,
+  lineHeight: 1,
+  fontWeight: 700,
+});
+
+export const editButton = style({
+  padding: '4px',
+  borderRadius: vars.radius.sm,
+  background: 'transparent',
+  border: 'none',
+  color: vars.color.textDisabled,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  flexShrink: 0,
+  ':hover': { color: vars.color.accent },
+});
+
 export const deleteButton = style({
   padding: '4px',
   borderRadius: vars.radius.sm,

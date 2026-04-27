@@ -124,6 +124,11 @@ func (s *Service) DeleteRule(ruleID string) error {
 	return s.loader.DeleteRule(ruleID)
 }
 
+// ReplaceCustomRules replaces all rules in custom.yaml with the given set.
+func (s *Service) ReplaceCustomRules(rules []Rule) error {
+	return s.loader.ReplaceCustomRules(rules)
+}
+
 // ToggleRule enables or disables a rule in custom.yaml.
 func (s *Service) ToggleRule(ruleID string, enabled bool) error {
 	return s.loader.ToggleRule(ruleID, enabled)
