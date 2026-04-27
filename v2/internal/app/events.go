@@ -40,6 +40,9 @@ const (
 	EventPrUpdated      = "pr:updated"       // payload: *git.PrStatus (nil if no PR)
 	EventCiUpdated      = "ci:updated"       // payload: []git.CiRun
 	EventPrsListUpdated = "prs:list-updated" // payload: []git.PrStatus
+
+	EventChatChunk           = "chat:chunk"            // payload: chat.StreamChunk
+	EventChatMessageComplete = "chat:message-complete"  // payload: *chat.Message
 )
 
 func EmitEvent(ctx context.Context, name string, data interface{}) {

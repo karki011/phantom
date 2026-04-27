@@ -224,7 +224,7 @@ export const actions = style({
   alignItems: 'center',
   justifyContent: 'center',
   gap: vars.space.sm,
-  padding: vars.space.sm,
+  padding: `${vars.space.md} ${vars.space.lg}`,
   borderTop: `1px solid ${vars.color.divider}`,
   flexShrink: 0,
 });
@@ -232,25 +232,33 @@ export const actions = style({
 export const actionButton = style({
   display: 'flex',
   alignItems: 'center',
+  justifyContent: 'center',
   gap: vars.space.xs,
-  backgroundColor: 'transparent',
-  border: 'none',
-  borderRadius: vars.radius.sm,
+  backgroundColor: vars.color.bgTertiary,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
   color: vars.color.textSecondary,
-  fontFamily: vars.font.body,
+  fontFamily: vars.font.mono,
   fontSize: vars.fontSize.xs,
   fontWeight: 500,
-  padding: `${vars.space.xs} ${vars.space.sm}`,
+  padding: `${vars.space.xs} ${vars.space.md}`,
   cursor: 'pointer',
   transition: `all ${vars.animation.fast} ease`,
   ':hover': {
     backgroundColor: vars.color.bgHover,
     color: vars.color.textPrimary,
+    borderColor: `color-mix(in srgb, ${vars.color.accent} 40%, ${vars.color.border})`,
   },
   ':focus-visible': {
     outline: `2px solid ${vars.color.borderFocus}`,
     outlineOffset: '1px',
   },
+});
+
+export const actionButtonCompact = style({
+  padding: vars.space.sm,
+  minWidth: '30px',
+  minHeight: '30px',
 });
 
 export const projectAddButton = style({
@@ -366,4 +374,17 @@ export const contextMenuSeparator = style({
   height: '1px',
   backgroundColor: vars.color.divider,
   margin: `${vars.space.xs} 0`,
+});
+
+export const deleteWarningText = style({
+  margin: 0,
+  fontFamily: vars.font.body,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textPrimary,
+  lineHeight: '1.6',
+});
+
+export const deleteWarningCount = style({
+  color: vars.color.warning,
+  fontWeight: 600,
 });

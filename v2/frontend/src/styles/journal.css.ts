@@ -693,3 +693,289 @@ export const dropdownItem = style({
 export const dropdownItemActive = style({
   color: vars.color.accent,
 });
+
+// === Inline Rendering ===
+
+export const markdownLink = style({
+  color: '#a855f7',
+  fontWeight: 600,
+  textDecoration: 'none',
+  cursor: 'pointer',
+  ':hover': {
+    textDecoration: 'underline',
+  },
+});
+
+export const bracketSpan = style({
+  color: vars.color.accent,
+  fontWeight: 600,
+});
+
+export const prHashSpan = style({
+  color: '#a855f7',
+  fontWeight: 600,
+});
+
+export const amountSpan = style({
+  color: vars.color.xp,
+  fontWeight: 600,
+});
+
+export const checkmarkSpan = style({
+  color: vars.color.success,
+  fontWeight: 600,
+});
+
+// === Section Header ===
+
+export const sectionHeaderRow = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  padding: `${vars.space.md} 0 ${vars.space.xs}`,
+});
+
+export const sectionHeaderIcon = style({
+  color: vars.color.accent,
+  display: 'flex',
+  alignItems: 'center',
+});
+
+export const sectionHeaderTitle = style({
+  fontSize: '0.75rem',
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  color: vars.color.textSecondary,
+  flex: 1,
+});
+
+export const sectionHeaderTimestamp = style({
+  fontSize: '0.625rem',
+  color: vars.color.textDisabled,
+  fontFamily: vars.font.mono,
+});
+
+export const sectionHeaderLock = style({
+  color: vars.color.textDisabled,
+  opacity: 0.4,
+});
+
+// === Content Block ===
+
+export const contentBlock = style({
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  borderRadius: vars.radius.md,
+  background: 'var(--block-bg)',
+  border: '1px solid var(--block-border)',
+});
+
+export const contentBlockHeading = style({
+  fontSize: '0.8rem',
+  fontWeight: 600,
+  color: vars.color.textPrimary,
+  marginBottom: vars.space.xs,
+  lineHeight: 1.5,
+});
+
+export const bulletRow = style({
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: vars.space.sm,
+  padding: '3px 0',
+});
+
+export const bulletDot = style({
+  color: vars.color.accent,
+  fontSize: '0.7rem',
+  marginTop: '2px',
+  flexShrink: 0,
+});
+
+export const bulletText = style({
+  fontSize: '0.78rem',
+  color: vars.color.textSecondary,
+  lineHeight: 1.5,
+});
+
+export const subBulletText = style({
+  fontSize: '0.75rem',
+  color: vars.color.textDisabled,
+  lineHeight: 1.5,
+  paddingLeft: `calc(${vars.space.sm} + 0.7rem + ${vars.space.sm})`,
+  padding: '1px 0',
+});
+
+export const plainText = style({
+  fontSize: '0.78rem',
+  color: vars.color.textSecondary,
+  lineHeight: 1.5,
+  padding: '2px 0',
+});
+
+// === Work Log ===
+
+export const workLogContainer = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 0,
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  borderRadius: vars.radius.md,
+  background: `color-mix(in srgb, ${vars.color.accent} 6%, transparent)`,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 15%, transparent)`,
+  maxHeight: '320px',
+  overflowY: 'auto',
+});
+
+export const workLogRow = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.md,
+  padding: `${vars.space.xs} 0`,
+});
+
+export const workLogTime = style({
+  fontSize: '0.7rem',
+  fontFamily: vars.font.mono,
+  color: vars.color.textDisabled,
+  minWidth: '40px',
+  flexShrink: 0,
+  fontVariantNumeric: 'tabular-nums',
+});
+
+export const workLogEvent = style({
+  fontSize: '0.78rem',
+  color: vars.color.textSecondary,
+  lineHeight: 1.4,
+});
+
+// === Generate Button ===
+
+export const generateButton = style({
+  padding: `${vars.space.sm} ${vars.space.lg}`,
+  borderRadius: vars.radius.md,
+  textAlign: 'center',
+  cursor: 'pointer',
+  background: vars.color.accent,
+  color: vars.color.textInverse,
+  fontSize: '0.73rem',
+  fontWeight: 600,
+  border: 'none',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: vars.space.sm,
+  width: 'fit-content',
+  fontFamily: 'inherit',
+  transition: `all ${vars.animation.fast} ease`,
+  selectors: {
+    '&[data-generating="true"]': {
+      cursor: 'default',
+      background: vars.color.bgTertiary,
+      color: vars.color.textDisabled,
+    },
+  },
+});
+
+export const generateButtonSpinner = style({
+  animation: 'journal-spin 1s linear infinite',
+});
+
+// === Date Pagination ===
+
+export const datePaginationContainer = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  borderBottom: `1px solid ${vars.color.divider}`,
+  flexShrink: 0,
+});
+
+export const datePaginationIcon = style({
+  color: vars.color.accent,
+  flexShrink: 0,
+});
+
+export const datePaginationLabel = style({
+  fontSize: '0.88rem',
+  fontWeight: 600,
+  color: vars.color.textPrimary,
+  flex: 1,
+  fontFamily: vars.font.body,
+});
+
+export const navButton = style({
+  cursor: 'pointer',
+  padding: '3px 8px',
+  borderRadius: vars.radius.sm,
+  display: 'flex',
+  alignItems: 'center',
+  border: 'none',
+  background: 'transparent',
+  color: vars.color.textSecondary,
+  transition: `background ${vars.animation.fast} ease`,
+  selectors: {
+    '&[data-disabled="true"]': {
+      opacity: 0.3,
+    },
+  },
+});
+
+export const todayButton = style({
+  cursor: 'pointer',
+  padding: '3px 10px',
+  borderRadius: vars.radius.sm,
+  fontSize: '0.68rem',
+  fontWeight: 600,
+  color: vars.color.accent,
+  border: `1px solid ${vars.color.accent}`,
+  background: 'transparent',
+  fontFamily: 'inherit',
+});
+
+export const dropdownTriggerFlex = style({
+  flex: 1,
+  textAlign: 'left',
+});
+
+// === Journal Body ===
+
+export const journalLoading = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: vars.space.xl,
+  color: vars.color.textDisabled,
+});
+
+export const journalSections = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.lg,
+});
+
+export const emptyWorkLog = style({
+  fontSize: '0.75rem',
+  color: vars.color.textDisabled,
+  fontStyle: 'italic',
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  borderRadius: vars.radius.md,
+  background: `color-mix(in srgb, ${vars.color.accent} 6%, transparent)`,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 15%, transparent)`,
+});
+
+export const notesTextarea = style({
+  width: '100%',
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  fontSize: '0.78rem',
+  borderRadius: vars.radius.md,
+  background: vars.color.bgSecondary,
+  border: `1px solid ${vars.color.border}`,
+  color: vars.color.textPrimary,
+  outline: 'none',
+  fontFamily: 'inherit',
+  resize: 'vertical',
+  lineHeight: 1.6,
+  boxSizing: 'border-box',
+});

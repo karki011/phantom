@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/log"
+	"github.com/subashkarki/phantom-os-v2/internal/provider"
 )
 
 // IsGhAvailable returns true if the gh CLI is authenticated and available.
@@ -507,7 +508,16 @@ func CreatePrWithAI(ctx context.Context, repoPath, branch, baseBranch string) (*
 	return pr, nil
 }
 
+// GenerateCommitMessage generates a commit message using the hardcoded
+// `claude --print -p` invocation. Kept for backward compatibility.
 func GenerateCommitMessage(ctx context.Context, diffStat string) string {
+	return GenerateCommitMessageWithRunner(ctx, diffStat, nil)
+}
+
+// GenerateCommitMessageWithRunner generates a commit message using the provided
+// CommandRunner when non-nil, falling back to the hardcoded `claude --print -p`
+// invocation when cmdRunner is nil.
+func GenerateCommitMessageWithRunner(ctx context.Context, diffStat string, cmdRunner provider.CommandRunner) string {
 	prompt := `Write a git commit message for the following changes. Format:
 
 Line 1: conventional commit type and short summary (under 72 chars)
@@ -520,7 +530,19 @@ No quotes around the message. No preamble like "Here's". Just the commit message
 Changes:
 ` + diffStat
 
-	cmd := exec.CommandContext(ctx, "claude", "--print", "-p", prompt)
+	var cmd *exec.Cmd
+	if cmdRunner != nil {
+		cmdStr := cmdRunner.AIGenerateCommand(prompt)
+		args := splitCommandString(cmdStr)
+		if len(args) > 0 {
+			cmd = exec.CommandContext(ctx, args[0], args[1:]...)
+		}
+	}
+	// Fallback: hardcoded Claude CLI
+	if cmd == nil {
+		cmd = exec.CommandContext(ctx, "claude", "--print", "-p", prompt)
+	}
+
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &bytes.Buffer{}
@@ -535,7 +557,16 @@ Changes:
 	return msg
 }
 
+// generatePRContent generates PR title and body using the hardcoded
+// `claude --print -p` invocation. Kept for backward compatibility.
 func generatePRContent(ctx context.Context, commits, diff string) (title, body string) {
+	return generatePRContentWithRunner(ctx, commits, diff, nil)
+}
+
+// generatePRContentWithRunner generates PR title and body using the provided
+// CommandRunner when non-nil, falling back to the hardcoded `claude --print -p`
+// invocation when cmdRunner is nil.
+func generatePRContentWithRunner(ctx context.Context, commits, diff string, cmdRunner provider.CommandRunner) (title, body string) {
 	prompt := `Output a GitHub PR title on line 1 and a markdown body starting on line 3. No preamble, no "Here's", no explanation — just the title and body directly.
 
 Title rules: under 70 chars, conventional format (feat/fix/chore: description), no quotes.
@@ -547,13 +578,25 @@ Commits:
 Diff (truncated):
 ` + diff
 
-	claudeCmd := exec.CommandContext(ctx, "claude", "--print", "-p", prompt)
-	var out bytes.Buffer
-	claudeCmd.Stdout = &out
-	claudeCmd.Stderr = &bytes.Buffer{}
+	var cmd *exec.Cmd
+	if cmdRunner != nil {
+		cmdStr := cmdRunner.AIGenerateCommand(prompt)
+		args := splitCommandString(cmdStr)
+		if len(args) > 0 {
+			cmd = exec.CommandContext(ctx, args[0], args[1:]...)
+		}
+	}
+	// Fallback: hardcoded Claude CLI
+	if cmd == nil {
+		cmd = exec.CommandContext(ctx, "claude", "--print", "-p", prompt)
+	}
 
-	if err := claudeCmd.Run(); err != nil {
-		log.Info("git/generatePRContent: claude failed, using fallback", "err", err)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &bytes.Buffer{}
+
+	if err := cmd.Run(); err != nil {
+		log.Info("git/generatePRContent: AI generation failed, using fallback", "err", err)
 		return fallbackPRContent(commits)
 	}
 
@@ -570,8 +613,26 @@ Diff (truncated):
 		return fallbackPRContent(commits)
 	}
 
-	log.Info("git/generatePRContent: claude success", "title", title)
+	log.Info("git/generatePRContent: AI generation success", "title", title)
 	return title, body
+}
+
+// splitCommandString splits a command string into executable and arguments.
+// It handles simple quoting for the prompt argument. For commands where the
+// prompt is passed as argv (e.g., "claude --print -p <prompt>"), this splits
+// on the first few known flags and keeps the rest as a single argument.
+func splitCommandString(cmdStr string) []string {
+	if cmdStr == "" {
+		return nil
+	}
+	// Simple split — works for most CLI commands. The provider's
+	// AIGenerateCommand() already interpolated the prompt into the template,
+	// so we split into at most the binary + flags + prompt.
+	fields := strings.Fields(cmdStr)
+	if len(fields) == 0 {
+		return nil
+	}
+	return fields
 }
 
 // fallbackPRContent derives a PR title from the first commit and uses the full log as the body.

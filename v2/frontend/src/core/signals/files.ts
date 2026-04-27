@@ -31,6 +31,10 @@ export interface CommitEntry {
 const [fileTree, setFileTree] = createSignal<FileNode[]>([]);
 const [selectedFile, setSelectedFile] = createSignal<string | null>(null);
 
+// Reveal-in-tree: set to a relative file path to auto-expand parents and scroll into view.
+// Consumed by FileTreeItem — cleared automatically after reveal completes.
+const [revealFilePath, setRevealFilePath] = createSignal<string | null>(null);
+
 // Git changes
 const [gitChanges, setGitChanges] = createSignal<GitChange[]>([]);
 const [commitMessage, setCommitMessage] = createSignal('');
@@ -57,6 +61,8 @@ export {
   setFileTree,
   selectedFile,
   setSelectedFile,
+  revealFilePath,
+  setRevealFilePath,
   gitChanges,
   setGitChanges,
   commitMessage,

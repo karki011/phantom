@@ -13,6 +13,7 @@ import {
   GitBranch, Eye, Clipboard, Trash2,
 } from 'lucide-solid';
 import * as styles from '@/styles/right-sidebar.css';
+import { iconShrink } from '@/styles/utilities.css';
 import { activeWorktreeId } from '@/core/signals/app';
 import { worktreeMap } from '@/core/signals/worktrees';
 import {
@@ -48,12 +49,12 @@ function getBasePath(): string {
 // ── Status icon per git status code ──────────────────────────────────────────
 
 function FileStatusIcon(props: { status: string }) {
-  const iconProps = { size: 12, style: { 'flex-shrink': 0 } };
+  const iconProps = { size: 12, class: iconShrink };
   switch (props.status) {
     case 'M': return <FilePen {...iconProps} class={styles.statusIconM} />;
     case 'A': return <FilePlus2 {...iconProps} class={styles.statusIconA} />;
     case 'D': return <FileX {...iconProps} class={styles.statusIconD} />;
-    case 'R': return <FilePen {...iconProps} class={styles.statusIconM} style={{ color: '#22d3ee', 'flex-shrink': 0 }} />;
+    case 'R': return <FilePen size={12} class={styles.statusIconR} />;
     default:  return <FileQuestion {...iconProps} class={styles.statusIconQ} />;
   }
 }
@@ -397,13 +398,13 @@ export function ChangesView() {
         <div class={styles.emptyState}>
           <GitCommit size={24} />
           <span>No changes detected</span>
-          <span style={{ 'font-size': '10px', opacity: '0.6' }}>
+          <span class={styles.emptyStateHint}>
             Modified files will appear here
           </span>
         </div>
       }
     >
-      <div style={{ display: 'flex', 'flex-direction': 'column', flex: '1', overflow: 'hidden', 'min-height': '0' }}>
+      <div class={styles.fileListContainer}>
 
         {/* ── Header bar ── */}
         <div class={styles.changesHeader}>
@@ -416,7 +417,7 @@ export function ChangesView() {
             </Tip>
           </Show>
 
-          <div style={{ 'margin-left': 'auto', display: 'flex', gap: '2px' }}>
+          <div class={styles.headerActions}>
             <Tip label="Fetch & refresh" placement="bottom">
               <button
                 type="button"
@@ -455,14 +456,14 @@ export function ChangesView() {
         </div>
 
         {/* ── Scrollable file list ── */}
-        <div style={{ 'overflow-y': 'auto', flex: '1', 'min-height': '0' }}>
+        <div class={styles.scrollArea}>
 
           {/* Staged section */}
           <Show when={stagedFiles().length > 0}>
             <Collapsible open={stagedOpen()} onOpenChange={setStagedOpen}>
               <Collapsible.Trigger as="div" class={styles.sectionHeader}>
-                <Show when={stagedOpen()} fallback={<ChevronRight size={12} style={{ 'flex-shrink': 0, color: 'var(--color-text-disabled)' }} />}>
-                  <ChevronDown size={12} style={{ 'flex-shrink': 0, color: 'var(--color-text-disabled)' }} />
+                <Show when={stagedOpen()} fallback={<ChevronRight size={12} class={styles.chevronIcon} />}>
+                  <ChevronDown size={12} class={styles.chevronIcon} />
                 </Show>
                 <span class={styles.sectionLabelStaged}>
                   STAGED ({stagedFiles().length})
@@ -493,8 +494,8 @@ export function ChangesView() {
           <Show when={unstagedFiles().length > 0}>
             <Collapsible open={changesOpen()} onOpenChange={setChangesOpen}>
               <Collapsible.Trigger as="div" class={styles.sectionHeader}>
-                <Show when={changesOpen()} fallback={<ChevronRight size={12} style={{ 'flex-shrink': 0, color: 'var(--color-text-disabled)' }} />}>
-                  <ChevronDown size={12} style={{ 'flex-shrink': 0, color: 'var(--color-text-disabled)' }} />
+                <Show when={changesOpen()} fallback={<ChevronRight size={12} class={styles.chevronIcon} />}>
+                  <ChevronDown size={12} class={styles.chevronIcon} />
                 </Show>
                 <span class={styles.sectionLabelChanges}>
                   CHANGES ({unstagedFiles().length})
@@ -538,7 +539,7 @@ export function ChangesView() {
         </div>
 
         {/* ── Commit area (pinned bottom) ── */}
-        <div class={styles.commitArea} style={{ 'margin-top': 'auto' }}>
+        <div class={`${styles.commitArea} ${styles.commitAreaPinned}`}>
           <TextField
             value={commitMessage()}
             onChange={setCommitMessage}

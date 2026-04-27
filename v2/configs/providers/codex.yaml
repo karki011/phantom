@@ -1,0 +1,137 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Codex CLI Provider Config — Phantom OS v2
+# Based on real filesystem inspection of ~/.codex/ (2026-04-26)
+# Author: Subash Karki
+# ═══════════════════════════════════════════════════════════════════════
+
+# ── Identity ──────────────────────────────────────────────────────────
+provider: codex
+display_name: "OpenAI Codex CLI"
+icon: "openai"
+enabled: true
+
+# ── Detection ─────────────────────────────────────────────────────────
+detection:
+  binary: "codex"
+  paths:
+    - "~/.codex/"
+    - "~/.codex/sessions/"
+  version_command: ["codex", "--version"]
+  version_pattern: "(\\d+\\.\\d+\\.\\d+)"
+
+# ── Paths ─────────────────────────────────────────────────────────────
+paths:
+  sessions: "~/.codex/"
+  conversations: "~/.codex/sessions/"
+  settings: "~/.codex/state_5.sqlite"
+
+# ── Session Discovery ─────────────────────────────────────────────────
+# Codex has DUAL discovery:
+#   1. JSONL index: ~/.codex/session_index.jsonl (fields: id, thread_name, updated_at)
+#   2. SQLite:      ~/.codex/state_5.sqlite threads table
+#      Columns: model_provider, model, cwd, title, tokens_used, source,
+#               approval_mode, git_sha, git_branch
+# The Go adapter reads SQLite for richer data, falls back to JSONL index.
+sessions:
+  discovery_method: "sqlite"         # Primary: SQLite; fallback: jsonl_index
+  sqlite:
+    path: "~/.codex/state_5.sqlite"
+    table: "threads"
+    fields:
+      id: "id"
+      cwd: "cwd"
+      model: "model"
+      model_provider: "model_provider"
+      title: "title"
+      tokens_used: "tokens_used"
+      source: "source"
+      approval_mode: "approval_mode"
+      git_sha: "git_sha"
+      git_branch: "git_branch"
+  jsonl_index:
+    path: "~/.codex/session_index.jsonl"
+    fields:
+      id: "id"
+      name: "thread_name"
+      updated_at: "updated_at"
+  alive_check: "none"
+
+# ── Conversation Parsing ──────────────────────────────────────────────
+# Codex uses JSONL in date-nested paths: sessions/YYYY/MM/DD/rollout-<ts>-<id>.jsonl
+# JSONL event types are completely different from Claude:
+#   - session_meta:  { id, timestamp, cwd, originator, cli_version, source, model_provider, base_instructions, git }
+#   - event_msg:     { type: "event_msg", ... }
+#   - response_item: { type: "response_item", item: { ... } }
+#   - turn_context:  { type: "turn_context", ... }
+conversations:
+  encoding: "jsonl"
+  file_extension: ".jsonl"
+  path_convention: "date-nested"     # YYYY/MM/DD/rollout-<timestamp>-<id>.jsonl
+  content_extraction: "openai-events"
+  token_strategy: "aggregate"        # Primary: tokens_used from SQLite; per-event in JSONL
+
+  message_types:
+    user:
+      match:
+        - { field: "type", value: "event_msg" }
+    assistant:
+      match:
+        - { field: "type", value: "response_item" }
+    system:
+      match:
+        - { field: "type", value: "turn_context" }
+    session_meta:
+      match:
+        - { field: "type", value: "session_meta" }
+
+  usage:
+    locations:
+      - "usage"
+      - "response.usage"
+    fields:
+      input: "prompt_tokens"
+      output: "completion_tokens"
+      total: "total_tokens"
+
+# ── Commands ──────────────────────────────────────────────────────────
+commands:
+  resume: ""                          # Codex has no resume-by-ID command
+  new_session: "codex --full-auto"
+  ai_generate: "codex --full-auto -- '${PROMPT}'"
+  prompt_transport: "argv"
+
+# ── Pricing ───────────────────────────────────────────────────────────
+pricing:
+  default_tier: "codex"
+  tiers:
+    codex:
+      match: "codex"
+      input_per_m: 2.50
+      output_per_m: 10.0
+      cache_read_per_m: 0.0
+      cache_write_per_m: 0.0
+    gpt4o:
+      match: "gpt-4o"
+      input_per_m: 2.50
+      output_per_m: 10.0
+      cache_read_per_m: 1.25
+      cache_write_per_m: 0.0
+    o3:
+      match: "o3"
+      input_per_m: 2.0
+      output_per_m: 8.0
+      cache_read_per_m: 0.0
+      cache_write_per_m: 0.0
+
+# ── Adapter ───────────────────────────────────────────────────────────
+# Codex needs Go adapter for:
+# - Dual discovery (SQLite primary + JSONL fallback)
+# - Date-nested conversation path resolution
+# - OpenAI event schema parsing (session_meta, event_msg, response_item, turn_context)
+adapter:
+  go_package: "codex"
+  overrides:
+    - "DiscoverSessions"
+    - "FindConversationFile"
+    - "ParseConversation"
+    - "ParseUsage"

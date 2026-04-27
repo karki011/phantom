@@ -19,6 +19,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
+	"github.com/subashkarki/phantom-os-v2/internal/provider"
 )
 
 const (
@@ -33,6 +34,7 @@ const (
 // Falls back to 5s polling if fsnotify is unavailable.
 type ActivityPoller struct {
 	queries   *db.Queries
+	prov      provider.Provider
 	ctx       context.Context
 	cancel    context.CancelFunc
 	emitEvent func(name string, data interface{})
@@ -56,9 +58,10 @@ type activityEvent struct {
 }
 
 // NewActivityPoller creates a new ActivityPoller.
-func NewActivityPoller(queries *db.Queries, emitEvent func(string, interface{})) *ActivityPoller {
+func NewActivityPoller(queries *db.Queries, prov provider.Provider, emitEvent func(string, interface{})) *ActivityPoller {
 	return &ActivityPoller{
 		queries:     queries,
+		prov:        prov,
 		emitEvent:   emitEvent,
 		fileOffsets: make(map[string]int64),
 	}
@@ -145,13 +148,9 @@ func (p *ActivityPoller) pollLoop() error {
 	}
 }
 
-// watchProjectDirs adds fsnotify watches on ~/.claude/projects/ subdirectories.
+// watchProjectDirs adds fsnotify watches on conversations directory subdirectories.
 func (p *ActivityPoller) watchProjectDirs(watcher *fsnotify.Watcher) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return
-	}
-	root := filepath.Join(home, ".claude", "projects")
+	root := p.prov.ConversationsDir()
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return
@@ -267,6 +266,7 @@ func (p *ActivityPoller) persistAndEmit(events []activityEvent) {
 			Type:      ev.Type,
 			SessionID: sql.NullString{String: ev.SessionID, Valid: true},
 			Metadata:  sql.NullString{String: string(meta), Valid: true},
+			Provider:  p.prov.Name(),
 		})
 	}
 
@@ -312,49 +312,20 @@ func (p *ActivityPoller) persistAndEmit(events []activityEvent) {
 	}
 }
 
-// findJSONLPath returns the most recently modified .jsonl file in the session's
-// project directory under ~/.claude/projects/.
+// findJSONLPath returns the conversation file path for a session using the
+// provider's FindConversationFile method.
 func (p *ActivityPoller) findJSONLPath(sess db.Session) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-
-	// Determine project dir from session's Cwd field.
 	cwd := sess.Cwd.String
 	if cwd == "" {
 		return ""
 	}
 
-	// Claude Code stores JSONL under ~/.claude/projects/<encoded-path>/
-	encodedPath := strings.ReplaceAll(cwd, "/", "-")
-	if strings.HasPrefix(encodedPath, "-") {
-		encodedPath = encodedPath[1:]
-	}
-	projectDir := filepath.Join(home, ".claude", "projects", encodedPath)
-
-	entries, err := os.ReadDir(projectDir)
+	path, err := p.prov.FindConversationFile(sess.ID, cwd)
 	if err != nil {
+		slog.Debug("activity-poller: find conversation file", "session_id", sess.ID, "cwd", cwd, "err", err)
 		return ""
 	}
-
-	var bestPath string
-	var bestMod time.Time
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-		if info.ModTime().After(bestMod) {
-			bestMod = info.ModTime()
-			bestPath = filepath.Join(projectDir, entry.Name())
-		}
-	}
-	return bestPath
+	return path
 }
 
 // readNewLines reads bytes from the last known offset, parses JSONL lines.

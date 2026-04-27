@@ -102,15 +102,13 @@ export function RightSidebar() {
                     }
                   >
                     <span
-                      class={styles.activityDot}
-                      style={{ 'background-color': 'var(--color-success, #22c55e)' }}
+                      class={`${styles.activityDot} ${styles.statusDotActive}`}
                     />
                   </Show>
                 }
               >
                 <span
-                  class={`${styles.activityDot} ${styles.activityDotPulse}`}
-                  style={{ 'background-color': 'var(--color-accent, #06b6d4)' }}
+                  class={`${styles.activityDot} ${styles.activityDotPulse} ${styles.statusDotDefault}`}
                 />
               </Show>
             </Tabs.Trigger>

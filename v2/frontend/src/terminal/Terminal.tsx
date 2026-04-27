@@ -124,7 +124,11 @@ export function Terminal(props: TerminalProps) {
     let resizeRaf = 0;
     const debouncedFit = () => {
       cancelAnimationFrame(resizeRaf);
-      resizeRaf = requestAnimationFrame(() => fitAddon?.fit());
+      resizeRaf = requestAnimationFrame(() => {
+        if (containerRef.offsetWidth > 0 && containerRef.offsetHeight > 0) {
+          fitAddon?.fit();
+        }
+      });
     };
     resizeObserver = new ResizeObserver(debouncedFit);
     resizeObserver.observe(containerRef);
@@ -154,7 +158,7 @@ export function Terminal(props: TerminalProps) {
     <div class={styles.terminalPane}>
       <div class={styles.terminalHeader}>
         <span>Terminal</span>
-        <span style={{ opacity: '0.4' }}>·</span>
+        <span class={styles.dimmed}>·</span>
         <span class={styles.terminalCwdLabel}>{props.cwd}</span>
       </div>
       <div class={styles.terminalContainer} ref={containerRef} />

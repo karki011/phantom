@@ -7,15 +7,18 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/charmbracelet/log"
 )
 
-// SystemStats holds CPU, memory, and battery information for the UI header.
+// SystemStats holds CPU, memory, disk, and battery information for the UI header.
 type SystemStats struct {
 	CPUPercent      float64 `json:"cpu_percent"`
 	MemUsedGB       float64 `json:"mem_used_gb"`
 	MemTotalGB      float64 `json:"mem_total_gb"`
+	DiskUsedGB      float64 `json:"disk_used_gb"`
+	DiskTotalGB     float64 `json:"disk_total_gb"`
 	BatteryPercent  int     `json:"battery_percent"`
 	BatteryCharging bool    `json:"battery_charging"`
 }
@@ -26,8 +29,23 @@ func (a *App) GetSystemStats() SystemStats {
 	stats := SystemStats{BatteryPercent: -1}
 	stats.CPUPercent = getCPUPercent()
 	stats.MemTotalGB, stats.MemUsedGB = getMemoryStats()
+	stats.DiskTotalGB, stats.DiskUsedGB = getDiskStats()
 	stats.BatteryPercent, stats.BatteryCharging = getBatteryStats()
 	return stats
+}
+
+// getDiskStats returns total and used disk space in GB for the root volume.
+func getDiskStats() (totalGB, usedGB float64) {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs("/", &stat); err != nil {
+		log.Debug("getDiskStats failed", "err", err)
+		return 0, 0
+	}
+	totalBytes := stat.Blocks * uint64(stat.Bsize)
+	freeBytes := stat.Bavail * uint64(stat.Bsize)
+	totalGB = float64(totalBytes) / (1024 * 1024 * 1024)
+	usedGB = totalGB - float64(freeBytes)/(1024*1024*1024)
+	return
 }
 
 // getCPUPercent aggregates per-process CPU via `ps` and normalises by core count.

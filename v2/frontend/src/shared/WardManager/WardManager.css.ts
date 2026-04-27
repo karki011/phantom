@@ -402,3 +402,30 @@ export const sectionDivider = style({
   background: `linear-gradient(90deg, transparent, ${vars.color.accent}, transparent)`,
   opacity: 0.3,
 });
+
+export const formFieldFlex = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+  flex: 1,
+});
+
+export const checkboxLabelReset = style({
+  fontFamily: vars.font.mono,
+  fontSize: '0.6rem',
+  color: vars.color.textSecondary,
+  margin: 0,
+  textTransform: 'none',
+  letterSpacing: 'normal',
+});
+
+export const shieldIcon = style({
+  verticalAlign: 'middle',
+  marginRight: '6px',
+});
+
+export const formRowCenter = style({
+  display: 'flex',
+  gap: vars.space.lg,
+  alignItems: 'center',
+});

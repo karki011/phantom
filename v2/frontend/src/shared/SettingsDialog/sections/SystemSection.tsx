@@ -3,7 +3,6 @@
 
 import { For } from 'solid-js';
 import { RotateCcw, Keyboard, Info } from 'lucide-solid';
-import { vars } from '../../../styles/theme.css';
 import { buttonRecipe } from '../../../styles/recipes.css';
 import { setPreference } from '../../../core/bindings';
 import { showWarningToast } from '../../Toast/Toast';
@@ -20,7 +19,7 @@ const SHORTCUTS: { keys: string; description: string }[] = [
 export default function SystemSection() {
   async function handleReinitialize() {
     try {
-      await setPreference('onboarding_complete', '');
+      await setPreference('onboarding_completed', '');
       showWarningToast('System Re-initialized', 'Reloading application...');
       setTimeout(() => window.location.reload(), 1000);
     } catch {
@@ -45,7 +44,7 @@ export default function SystemSection() {
             class={buttonRecipe({ variant: 'danger', size: 'sm' })}
             onClick={handleReinitialize}
           >
-            <span style={{ display: 'inline-flex', 'align-items': 'center', gap: vars.space.xs }}>
+            <span class={styles.inlineIconLabel}>
               <RotateCcw size={14} />
               Re-initialize System
             </span>
@@ -56,7 +55,7 @@ export default function SystemSection() {
       {/* Keyboard Shortcuts */}
       <div class={styles.settingGroup}>
         <span class={styles.settingLabel}>
-          <span style={{ display: 'inline-flex', 'align-items': 'center', gap: vars.space.xs }}>
+          <span class={styles.inlineIconLabel}>
             <Keyboard size={14} />
             Keyboard Shortcuts
           </span>
@@ -76,16 +75,16 @@ export default function SystemSection() {
       {/* About */}
       <div class={styles.settingGroup}>
         <span class={styles.settingLabel}>
-          <span style={{ display: 'inline-flex', 'align-items': 'center', gap: vars.space.xs }}>
+          <span class={styles.inlineIconLabel}>
             <Info size={14} />
             About
           </span>
         </span>
         <div class={styles.aboutBlock}>
-          <span style={{ 'font-family': vars.font.display, 'font-size': vars.fontSize.lg, color: vars.color.textPrimary, 'font-weight': '600' }}>
+          <span class={styles.aboutTitle}>
             PhantomOS v2
           </span>
-          <span style={{ 'font-family': vars.font.mono, 'font-size': vars.fontSize.xs, color: vars.color.textSecondary }}>
+          <span class={styles.aboutAuthor}>
             Author: Subash Karki
           </span>
         </div>

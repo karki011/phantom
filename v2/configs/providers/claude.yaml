@@ -1,0 +1,122 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Claude Code Provider Config — Phantom OS v2
+# Based on real filesystem inspection of ~/.claude/ (2026-04-26)
+# Author: Subash Karki
+# ═══════════════════════════════════════════════════════════════════════
+
+# ── Identity ──────────────────────────────────────────────────────────
+provider: claude
+display_name: "Claude Code"
+icon: "anthropic"
+enabled: true
+
+# ── Detection ─────────────────────────────────────────────────────────
+detection:
+  binary: "claude"
+  paths:
+    - "~/.claude/sessions/"
+    - "~/.claude/projects/"
+  version_command: ["claude", "--version"]
+  version_pattern: "(\\d+\\.\\d+\\.\\d+)"
+
+# ── Paths ─────────────────────────────────────────────────────────────
+paths:
+  sessions: "~/.claude/sessions/"
+  conversations: "~/.claude/projects/"
+  settings: "~/.claude/settings.json"
+  todos: "~/.claude/todos/"
+  tasks: "~/.claude/tasks/"
+  context: "~/.phantom-os/context/claude/"
+
+# ── Session Discovery ─────────────────────────────────────────────────
+# Claude stores individual JSON files in sessions/, one per session.
+sessions:
+  discovery_method: "glob"
+  glob: "*.json"
+  exclude: ["*.lock", "*.tmp"]
+  fields:
+    id: "sessionId"
+    pid: "pid"
+    cwd: "cwd"
+    model: "model"
+    started_at: "startedAt"
+  alive_check: "pid"
+
+# ── Conversation Parsing ──────────────────────────────────────────────
+# Claude uses JSONL in projects/<encoded-cwd>/ where CWD path has / → -
+# Each line is a JSON object with content blocks (text, tool_use, thinking)
+conversations:
+  encoding: "jsonl"
+  file_extension: ".jsonl"
+  path_convention: "encoded"       # CWD with / replaced by -
+  content_extraction: "claude-blocks"
+  token_strategy: "inline"          # Usage blocks interleaved in JSONL lines
+
+  message_types:
+    user:
+      match:
+        - { field: "type", value: "human" }
+    assistant:
+      match:
+        - { field: "type", value: "assistant" }
+    tool_use:
+      match:
+        - { field: "type", value: "tool_use" }
+    tool_result:
+      match:
+        - { field: "type", value: "tool_result" }
+    system:
+      match:
+        - { field: "type", value: "system" }
+    thinking:
+      match:
+        - { field: "type", value: "thinking" }
+
+  usage:
+    locations:
+      - "usage"
+      - "message.usage"
+      - "result.usage"
+    fields:
+      input: "input_tokens"
+      output: "output_tokens"
+      cache_read: "cache_read_input_tokens"
+      cache_write: "cache_creation_input_tokens"
+
+# ── Commands ──────────────────────────────────────────────────────────
+commands:
+  resume: "claude --resume --session-id ${SESSION_ID}"
+  new_session: "claude --dangerously-skip-permissions"
+  ai_generate: "claude --print -p '${PROMPT}'"
+  prompt_transport: "argv"
+
+# ── Pricing ───────────────────────────────────────────────────────────
+pricing:
+  default_tier: "sonnet"
+  tiers:
+    sonnet:
+      match: "sonnet"
+      input_per_m: 3.0
+      output_per_m: 15.0
+      cache_read_per_m: 0.30
+      cache_write_per_m: 3.75
+    opus:
+      match: "opus"
+      input_per_m: 15.0
+      output_per_m: 75.0
+      cache_read_per_m: 1.50
+      cache_write_per_m: 18.75
+    haiku:
+      match: "haiku"
+      input_per_m: 0.80
+      output_per_m: 4.0
+      cache_read_per_m: 0.08
+      cache_write_per_m: 1.0
+
+# ── Adapter ───────────────────────────────────────────────────────────
+# Claude's nested content blocks and encoded-path convention need Go code
+adapter:
+  go_package: "claude"
+  overrides:
+    - "ParseConversation"
+    - "FindConversationFile"

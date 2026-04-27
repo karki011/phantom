@@ -38,7 +38,7 @@ export function ApprovalModal() {
       title="Ward Approval Required"
       size="sm"
     >
-      <div style={{ display: 'flex', 'flex-direction': 'column', gap: '12px' }}>
+      <div class={styles.approvalStack}>
         <div class={styles.approvalDetail}>
           <div>
             <span class={styles.approvalLabel}>Rule</span>

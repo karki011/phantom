@@ -23,6 +23,15 @@ export async function getActiveSessions(): Promise<Session[]> {
   }
 }
 
+export async function getSessionsByProvider(provider: string): Promise<Session[]> {
+  try {
+    const raw = (await App()?.GetSessionsByProvider(provider)) ?? [];
+    return normalize<Session[]>(raw);
+  } catch {
+    return [];
+  }
+}
+
 export async function getSession(id: string): Promise<Session | null> {
   try {
     const raw = (await App()?.GetSession(id)) ?? null;

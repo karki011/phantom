@@ -25,6 +25,7 @@ type ActivityLog struct {
 	SessionID sql.NullString `json:"session_id"`
 	Metadata  sql.NullString `json:"metadata"`
 	XpEarned  sql.NullInt64  `json:"xp_earned"`
+	Provider  string         `json:"provider"`
 }
 
 type ChatConversation struct {
@@ -44,6 +45,19 @@ type ChatMessage struct {
 	Content        string         `json:"content"`
 	Model          sql.NullString `json:"model"`
 	CreatedAt      int64          `json:"created_at"`
+}
+
+type CustomRecipe struct {
+	ID          string         `json:"id"`
+	ProjectID   string         `json:"project_id"`
+	Label       string         `json:"label"`
+	Command     string         `json:"command"`
+	Icon        sql.NullString `json:"icon"`
+	Category    sql.NullString `json:"category"`
+	Description sql.NullString `json:"description"`
+	Favorite    sql.NullInt64  `json:"favorite"`
+	CreatedAt   int64          `json:"created_at"`
+	UpdatedAt   int64          `json:"updated_at"`
 }
 
 type DailyQuest struct {
@@ -150,6 +164,12 @@ type Project struct {
 	CreatedAt       int64          `json:"created_at"`
 }
 
+type RecipeFavorite struct {
+	ProjectID string `json:"project_id"`
+	RecipeID  string `json:"recipe_id"`
+	CreatedAt int64  `json:"created_at"`
+}
+
 type Session struct {
 	ID                  string         `json:"id"`
 	Pid                 sql.NullInt64  `json:"pid"`
@@ -186,6 +206,7 @@ type Session struct {
 	Branch              sql.NullString `json:"branch"`
 	PrUrl               sql.NullString `json:"pr_url"`
 	PrStatus            sql.NullString `json:"pr_status"`
+	Provider            string         `json:"provider"`
 }
 
 type SessionEvent struct {

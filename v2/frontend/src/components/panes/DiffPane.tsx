@@ -330,7 +330,7 @@ const DiffPane = (props: DiffPaneProps) => {
         </div>
         <div class={styles.diffToolbarCenter}>
           <span
-            style={{ cursor: 'pointer', 'text-decoration': 'underline', 'text-underline-offset': '3px' }}
+            class={styles.diffFileLink}
             onClick={handleOpenInEditor}
             title="Open in editor"
           >
@@ -357,12 +357,11 @@ const DiffPane = (props: DiffPaneProps) => {
       </Show>
 
       {/* Editor area — position:relative wrapper for overlay positioning */}
-      <div style={{ position: 'relative', flex: '1', overflow: 'hidden' }}>
+      <div class={styles.diffEditorWrap}>
         {/* Monaco container — MUST be empty, no SolidJS children */}
         <div
           ref={monacoContainerRef!}
-          class={styles.editorContainer}
-          style={{ width: '100%', height: '100%' }}
+          class={`${styles.editorContainer} ${styles.diffEditorFill}`}
         />
 
         {/* Loading overlay — SIBLING of Monaco container, not a child */}

@@ -4,16 +4,21 @@
 // Integrates with the Terminal Runtime Registry so sessions survive
 // SolidJS component unmount/remount cycles (tab switches, worktree changes).
 
-import { onMount, onCleanup, createSignal, createEffect, Show } from 'solid-js';
+import { onMount, onCleanup, createSignal, createEffect, createMemo, Show } from 'solid-js';
 import { TextField } from '@kobalte/core/text-field';
 import '@xterm/xterm/css/xterm.css';
 import * as termStyles from '@/styles/terminal.css';
+import { TaskOverlay } from '@/shared/TaskOverlay/TaskOverlay';
+import { sessions } from '@/core/signals/sessions';
+import { cwdMatchesBidirectional } from '@/core/utils/path-match';
+import { onWailsEvent } from '@/core/events';
 import {
   createSession,
   attachSession,
   detachSession,
   hasSession,
   getSession,
+  safeFit,
 } from '@/core/terminal/registry';
 import { activeTerminalThemeId, resolveTerminalTheme } from '@/core/terminal/theme-manager';
 import {
@@ -51,7 +56,45 @@ export default function TerminalPane(props: TerminalPaneProps) {
   const sessionId = effectiveSessionId;
   const [showSearch, setShowSearch] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
+  const [linkedSessionId, setLinkedSessionId] = createSignal<string | null>(null);
   const isReattach = hasSession(sessionId);
+
+  // Derive linked AI session: explicit link > command parse > CWD match > any active session
+  const derivedSessionId = createMemo(() => {
+    if (linkedSessionId()) return linkedSessionId();
+
+    const activeSessions = sessions().filter(
+      (s) => s.status === 'active' || s.status === 'paused',
+    );
+
+    // Try extracting session ID from the terminal command (e.g. claude --resume --session-id <id>)
+    const cmd = props.command ?? '';
+    if (cmd) {
+      const sidMatch = cmd.match(/--session-id\s+(\S+)/);
+      if (sidMatch) {
+        const found = activeSessions.find((s) => s.id === sidMatch[1]);
+        if (found) return found.id;
+      }
+    }
+
+    // Try matching by CWD (bidirectional) — prefer most recently started
+    const cwd = props.cwd;
+    if (cwd) {
+      const matches = activeSessions
+        .filter((s) => cwdMatchesBidirectional(s.cwd, cwd))
+        .sort((a, b) => (b.started_at ?? 0) - (a.started_at ?? 0));
+      if (matches.length > 0) return matches[0].id;
+    }
+
+    // Fallback: if there's exactly one active session, use it
+    if (activeSessions.length === 1) return activeSessions[0].id;
+
+    return null;
+  });
+
+  onWailsEvent<{ paneId: string; sessionId: string }>('terminal:linked', (data) => {
+    if (data.paneId === sessionId) setLinkedSessionId(data.sessionId);
+  });
 
   onMount(async () => {
     // --- Reattach path: session already lives in the registry ---
@@ -66,6 +109,9 @@ export default function TerminalPane(props: TerminalPaneProps) {
             } catch {}
           }),
         );
+        setTimeout(() => {
+          try { session.fitAddon.fit(); } catch {}
+        }, 150);
         return;
       }
     }
@@ -255,23 +301,21 @@ export default function TerminalPane(props: TerminalPaneProps) {
     }
   });
 
-  // ResizeObserver: refit xterm whenever the pane container resizes
+  // ResizeObserver: refit xterm whenever the pane container resizes.
+  // safeFit() skips when the container has zero dimensions (e.g. parent
+  // has display:none during a tab switch) to avoid reflowing content to
+  // MINIMUM_COLS and sending a bogus resize to the PTY backend.
   onMount(() => {
     const ro = new ResizeObserver(() => {
       const session = getSession(sessionId);
-      if (session?.attached) {
-        try {
-          session.fitAddon.fit();
-        } catch {}
-      }
+      if (session?.attached) safeFit(session);
     });
     ro.observe(containerRef);
     onCleanup(() => ro.disconnect());
   });
 
   // IntersectionObserver: refit when the terminal becomes visible (tab switch).
-  // Hides the container briefly to prevent a flash of wrong-sized content,
-  // then reveals after fit completes.
+  // Uses setTimeout to wait for flex layout to fully settle before measuring.
   onMount(() => {
     const io = new IntersectionObserver((entries) => {
       for (const entry of entries) {
@@ -279,10 +323,10 @@ export default function TerminalPane(props: TerminalPaneProps) {
           const session = getSession(sessionId);
           if (session) {
             containerRef.style.visibility = 'hidden';
-            requestAnimationFrame(() => {
-              try { session.fitAddon.fit(); } catch {}
+            setTimeout(() => {
+              safeFit(session);
               containerRef.style.visibility = '';
-            });
+            }, 50);
           }
         }
       }
@@ -291,6 +335,20 @@ export default function TerminalPane(props: TerminalPaneProps) {
     onCleanup(() => io.disconnect());
   });
 
+
+  // Refit when the app regains focus (e.g. user switches to another OS window and back)
+  onMount(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        setTimeout(() => {
+          const session = getSession(sessionId);
+          if (session?.attached) safeFit(session);
+        }, 100);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    onCleanup(() => document.removeEventListener('visibilitychange', handleVisibility));
+  });
 
   // Cmd+F: toggle search bar
   onMount(() => {
@@ -391,6 +449,7 @@ export default function TerminalPane(props: TerminalPaneProps) {
       onDrop={handleTerminalDrop}
     >
       <div class={termStyles.terminalContainer} ref={containerRef!} />
+      <TaskOverlay sessionId={derivedSessionId()} worktreePath={props.cwd ?? ''} />
       <Show when={showSearch()}>
         <div class={termStyles.searchBar}>
           <TextField class={termStyles.searchInput}>

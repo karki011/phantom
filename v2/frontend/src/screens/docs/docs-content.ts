@@ -41,7 +41,7 @@ export const DOC_SECTIONS: DocSection[] = [
           sections: [
             {
               type: 'paragraph',
-              text: 'PhantomOS is a Wails v2 desktop application for AI-powered development. It manages Claude Code sessions, git worktrees, and terminal workflows in a unified interface designed for speed and clarity.',
+              text: 'PhantomOS is a Wails v2 desktop application for AI-powered development. It manages AI coding sessions, git worktrees, and terminal workflows in a unified interface designed for speed and clarity.',
             },
             {
               type: 'paragraph',
@@ -75,7 +75,7 @@ export const DOC_SECTIONS: DocSection[] = [
               type: 'list',
               items: [
                 'Multi-tab, split-pane terminal with 497 themes and WebGL rendering',
-                'Real-time Claude Code session tracking with 5 parallel collectors',
+                'Real-time AI session tracking with 5 parallel collectors',
                 'Git worktree management with AI-powered commit and PR creation',
                 'Rich prompt composer with drag-and-drop file/image support',
                 'Boot ceremony animation with parallel backend initialization',
@@ -132,7 +132,7 @@ export const DOC_SECTIONS: DocSection[] = [
                 { keys: ['Cmd', '-'], action: 'Zoom out' },
                 { keys: ['Cmd', '1'], action: 'Switch to tab 1' },
                 { keys: ['Cmd', '2'], action: 'Switch to tab 2' },
-                { keys: ['Shift', 'Enter'], action: 'Newline in Claude prompt' },
+                { keys: ['Shift', 'Enter'], action: 'Newline in AI prompt' },
               ],
             },
           ],
@@ -154,7 +154,7 @@ export const DOC_SECTIONS: DocSection[] = [
             },
             {
               type: 'paragraph',
-              text: 'The backend manages PTY processes, git operations, file system watching, and Claude session tracking. All persistent state is stored in a local SQLite database with 17 tables.',
+              text: 'The backend manages PTY processes, git operations, file system watching, and AI session tracking. All persistent state is stored in a local SQLite database with 17 tables.',
             },
             {
               type: 'h3',
@@ -162,17 +162,17 @@ export const DOC_SECTIONS: DocSection[] = [
             },
             {
               type: 'paragraph',
-              text: 'Five collectors run in parallel to provide real-time insight into Claude Code sessions:',
+              text: 'Five collectors run in parallel to provide real-time insight into AI coding sessions:',
             },
             {
               type: 'table',
               headers: ['Collector', 'Purpose'],
               rows: [
-                ['SessionWatcher', 'Detects active Claude Code sessions and their lifecycle state'],
-                ['JSONLScanner', 'Parses Claude JSONL output for token counts, costs, and tool usage'],
+                ['SessionWatcher', 'Detects active AI coding sessions and their lifecycle state'],
+                ['JSONLScanner', 'Parses session JSONL output for token counts, costs, and tool usage'],
                 ['ActivityPoller', 'Polls session activity to determine active/paused/completed status'],
                 ['TaskWatcher', 'Monitors task progress and completion events'],
-                ['TodoWatcher', 'Tracks TODO items created during Claude sessions'],
+                ['TodoWatcher', 'Tracks TODO items created during AI sessions'],
               ],
             },
             {
@@ -279,7 +279,7 @@ export const DOC_SECTIONS: DocSection[] = [
           sections: [
             {
               type: 'paragraph',
-              text: 'The prompt composer is a floating, draggable glass panel activated with Cmd+I. It provides a rich editing experience for crafting Claude Code prompts with file and image attachments.',
+              text: 'The prompt composer is a floating, draggable glass panel activated with Cmd+I. It provides a rich editing experience for crafting AI prompts with file and image attachments.',
             },
             {
               type: 'heading',
@@ -392,7 +392,7 @@ export const DOC_SECTIONS: DocSection[] = [
           sections: [
             {
               type: 'paragraph',
-              text: 'PhantomOS provides first-class git worktree support, allowing you to work on multiple branches simultaneously without stashing or switching. Each worktree gets its own terminal context and Claude session detection.',
+              text: 'PhantomOS provides first-class git worktree support, allowing you to work on multiple branches simultaneously without stashing or switching. Each worktree gets its own terminal context and AI session detection.',
             },
             {
               type: 'heading',
@@ -414,7 +414,7 @@ export const DOC_SECTIONS: DocSection[] = [
             },
             {
               type: 'paragraph',
-              text: 'Claude Code sessions are automatically detected per worktree. When you switch worktrees, the session panel updates to show only the sessions associated with that worktree. This keeps your AI context organized across parallel workstreams.',
+              text: 'AI coding sessions are automatically detected per worktree. When you switch worktrees, the session panel updates to show only the sessions associated with that worktree. This keeps your AI context organized across parallel workstreams.',
             },
             {
               type: 'heading',
@@ -461,7 +461,7 @@ export const DOC_SECTIONS: DocSection[] = [
             },
             {
               type: 'paragraph',
-              text: 'PhantomOS can generate commit messages and pull request descriptions using Claude. When creating a commit, the AI analyzes your staged changes and produces a conventional commit message. For PRs, it summarizes the full diff and generates a structured description with context.',
+              text: 'PhantomOS can generate commit messages and pull request descriptions using your AI assistant. When creating a commit, the AI analyzes your staged changes and produces a conventional commit message. For PRs, it summarizes the full diff and generates a structured description with context.',
             },
           ],
         },
@@ -573,7 +573,7 @@ export const DOC_SECTIONS: DocSection[] = [
           sections: [
             {
               type: 'paragraph',
-              text: 'PhantomOS provides real-time tracking of all active Claude Code sessions. Five collectors run in parallel to gather session metadata, token usage, cost estimates, and task progress.',
+              text: 'PhantomOS provides real-time tracking of all active AI coding sessions. Five collectors run in parallel to gather session metadata, token usage, cost estimates, and task progress.',
             },
             {
               type: 'heading',
@@ -606,7 +606,7 @@ export const DOC_SECTIONS: DocSection[] = [
             {
               type: 'list',
               items: [
-                'SessionWatcher detects a new Claude Code process',
+                'SessionWatcher detects a new AI coding process',
                 'JSONLScanner begins parsing the session JSONL output file',
                 'ActivityPoller monitors for pauses and idle periods',
                 'TaskWatcher and TodoWatcher track structured output',
@@ -624,7 +624,7 @@ export const DOC_SECTIONS: DocSection[] = [
           sections: [
             {
               type: 'paragraph',
-              text: 'PhantomOS allows you to manage Claude Code sessions directly from the UI. Control session lifecycle and apply safety policies without touching the terminal.',
+              text: 'PhantomOS allows you to manage AI coding sessions directly from the UI. Control session lifecycle and apply safety policies without touching the terminal.',
             },
             {
               type: 'heading',
@@ -634,9 +634,9 @@ export const DOC_SECTIONS: DocSection[] = [
               type: 'table',
               headers: ['Action', 'Description'],
               rows: [
-                ['Pause', 'Temporarily suspend the Claude session'],
+                ['Pause', 'Temporarily suspend the AI session'],
                 ['Resume', 'Continue a paused session from where it left off'],
-                ['Kill', 'Terminate the Claude Code process immediately'],
+                ['Kill', 'Terminate the AI coding process immediately'],
               ],
             },
             {
@@ -645,7 +645,7 @@ export const DOC_SECTIONS: DocSection[] = [
             },
             {
               type: 'paragraph',
-              text: 'Ward rules define safety policies for Claude sessions. Rules can restrict file access, prevent certain operations, or enforce review steps before dangerous actions. Ward rules are configured per-project or globally and are enforced by the Go backend.',
+              text: 'Ward rules define safety policies for AI sessions. Rules can restrict file access, prevent certain operations, or enforce review steps before dangerous actions. Ward rules are configured per-project or globally and are enforced by the Go backend.',
             },
             {
               type: 'heading',
@@ -666,7 +666,7 @@ export const DOC_SECTIONS: DocSection[] = [
           sections: [
             {
               type: 'paragraph',
-              text: 'The prompt composer is PhantomOS\'s primary interface for sending instructions to Claude Code. See the Terminal > Rich Prompt Composer section for full documentation.',
+              text: 'The prompt composer is PhantomOS\'s primary interface for sending instructions to your AI assistant. See the Terminal > Rich Prompt Composer section for full documentation.',
             },
             {
               type: 'heading',
@@ -987,9 +987,9 @@ export const DOC_SECTIONS: DocSection[] = [
               type: 'table',
               headers: ['Table', 'Purpose'],
               rows: [
-                ['sessions', 'Claude Code session metadata (status, start time, duration)'],
+                ['sessions', 'AI coding session metadata (status, start time, duration)'],
                 ['terminal_sessions', 'Terminal PTY state (shell, cwd, environment)'],
-                ['tasks', 'Task tracking for Claude-generated tasks'],
+                ['tasks', 'Task tracking for AI-generated tasks'],
                 ['projects', 'Registered project directories and metadata'],
                 ['worktrees', 'Git worktree entries and their branch associations'],
                 ['activity_log', 'Timestamped log of user and system actions'],
@@ -1001,7 +1001,7 @@ export const DOC_SECTIONS: DocSection[] = [
                 ['chat_messages', 'Individual messages within conversations'],
                 ['pane_states', 'Terminal pane layout and position persistence'],
                 ['user_preferences', 'Key-value store for all user settings and theme choices'],
-                ['session_events', 'Fine-grained events emitted during Claude sessions'],
+                ['session_events', 'Fine-grained events emitted during AI sessions'],
                 ['session_policies', 'Ward rules and safety policies applied to sessions'],
                 ['graph_nodes', 'Knowledge graph nodes for codebase understanding'],
               ],

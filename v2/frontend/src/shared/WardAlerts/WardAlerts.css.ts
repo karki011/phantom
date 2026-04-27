@@ -182,3 +182,9 @@ export const approvalValue = style({
   color: vars.color.textPrimary,
   wordBreak: 'break-all',
 });
+
+export const approvalStack = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '12px',
+});

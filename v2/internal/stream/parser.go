@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/subashkarki/phantom-os-v2/internal/pricing"
+	"github.com/subashkarki/phantom-os-v2/internal/provider"
 )
 
 func calcCostMicros(model string, input, output, cacheRead, cacheWrite int64) int64 {
@@ -24,11 +25,23 @@ type Parser struct {
 	sessionID string
 	seqNum    int
 	model     string
+	// streamCfg holds provider-specific configuration for message type
+	// classification and usage extraction. When nil, the parser falls back
+	// to the hardcoded Claude-specific logic for backward compatibility.
+	streamCfg *provider.StreamConfig
 }
 
 // NewParser returns a new Parser for the given session.
 func NewParser(sessionID string) *Parser {
 	return &Parser{sessionID: sessionID}
+}
+
+// SetStreamConfig attaches provider-specific stream configuration to the parser.
+// When set, the parser uses config-driven rules for message type classification
+// and usage field extraction instead of the hardcoded Claude defaults.
+// Passing nil restores the hardcoded fallback behavior.
+func (p *Parser) SetStreamConfig(cfg *provider.StreamConfig) {
+	p.streamCfg = cfg
 }
 
 // ParseLine takes a raw JSONL line and returns a typed Event, or nil if the
@@ -43,6 +56,65 @@ func (p *Parser) ParseLine(line []byte) *Event {
 		return nil
 	}
 
+	// When streamCfg is set, use config-driven message type matching.
+	if p.streamCfg != nil {
+		return p.parseLineWithConfig(raw)
+	}
+
+	// Hardcoded Claude-specific fallback (backward compatibility).
+	return p.parseLineHardcoded(raw)
+}
+
+// parseLineWithConfig classifies a raw JSONL map using the provider's
+// MessageTypeRules configuration. Falls back to the hardcoded path if
+// no rule matches (e.g., for "result" lines that carry usage but have
+// no explicit message type rule).
+func (p *Parser) parseLineWithConfig(raw map[string]interface{}) *Event {
+	matched := p.matchConfigType(raw)
+	switch matched {
+	case "user":
+		return p.parseHuman(raw)
+	case "assistant":
+		return p.parseAssistant(raw)
+	case "tool_result":
+		return p.parseTopLevelToolResult(raw)
+	case "system":
+		return p.parseSystem(raw)
+	}
+	// "result" lines are Claude-specific usage carriers — fall through
+	// to hardcoded logic so existing behavior is preserved.
+	return p.parseLineHardcoded(raw)
+}
+
+// matchConfigType checks the raw JSON map against all configured
+// MessageTypeRules and returns the first matching type name, or "".
+func (p *Parser) matchConfigType(raw map[string]interface{}) string {
+	for typeName, rules := range p.streamCfg.MessageTypeRules {
+		for _, rule := range rules {
+			if val, ok := raw[rule.Field]; ok {
+				if s, ok := val.(string); ok && s == rule.Value {
+					return typeName
+				}
+			}
+			// Also check nested fields (e.g., "message.role")
+			if strings.Contains(rule.Field, ".") {
+				parts := strings.SplitN(rule.Field, ".", 2)
+				if nested := extractMap(raw, parts[0]); nested != nil {
+					if val, ok := nested[parts[1]]; ok {
+						if s, ok := val.(string); ok && s == rule.Value {
+							return typeName
+						}
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// parseLineHardcoded is the original Claude-specific classification logic,
+// preserved for backward compatibility when streamCfg is nil.
+func (p *Parser) parseLineHardcoded(raw map[string]interface{}) *Event {
 	typ, _ := raw["type"].(string)
 
 	switch typ {
@@ -206,10 +278,10 @@ func (p *Parser) parseAssistantMulti(raw map[string]interface{}) []Event {
 		}
 	}
 
-	// Gather usage for cost calculation
+	// Gather usage for cost calculation — use config-driven extraction when available.
 	var inputTok, outputTok, cacheRead, cacheWrite int64
-	if usageMap := extractUsage(raw); usageMap != nil {
-		inputTok, outputTok, cacheRead, cacheWrite = parseUsageMap(usageMap)
+	if usageMap := extractUsageWithConfig(raw, p.streamCfg); usageMap != nil {
+		inputTok, outputTok, cacheRead, cacheWrite = parseUsageMapWithConfig(usageMap, p.streamCfg)
 	}
 
 	blocks := extractContentBlocks(raw)
@@ -325,11 +397,11 @@ func (p *Parser) parseTopLevelToolResult(raw map[string]interface{}) *Event {
 }
 
 func (p *Parser) parseResult(raw map[string]interface{}) *Event {
-	usageMap := extractUsage(raw)
+	usageMap := extractUsageWithConfig(raw, p.streamCfg)
 	if usageMap == nil {
 		return nil
 	}
-	input, output, cacheRead, cacheWrite := parseUsageMap(usageMap)
+	input, output, cacheRead, cacheWrite := parseUsageMapWithConfig(usageMap, p.streamCfg)
 	if input == 0 && output == 0 {
 		return nil
 	}
@@ -443,6 +515,7 @@ func extractBlockContent(block map[string]interface{}) string {
 }
 
 // extractUsage finds the usage block, checking both top-level and message-nested locations.
+// This is the hardcoded Claude-specific version used when streamCfg is nil.
 func extractUsage(raw map[string]interface{}) map[string]interface{} {
 	if u := extractMap(raw, "usage"); u != nil {
 		return u
@@ -461,11 +534,74 @@ func extractUsage(raw map[string]interface{}) map[string]interface{} {
 	return nil
 }
 
+// extractUsageWithConfig finds the usage block using the provider's configured
+// UsageLocations. Falls back to the hardcoded logic if no config locations match.
+func extractUsageWithConfig(raw map[string]interface{}, cfg *provider.StreamConfig) map[string]interface{} {
+	if cfg == nil || len(cfg.UsageLocations) == 0 {
+		return extractUsage(raw)
+	}
+	for _, loc := range cfg.UsageLocations {
+		// Navigate dot-separated path (e.g., "message.usage" → raw["message"]["usage"])
+		obj := navigateToMap(raw, loc)
+		if obj != nil {
+			return obj
+		}
+	}
+	// Fall back to hardcoded if config-driven locations found nothing.
+	return extractUsage(raw)
+}
+
+// navigateToMap traverses a dot-separated path in a JSON map to find a nested map.
+// The last segment is the target key. Returns nil if the path doesn't resolve.
+func navigateToMap(m map[string]interface{}, path string) map[string]interface{} {
+	parts := strings.Split(path, ".")
+	current := m
+	for i, part := range parts {
+		v, ok := current[part]
+		if !ok {
+			return nil
+		}
+		sub, ok := v.(map[string]interface{})
+		if !ok {
+			return nil
+		}
+		if i == len(parts)-1 {
+			return sub
+		}
+		current = sub
+	}
+	return current
+}
+
+// parseUsageMap extracts token counts from a usage map using hardcoded Claude field names.
 func parseUsageMap(u map[string]interface{}) (input, output, cacheRead, cacheWrite int64) {
 	input = toInt64(u["input_tokens"])
 	output = toInt64(u["output_tokens"])
 	cacheRead = toInt64(u["cache_read_input_tokens"])
 	cacheWrite = toInt64(u["cache_creation_input_tokens"])
+	return
+}
+
+// parseUsageMapWithConfig extracts token counts from a usage map using the
+// provider's configured UsageFields. Falls back to hardcoded field names if
+// cfg is nil or the fields map is empty.
+func parseUsageMapWithConfig(u map[string]interface{}, cfg *provider.StreamConfig) (input, output, cacheRead, cacheWrite int64) {
+	if cfg == nil || len(cfg.UsageFields) == 0 {
+		return parseUsageMap(u)
+	}
+	fields := cfg.UsageFields
+	if f, ok := fields["input"]; ok {
+		input = toInt64(u[f])
+	}
+	if f, ok := fields["output"]; ok {
+		output = toInt64(u[f])
+	}
+	if f, ok := fields["cache_read"]; ok {
+		cacheRead = toInt64(u[f])
+	}
+	if f, ok := fields["cache_write"]; ok {
+		cacheWrite = toInt64(u[f])
+	}
 	return
 }
 

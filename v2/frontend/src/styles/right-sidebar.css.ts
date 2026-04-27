@@ -178,6 +178,14 @@ export const fileTree = style({
   flexDirection: 'column',
   padding: vars.space.sm,
   gap: '1px',
+  flex: 1,
+  overflowY: 'auto',
+  minHeight: 0,
+  scrollbarWidth: 'thin',
+  scrollbarColor: `${vars.color.border} transparent`,
+  '::-webkit-scrollbar': { width: '4px' },
+  '::-webkit-scrollbar-thumb': { background: vars.color.border, borderRadius: '2px' },
+  '::-webkit-scrollbar-track': { background: 'transparent' },
 });
 
 export const fileItem = style({
@@ -1037,4 +1045,153 @@ const dotPulseKf = keyframes({
 
 export const activityDotPulse = style({
   animation: `${dotPulseKf} 1.2s ease infinite`,
+});
+
+// ── CiSection additions ───────────────────────────────────────────────────────
+
+export const ciSectionTitle = style({
+  fontSize: '0.6rem',
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  color: 'inherit',
+  flex: 1,
+});
+
+export const ciNameBold = style({
+  fontWeight: 500,
+});
+
+export const ciEmptyState = style({
+  padding: '4px 8px',
+});
+
+// ── ChangesView additions ─────────────────────────────────────────────────────
+
+export const statusIconR = style({
+  color: vars.color.info,
+  flexShrink: 0,
+});
+
+export const emptyStateHint = style({
+  fontSize: '10px',
+  opacity: 0.6,
+});
+
+export const fileListContainer = style({
+  display: 'flex',
+  flexDirection: 'column',
+  flex: 1,
+  overflow: 'hidden',
+  minHeight: 0,
+});
+
+export const headerActions = style({
+  marginLeft: 'auto',
+  display: 'flex',
+  gap: '2px',
+});
+
+export const scrollArea = style({
+  overflowY: 'auto',
+  flex: 1,
+  minHeight: 0,
+});
+
+export const chevronIcon = style({
+  flexShrink: 0,
+  color: vars.color.textDisabled,
+});
+
+export const commitAreaPinned = style({
+  marginTop: 'auto',
+});
+
+// ── PrSection additions ───────────────────────────────────────────────────────
+
+export const prCreatingText = style({
+  color: 'inherit',
+  fontSize: '0.73rem',
+});
+
+export const prStateBadgeRow = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  marginBottom: '4px',
+});
+
+export const prStateLabel = style({
+  fontSize: '0.65rem',
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.07em',
+});
+
+export const prTitle = style({
+  flex: 1,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  fontSize: '0.73rem',
+});
+
+export const prNumber = style({
+  fontSize: '0.68rem',
+  color: 'inherit',
+  opacity: 0.5,
+  flexShrink: 0,
+});
+
+export const prExternalLink = style({
+  flexShrink: 0,
+  opacity: 0.5,
+});
+
+export const prEmptyText = style({
+  fontSize: '0.73rem',
+  color: 'inherit',
+  opacity: 0.4,
+  marginBottom: '6px',
+});
+
+// ── RightSidebar activity dot colors ─────────────────────────────────────────
+
+export const statusDotActive = style({
+  backgroundColor: vars.color.success,
+});
+
+export const statusDotDefault = style({
+  backgroundColor: vars.color.accent,
+});
+
+// ── FilesView rename input ────────────────────────────────────────────────────
+
+export const renameInput = style({
+  background: vars.color.bgTertiary,
+  border: `1px solid ${vars.color.borderFocus}`,
+  color: 'inherit',
+  fontSize: vars.fontSize.xs,
+  padding: '1px 4px',
+  borderRadius: vars.radius.sm,
+  outline: 'none',
+  flex: '1',
+  minWidth: 0,
+});
+
+export const fileItemPadded = style({
+  paddingLeft: vars.space.sm,
+});
+
+// ── GitActivityPanel layout ───────────────────────────────────────────────────
+
+export const gitActivityPanel = style({
+  display: 'flex',
+  flexDirection: 'column',
+  height: '100%',
+});
+
+export const gitActivityScroll = style({
+  flex: 1,
+  overflowY: 'auto',
 });

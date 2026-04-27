@@ -25,8 +25,8 @@ export function GitActivityPanel() {
   });
 
   return (
-    <div style={{ display: 'flex', 'flex-direction': 'column', height: '100%' }}>
-      <div style={{ flex: '1', 'overflow-y': 'auto' }}>
+    <div class={styles.gitActivityPanel}>
+      <div class={styles.gitActivityScroll}>
         <Show when={activeWorktreeId()}>
           {(wtId) => (
             <>

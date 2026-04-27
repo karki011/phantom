@@ -1,5 +1,6 @@
-// jsonl_scanner.go parses JSONL conversation logs under ~/.claude/projects/
-// to extract token usage, cost estimates, and tool breakdowns per session.
+// jsonl_scanner.go parses JSONL conversation logs under the provider's
+// conversations directory to extract token usage, cost estimates, and tool
+// breakdowns per session.
 // Author: Subash Karki
 package collector
 
@@ -18,7 +19,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
-	"github.com/subashkarki/phantom-os-v2/internal/pricing"
+	"github.com/subashkarki/phantom-os-v2/internal/provider"
 )
 
 const (
@@ -37,6 +38,7 @@ const rescanMaxAttempts = 20
 // token usage, cost estimates, message counts, and tool breakdowns.
 type JSONLScanner struct {
 	queries   *db.Queries
+	prov      provider.Provider
 	ctx       context.Context
 	cancel    context.CancelFunc
 	emitEvent func(name string, data interface{})
@@ -46,9 +48,10 @@ type JSONLScanner struct {
 }
 
 // NewJSONLScanner creates a new scanner. queries must be backed by db.Writer.
-func NewJSONLScanner(queries *db.Queries, emitEvent func(string, interface{})) *JSONLScanner {
+func NewJSONLScanner(queries *db.Queries, prov provider.Provider, emitEvent func(string, interface{})) *JSONLScanner {
 	return &JSONLScanner{
 		queries:        queries,
+		prov:           prov,
 		emitEvent:      emitEvent,
 		rescanAttempts: make(map[string]int),
 	}
@@ -81,15 +84,14 @@ func (js *JSONLScanner) Stop() error {
 	return nil
 }
 
-// projectsDir returns ~/.claude/projects/.
-func projectsDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".claude", "projects")
+// projectsDir returns the conversations directory from the provider.
+func (js *JSONLScanner) projectsDir() string {
+	return js.prov.ConversationsDir()
 }
 
-// fullScan walks ~/.claude/projects/ and processes every .jsonl file found.
+// fullScan walks the conversations directory and processes every .jsonl file found.
 func (js *JSONLScanner) fullScan() {
-	root := projectsDir()
+	root := js.projectsDir()
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		log.Printf("jsonl_scanner: projects dir %s does not exist, skipping initial scan", root)
 		return
@@ -185,7 +187,7 @@ func (js *JSONLScanner) processJSONLFile(path string) {
 		return // nothing to update
 	}
 
-	costMicros := calculateCostMicros(result)
+	costMicros := js.calculateCostMicros(result)
 
 	// Serialize tool breakdown to JSON
 	toolBreakdownJSON := ""
@@ -350,10 +352,14 @@ func extractTextContent(content json.RawMessage, fullLine []byte) string {
 
 // truncate is defined in activity_poller.go (same package)
 
-// calculateCostMicros computes estimated cost in microdollars using the
-// shared pricing package.
-func calculateCostMicros(r *scanResult) int64 {
-	return pricing.CalculateCostMicros(r.Model, r.InputTokens, r.OutputTokens, r.CacheRead, r.CacheWrite)
+// calculateCostMicros computes estimated cost in microdollars using the provider.
+func (js *JSONLScanner) calculateCostMicros(r *scanResult) int64 {
+	return js.prov.CalculateCost(r.Model, provider.TokenUsage{
+		Input:      r.InputTokens,
+		Output:     r.OutputTokens,
+		CacheRead:  r.CacheRead,
+		CacheWrite: r.CacheWrite,
+	})
 }
 
 // periodicRescan re-processes sessions with 0 tokens every 60 seconds.
@@ -378,7 +384,6 @@ func (js *JSONLScanner) rescan() {
 		return
 	}
 
-	root := projectsDir()
 	rescanned := 0
 
 	// Build set of active session IDs for cleanup.
@@ -405,9 +410,9 @@ func (js *JSONLScanner) rescan() {
 		js.rescanAttempts[s.ID] = attempts + 1
 		js.mu.Unlock()
 
-		// Search for the JSONL file
-		jsonlPath := findJSONLFile(root, s.ID)
-		if jsonlPath == "" {
+		// Search for the JSONL file via the provider
+		jsonlPath, err := js.prov.FindConversationFile(s.ID, "")
+		if err != nil || jsonlPath == "" {
 			continue
 		}
 
@@ -432,21 +437,13 @@ func (js *JSONLScanner) rescan() {
 	}
 }
 
-// findJSONLFile searches for a JSONL file matching the session ID under root.
-func findJSONLFile(root, sessionID string) string {
-	target := sessionID + ".jsonl"
-	var found string
-	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		if d.Name() == target {
-			found = path
-			return filepath.SkipAll
-		}
-		return nil
-	})
-	return found
+// findJSONLFile locates a JSONL file for a session via the provider.
+func (js *JSONLScanner) findJSONLFile(sessionID string) string {
+	path, err := js.prov.FindConversationFile(sessionID, "")
+	if err != nil {
+		return ""
+	}
+	return path
 }
 
 // activeContextPoller watches project dirs for JSONL changes via fsnotify and
@@ -531,9 +528,9 @@ func (js *JSONLScanner) activeContextPoll() {
 	}
 }
 
-// watchProjectDirs adds fsnotify watches on ~/.claude/projects/ subdirectories.
+// watchProjectDirs adds fsnotify watches on conversations subdirectories.
 func (js *JSONLScanner) watchProjectDirs(watcher *fsnotify.Watcher) {
-	root := projectsDir()
+	root := js.projectsDir()
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return
@@ -552,10 +549,8 @@ func (js *JSONLScanner) pollActiveContext() {
 		return
 	}
 
-	root := projectsDir()
-
 	for _, s := range sessions {
-		jsonlPath := findJSONLFile(root, s.ID)
+		jsonlPath := js.findJSONLFile(s.ID)
 		if jsonlPath == "" {
 			continue
 		}
@@ -569,7 +564,7 @@ func (js *JSONLScanner) pollActiveContext() {
 			continue
 		}
 
-		costMicros := calculateCostMicros(result)
+		costMicros := js.calculateCostMicros(result)
 
 		if err := js.queries.UpdateSessionTokens(js.ctx, db.UpdateSessionTokensParams{
 			ID:                  s.ID,

@@ -1,0 +1,126 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Gemini CLI Provider Config — Phantom OS v2
+# Based on real filesystem inspection of ~/.gemini/ (2026-04-26)
+# Author: Subash Karki
+# ═══════════════════════════════════════════════════════════════════════
+
+# ── Identity ──────────────────────────────────────────────────────────
+provider: gemini
+display_name: "Gemini CLI"
+icon: "google"
+enabled: true
+
+# ── Detection ─────────────────────────────────────────────────────────
+detection:
+  binary: "gemini"
+  paths:
+    - "~/.gemini/"
+    - "~/.gemini/tmp/"
+  version_command: ["gemini", "--version"]
+  version_pattern: "(\\d+\\.\\d+\\.\\d+)"
+
+# ── Paths ─────────────────────────────────────────────────────────────
+paths:
+  sessions: "~/.gemini/tmp/"
+  conversations: "~/.gemini/tmp/"
+  settings: "~/.gemini/settings.json"
+
+# ── Session Discovery ─────────────────────────────────────────────────
+# Gemini stores sessions in: tmp/<sha256-project-hash>/chats/session-*.json
+# Each session JSON file IS the conversation (no separate conversation store).
+# The project hash is SHA256 of the project root path.
+sessions:
+  discovery_method: "glob"
+  glob: "*/chats/session-*.json"
+  exclude: []
+  fields:
+    id: "sessionId"
+    cwd: "projectHash"               # SHA256 hash, not raw CWD — adapter resolves
+    model: "messages[-1].model"       # Model is per-message, use latest
+    started_at: "startTime"
+    updated_at: "lastUpdated"
+  alive_check: "none"
+
+# ── Conversation Parsing ──────────────────────────────────────────────
+# Gemini uses a single JSON file (NOT JSONL) per session.
+# Structure: { sessionId, projectHash, startTime, lastUpdated, messages[] }
+# Each message: { id, timestamp, type, content, thoughts[], tokens, model, toolCalls[] }
+#
+# thoughts[] per message: [{ subject, description, timestamp }]
+# toolCalls[] per message: [{ id, name, args, result, status }]
+# tokens per message: { input, output, cached, thoughts, tool, total }
+conversations:
+  encoding: "json"                    # Full JSON file, NOT JSONL
+  file_extension: ".json"
+  path_convention: "hash"             # SHA256 of project root path
+  content_extraction: "gemini-messages"
+  token_strategy: "per-message"       # Each message has its own tokens object
+
+  message_types:
+    user:
+      match:
+        - { field: "type", value: "user" }
+    assistant:
+      match:
+        - { field: "type", value: "gemini" }
+    system:
+      match:
+        - { field: "type", value: "info" }
+    error:
+      match:
+        - { field: "type", value: "error" }
+
+  usage:
+    locations:
+      - "tokens"                      # tokens object directly on each message
+    fields:
+      input: "input"
+      output: "output"
+      cache_read: "cached"
+      thinking: "thoughts"
+      tool: "tool"
+      total: "total"
+
+# ── Commands ──────────────────────────────────────────────────────────
+commands:
+  resume: ""                          # Gemini CLI has no resume command
+  new_session: "gemini"
+  ai_generate: "gemini --approval-mode=auto_edit"
+  prompt_transport: "stdin"
+
+# ── Pricing ───────────────────────────────────────────────────────────
+pricing:
+  default_tier: "flash"
+  tiers:
+    flash:
+      match: "flash"
+      input_per_m: 0.10
+      output_per_m: 0.40
+      cache_read_per_m: 0.025
+      cache_write_per_m: 0.025
+    pro:
+      match: "pro"
+      input_per_m: 1.25
+      output_per_m: 5.0
+      cache_read_per_m: 0.3125
+      cache_write_per_m: 0.3125
+    ultra:
+      match: "ultra"
+      input_per_m: 7.0
+      output_per_m: 21.0
+      cache_read_per_m: 1.75
+      cache_write_per_m: 1.75
+
+# ── Adapter ───────────────────────────────────────────────────────────
+# Gemini needs Go adapter for:
+# - SHA256 project hash path resolution (hash → actual CWD)
+# - Single JSON file parsing with messages[] array (not JSONL)
+# - Per-message token extraction (tokens, thoughts, toolCalls are embedded objects)
+# - Thought extraction from thoughts[] array on each message
+adapter:
+  go_package: "gemini"
+  overrides:
+    - "DiscoverSessions"
+    - "FindConversationFile"
+    - "ParseConversation"
+    - "ParseUsage"

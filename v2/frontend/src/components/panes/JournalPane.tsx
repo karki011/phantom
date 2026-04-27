@@ -83,21 +83,14 @@ const renderLine = (text: string): JSX.Element => {
         <a
           href={url}
           onClick={(e) => { e.preventDefault(); window.open(url, '_blank'); }}
-          style={{
-            color: '#a855f7',
-            'font-weight': '600',
-            'text-decoration': 'none',
-            cursor: 'pointer',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
+          class={styles.markdownLink}
         >
           {linkText}
         </a>,
       );
     } else {
       parts.push(
-        <span style={{ color: vars.color.accent, 'font-weight': '600' }}>
+        <span class={styles.bracketSpan}>
           [{linkText}]
         </span>,
       );
@@ -126,11 +119,11 @@ const highlightInline = (text: string, _key: number): JSX.Element => {
     }
     const m = match[0];
     if (m.startsWith('PR #')) {
-      parts.push(<span style={{ color: '#a855f7', 'font-weight': '600' }}>{m}</span>);
+      parts.push(<span class={styles.prHashSpan}>{m}</span>);
     } else if (m.startsWith('$')) {
-      parts.push(<span style={{ color: vars.color.xp, 'font-weight': '600' }}>{m}</span>);
+      parts.push(<span class={styles.amountSpan}>{m}</span>);
     } else if (m === '✓') {
-      parts.push(<span style={{ color: vars.color.success, 'font-weight': '600' }}>{m}</span>);
+      parts.push(<span class={styles.checkmarkSpan}>{m}</span>);
     }
     lastIndex = regex.lastIndex;
     k++;
@@ -150,36 +143,20 @@ function SectionHeader(props: {
   timestamp?: number;
 }) {
   return (
-    <div style={{
-      display: 'flex',
-      'align-items': 'center',
-      gap: vars.space.sm,
-      padding: `${vars.space.md} 0 ${vars.space.xs}`,
-    }}>
-      <span style={{ color: vars.color.accent, display: 'flex', 'align-items': 'center' }}>
+    <div class={styles.sectionHeaderRow}>
+      <span class={styles.sectionHeaderIcon}>
         {props.icon()}
       </span>
-      <span style={{
-        'font-size': '0.75rem',
-        'font-weight': '700',
-        'text-transform': 'uppercase',
-        'letter-spacing': '0.06em',
-        color: vars.color.textSecondary,
-        flex: '1',
-      }}>
+      <span class={styles.sectionHeaderTitle}>
         {props.title}
       </span>
       <Show when={props.timestamp && props.timestamp > 0}>
-        <span style={{
-          'font-size': '0.625rem',
-          color: vars.color.textDisabled,
-          'font-family': vars.font.mono,
-        }}>
+        <span class={styles.sectionHeaderTimestamp}>
           Generated {formatTime(props.timestamp!)}
         </span>
       </Show>
       <Show when={props.locked}>
-        <Lock size={10} style={{ color: vars.color.textDisabled, opacity: '0.4' }} />
+        <Lock size={10} class={styles.sectionHeaderLock} />
       </Show>
     </div>
   );
@@ -198,12 +175,10 @@ function ContentBlock(props: { content: string; variant: 'brief' | 'eod' }) {
     : 'color-mix(in srgb, #a855f7 15%, transparent)';
 
   return (
-    <div style={{
-      padding: `${vars.space.sm} ${vars.space.md}`,
-      'border-radius': vars.radius.md,
-      background: bgColor(),
-      border: `1px solid ${borderColor()}`,
-    }}>
+    <div
+      class={styles.contentBlock}
+      style={{ '--block-bg': bgColor(), '--block-border': borderColor() }}
+    >
       <For each={lines()}>
         {(line, i) => {
           const trimmed = line.replace(/^- /, '').replace(/^  · /, '').trim();
@@ -213,13 +188,7 @@ function ContentBlock(props: { content: string; variant: 'brief' | 'eod' }) {
 
           if (isHeader) {
             return (
-              <div style={{
-                'font-size': '0.8rem',
-                'font-weight': '600',
-                color: vars.color.textPrimary,
-                'margin-bottom': vars.space.xs,
-                'line-height': '1.5',
-              }}>
+              <div class={styles.contentBlockHeading}>
                 {renderLine(trimmed)}
               </div>
             );
@@ -227,25 +196,9 @@ function ContentBlock(props: { content: string; variant: 'brief' | 'eod' }) {
 
           if (isBullet) {
             return (
-              <div style={{
-                display: 'flex',
-                'align-items': 'flex-start',
-                gap: vars.space.sm,
-                padding: '3px 0',
-              }}>
-                <span style={{
-                  color: vars.color.accent,
-                  'font-size': '0.7rem',
-                  'margin-top': '2px',
-                  'flex-shrink': '0',
-                }}>
-                  ●
-                </span>
-                <span style={{
-                  'font-size': '0.78rem',
-                  color: vars.color.textSecondary,
-                  'line-height': '1.5',
-                }}>
+              <div class={styles.bulletRow}>
+                <span class={styles.bulletDot}>●</span>
+                <span class={styles.bulletText}>
                   {renderLine(trimmed)}
                 </span>
               </div>
@@ -254,25 +207,14 @@ function ContentBlock(props: { content: string; variant: 'brief' | 'eod' }) {
 
           if (isSubBullet) {
             return (
-              <div style={{
-                'font-size': '0.75rem',
-                color: vars.color.textDisabled,
-                'line-height': '1.5',
-                'padding-left': `calc(${vars.space.sm} + 0.7rem + ${vars.space.sm})`,
-                padding: '1px 0',
-              }}>
+              <div class={styles.subBulletText}>
                 {renderLine(trimmed)}
               </div>
             );
           }
 
           return (
-            <div style={{
-              'font-size': '0.78rem',
-              color: vars.color.textSecondary,
-              'line-height': '1.5',
-              padding: '2px 0',
-            }}>
+            <div class={styles.plainText}>
               {renderLine(trimmed)}
             </div>
           );
@@ -285,45 +227,23 @@ function ContentBlock(props: { content: string; variant: 'brief' | 'eod' }) {
 /** Work log with time column + event column */
 function WorkLogContent(props: { lines: string[] }) {
   return (
-    <div style={{
-      display: 'flex',
-      'flex-direction': 'column',
-      gap: '0',
-    }}>
+    <div class={styles.workLogContainer}>
       <For each={props.lines}>
         {(line, i) => {
           // Parse "HH:MM ..." pattern
           const timeMatch = line.match(/^(\d{1,2}:\d{2})\s*(.*)/);
           const time = timeMatch ? timeMatch[1] : '';
           const rest = timeMatch ? timeMatch[2] : line;
+          const borderBottom = i() < props.lines.length - 1
+            ? `1px solid color-mix(in srgb, ${vars.color.border} 50%, transparent)`
+            : 'none';
 
           return (
-            <div style={{
-              display: 'flex',
-              'align-items': 'center',
-              gap: vars.space.md,
-              padding: `${vars.space.xs} 0`,
-              'border-bottom': i() < props.lines.length - 1
-                ? `1px solid color-mix(in srgb, ${vars.color.border} 50%, transparent)`
-                : 'none',
-            }}>
+            <div class={styles.workLogRow} style={{ 'border-bottom': borderBottom }}>
               <Show when={time}>
-                <span style={{
-                  'font-size': '0.7rem',
-                  'font-family': vars.font.mono,
-                  color: vars.color.textDisabled,
-                  'min-width': '40px',
-                  'flex-shrink': '0',
-                  'font-variant-numeric': 'tabular-nums',
-                }}>
-                  {time}
-                </span>
+                <span class={styles.workLogTime}>{time}</span>
               </Show>
-              <span style={{
-                'font-size': '0.78rem',
-                color: vars.color.textSecondary,
-                'line-height': '1.4',
-              }}>
+              <span class={styles.workLogEvent}>
                 {renderLine(rest)}
               </span>
             </div>
@@ -341,28 +261,11 @@ function GenerateButton(props: { label: string; generating: boolean; onClick: ()
       type="button"
       onClick={() => !props.generating && props.onClick()}
       disabled={props.generating}
-      style={{
-        padding: `${vars.space.sm} ${vars.space.lg}`,
-        'border-radius': vars.radius.md,
-        'text-align': 'center',
-        cursor: props.generating ? 'default' : 'pointer',
-        background: props.generating ? vars.color.bgTertiary : vars.color.accent,
-        color: props.generating ? vars.color.textDisabled : vars.color.textInverse,
-        'font-size': '0.73rem',
-        'font-weight': '600',
-        border: 'none',
-        display: 'flex',
-        'align-items': 'center',
-        'justify-content': 'center',
-        gap: vars.space.sm,
-        width: '100%',
-        'font-family': 'inherit',
-        transition: `all ${vars.animation.fast} ease`,
-        width: 'fit-content',
-      }}
+      class={styles.generateButton}
+      data-generating={props.generating ? 'true' : undefined}
     >
       <Show when={props.generating}>
-        <Loader size={12} style={{ animation: 'journal-spin 1s linear infinite' }} />
+        <Loader size={12} class={styles.generateButtonSpinner} />
       </Show>
       {props.generating ? 'Generating...' : props.label}
     </button>
@@ -377,45 +280,21 @@ function DatePagination() {
   const goForward = () => { if (!isFuture()) void loadJournalEntry(addDays(selectedDate(), 1)); };
   const goToday = () => void loadJournalEntry(todayStr());
 
-  const navBtnStyle = {
-    cursor: 'pointer',
-    padding: '3px 8px',
-    'border-radius': vars.radius.sm,
-    display: 'flex',
-    'align-items': 'center',
-    border: 'none',
-    background: 'transparent',
-    color: vars.color.textSecondary,
-    transition: `background ${vars.animation.fast} ease`,
-  };
-
   return (
-    <div style={{
-      display: 'flex',
-      'align-items': 'center',
-      gap: '8px',
-      padding: `${vars.space.sm} ${vars.space.md}`,
-      'border-bottom': `1px solid ${vars.color.divider}`,
-      'flex-shrink': '0',
-    }}>
-      <CalendarDays size={15} style={{ color: vars.color.accent, 'flex-shrink': '0' }} />
-      <span style={{
-        'font-size': '0.88rem',
-        'font-weight': '600',
-        color: vars.color.textPrimary,
-        flex: '1',
-        'font-family': vars.font.body,
-      }}>
+    <div class={styles.datePaginationContainer}>
+      <CalendarDays size={15} class={styles.datePaginationIcon} />
+      <span class={styles.datePaginationLabel}>
         {formatFullDate(selectedDate())}
       </span>
-      <button type="button" onClick={goBack} aria-label="Previous day" style={navBtnStyle}>
+      <button type="button" onClick={goBack} aria-label="Previous day" class={styles.navButton}>
         <ChevronLeft size={14} />
       </button>
       <button
         type="button"
         onClick={goForward}
         aria-label="Next day"
-        style={{ ...navBtnStyle, opacity: isFuture() ? '0.3' : '1' }}
+        class={styles.navButton}
+        data-disabled={isFuture() ? 'true' : undefined}
         disabled={isFuture()}
       >
         <ChevronRight size={14} />
@@ -424,17 +303,7 @@ function DatePagination() {
         <button
           type="button"
           onClick={goToday}
-          style={{
-            cursor: 'pointer',
-            padding: '3px 10px',
-            'border-radius': vars.radius.sm,
-            'font-size': '0.68rem',
-            'font-weight': '600',
-            color: vars.color.accent,
-            border: `1px solid ${vars.color.accent}`,
-            background: 'transparent',
-            'font-family': 'inherit',
-          }}
+          class={styles.todayButton}
         >
           Today
         </button>
@@ -442,7 +311,7 @@ function DatePagination() {
       <Show when={projects().length > 0}>
         <DropdownMenu>
           <DropdownMenu.Trigger class={styles.dropdownTrigger}>
-            <span style={{ flex: '1', 'text-align': 'left' }}>
+            <span class={styles.dropdownTriggerFlex}>
               {selectedProject() ?? 'All Projects'}
             </span>
             <DropdownMenu.Icon class={styles.dropdownTriggerIcon}>
@@ -592,24 +461,14 @@ export default function JournalPane() {
 
       {/* Loading state */}
       <Show when={journalLoading()}>
-        <div style={{
-          display: 'flex',
-          'align-items': 'center',
-          'justify-content': 'center',
-          padding: vars.space.xl,
-          color: vars.color.textDisabled,
-        }}>
-          <Loader size={16} style={{ animation: 'journal-spin 1s linear infinite' }} />
+        <div class={styles.journalLoading}>
+          <Loader size={16} class={styles.generateButtonSpinner} />
         </div>
       </Show>
 
       {/* Journal Sections */}
       <Show when={!journalLoading()}>
-        <div style={{
-          display: 'flex',
-          'flex-direction': 'column',
-          gap: vars.space.lg,
-        }}>
+        <div class={styles.journalSections}>
           {/* ── Morning Brief ────────────────────────────────────────────── */}
           <div>
             <SectionHeader
@@ -644,12 +503,7 @@ export default function JournalPane() {
             <Show
               when={filteredWorkLog().length > 0}
               fallback={
-                <div style={{
-                  'font-size': '0.75rem',
-                  color: vars.color.textDisabled,
-                  'font-style': 'italic',
-                  padding: `${vars.space.sm} 0`,
-                }}>
+                <div class={styles.emptyWorkLog}>
                   No activity logged yet today
                 </div>
               }
@@ -696,20 +550,7 @@ export default function JournalPane() {
               onInput={(e) => handleNotesChange(e.currentTarget.value)}
               placeholder="Add personal notes..."
               rows={4}
-              style={{
-                width: '100%',
-                padding: `${vars.space.sm} ${vars.space.md}`,
-                'font-size': '0.78rem',
-                'border-radius': vars.radius.md,
-                background: vars.color.bgSecondary,
-                border: `1px solid ${vars.color.border}`,
-                color: vars.color.textPrimary,
-                outline: 'none',
-                'font-family': 'inherit',
-                resize: 'vertical',
-                'line-height': '1.6',
-                'box-sizing': 'border-box',
-              }}
+              class={styles.notesTextarea}
             />
           </div>
         </div>

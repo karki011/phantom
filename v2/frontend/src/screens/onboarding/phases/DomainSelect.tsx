@@ -54,10 +54,10 @@ export function DomainSelect(props: DomainSelectProps) {
       <div
         onPointerDown={() => setPaused(true)}
         onKeyDown={() => setPaused(true)}
-        style={{ display: 'flex', 'flex-direction': 'column', gap: '24px' }}
+        class={styles.phaseStack}
       >
         <div>
-          <div class={styles.label} style={{ 'margin-bottom': '12px' }}>Theme</div>
+          <div class={`${styles.label} ${styles.labelMargin}`}>Theme</div>
           <ToggleGroup
             value={activeTheme()}
             onChange={(val) => {
@@ -73,7 +73,7 @@ export function DomainSelect(props: DomainSelectProps) {
                 <ToggleGroup.Item value={t.id} class={styles.themeCard}>
                   <div class={styles.themePreview} style={{ background: t.colors.bg }}>
                     <div class={styles.themePreviewAccent} style={{ background: t.colors.accent }} />
-                    <span style={{ color: t.colors.text, 'font-size': '14px', 'font-weight': '600', 'font-family': 'var(--font-mono, "JetBrains Mono", "Fira Code", "SF Mono", monospace)' }}>Aa</span>
+                    <span class={styles.themePreviewSampleText} style={{ color: t.colors.text }}>Aa</span>
                   </div>
                   <div class={styles.themeCardBody}>
                     <div class={styles.themeName}>{t.name}</div>
@@ -86,7 +86,7 @@ export function DomainSelect(props: DomainSelectProps) {
         </div>
 
         <div>
-          <div class={styles.label} style={{ 'margin-bottom': '12px' }}>Font Style</div>
+          <div class={`${styles.label} ${styles.labelMargin}`}>Font Style</div>
           <ToggleGroup
             value={activeFontStyle()}
             onChange={(val) => {
@@ -108,7 +108,7 @@ export function DomainSelect(props: DomainSelectProps) {
           </ToggleGroup>
         </div>
 
-        <div style={{ display: 'flex', 'justify-content': 'center', 'padding-top': '8px' }}>
+        <div class={styles.actionCenter}>
           <button
             class={buttonRecipe({ variant: 'primary', size: 'lg' })}
             onClick={handleConfirm}

@@ -50,7 +50,7 @@ export function IdentityBind(props: IdentityBindProps) {
       <div
         onPointerDown={handleInteraction}
         onKeyDown={handleInteraction}
-        style={{ display: 'flex', 'flex-direction': 'column', gap: '24px' }}
+        class={styles.phaseStack}
       >
         <div class={styles.field}>
           <label class={styles.label}>Your Name</label>
@@ -72,12 +72,12 @@ export function IdentityBind(props: IdentityBindProps) {
         </div>
 
         <Show when={detected()}>
-          <div class={styles.label} style={{ 'text-transform': 'none', opacity: '0.7' }}>
+          <div class={`${styles.label} ${styles.labelDetected}`}>
             Identity detected: {detected()}
           </div>
         </Show>
 
-        <div style={{ display: 'flex', 'justify-content': 'center', 'padding-top': '8px' }}>
+        <div class={styles.actionCenter}>
           <button
             class={buttonRecipe({ variant: 'primary', size: 'lg' })}
             onClick={handleSubmit}

@@ -20,14 +20,14 @@ INSERT INTO sessions (
     xp_earned, input_tokens, output_tokens, cache_read_tokens,
     cache_write_tokens, estimated_cost_micros, message_count,
     tool_use_count, first_prompt, tool_breakdown,
-    last_input_tokens, context_used_pct
+    last_input_tokens, context_used_pct, provider
 ) VALUES (
     ?, ?, ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?,
     ?, ?, ?, ?,
     ?, ?, ?,
     ?, ?, ?,
-    ?, ?
+    ?, ?, ?
 );
 
 -- name: UpdateSession :exec
@@ -90,6 +90,9 @@ UPDATE sessions SET
     tool_breakdown = ?,
     last_input_tokens = ?
 WHERE id = ?;
+
+-- name: ListSessionsByProvider :many
+SELECT * FROM sessions WHERE provider = ? ORDER BY started_at DESC;
 
 -- name: DeleteSession :exec
 DELETE FROM sessions WHERE id = ?;

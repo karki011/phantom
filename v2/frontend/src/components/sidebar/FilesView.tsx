@@ -12,6 +12,8 @@ import {
   setFilesCount,
   selectedFile,
   setSelectedFile,
+  revealFilePath,
+  setRevealFilePath,
   type FileNode,
 } from '@/core/signals/files';
 import { activeWorktreeId } from '@/core/signals/app';
@@ -94,10 +96,42 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
     return base ? `${base}/${props.node.path}` : props.node.path;
   };
 
+  // Reveal-in-tree: auto-expand directories that are ancestors of the target path
+  if (props.node.isDir) {
+    createEffect(on(revealFilePath, (target) => {
+      if (!target) return;
+      const prefix = props.node.path + '/';
+      if (target.startsWith(prefix) && !expanded()) {
+        handleExpand(true);
+      }
+    }));
+  }
+
+  let itemRef: HTMLDivElement | undefined;
+
   if (!props.node.isDir) {
+    // Reveal-in-tree: scroll file into view when it's the target.
+    // Like VS Code: skip scroll if already visible, otherwise center in viewport.
+    createEffect(on(revealFilePath, (target) => {
+      if (!target || target !== props.node.path) return;
+      setRevealFilePath(null);
+      requestAnimationFrame(() => {
+        if (!itemRef) return;
+        const rect = itemRef.getBoundingClientRect();
+        const parent = itemRef.closest('[class*="fileTree"]');
+        if (parent) {
+          const parentRect = parent.getBoundingClientRect();
+          const isVisible = rect.top >= parentRect.top && rect.bottom <= parentRect.bottom;
+          if (isVisible) return;
+        }
+        itemRef.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
+    }));
+
     return (
       <ContextMenu>
         <ContextMenu.Trigger
+          ref={itemRef}
           as="div"
           class={`${styles.fileItem} ${isSelected() ? styles.fileItemSelected : ''} ${isIgnored() ? styles.fileItemIgnored : ''}`}
           style={{ 'padding-left': `${indent() + 8}px` }}
@@ -211,7 +245,7 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
                       ref={(el: HTMLInputElement) => { inputRef = el; requestAnimationFrame(() => requestAnimationFrame(() => el.focus())); }}
                       type="text"
                       placeholder={type() === 'file' ? 'filename' : 'folder name'}
-                      style={{ background: 'var(--color-bg-input, #1a1a2e)', border: '1px solid var(--color-border-focus, #4a9eff)', color: 'inherit', 'font-size': '12px', padding: '1px 4px', 'border-radius': '3px', outline: 'none', flex: '1', 'min-width': '0' }}
+                      class={styles.renameInput}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); if (e.key === 'Escape') setCreating(null); }}
                       onFocusOut={handleSubmit}
                     />
@@ -288,8 +322,7 @@ function SearchResultItem(props: { entry: FileEntry }) {
 
   return (
     <div
-      class={`${styles.fileItem} ${isSelected() ? styles.fileItemSelected : ''}`}
-      style={{ 'padding-left': '8px' }}
+      class={`${styles.fileItem} ${styles.fileItemPadded} ${isSelected() ? styles.fileItemSelected : ''}`}
       onClick={() => setSelectedFile(props.entry.path)}
       title={props.entry.path}
     >
@@ -389,7 +422,7 @@ export function FilesView() {
               <div class={styles.emptyState}>
                 <FileText size={24} />
                 <span>No files loaded</span>
-                <span style={{ 'font-size': '10px', opacity: '0.6' }}>
+                <span class={styles.emptyStateHint}>
                   File tree will populate when a worktree is active
                 </span>
               </div>

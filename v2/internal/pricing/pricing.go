@@ -3,7 +3,11 @@
 // Author: Subash Karki
 package pricing
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/subashkarki/phantom-os-v2/internal/provider"
+)
 
 // ModelPricing holds the token rates for a Claude model tier.
 // All prices are in US dollars per one million tokens.
@@ -51,4 +55,21 @@ func CalculateCostMicros(model string, input, output, cacheRead, cacheWrite int6
 		float64(cacheRead)*p.CacheReadPerM +
 		float64(cacheWrite)*p.CacheWritePerM
 	return int64(cost)
+}
+
+// CalculateCostMicrosWithProvider delegates cost calculation to the given
+// provider.CostCalculator. This allows callers that have a provider to use
+// the provider's YAML-driven pricing configuration instead of the hardcoded
+// pricing table. When prov is nil, it falls back to CalculateCostMicros.
+func CalculateCostMicrosWithProvider(prov provider.CostCalculator, model string, input, output, cacheRead, cacheWrite int64) int64 {
+	if prov == nil {
+		return CalculateCostMicros(model, input, output, cacheRead, cacheWrite)
+	}
+	usage := provider.TokenUsage{
+		Input:      input,
+		Output:     output,
+		CacheRead:  cacheRead,
+		CacheWrite: cacheWrite,
+	}
+	return prov.CalculateCost(model, usage)
 }

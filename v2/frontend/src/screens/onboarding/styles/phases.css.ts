@@ -312,3 +312,60 @@ export const successText = style({
   color: vars.color.success,
   textAlign: 'center',
 });
+
+// DomainSelect + IdentityBind shared layout
+export const phaseStack = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '24px',
+});
+
+export const labelMargin = style({
+  marginBottom: '12px',
+});
+
+export const labelDetected = style({
+  textTransform: 'none',
+  opacity: 0.7,
+});
+
+export const themePreviewSampleText = style({
+  fontSize: '14px',
+  fontWeight: 600,
+  fontFamily: 'var(--font-mono, "JetBrains Mono", "Fira Code", "SF Mono", monospace)',
+});
+
+export const actionCenter = style({
+  display: 'flex',
+  justifyContent: 'center',
+  paddingTop: '8px',
+});
+
+// DomainLink layout
+export const inputRow = style({
+  display: 'flex',
+  gap: '10px',
+  alignItems: 'stretch',
+});
+
+export const inputFlex = style({
+  flex: 1,
+});
+
+export const linkActionCenter = style({
+  display: 'flex',
+  justifyContent: 'center',
+});
+
+export const footerRow = style({
+  display: 'flex',
+  justifyContent: 'center',
+  gap: '16px',
+  paddingTop: '12px',
+});
+
+export const phaseStack20 = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '20px',
+});

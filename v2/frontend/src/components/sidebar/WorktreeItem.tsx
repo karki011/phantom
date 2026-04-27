@@ -6,6 +6,7 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { Terminal, Trash2, GitBranch, GitFork, FolderOpen, ExternalLink, Clipboard, Pencil, RefreshCw, ArrowDownFromLine, ArrowUpFromLine, X, LoaderCircle } from 'lucide-solid';
 
 import * as styles from '@/styles/sidebar.css';
+import { spin } from '@/styles/utilities.css';
 import { activeWorktreeId } from '@/core/signals/app';
 import { selectWorktree, removeWorktreeById } from '@/core/signals/worktrees';
 import { addTabWithData } from '@/core/panes/signals';
@@ -15,7 +16,6 @@ import { SwitchBranchDialog } from '@/shared/SwitchBranchDialog/SwitchBranchDial
 import { RenameWorktreeDialog } from '@/shared/RenameWorktreeDialog/RenameWorktreeDialog';
 import { PhantomModal, phantomModalStyles } from '@/shared/PhantomModal/PhantomModal';
 import { buttonRecipe } from '@/styles/recipes.css';
-import { vars } from '@/styles/theme.css';
 import type { Workspace } from '@/core/types';
 
 interface WorktreeItemProps {
@@ -96,7 +96,7 @@ export function WorktreeItem(props: WorktreeItemProps) {
         }}
       >
         {deleting() ? (
-          <LoaderCircle size={13} class={styles.worktreeIcon} style={{ animation: 'spin 1s linear infinite' }} />
+          <LoaderCircle size={13} class={`${styles.worktreeIcon} ${spin}`} />
         ) : props.worktree.type === 'branch' ? (
           <GitBranch size={13} class={styles.worktreeIcon} />
         ) : (
@@ -231,8 +231,8 @@ export function WorktreeItem(props: WorktreeItemProps) {
       description="This action cannot be undone"
       size="sm"
     >
-      <p style={{ margin: 0, 'font-family': vars.font.body, 'font-size': vars.fontSize.sm, color: vars.color.textPrimary, 'line-height': '1.6' }}>
-        <strong>{props.worktree.name}</strong> has <span style={{ color: vars.color.warning, 'font-weight': '600' }}>{dirtyCount()}</span> uncommitted change{dirtyCount() > 1 ? 's' : ''}. Closing will permanently remove the worktree directory from disk.
+      <p class={styles.deleteWarningText}>
+        <strong>{props.worktree.name}</strong> has <span class={styles.deleteWarningCount}>{dirtyCount()}</span> uncommitted change{dirtyCount() > 1 ? 's' : ''}. Closing will permanently remove the worktree directory from disk.
       </p>
       <div class={phantomModalStyles.actions}>
         <button type="button" class={buttonRecipe({ variant: 'ghost', size: 'md' })} onClick={() => setShowDeleteConfirm(false)}>

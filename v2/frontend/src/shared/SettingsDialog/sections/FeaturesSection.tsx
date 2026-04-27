@@ -90,7 +90,7 @@ export default function FeaturesSection() {
           <div>
             <div class={styles.settingLabel}>Ward System</div>
             <div class={styles.settingDescription}>
-              Evaluate safety rules against Claude tool calls — block, confirm, or warn on risky operations
+              Evaluate safety rules against AI tool calls — block, confirm, or warn on risky operations
             </div>
           </div>
           <KobalteSwitch

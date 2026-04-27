@@ -147,14 +147,9 @@ export async function removeWorktreeById(
 ): Promise<boolean> {
   const isActive = activeWorktreeId() === worktreeId;
 
-  if (isActive) {
-    setActiveWorktreeId(null);
-  }
-
   const ok = await removeWorktree(worktreeId);
   if (!ok) {
     console.error('[worktrees] removeWorktree failed for', worktreeId);
-    if (isActive) setActiveWorktreeId(worktreeId);
     return false;
   }
   clearWorktreeCache(worktreeId);
@@ -167,6 +162,9 @@ export async function removeWorktreeById(
       selectWorktree(localBranch.id);
     } else if (projectWorktrees.length > 0) {
       selectWorktree(projectWorktrees[0].id);
+    } else {
+      setActiveWorktreeId(null);
+      setPref('active_worktree_id', '');
     }
   }
   return true;

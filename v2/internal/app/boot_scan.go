@@ -3,24 +3,240 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
+	"time"
+
+	"github.com/subashkarki/phantom-os-v2/internal/provider"
 )
+
+// AgentStatus holds detection results for a single AI coding agent.
+type AgentStatus struct {
+	Name         string `json:"name"`
+	Installed    bool   `json:"installed"`
+	Version      string `json:"version,omitempty"`
+	SessionCount int    `json:"sessionCount"`
+	Detail       string `json:"detail,omitempty"`
+}
 
 // BootScanResult holds real system health data surfaced during the boot sequence.
 type BootScanResult struct {
-	Operator       string `json:"operator"`
-	NodeVersion    string `json:"nodeVersion"`
-	BunVersion     string `json:"bunVersion"`
-	ClaudeSessions int    `json:"claudeSessions"`
-	ClaudeProjects int    `json:"claudeProjects"`
-	MCPChannels    int    `json:"mcpChannels"`
-	GithubAuth     bool   `json:"githubAuth"`
-	AWSConfigured  bool   `json:"awsConfigured"`
-	GCPConfigured  bool   `json:"gcpConfigured"`
+	Operator       string        `json:"operator"`
+	NodeVersion    string        `json:"nodeVersion"`
+	BunVersion     string        `json:"bunVersion"`
+	ClaudeSessions int           `json:"claudeSessions"`
+	ClaudeProjects int           `json:"claudeProjects"`
+	MCPChannels    int           `json:"mcpChannels"`
+	GithubAuth     bool          `json:"githubAuth"`
+	AWSConfigured  bool          `json:"awsConfigured"`
+	GCPConfigured  bool          `json:"gcpConfigured"`
+	Agents         []AgentStatus `json:"agents"`
+}
+
+// versionWithTimeout runs a command with a 2-second timeout and returns stdout trimmed.
+func versionWithTimeout(name string, args ...string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, name, args...).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// countDirs returns the number of subdirectories inside dir (0 on error).
+func countDirs(dir string) int {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			n++
+		}
+	}
+	return n
+}
+
+// detectAgents concurrently probes for 10 AI coding tools and returns only installed ones.
+// The provider registry is used to detect providers that have been registered
+// (currently Claude Code); remaining agents use direct filesystem/binary probes.
+func detectAgents(home string, provReg *provider.Registry) []AgentStatus {
+	results := make([]AgentStatus, 10)
+	var wg sync.WaitGroup
+	wg.Add(10)
+
+	// 0 — Claude Code (via provider registry when available, else binary probe)
+	go func() {
+		defer wg.Done()
+		a := AgentStatus{Name: "Claude Code"}
+		if provReg != nil {
+			if prov, ok := provReg.Get("claude"); ok {
+				health := prov.HealthCheck(context.Background())
+				a.Installed = health.Installed
+				a.Version = health.Version
+				if a.Installed {
+					n := countDirs(prov.ConversationsDir())
+					a.SessionCount = n
+					a.Detail = fmt.Sprintf("%d projects", n)
+				}
+				results[0] = a
+				return
+			}
+		}
+		// Fallback: direct binary probe
+		if _, err := exec.LookPath("claude"); err == nil {
+			a.Installed = true
+			a.Version = versionWithTimeout("claude", "--version")
+			n := countDirs(filepath.Join(home, ".claude", "projects"))
+			a.SessionCount = n
+			a.Detail = fmt.Sprintf("%d projects", n)
+		}
+		results[0] = a
+	}()
+
+	// 1 — Codex CLI
+	go func() {
+		defer wg.Done()
+		a := AgentStatus{Name: "Codex CLI"}
+		if _, err := exec.LookPath("codex"); err == nil {
+			a.Installed = true
+			a.Detail = "installed"
+		} else if _, err := os.Stat(filepath.Join(home, ".codex")); err == nil {
+			a.Installed = true
+			a.Detail = "installed"
+		}
+		results[1] = a
+	}()
+
+	// 2 — Aider
+	go func() {
+		defer wg.Done()
+		a := AgentStatus{Name: "Aider"}
+		if _, err := exec.LookPath("aider"); err == nil {
+			a.Installed = true
+			a.Detail = "installed"
+		} else if _, err := os.Stat(filepath.Join(home, ".aider")); err == nil {
+			a.Installed = true
+			a.Detail = "installed"
+		}
+		results[2] = a
+	}()
+
+	// 3 — Ollama
+	go func() {
+		defer wg.Done()
+		a := AgentStatus{Name: "Ollama"}
+		if _, err := exec.LookPath("ollama"); err == nil {
+			a.Installed = true
+			modelsDir := filepath.Join(home, ".ollama", "models", "manifests", "registry.ollama.ai", "library")
+			n := countDirs(modelsDir)
+			a.SessionCount = n
+			a.Detail = fmt.Sprintf("%d models", n)
+		}
+		results[3] = a
+	}()
+
+	// 4 — Gemini CLI
+	go func() {
+		defer wg.Done()
+		a := AgentStatus{Name: "Gemini CLI"}
+		if _, err := exec.LookPath("gemini"); err == nil {
+			a.Installed = true
+			a.Detail = "installed"
+		} else if _, err := os.Stat(filepath.Join(home, ".gemini")); err == nil {
+			a.Installed = true
+			a.Detail = "installed"
+		}
+		results[4] = a
+	}()
+
+	// 5 — GitHub Copilot (only if the copilot extension is actually installed)
+	go func() {
+		defer wg.Done()
+		a := AgentStatus{Name: "GitHub Copilot"}
+		if _, err := exec.LookPath("gh"); err == nil {
+			ver := versionWithTimeout("gh", "copilot", "--version")
+			if ver != "" {
+				a.Installed = true
+				a.Version = ver
+				a.Detail = ver
+			}
+		}
+		results[5] = a
+	}()
+
+	// 6 — Amazon Q
+	go func() {
+		defer wg.Done()
+		a := AgentStatus{Name: "Amazon Q"}
+		if _, err := exec.LookPath("q"); err == nil {
+			a.Installed = true
+			a.Detail = "installed"
+		} else if _, err := os.Stat(filepath.Join(home, ".aws", "amazonq")); err == nil {
+			a.Installed = true
+			a.Detail = "installed"
+		}
+		results[6] = a
+	}()
+
+	// 7 — Cursor (macOS app bundle only)
+	go func() {
+		defer wg.Done()
+		a := AgentStatus{Name: "Cursor"}
+		if runtime.GOOS == "darwin" {
+			if _, err := os.Stat("/Applications/Cursor.app"); err == nil {
+				a.Installed = true
+				a.Detail = "installed"
+			}
+		}
+		results[7] = a
+	}()
+
+	// 8 — Continue.dev
+	go func() {
+		defer wg.Done()
+		a := AgentStatus{Name: "Continue.dev"}
+		if _, err := os.Stat(filepath.Join(home, ".continue")); err == nil {
+			a.Installed = true
+			a.Detail = "installed"
+		}
+		results[8] = a
+	}()
+
+	// 9 — Windsurf
+	go func() {
+		defer wg.Done()
+		a := AgentStatus{Name: "Windsurf"}
+		if _, err := exec.LookPath("windsurf"); err == nil {
+			a.Installed = true
+			a.Detail = "installed"
+		} else if runtime.GOOS == "darwin" {
+			if _, err := os.Stat("/Applications/Windsurf.app"); err == nil {
+				a.Installed = true
+				a.Detail = "installed"
+			}
+		}
+		results[9] = a
+	}()
+
+	wg.Wait()
+
+	installed := make([]AgentStatus, 0, 10)
+	for _, a := range results {
+		if a.Installed {
+			installed = append(installed, a)
+		}
+	}
+	return installed
 }
 
 // BootScan collects real system data for the PhantomOS boot screen.
@@ -41,17 +257,23 @@ func (a *App) BootScan() (*BootScanResult, error) {
 		r.BunVersion = strings.TrimSpace(string(out))
 	}
 
-	claudeDir := filepath.Join(home, ".claude", "projects")
-	if entries, err := os.ReadDir(claudeDir); err == nil {
-		for _, e := range entries {
-			if e.IsDir() {
-				r.ClaudeProjects++
-			}
+	r.Agents = detectAgents(home, a.provRegistry)
+	// Backward compat: populate legacy Claude fields
+	for _, ag := range r.Agents {
+		if ag.Name == "Claude Code" {
+			r.ClaudeProjects = ag.SessionCount
+			r.ClaudeSessions = ag.SessionCount
+			break
 		}
-		r.ClaudeSessions = r.ClaudeProjects
 	}
 
+	// Use provider's settings path when available, fall back to hardcoded path.
 	settingsPath := filepath.Join(home, ".claude", "settings.json")
+	if a.prov != nil {
+		if sf := a.prov.SettingsFile(); sf != "" {
+			settingsPath = sf
+		}
+	}
 	if data, err := os.ReadFile(settingsPath); err == nil {
 		var settings map[string]any
 		if json.Unmarshal(data, &settings) == nil {

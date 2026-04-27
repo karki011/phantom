@@ -12,6 +12,7 @@ const registry: Partial<Record<PaneType, Component<any>>> = {
   editor: lazy(() => import('./EditorPane')),
   diff: lazy(() => import('./DiffPane')),
   journal: lazy(() => import('./JournalPane')),
+  chat: lazy(() => import('./ChatPane')),
 };
 
 export function getPaneComponent(kind: string): Component<any> | undefined {

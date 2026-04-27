@@ -4,19 +4,21 @@
 import { For, createEffect, on } from 'solid-js';
 import * as styles from '@/styles/panes.css';
 import { activeTab, tabs } from '@/core/panes/signals';
-import { getAllSessions } from '@/core/terminal/registry';
+import { getAllSessions, safeFit } from '@/core/terminal/registry';
 import { TabBar } from './TabBar';
 import { LayoutRenderer } from './LayoutRenderer';
 
 export function Workspace() {
   createEffect(on(() => activeTab()?.id, () => {
-    requestAnimationFrame(() => {
+    const refitAll = () => {
       for (const session of getAllSessions()) {
-        if (session.attached) {
-          try { session.fitAddon.fit(); } catch {}
-        }
+        if (session.attached) safeFit(session);
       }
+    };
+    requestAnimationFrame(() => {
+      requestAnimationFrame(refitAll);
     });
+    setTimeout(refitAll, 150);
   }));
 
   return (

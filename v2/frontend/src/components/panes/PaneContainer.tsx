@@ -136,8 +136,8 @@ function PlaceholderContent() {
   return (
     <Skeleton visible animate class={styles.skeletonPlaceholder}>
       <div class={styles.skeletonHeader} />
-      <div class={styles.skeletonLine} style={{ height: '12px', width: '70%' }} />
-      <div class={styles.skeletonLine} style={{ height: '12px', width: '55%' }} />
+      <div class={`${styles.skeletonLine} ${styles.skeletonLineShort}`} />
+      <div class={`${styles.skeletonLine} ${styles.skeletonLineShorter}`} />
       <div class={styles.skeletonBody} />
     </Skeleton>
   );

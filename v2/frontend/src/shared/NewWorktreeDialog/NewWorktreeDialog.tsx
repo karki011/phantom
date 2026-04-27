@@ -8,6 +8,7 @@ import { buttonRecipe } from '@/styles/recipes.css';
 import { PhantomModal, phantomModalStyles } from '@/shared/PhantomModal/PhantomModal';
 import { PhantomLoader } from '@/shared/PhantomLoader/PhantomLoader';
 import { getProjectBranches, createWorktree } from '@/core/bindings';
+import { activeProviderCommand, activeProviderLabel } from '@/core/signals/active-provider';
 import { refreshProjects } from '@/core/signals/projects';
 import { bootstrapWorktrees, selectWorktree } from '@/core/signals/worktrees';
 import { addTabWithData } from '@/core/panes/signals';
@@ -100,9 +101,9 @@ export function NewWorktreeDialog(props: NewWorktreeDialogProps) {
         await bootstrapWorktrees();
         selectWorktree(result.id);
         if (result.worktree_path) {
-          addTabWithData('terminal', 'Claude', {
+          addTabWithData('terminal', activeProviderLabel(), {
             cwd: result.worktree_path,
-            command: 'claude --dangerously-skip-permissions',
+            command: activeProviderCommand(),
           });
         }
         props.onOpenChange(false);
@@ -202,7 +203,7 @@ export function NewWorktreeDialog(props: NewWorktreeDialogProps) {
           {/* Ticket Link */}
           <TextField class={styles.textFieldRoot} value={ticketLink()} onChange={setTicketLink}>
             <TextField.Label class={styles.textFieldLabel}>
-              Ticket Link <span style={{ 'font-weight': '400', opacity: '0.6' }}>(optional)</span>
+              Ticket Link <span class={styles.optionalLabel}>(optional)</span>
             </TextField.Label>
             <TextField.Input
               class={styles.textFieldInput}

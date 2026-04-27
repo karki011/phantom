@@ -6,8 +6,8 @@ import { CheckCircle, ChevronRight, Circle, Play, XCircle, LoaderCircle } from '
 import { ciRuns } from '@/core/signals/activity';
 import type { CiRun } from '@/core/types';
 import { openURL } from '@/core/bindings/shell';
-import { vars } from '@/styles/theme.css';
 import * as s from '@/styles/right-sidebar.css';
+import { iconSuccess, iconDanger, iconWarning, iconMuted } from '@/styles/utilities.css';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -19,15 +19,15 @@ interface CiSectionProps {
 
 function getStatusIcon(status: string, conclusion: string): JSX.Element {
   if (conclusion === 'success') {
-    return <CheckCircle size={13} style={{ color: vars.color.success }} />;
+    return <CheckCircle size={13} class={iconSuccess} />;
   }
   if (conclusion === 'failure') {
-    return <XCircle size={13} style={{ color: vars.color.danger }} />;
+    return <XCircle size={13} class={iconDanger} />;
   }
   if (status === 'in_progress') {
-    return <LoaderCircle size={13} class={s.ciSpinner} style={{ color: vars.color.warning }} />;
+    return <LoaderCircle size={13} class={`${iconWarning} ${s.ciSpinner}`} />;
   }
-  return <Circle size={13} style={{ color: vars.color.textDisabled }} />;
+  return <Circle size={13} class={iconMuted} />;
 }
 
 function getGroupStatus(checks: CiRun[]): { icon: JSX.Element; summary: string } {
@@ -36,18 +36,18 @@ function getGroupStatus(checks: CiRun[]): { icon: JSX.Element; summary: string }
 
   if (failed.length > 0) {
     return {
-      icon: <XCircle size={13} style={{ color: vars.color.danger }} />,
+      icon: <XCircle size={13} class={iconDanger} />,
       summary: `${failed.length} failed`,
     };
   }
   if (pending.length > 0) {
     return {
-      icon: <LoaderCircle size={13} class={s.ciSpinner} style={{ color: vars.color.warning }} />,
+      icon: <LoaderCircle size={13} class={`${iconWarning} ${s.ciSpinner}`} />,
       summary: `${pending.length} pending`,
     };
   }
   return {
-    icon: <CheckCircle size={13} style={{ color: vars.color.success }} />,
+    icon: <CheckCircle size={13} class={iconSuccess} />,
     summary: `${checks.length} passed`,
   };
 }
@@ -122,7 +122,7 @@ function MultiCheckGroup(props: MultiCheckGroupProps) {
           class={expanded() ? `${s.ciChevron} ${s.ciChevronExpanded}` : s.ciChevron}
         />
         {groupStatus().icon}
-        <span class={s.ciName} style={{ 'font-weight': '500' }}>
+        <span class={`${s.ciName} ${s.ciNameBold}`}>
           {props.workflow}
         </span>
         <span class={s.ciStatusLabel}>
@@ -171,16 +171,7 @@ export function CiSection(_props: CiSectionProps) {
         {/* Section header */}
         <div class={s.ciSectionHeader}>
           <Play size={11} />
-          <span
-            style={{
-              'font-size': '0.6rem',
-              'font-weight': '700',
-              'text-transform': 'uppercase',
-              'letter-spacing': '0.05em',
-              color: 'inherit',
-              flex: '1',
-            }}
-          >
+          <span class={s.ciSectionTitle}>
             CI / CD Runs
           </span>
           <Show when={runs()!.length > 0}>
@@ -190,7 +181,7 @@ export function CiSection(_props: CiSectionProps) {
 
         {/* Empty state */}
         <Show when={runs()!.length === 0}>
-          <div class={s.ciStatusLabel} style={{ padding: '4px 8px' }}>
+          <div class={`${s.ciStatusLabel} ${s.ciEmptyState}`}>
             No CI runs
           </div>
         </Show>

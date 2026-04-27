@@ -7,12 +7,18 @@ import { vars } from '../../styles/theme.css';
 export const controlsCard = style({
   display: 'flex',
   flexDirection: 'column',
-  gap: vars.space.sm,
-  padding: vars.space.lg,
-  background: vars.color.bgTertiary,
-  borderRadius: vars.radius.lg,
-  border: `1px solid color-mix(in srgb, ${vars.color.accent} 20%, ${vars.color.border})`,
+  gap: '2px',
+  padding: `${vars.space.xs} ${vars.space.sm}`,
+  borderRadius: vars.radius.md,
+  background: vars.color.bgPrimary,
+  border: `1px solid ${vars.color.border}`,
   fontFamily: vars.font.mono,
+  cursor: 'default',
+  transition: `all ${vars.animation.fast} ease`,
+  ':hover': {
+    borderColor: `color-mix(in srgb, ${vars.color.accent} 40%, ${vars.color.border})`,
+    boxShadow: `0 0 8px color-mix(in srgb, ${vars.color.accent} 12%, transparent)`,
+  },
 });
 
 export const controlsHeader = style({
@@ -40,18 +46,26 @@ export const controlsIcon = style({
 export const controlsRow = style({
   display: 'flex',
   alignItems: 'center',
-  gap: vars.space.sm,
-  flexWrap: 'wrap',
+  gap: vars.space.xs,
+  flexWrap: 'nowrap',
+});
+
+export const controlButtons = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  marginLeft: 'auto',
+  flexShrink: 0,
 });
 
 export const sessionName = style({
-  fontSize: vars.fontSize.sm,
+  fontSize: '0.75rem',
   color: vars.color.textPrimary,
   fontWeight: 500,
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
-  flex: 1,
+  maxWidth: '200px',
 });
 
 export const sessionModel = style({
@@ -86,29 +100,25 @@ export const statusPaused = style({
 export const controlButton = style({
   display: 'inline-flex',
   alignItems: 'center',
-  gap: '4px',
-  padding: '4px 10px',
+  gap: '3px',
+  padding: '3px 8px',
   borderRadius: vars.radius.sm,
-  fontSize: vars.fontSize.xs,
+  fontSize: '0.65rem',
   fontFamily: vars.font.mono,
-  fontWeight: 500,
-  border: `1px solid ${vars.color.border}`,
-  background: vars.color.bgSecondary,
-  color: vars.color.textSecondary,
+  fontWeight: 400,
+  border: 'none',
+  background: 'transparent',
+  color: vars.color.textDisabled,
   cursor: 'pointer',
   transition: `all 150ms ease`,
   ':hover': {
-    borderColor: vars.color.accent,
     color: vars.color.accent,
-    background: `color-mix(in srgb, ${vars.color.accent} 8%, ${vars.color.bgSecondary})`,
   },
 });
 
 export const controlButtonDanger = style({
   ':hover': {
-    borderColor: vars.color.danger,
     color: vars.color.danger,
-    background: `color-mix(in srgb, ${vars.color.danger} 8%, ${vars.color.bgSecondary})`,
   },
 });
 
@@ -145,7 +155,6 @@ export const policyOptionActive = style({
 });
 
 export const controlsCardExternal = style({
-  border: `1px solid color-mix(in srgb, ${vars.color.textDisabled} 25%, ${vars.color.border})`,
 });
 
 export const externalBadge = style({
@@ -164,11 +173,7 @@ export const externalBadge = style({
 });
 
 export const controlButtonAttach = style({
-  borderColor: vars.color.accent,
   color: vars.color.accent,
-  ':hover': {
-    background: `color-mix(in srgb, ${vars.color.accent} 15%, ${vars.color.bgSecondary})`,
-  },
 });
 
 export const wardBadge = style({
@@ -185,4 +190,125 @@ export const wardBadge = style({
   backgroundColor: 'rgba(245, 158, 11, 0.2)',
   color: '#f59e0b',
   marginLeft: 'auto',
+});
+
+export const taskSection = style({
+  borderTop: `1px solid ${vars.color.border}`,
+  paddingTop: vars.space.sm,
+  marginTop: vars.space.xs,
+});
+
+export const taskTrigger = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  background: 'none',
+  border: 'none',
+  color: vars.color.textSecondary,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  cursor: 'pointer',
+  padding: '0',
+  width: '100%',
+  transition: `color ${vars.animation.fast} ease`,
+  ':hover': { color: vars.color.accent },
+  selectors: {
+    '[data-expanded] &': { color: vars.color.textPrimary },
+  },
+});
+
+export const taskChevron = style({
+  display: 'flex',
+  alignItems: 'center',
+  transition: `transform ${vars.animation.fast} ease`,
+  selectors: {
+    '[data-expanded] &': { transform: 'rotate(90deg)' },
+  },
+});
+
+export const taskContent = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '3px',
+  marginTop: vars.space.xs,
+  paddingLeft: vars.space.md,
+  overflow: 'hidden',
+});
+
+export const taskItem = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  fontSize: vars.fontSize.xs,
+  fontFamily: vars.font.mono,
+  color: vars.color.textSecondary,
+  padding: `2px 0`,
+});
+
+export const taskItemCompleted = style({
+  color: vars.color.textDisabled,
+});
+
+export const taskIconDone = style({
+  color: vars.color.success,
+  flexShrink: 0,
+});
+
+export const taskIconProgress = style({
+  color: vars.color.accent,
+  flexShrink: 0,
+  animation: 'spin 1s linear infinite',
+});
+
+export const taskIconPending = style({
+  color: vars.color.textDisabled,
+  flexShrink: 0,
+});
+
+export const taskLabel = style({
+  flex: 1,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+});
+
+export const taskLabelDone = style({
+  textDecoration: 'line-through',
+});
+
+export const taskCrew = style({
+  fontSize: '0.6rem',
+  color: vars.color.accent,
+  flexShrink: 0,
+});
+
+export const taskDuration = style({
+  fontSize: '0.6rem',
+  color: vars.color.textDisabled,
+  flexShrink: 0,
+  minWidth: '28px',
+  textAlign: 'right',
+});
+
+export const taskTodo = style({
+  fontSize: '0.6rem',
+  color: vars.color.textDisabled,
+  flexShrink: 0,
+  fontStyle: 'italic',
+});
+
+export const planBadge = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '2px 8px',
+  borderRadius: '4px',
+  fontSize: vars.fontSize.xs,
+  fontFamily: vars.font.mono,
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  backgroundColor: `color-mix(in srgb, ${vars.color.accent} 15%, transparent)`,
+  color: vars.color.accent,
+  animation: 'pulse 2s ease-in-out infinite',
 });

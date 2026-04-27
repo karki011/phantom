@@ -3,7 +3,7 @@
 
 import { createSignal } from 'solid-js';
 
-export type SettingsSection = 'appearance' | 'terminal' | 'features' | 'system';
+export type SettingsSection = 'appearance' | 'editor' | 'terminal' | 'features' | 'providers' | 'system';
 
 const [settingsOpen, setSettingsOpen] = createSignal(false);
 const [settingsSection, setSettingsSection] = createSignal<SettingsSection>('appearance');

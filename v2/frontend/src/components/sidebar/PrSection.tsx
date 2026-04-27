@@ -13,6 +13,7 @@ import {
 } from '@/core/signals/activity';
 import { createPrWithAI } from '@/core/bindings/git';
 import { openURL } from '@/core/bindings/shell';
+import { activeProviderLabel } from '@/core/signals/active-provider';
 import { vars } from '@/styles/theme.css';
 import * as s from '@/styles/right-sidebar.css';
 
@@ -60,8 +61,8 @@ const PrSection: Component<PrSectionProps> = (props) => {
         <Show when={isCreatingPr()}>
           <div class={s.prCreatingRow}>
             <Loader2 size={12} class={s.spinning} />
-            <span style={{ color: 'inherit', 'font-size': '0.73rem' }}>
-              Claude is creating PR...
+            <span class={s.prCreatingText}>
+              {activeProviderLabel()} is creating PR...
             </span>
           </div>
         </Show>
@@ -73,18 +74,12 @@ const PrSection: Component<PrSectionProps> = (props) => {
             return (
               <div class={s.prCard}>
                 {/* State badge row */}
-                <div style={{ display: 'flex', 'align-items': 'center', gap: '6px', 'margin-bottom': '4px' }}>
+                <div class={s.prStateBadgeRow}>
                   <span
                     class={s.prStateDot}
                     style={{ 'background-color': stateColor(pr) }}
                   />
-                  <span style={{
-                    'font-size': '0.65rem',
-                    'font-weight': '700',
-                    'text-transform': 'uppercase',
-                    'letter-spacing': '0.07em',
-                    color: stateColor(pr),
-                  }}>
+                  <span class={s.prStateLabel} style={{ color: stateColor(pr) }}>
                     {stateLabel(pr)}
                   </span>
                 </div>
@@ -97,19 +92,13 @@ const PrSection: Component<PrSectionProps> = (props) => {
                   onClick={() => openURL(pr.url)}
                   onKeyDown={(e) => e.key === 'Enter' && openURL(pr.url)}
                 >
-                  <span style={{
-                    flex: 1,
-                    overflow: 'hidden',
-                    'text-overflow': 'ellipsis',
-                    'white-space': 'nowrap',
-                    'font-size': '0.73rem',
-                  }}>
+                  <span class={s.prTitle}>
                     {pr.title}
                   </span>
-                  <span style={{ 'font-size': '0.68rem', color: 'inherit', opacity: 0.5, 'flex-shrink': '0' }}>
+                  <span class={s.prNumber}>
                     #{pr.number}
                   </span>
-                  <ExternalLink size={10} style={{ 'flex-shrink': '0', opacity: 0.5 }} />
+                  <ExternalLink size={10} class={s.prExternalLink} />
                 </div>
 
                 {/* Branch info row */}
@@ -123,7 +112,7 @@ const PrSection: Component<PrSectionProps> = (props) => {
 
         {/* No PR, not creating */}
         <Show when={!isCreatingPr() && prStatus() === null}>
-          <div style={{ 'font-size': '0.73rem', color: 'inherit', opacity: 0.4, 'margin-bottom': '6px' }}>
+          <div class={s.prEmptyText}>
             No pull request
           </div>
           <button
@@ -132,7 +121,7 @@ const PrSection: Component<PrSectionProps> = (props) => {
             onClick={() => handleCreatePr(props.worktreeId)}
           >
             <GitPullRequest size={12} />
-            Create PR with Claude
+            Create PR with {activeProviderLabel()}
           </button>
         </Show>
       </div>

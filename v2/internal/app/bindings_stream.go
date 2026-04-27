@@ -5,9 +5,6 @@ package app
 import (
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
 )
@@ -75,30 +72,11 @@ func (a *App) ParseSessionHistory(sessionID string) (int, error) {
 	return a.Stream.ParseSession(a.ctx, sessionID, jsonlPath)
 }
 
-// resolveJSONLPath walks ~/.claude/projects/ to find the JSONL file for a session.
+// resolveJSONLPath locates the JSONL conversation file for a session
+// using the active provider's FindConversationFile method.
 func (a *App) resolveJSONLPath(sessionID string) (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve jsonl: %w", err)
+	if a.prov == nil {
+		return "", fmt.Errorf("resolve jsonl: provider not initialised")
 	}
-
-	root := filepath.Join(home, ".claude", "projects")
-	target := sessionID + ".jsonl"
-
-	var found string
-	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil || d.IsDir() {
-			return nil
-		}
-		if strings.EqualFold(d.Name(), target) {
-			found = path
-			return filepath.SkipAll
-		}
-		return nil
-	})
-
-	if found == "" {
-		return "", fmt.Errorf("JSONL file not found for session %s", sessionID)
-	}
-	return found, nil
+	return a.prov.FindConversationFile(sessionID, "")
 }

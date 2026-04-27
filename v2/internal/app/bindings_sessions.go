@@ -55,6 +55,17 @@ func (a *App) GetSessionTasks(sessionId string) []db.Task {
 	return tasks
 }
 
+// GetSessionsByProvider returns all sessions for a given provider (e.g. "claude", "codex").
+func (a *App) GetSessionsByProvider(provider string) []db.Session {
+	q := db.New(a.DB.Reader)
+	sessions, err := q.ListSessionsByProvider(a.ctx, provider)
+	if err != nil {
+		log.Printf("app/bindings_sessions: ListSessionsByProvider(%s) error: %v", provider, err)
+		return []db.Session{}
+	}
+	return sessions
+}
+
 // GetActivityLog returns recent activity entries for a session.
 // Pass an empty sessionId to get activity across all sessions.
 func (a *App) GetActivityLog(sessionId string, limit int) []db.ActivityLog {

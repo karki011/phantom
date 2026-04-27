@@ -29,10 +29,10 @@ export function applyZoom(id: ZoomLevelId): void {
 
   document.documentElement.style.fontSize = `${16 * level.scale}px`;
 
-  import('../terminal/registry').then(({ getAllSessions }) => {
+  import('../terminal/registry').then(({ getAllSessions, safeFit }) => {
     for (const session of getAllSessions()) {
       session.terminal.options.fontSize = level.terminalFontSize;
-      session.fitAddon.fit();
+      safeFit(session);
     }
   });
 

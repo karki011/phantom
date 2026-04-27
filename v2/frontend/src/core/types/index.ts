@@ -24,6 +24,7 @@ export interface Session {
   tool_use_count: number | null;
   first_prompt: string | null;
   context_used_pct: number | null;
+  provider: string;
 }
 
 export interface Task {
@@ -42,6 +43,7 @@ export interface ActivityLog {
   type: string;
   session_id: string | null;
   metadata: string | null;
+  provider: string;
 }
 
 export interface Project {
@@ -157,6 +159,18 @@ export interface Recipe {
   auto: boolean;
 }
 
+export interface EnrichedRecipe {
+  id: string;
+  label: string;
+  command: string;
+  icon: string;
+  description: string;
+  category: 'setup' | 'test' | 'lint' | 'build' | 'serve' | 'deploy' | 'custom';
+  auto: boolean;
+  favorite: boolean;
+  custom: boolean;
+}
+
 export interface ActivityMetadata {
   icon?: string;
   detail?: string;
@@ -267,6 +281,7 @@ export interface JournalEntry {
   tool_use_count: number | null;
   first_prompt: string | null;
   tool_breakdown: string | null;
+  provider: string;
 }
 
 /** File-based daily journal entry (v2 — Morning Brief / Work Log / End of Day / Notes). */
@@ -292,4 +307,31 @@ export interface DailyStats {
   total_commits: number;
   pr_count: number;
   top_files: string | null;
+}
+
+// ── Chat ───────────────────────────────────────────────────────────────────
+
+export interface Conversation {
+  id: string;
+  workspace_id: string;
+  title: string;
+  model: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  model: string;
+  created_at: number;
+}
+
+export interface StreamEvent {
+  type: 'delta' | 'done' | 'error' | 'thinking' | 'tool_use';
+  content?: string;
+  tool_name?: string;
+  tool_input?: string;
 }

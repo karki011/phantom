@@ -30,6 +30,7 @@ export function WorktreeSidebar() {
     bootstrapWorktrees();
   });
 
+
   const [gitInitPath, setGitInitPath] = createSignal('');
   const gitInitOpen = () => gitInitPath() !== '';
 
@@ -109,44 +110,40 @@ export function WorktreeSidebar() {
 
         {/* Bottom actions */}
         <div class={styles.actions}>
-          <Tip label="Add a single project directory">
+          <Tip label="Add project">
             <button
-              class={styles.actionButton}
+              class={`${styles.actionButton} ${styles.actionButtonCompact}`}
               type="button"
               onClick={handleAddProject}
             >
-              <FolderPlus size={13} />
-              Add
+              <FolderPlus size={14} />
             </button>
           </Tip>
-          <Tip label="Scan a folder for all git repos">
+          <Tip label="Scan directory">
             <button
-              class={styles.actionButton}
+              class={`${styles.actionButton} ${styles.actionButtonCompact}`}
               type="button"
               onClick={handleScanDirectory}
             >
-              <GitBranch size={13} />
-              Scan
+              <GitBranch size={14} />
             </button>
           </Tip>
-          <Tip label="Clone a repository by URL">
+          <Tip label="Clone repo">
             <button
-              class={styles.actionButton}
+              class={`${styles.actionButton} ${styles.actionButtonCompact}`}
               type="button"
               onClick={() => setCloneOpen(true)}
             >
-              <HardDriveDownload size={13} />
-              Clone
+              <HardDriveDownload size={14} />
             </button>
           </Tip>
-          <Tip label="Bulk remove projects">
+          <Tip label="Manage projects">
             <button
-              class={styles.actionButton}
+              class={`${styles.actionButton} ${styles.actionButtonCompact}`}
               type="button"
               onClick={() => setManageOpen(true)}
             >
-              <Settings2 size={13} />
-              Manage
+              <Settings2 size={14} />
             </button>
           </Tip>
         </div>

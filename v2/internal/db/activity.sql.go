@@ -13,9 +13,9 @@ import (
 const insertActivity = `-- name: InsertActivity :exec
 
 INSERT INTO activity_log (
-    timestamp, type, session_id, metadata, xp_earned
+    timestamp, type, session_id, metadata, xp_earned, provider
 ) VALUES (
-    ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?
 )
 `
 
@@ -25,6 +25,7 @@ type InsertActivityParams struct {
 	SessionID sql.NullString `json:"session_id"`
 	Metadata  sql.NullString `json:"metadata"`
 	XpEarned  sql.NullInt64  `json:"xp_earned"`
+	Provider  string         `json:"provider"`
 }
 
 // activity.sql - Operations for activity_log table
@@ -36,12 +37,56 @@ func (q *Queries) InsertActivity(ctx context.Context, arg InsertActivityParams) 
 		arg.SessionID,
 		arg.Metadata,
 		arg.XpEarned,
+		arg.Provider,
 	)
 	return err
 }
 
+const listActivityByProvider = `-- name: ListActivityByProvider :many
+SELECT id, timestamp, type, session_id, metadata, xp_earned, provider FROM activity_log
+WHERE provider = ?
+ORDER BY timestamp DESC
+LIMIT ?
+`
+
+type ListActivityByProviderParams struct {
+	Provider string `json:"provider"`
+	Limit    int64  `json:"limit"`
+}
+
+func (q *Queries) ListActivityByProvider(ctx context.Context, arg ListActivityByProviderParams) ([]ActivityLog, error) {
+	rows, err := q.db.QueryContext(ctx, listActivityByProvider, arg.Provider, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ActivityLog{}
+	for rows.Next() {
+		var i ActivityLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.Timestamp,
+			&i.Type,
+			&i.SessionID,
+			&i.Metadata,
+			&i.XpEarned,
+			&i.Provider,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecentActivity = `-- name: ListRecentActivity :many
-SELECT id, timestamp, type, session_id, metadata, xp_earned FROM activity_log
+SELECT id, timestamp, type, session_id, metadata, xp_earned, provider FROM activity_log
 WHERE (session_id = ? OR ? IS NULL)
 ORDER BY timestamp DESC
 LIMIT ?
@@ -69,6 +114,7 @@ func (q *Queries) ListRecentActivity(ctx context.Context, arg ListRecentActivity
 			&i.SessionID,
 			&i.Metadata,
 			&i.XpEarned,
+			&i.Provider,
 		); err != nil {
 			return nil, err
 		}

@@ -362,3 +362,15 @@ export const resizeHandleVertical = style({
 export const resizeHandleActive = style({
   backgroundColor: vars.color.accent,
 });
+
+// ── PaneContainer skeleton line size variants ─────────────────────────────────
+
+export const skeletonLineShort = style({
+  height: '12px',
+  width: '70%',
+});
+
+export const skeletonLineShorter = style({
+  height: '12px',
+  width: '55%',
+});

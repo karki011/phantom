@@ -70,7 +70,6 @@ export const sectionTitle = style({
   color: vars.color.textSecondary,
   textTransform: 'uppercase',
   letterSpacing: '0.1em',
-  marginBottom: vars.space.sm,
   fontWeight: 400,
 });
 
@@ -78,8 +77,24 @@ export const sectionSeparator = style({
   width: '100%',
   height: '1px',
   background: `linear-gradient(90deg, transparent, ${vars.color.accent}, transparent)`,
-  marginBottom: vars.space.xl,
   opacity: 0.4,
+});
+
+export const quickActionsCard = style({
+  display: 'flex',
+  flexDirection: 'column',
+  background: vars.color.bgTertiary,
+  borderRadius: vars.radius.lg,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 20%, ${vars.color.border})`,
+  overflow: 'hidden',
+});
+
+export const quickActionsHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  borderBottom: `1px solid ${vars.color.border}`,
 });
 
 export const quickActions = style({
@@ -87,7 +102,7 @@ export const quickActions = style({
   flexDirection: 'row',
   gap: vars.space.sm,
   flexWrap: 'wrap',
-  width: '100%',
+  padding: vars.space.sm,
   boxSizing: 'border-box',
 });
 
@@ -159,6 +174,7 @@ export const statusHeader = style({
   flexDirection: 'row',
   alignItems: 'center',
   gap: vars.space.xs,
+  flexWrap: 'wrap',
 });
 
 export const statusIcon = style({
@@ -178,7 +194,6 @@ export const statusTitle = style({
 });
 
 export const statusRefreshButton = style({
-  marginLeft: 'auto',
   display: 'inline-flex',
   alignItems: 'center',
   gap: '5px',
@@ -749,5 +764,411 @@ export const rankLevel = style({
   fontSize: vars.fontSize.xs,
   color: vars.color.textSecondary,
   letterSpacing: '0.08em',
+});
+
+// === Ward Summary Card ===
+
+export const wardCard = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.sm,
+  padding: vars.space.lg,
+  background: vars.color.bgTertiary,
+  borderRadius: vars.radius.lg,
+  border: `1px solid ${vars.color.border}`,
+  fontFamily: vars.font.mono,
+});
+
+export const wardHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+});
+
+export const wardHeaderLeft = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+});
+
+export const wardHeaderIcon = style({
+  color: vars.color.accent,
+  display: 'flex',
+  alignItems: 'center',
+});
+
+export const wardSectionLabel = style({
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textSecondary,
+  textTransform: 'uppercase',
+  letterSpacing: '0.12em',
+});
+
+export const wardManageButton = style({
+  background: 'none',
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+  color: vars.color.textSecondary,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  padding: `2px ${vars.space.sm}`,
+  cursor: 'pointer',
+  transition: `all ${vars.animation.fast} ease`,
+});
+
+export const wardFallbackText = style({
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textDisabled,
+});
+
+export const wardSummaryRow = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  flexWrap: 'wrap',
+});
+
+export const wardRuleCount = style({
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textSecondary,
+});
+
+export const wardBadgeBlock = style({
+  fontSize: '10px',
+  padding: `1px ${vars.space.xs}`,
+  borderRadius: vars.radius.sm,
+  background: `color-mix(in srgb, ${vars.color.danger} 18%, transparent)`,
+  color: vars.color.danger,
+  border: `1px solid color-mix(in srgb, ${vars.color.danger} 35%, transparent)`,
+});
+
+export const wardBadgeWarn = style({
+  fontSize: '10px',
+  padding: `1px ${vars.space.xs}`,
+  borderRadius: vars.radius.sm,
+  background: `color-mix(in srgb, ${vars.color.warning} 18%, transparent)`,
+  color: vars.color.warning,
+  border: `1px solid color-mix(in srgb, ${vars.color.warning} 35%, transparent)`,
+});
+
+export const wardBadgeConfirm = style({
+  fontSize: '10px',
+  padding: `1px ${vars.space.xs}`,
+  borderRadius: vars.radius.sm,
+  background: `color-mix(in srgb, ${vars.color.accent} 18%, transparent)`,
+  color: vars.color.accent,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 35%, transparent)`,
+});
+
+export const wardDrawerOverlay = style({
+  position: 'fixed',
+  inset: '0',
+  zIndex: 100,
+  display: 'flex',
+  alignItems: 'stretch',
+});
+
+export const wardDrawerBackdrop = style({
+  flex: 1,
+  background: 'rgba(0,0,0,0.45)',
+});
+
+export const wardDrawerPanel = style({
+  width: '480px',
+  maxWidth: '90vw',
+  background: vars.color.bgSecondary,
+  borderLeft: `1px solid ${vars.color.border}`,
+  overflow: 'auto',
+  boxShadow: `-8px 0 32px rgba(0,0,0,0.4)`,
+  padding: vars.space.xl,
+});
+
+export const wardDrawerHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  marginBottom: vars.space.lg,
+});
+
+export const wardDrawerTitle = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textPrimary,
+});
+
+export const wardDrawerCloseButton = style({
+  background: 'none',
+  border: 'none',
+  color: vars.color.textDisabled,
+  cursor: 'pointer',
+  fontSize: vars.fontSize.md,
+  lineHeight: '1',
+  padding: vars.space.xs,
+});
+
+// === Recent Sessions ===
+
+export const recentSectionLabel = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  textTransform: 'uppercase',
+  letterSpacing: '0.12em',
+  color: vars.color.textDisabled,
+  marginBottom: vars.space.sm,
+});
+
+export const recentSessionList = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '1px',
+  background: vars.color.bgTertiary,
+  borderRadius: vars.radius.lg,
+  border: `1px solid ${vars.color.border}`,
+  overflow: 'hidden',
+});
+
+export const sessionRow = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  padding: `${vars.space.xs} ${vars.space.sm}`,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  background: vars.color.bgSecondary,
+});
+
+// Dynamic: use style="--provider-color: <value>" on the element
+export const providerBadge = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '3px',
+  fontSize: '0.6rem',
+  fontWeight: '600',
+  color: 'var(--provider-color)',
+  letterSpacing: '0.04em',
+  flexShrink: 0,
+});
+
+// Dynamic: use style="--provider-color: <value>" on the element
+export const providerDot = style({
+  width: '5px',
+  height: '5px',
+  borderRadius: '50%',
+  background: 'var(--provider-color)',
+});
+
+export const sessionTimeAgo = style({
+  color: vars.color.textDisabled,
+  minWidth: '52px',
+  textAlign: 'right',
+  flexShrink: 0,
+});
+
+export const sessionSeparatorDot = style({
+  color: vars.color.textDisabled,
+});
+
+export const sessionDuration = style({
+  color: vars.color.textSecondary,
+  minWidth: '32px',
+  flexShrink: 0,
+});
+
+export const sessionPrompt = style({
+  color: vars.color.textSecondary,
+  flex: 1,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+});
+
+export const sessionCost = style({
+  color: vars.color.textSecondary,
+  flexShrink: 0,
+});
+
+// Dynamic: use style="--status-color: <value>" on the element
+export const sessionStatusBadge = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '3px',
+  color: 'var(--status-color)',
+  flexShrink: 0,
+});
+
+// Dynamic: use style="--status-color: <value>" on the element
+export const sessionStatusDot = style({
+  width: '5px',
+  height: '5px',
+  borderRadius: '50%',
+  background: 'var(--status-color)',
+});
+
+// === OpenPrCard / shared icon styles ===
+
+export const iconExternalLink = style({
+  color: vars.color.textDisabled,
+  flexShrink: 0,
+});
+
+export const ciTooltipRowTotal = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  fontSize: '0.65rem',
+  color: vars.color.textDisabled,
+  fontFamily: vars.font.mono,
+  marginTop: '2px',
+});
+
+export const ciTotalText = style({
+  fontSize: '0.55rem',
+});
+
+// === FailedCheckItem ===
+
+export const failureRunName = style({
+  flex: 1,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+});
+
+export const failureWorkflow = style({
+  color: vars.color.textDisabled,
+  fontSize: '0.55rem',
+});
+
+export const failureExternalLink = style({
+  color: vars.color.textDisabled,
+  flexShrink: 0,
+});
+
+export const ciStepText = style({
+  fontSize: '0.6rem',
+  color: vars.color.textPrimary,
+});
+
+// === Icon color helpers (static, used in place of inline icon style props) ===
+
+export const iconDanger = style({
+  color: vars.color.danger,
+  flexShrink: 0,
+});
+
+export const iconSuccess = style({
+  color: vars.color.success,
+  flexShrink: 0,
+});
+
+export const iconWarning = style({
+  color: vars.color.warning,
+  flexShrink: 0,
+});
+
+export const iconMuted = style({
+  color: vars.color.textDisabled,
+  flexShrink: 0,
+});
+
+export const activeSessionsCard = style({
+  display: 'flex',
+  flexDirection: 'column',
+  background: vars.color.bgTertiary,
+  borderRadius: vars.radius.lg,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 20%, ${vars.color.border})`,
+  overflow: 'hidden',
+});
+
+export const activeSessionsHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  borderBottom: `1px solid ${vars.color.border}`,
+});
+
+export const activeSessionsTitle = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textSecondary,
+  textTransform: 'uppercase',
+  letterSpacing: '0.12em',
+  fontWeight: 400,
+});
+
+export const activeSessionsCount = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minWidth: '18px',
+  height: '18px',
+  padding: '0 4px',
+  borderRadius: '9px',
+  fontSize: '0.6rem',
+  fontWeight: 700,
+  fontFamily: vars.font.mono,
+  backgroundColor: `color-mix(in srgb, ${vars.color.accent} 15%, transparent)`,
+  color: vars.color.accent,
+});
+
+export const activeSessionsScroll = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.xs,
+  padding: vars.space.sm,
+  maxHeight: '320px',
+  overflowY: 'auto',
+  '::-webkit-scrollbar': { width: '4px' },
+  '::-webkit-scrollbar-thumb': { background: vars.color.border, borderRadius: '2px' },
+  '::-webkit-scrollbar-track': { background: 'transparent' },
+});
+
+// === Inline Quick Actions (inside status card header) ===
+
+export const quickActionsInline = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  marginLeft: 'auto',
+  marginRight: vars.space.sm,
+});
+
+export const quickActionInlineButton = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '3px 8px',
+  borderRadius: vars.radius.sm,
+  background: 'transparent',
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 18%, ${vars.color.border})`,
+  color: vars.color.textSecondary,
+  cursor: 'pointer',
+  fontFamily: vars.font.mono,
+  fontSize: '0.65rem',
+  letterSpacing: '0.03em',
+  whiteSpace: 'nowrap',
+  transition: `all ${vars.animation.fast} ease`,
+  ':hover': {
+    color: vars.color.textPrimary,
+    borderColor: `color-mix(in srgb, ${vars.color.accent} 45%, ${vars.color.border})`,
+    background: `color-mix(in srgb, ${vars.color.accent} 8%, transparent)`,
+    boxShadow: `0 0 8px color-mix(in srgb, ${vars.color.accent} 12%, transparent)`,
+  },
+});
+
+export const quickActionInlineIcon = style({
+  width: '13px',
+  height: '13px',
+  flexShrink: 0,
+  color: vars.color.accent,
+});
+
+export const quickActionInlineHint = style({
+  fontSize: '0.5rem',
+  color: vars.color.textDisabled,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  marginLeft: '2px',
 });
 

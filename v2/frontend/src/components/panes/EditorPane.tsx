@@ -7,11 +7,14 @@
 // and reactive theme sync.
 
 import { createSignal, createEffect, onMount, onCleanup, Show, For, on } from 'solid-js';
+import { ContextMenu } from '@kobalte/core/context-menu';
+import { Clipboard } from 'lucide-solid';
 import type * as MonacoNS from 'monaco-editor';
 import { getMonaco, DEFAULT_EDITOR_OPTIONS } from '@/core/editor/loader';
 import { registerPhantomTheme, buildMonacoTheme } from '@/core/editor/theme-bridge';
 import { detectLanguage } from '@/core/editor/language';
 import { readFileContents, writeFileContents } from '@/core/bindings/editor';
+import { getPreference } from '@/core/bindings';
 import { BlameManager } from '@/core/editor/blame';
 import {
   registerOpenFile,
@@ -23,7 +26,11 @@ import {
 import type { EditorFileState, EditorPaneState } from '@/core/editor/types';
 import { activeTab, activePaneId, setActivePaneInTab, closePane, removeTab, tabs } from '@/core/panes/signals';
 import { activeWorktreeId } from '@/core/signals/app';
+import { worktreeMap } from '@/core/signals/worktrees';
+import { setSelectedFile, setRevealFilePath, setRightSidebarTab } from '@/core/signals/files';
+import { showToast } from '@/shared/Toast/Toast';
 import * as styles from '@/styles/editor.css';
+import * as ctxStyles from '@/styles/right-sidebar.css';
 
 // ---------------------------------------------------------------------------
 // Diff review mode types
@@ -71,6 +78,51 @@ export default function EditorPane(props: EditorPaneProps) {
   const workspaceId = () =>
     (props.workspaceId as string) || activeWorktreeId() || '';
 
+  // Derive the worktree root path for relative path computation
+  const worktreeRootPath = (): string => {
+    const wtId = workspaceId();
+    if (!wtId) return '';
+    for (const workspaces of Object.values(worktreeMap())) {
+      const match = workspaces.find((w) => w.id === wtId);
+      if (match) return match.worktree_path ?? '';
+    }
+    return '';
+  };
+
+  // ---------------------------------------------------------------------------
+  // Context menu: Copy file path actions
+  // ---------------------------------------------------------------------------
+
+  const registerCopyPathActions = (editor: MonacoNS.editor.IStandaloneCodeEditor): void => {
+    editor.addAction({
+      id: 'phantom.copyAbsolutePath',
+      label: 'Copy Absolute Path',
+      contextMenuGroupId: 'filePath',
+      contextMenuOrder: 1,
+      run: () => {
+        const file = activeFile();
+        if (!file) return;
+        void navigator.clipboard.writeText(file.filePath);
+      },
+    });
+
+    editor.addAction({
+      id: 'phantom.copyRelativePath',
+      label: 'Copy Relative Path',
+      contextMenuGroupId: 'filePath',
+      contextMenuOrder: 2,
+      run: () => {
+        const file = activeFile();
+        if (!file) return;
+        const root = worktreeRootPath();
+        const relativePath = root && file.filePath.startsWith(root)
+          ? file.filePath.slice(root.length).replace(/^\//, '')
+          : file.filePath;
+        void navigator.clipboard.writeText(relativePath);
+      },
+    });
+  };
+
   // ---------------------------------------------------------------------------
   // Monaco initialization
   // ---------------------------------------------------------------------------
@@ -79,8 +131,16 @@ export default function EditorPane(props: EditorPaneProps) {
     monacoRef = await getMonaco();
     registerPhantomTheme(monacoRef);
 
+    // Load saved editor preferences before creating the instance
+    const [savedFontSize, savedLineHeight] = await Promise.all([
+      getPreference('editor_fontSize'),
+      getPreference('editor_lineHeight'),
+    ]);
+
     editorInstance = monacoRef.editor.create(editorContainerRef, {
       ...DEFAULT_EDITOR_OPTIONS,
+      ...(savedFontSize ? { fontSize: Number(savedFontSize) } : {}),
+      ...(savedLineHeight ? { lineHeight: Number(savedLineHeight) } : {}),
       value: '',
       language: 'plaintext',
     });
@@ -94,6 +154,9 @@ export default function EditorPane(props: EditorPaneProps) {
     // Initialize git blame integration
     blameManager = new BlameManager(monacoRef, editorInstance);
     blameManager.registerToggleAction();
+
+    // Register copy path context menu actions
+    registerCopyPathActions(editorInstance);
 
     setLoading(false);
 
@@ -135,6 +198,21 @@ export default function EditorPane(props: EditorPaneProps) {
     });
     ro.observe(editorContainerRef);
     onCleanup(() => ro.disconnect());
+  });
+
+  // ---------------------------------------------------------------------------
+  // Editor settings sync — live-apply font size / line height from Settings
+  // ---------------------------------------------------------------------------
+
+  onMount(() => {
+    const handleSettingsChanged = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && editorInstance) {
+        editorInstance.updateOptions(detail);
+      }
+    };
+    window.addEventListener('phantom:editor-settings-changed', handleSettingsChanged);
+    onCleanup(() => window.removeEventListener('phantom:editor-settings-changed', handleSettingsChanged));
   });
 
   // ---------------------------------------------------------------------------
@@ -309,6 +387,11 @@ export default function EditorPane(props: EditorPaneProps) {
 
     editorInstance.focus();
 
+    // Sync file tree selection in right sidebar
+    setSelectedFile(filePath);
+    setRevealFilePath(filePath);
+    setRightSidebarTab('files');
+
     // Activate git blame for this file (async, non-blocking)
     void blameManager?.activate(workspaceId(), filePath);
   };
@@ -336,8 +419,48 @@ export default function EditorPane(props: EditorPaneProps) {
     setActiveFileIndex(index);
     editorInstance.focus();
 
+    // Sync file tree selection in right sidebar
+    setSelectedFile(targetFile.filePath);
+    setRevealFilePath(targetFile.filePath);
+    setRightSidebarTab('files');
+
     // Re-activate blame for the switched-to file
     void blameManager?.activate(targetFile.workspaceId, targetFile.filePath);
+  };
+
+  const closeOtherTabs = (keepIndex: number): void => {
+    if (!monacoRef) return;
+    const fileList = files();
+    const keepFile = fileList[keepIndex];
+    if (!keepFile) return;
+
+    for (let j = 0; j < fileList.length; j++) {
+      if (j === keepIndex) continue;
+      const f = fileList[j];
+      const uri = monacoRef.Uri.file(f.filePath);
+      monacoRef.editor.getModel(uri)?.dispose();
+      unregisterOpenFile(f.filePath);
+    }
+
+    setFiles([keepFile]);
+    setActiveFileIndex(0);
+
+    registerOpenFile(keepFile.filePath, {
+      paneId: props.paneId,
+      tabIndex: 0,
+      workspaceId: workspaceId(),
+    });
+
+    const uri = monacoRef.Uri.file(keepFile.filePath);
+    const model = monacoRef.editor.getModel(uri);
+    if (model) {
+      editorInstance?.setModel(model);
+      if (keepFile.viewState) editorInstance?.restoreViewState(keepFile.viewState);
+    }
+    editorInstance?.focus();
+
+    setSelectedFile(keepFile.filePath);
+    setRevealFilePath(keepFile.filePath);
   };
 
   const closeFileTab = (index: number): void => {
@@ -380,6 +503,9 @@ export default function EditorPane(props: EditorPaneProps) {
       }
       setActiveFileIndex(newIndex);
       editorInstance?.focus();
+
+      setSelectedFile(targetFile.filePath);
+      setRevealFilePath(targetFile.filePath);
     }
   };
 
@@ -558,6 +684,24 @@ export default function EditorPane(props: EditorPaneProps) {
   const hasFiles = () => files().length > 0;
 
   // ---------------------------------------------------------------------------
+  // File tab context menu helpers
+  // ---------------------------------------------------------------------------
+
+  const absolutePathFor = (filePath: string): string => {
+    const root = worktreeRootPath();
+    if (root && !filePath.startsWith('/')) return `${root}/${filePath}`;
+    return filePath;
+  };
+
+  const relativePathFor = (filePath: string): string => {
+    const root = worktreeRootPath();
+    const abs = absolutePathFor(filePath);
+    return root && abs.startsWith(root)
+      ? abs.slice(root.length).replace(/^\//, '')
+      : filePath;
+  };
+
+  // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
@@ -568,24 +712,50 @@ export default function EditorPane(props: EditorPaneProps) {
         <div class={styles.fileTabBar}>
           <For each={files()}>
             {(file, i) => (
-              <button
-                class={styles.fileTab}
-                data-active={i() === activeFileIndex()}
-                onClick={() => switchToFile(i())}
-                title={file.filePath}
-                type="button"
-              >
-                <span class={styles.fileTabLabel}>{file.label}</span>
-                <Show when={file.dirty}>
-                  <span class={styles.dirtyDot} />
-                </Show>
-                <span
-                  class={styles.fileTabClose}
-                  onClick={(e) => { e.stopPropagation(); closeFileTab(i()); }}
+              <ContextMenu>
+                <ContextMenu.Trigger
+                  as="button"
+                  class={styles.fileTab}
+                  data-active={i() === activeFileIndex()}
+                  onClick={() => switchToFile(i())}
+                  title={file.filePath}
+                  type="button"
                 >
-                  &times;
-                </span>
-              </button>
+                  <span class={styles.fileTabLabel}>{file.label}</span>
+                  <Show when={file.dirty}>
+                    <span class={styles.dirtyDot} />
+                  </Show>
+                  <span
+                    class={styles.fileTabClose}
+                    onClick={(e: MouseEvent) => { e.stopPropagation(); closeFileTab(i()); }}
+                  >
+                    &times;
+                  </span>
+                </ContextMenu.Trigger>
+                <ContextMenu.Portal>
+                  <ContextMenu.Content class={ctxStyles.contextMenuContent}>
+                    <ContextMenu.Item class={ctxStyles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(file.label); showToast('Copied', file.label); }}>
+                      <Clipboard size={13} />
+                      Copy File Name
+                    </ContextMenu.Item>
+                    <ContextMenu.Item class={ctxStyles.contextMenuItem} onSelect={() => { const rel = relativePathFor(file.filePath); navigator.clipboard.writeText(rel); showToast('Copied', rel); }}>
+                      <Clipboard size={13} />
+                      Copy Relative Path
+                    </ContextMenu.Item>
+                    <ContextMenu.Item class={ctxStyles.contextMenuItem} onSelect={() => { const abs = absolutePathFor(file.filePath); navigator.clipboard.writeText(abs); showToast('Copied', abs); }}>
+                      <Clipboard size={13} />
+                      Copy Absolute Path
+                    </ContextMenu.Item>
+                    <ContextMenu.Separator class={ctxStyles.contextMenuSeparator} />
+                    <ContextMenu.Item class={ctxStyles.contextMenuItem} onSelect={() => closeFileTab(i())}>
+                      Close
+                    </ContextMenu.Item>
+                    <ContextMenu.Item class={ctxStyles.contextMenuItem} disabled={files().length <= 1} onSelect={() => closeOtherTabs(i())}>
+                      Close Others
+                    </ContextMenu.Item>
+                  </ContextMenu.Content>
+                </ContextMenu.Portal>
+              </ContextMenu>
             )}
           </For>
         </div>
@@ -669,7 +839,7 @@ export default function EditorPane(props: EditorPaneProps) {
             <span class={styles.statusBarItem}>{activeLanguage()}</span>
             <span class={styles.statusBarItem}>UTF-8</span>
             <Show when={activeFile()?.dirty && !diffReview().active}>
-              <span class={styles.statusBarItem} style={{ color: 'var(--accent)' }}>Modified</span>
+              <span class={`${styles.statusBarItem} ${styles.statusBarItemAccent}`}>Modified</span>
               <button
                 class={styles.diffReviewButton}
                 onClick={enterDiffReview}
@@ -679,7 +849,7 @@ export default function EditorPane(props: EditorPaneProps) {
               </button>
             </Show>
             <Show when={diffReview().active}>
-              <span class={styles.statusBarItem} style={{ color: 'var(--accent)' }}>
+              <span class={`${styles.statusBarItem} ${styles.statusBarItemAccent}`}>
                 Diff Review
               </span>
             </Show>

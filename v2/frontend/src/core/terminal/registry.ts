@@ -20,16 +20,18 @@ let userPrefs: {
   fontWeightBold?: string;
   lineHeight?: number;
   letterSpacing?: number;
+  brightness?: number;
 } = {};
 
 export async function initTerminalPrefs(): Promise<void> {
-  const [family, size, weight, bold, lh, ls] = await Promise.all([
+  const [family, size, weight, bold, lh, ls, br] = await Promise.all([
     loadPref('terminal_fontFamily'),
     loadPref('terminal_fontSize'),
     loadPref('terminal_fontWeight'),
     loadPref('terminal_fontWeightBold'),
     loadPref('terminal_lineHeight'),
     loadPref('terminal_letterSpacing'),
+    loadPref('terminal_brightness'),
   ]);
   if (family) userPrefs.fontFamily = `"${family}", monospace`;
   if (size) userPrefs.fontSize = Number(size);
@@ -37,6 +39,7 @@ export async function initTerminalPrefs(): Promise<void> {
   if (bold) userPrefs.fontWeightBold = bold;
   if (lh) userPrefs.lineHeight = Number(lh);
   if (ls) userPrefs.letterSpacing = Number(ls);
+  if (br) userPrefs.brightness = Number(br);
 }
 
 export interface TerminalSession {
@@ -82,7 +85,15 @@ export function createSession(
     cursorBlink: true,
     cursorStyle: 'bar',
     allowTransparency: true,
-    theme: opts?.theme ?? {},
+    theme: (() => {
+      const base = opts?.theme ?? {};
+      if (userPrefs.brightness && userPrefs.brightness !== 100) {
+        const r = userPrefs.brightness / 100;
+        const fg = `rgb(${Math.round(255 * r)}, ${Math.round(255 * r)}, ${Math.round(255 * r)})`;
+        return { ...base, foreground: fg };
+      }
+      return base;
+    })(),
     scrollback: 500,
   });
 
@@ -124,20 +135,26 @@ export function attachSession(
   const session = sessions.get(sessionId);
   if (!session) return null;
 
-  // Move wrapper from wherever it is into the visible container
   container.appendChild(session.wrapper);
   session.attached = true;
 
-  // Double-rAF: first frame triggers layout, second reads resolved dimensions
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  const fitWhenReady = (attempt = 0) => {
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+
+    if (w > 50 && h > 50) {
       try {
         session.fitAddon.fit();
-      } catch {
-        /* ignore fit errors on zero-size containers */
-      }
-    });
-  });
+      } catch { /* ignore */ }
+      return;
+    }
+
+    if (attempt < 10) {
+      requestAnimationFrame(() => fitWhenReady(attempt + 1));
+    }
+  };
+
+  requestAnimationFrame(() => fitWhenReady());
 
   return session;
 }
@@ -171,4 +188,11 @@ export function hasSession(sessionId: string): boolean {
 
 export function getAllSessions(): TerminalSession[] {
   return Array.from(sessions.values());
+}
+
+export function safeFit(session: TerminalSession): boolean {
+  const parent = session.wrapper.parentElement;
+  if (!parent || parent.offsetWidth < 50 || parent.offsetHeight < 50) return false;
+  try { session.fitAddon.fit(); } catch {}
+  return true;
 }

@@ -112,6 +112,13 @@ func (a *App) RemoveProject(id string) error {
 			log.Printf("RemoveProject: clean %s warning: %v", table, err)
 		}
 	}
+	// Clean up custom recipes and recipe favorites for this project.
+	if err := wq.DeleteCustomRecipesByProject(a.ctx, id); err != nil {
+		log.Printf("RemoveProject: clean custom_recipes warning: %v", err)
+	}
+	if err := wq.DeleteRecipeFavoritesByProject(a.ctx, id); err != nil {
+		log.Printf("RemoveProject: clean recipe_favorites warning: %v", err)
+	}
 	return wq.DeleteProject(a.ctx, id)
 }
 

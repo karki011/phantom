@@ -6,19 +6,57 @@ export interface ScanResult {
   status: ScanStatus;
 }
 
+interface AgentStatus {
+  name: string;
+  installed: boolean;
+  version?: string;
+  sessionCount: number;
+  detail?: string;
+}
+
 interface BootScanData {
   operator: string;
   nodeVersion: string;
   bunVersion: string;
+  /** @deprecated Use agents[] instead — kept for backward compat with older backends */
   claudeSessions: number;
+  /** @deprecated Use agents[] instead — kept for backward compat with older backends */
   claudeProjects: number;
+  /** Generic session/project counts (preferred over claude* fields) */
+  sessions?: number;
+  projects?: number;
   mcpChannels: number;
   githubAuth: boolean;
   awsConfigured: boolean;
   gcpConfigured: boolean;
+  agents?: AgentStatus[];
 }
 
 const App = () => (window as any).go?.['app']?.App;
+
+function formatAgentScans(agents: AgentStatus[]): ScanResult[] {
+  const installed = agents.filter(a => a.installed);
+  if (installed.length === 0) {
+    return [{
+      label: 'AI Agents',
+      detail: '─── none detected',
+      status: 'offline' as ScanStatus,
+    }];
+  }
+
+  return installed.map(agent => {
+    const parts: string[] = [];
+    if (agent.version) parts.push(agent.version);
+    if (agent.detail) parts.push(agent.detail);
+    const info = parts.length > 0 ? `${parts.join(' · ')} ─── online` : '─── online';
+
+    return {
+      label: agent.name,
+      detail: info,
+      status: 'success' as ScanStatus,
+    };
+  });
+}
 
 function formatScans(d: BootScanData): ScanResult[] {
   const runtimes = [
@@ -33,6 +71,19 @@ function formatScans(d: BootScanData): ScanResult[] {
     d.gcpConfigured ? 'GCP' : null,
   ].filter(Boolean);
 
+  const sessionCount = d.sessions ?? d.claudeSessions;
+  const projectCount = d.projects ?? d.claudeProjects;
+
+  const agentRows = d.agents && d.agents.length > 0
+    ? formatAgentScans(d.agents)
+    : [{
+        label: 'AI Agent',
+        detail: sessionCount > 0
+          ? `${sessionCount} sessions · ${projectCount} projects ─── loaded`
+          : '─── offline',
+        status: (sessionCount > 0 ? 'success' : 'offline') as ScanStatus,
+      }];
+
   return [
     {
       label: 'Operator',
@@ -44,14 +95,7 @@ function formatScans(d: BootScanData): ScanResult[] {
       detail: runtimes ? `${runtimes} ─── operational` : '─── offline',
       status: runtimes ? 'success' : 'offline',
     },
-    {
-      label: 'Claude',
-      detail:
-        d.claudeSessions > 0
-          ? `${d.claudeSessions} sessions · ${d.claudeProjects} projects ─── loaded`
-          : '─── offline',
-      status: d.claudeSessions > 0 ? 'success' : 'offline',
-    },
+    ...agentRows,
     {
       label: 'MCP channels',
       detail:
@@ -80,7 +124,7 @@ function defaultScans(): ScanResult[] {
   return [
     { label: 'Operator', detail: '─── standing by', status: 'warning' },
     { label: 'Runtimes', detail: '─── standing by', status: 'warning' },
-    { label: 'Claude', detail: '─── standing by', status: 'warning' },
+    { label: 'AI Agents', detail: '─── scanning', status: 'warning' },
     { label: 'MCP channels', detail: '─── standing by', status: 'warning' },
     { label: 'GitHub uplink', detail: '─── standing by', status: 'warning' },
     { label: 'Cloud bridges', detail: '─── standing by', status: 'warning' },

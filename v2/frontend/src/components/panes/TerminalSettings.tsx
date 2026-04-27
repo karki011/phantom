@@ -1,10 +1,11 @@
 // PhantomOS v2 — Terminal display settings floating popover
 // Author: Subash Karki
 import { createSignal } from 'solid-js';
-import { getSession } from '@/core/terminal/registry';
+import { getSession, getAllSessions } from '@/core/terminal/registry';
 import { setPref } from '@/core/signals/preferences';
 import { TERMINAL_THEMES, APP_THEME_DEFAULT_ID } from '@/core/terminal/themes';
 import { activeTerminalThemeId, applyTerminalTheme } from '@/core/terminal/theme-manager';
+import * as styles from './TerminalSettings.css';
 
 interface TerminalSettingsProps {
   paneId: string;
@@ -12,49 +13,6 @@ interface TerminalSettingsProps {
 }
 
 const DEFAULTS = { fontSize: 12, fontWeight: 300, fontWeightBold: 400, lineHeight: 1.18, letterSpacing: 0.2 };
-
-const panel: Record<string, string> = {
-  position: 'absolute', top: '32px', right: '8px', 'z-index': '50',
-  background: '#1a1a2e', border: '1px solid rgba(255,255,255,0.1)',
-  'border-radius': '8px', 'box-shadow': '0 8px 32px rgba(0,0,0,0.6)',
-  padding: '12px', 'min-width': '220px',
-  'font-family': '-apple-system, BlinkMacSystemFont, system-ui, sans-serif',
-  'font-size': '11px', color: '#ccc',
-};
-
-const headerStyle: Record<string, string> = {
-  display: 'flex', 'justify-content': 'space-between', 'align-items': 'center',
-  'font-weight': '600', color: '#eee', 'padding-bottom': '8px',
-  'border-bottom': '1px solid rgba(255,255,255,0.1)', 'margin-bottom': '8px',
-};
-
-const rowStyle: Record<string, string> = {
-  display: 'flex', 'justify-content': 'space-between', 'align-items': 'center',
-  padding: '3px 0',
-};
-
-const controlStyle: Record<string, string> = {
-  display: 'flex', 'align-items': 'center', gap: '6px',
-};
-
-const btnStyle: Record<string, string> = {
-  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-  'border-radius': '4px', color: '#aaa', width: '22px', height: '22px',
-  cursor: 'pointer', display: 'flex', 'align-items': 'center',
-  'justify-content': 'center', 'font-size': '13px', padding: '0',
-  'font-family': 'system-ui',
-};
-
-const valStyle: Record<string, string> = {
-  'min-width': '42px', 'text-align': 'center', 'font-variant-numeric': 'tabular-nums',
-  'font-family': '"JetBrains Mono", monospace', 'font-size': '10px', color: '#eee',
-};
-
-const resetStyle: Record<string, string> = {
-  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-  'border-radius': '4px', color: '#888', 'font-size': '10px', padding: '2px 8px',
-  cursor: 'pointer', 'font-family': 'system-ui',
-};
 
 export default function TerminalSettings(props: TerminalSettingsProps) {
   const session = () => getSession(props.paneId);
@@ -91,19 +49,20 @@ export default function TerminalSettings(props: TerminalSettingsProps) {
   const cycleFont = (dir: number) => {
     const next = (fontIdx() + dir + FONTS.length) % FONTS.length;
     setFontIdx(next);
-    const s = session();
-    if (!s) return;
     const family = `"${FONTS[next]}", monospace`;
-    s.terminal.options.fontFamily = family;
-    try { s.fitAddon.fit(); } catch {}
+    for (const s of getAllSessions()) {
+      s.terminal.options.fontFamily = family;
+      try { s.fitAddon.fit(); } catch {}
+    }
     void setPref('terminal_fontFamily', FONTS[next]);
   };
 
   const apply = (key: string, value: number) => {
-    const s = session();
-    if (!s) return;
-    (s.terminal.options as any)[key] = key === 'fontWeight' || key === 'fontWeightBold' ? String(value) : value;
-    try { s.fitAddon.fit(); } catch {}
+    const resolved = key === 'fontWeight' || key === 'fontWeightBold' ? String(value) : value;
+    for (const s of getAllSessions()) {
+      (s.terminal.options as any)[key] = resolved;
+      try { s.fitAddon.fit(); } catch {}
+    }
     void setPref(`terminal_${key}`, String(value));
   };
 
@@ -111,11 +70,11 @@ export default function TerminalSettings(props: TerminalSettingsProps) {
 
   const applyBrightness = (pct: number) => {
     setBrightness(pct);
-    const s = session();
-    if (!s) return;
     const ratio = pct / 100;
     const fg = `rgb(${Math.round(255 * ratio)}, ${Math.round(255 * ratio)}, ${Math.round(255 * ratio)})`;
-    s.terminal.options.theme = { ...s.terminal.options.theme, foreground: fg };
+    for (const s of getAllSessions()) {
+      s.terminal.options.theme = { ...s.terminal.options.theme, foreground: fg };
+    }
     void setPref('terminal_brightness', String(pct));
   };
 
@@ -170,34 +129,34 @@ export default function TerminalSettings(props: TerminalSettingsProps) {
   ];
 
   return (
-    <div style={panel} onClick={(e) => e.stopPropagation()}>
-      <div style={headerStyle}>
+    <div class={styles.panel} onClick={(e) => e.stopPropagation()}>
+      <div class={styles.header}>
         <span>Terminal Display</span>
-        <button style={resetStyle} onClick={reset} type="button">Reset</button>
+        <button class={styles.reset} onClick={reset} type="button">Reset</button>
       </div>
-      <div style={rowStyle}>
+      <div class={styles.row}>
         <span>Theme</span>
-        <div style={controlStyle}>
-          <button style={btnStyle} onClick={() => cycleTheme(-1)} type="button">&#x2039;</button>
-          <span style={{ ...valStyle, 'min-width': '120px', 'font-size': '10px' }}>{themeList[themeIdx()].name}</span>
-          <button style={btnStyle} onClick={() => cycleTheme(1)} type="button">&#x203A;</button>
+        <div class={styles.control}>
+          <button class={styles.btn} onClick={() => cycleTheme(-1)} type="button">&#x2039;</button>
+          <span class={styles.valWide}>{themeList[themeIdx()].name}</span>
+          <button class={styles.btn} onClick={() => cycleTheme(1)} type="button">&#x203A;</button>
         </div>
       </div>
-      <div style={rowStyle}>
+      <div class={styles.row}>
         <span>Font</span>
-        <div style={controlStyle}>
-          <button style={btnStyle} onClick={() => cycleFont(-1)} type="button">‹</button>
-          <span style={{ ...valStyle, 'min-width': '110px', 'font-size': '10px' }}>{FONTS[fontIdx()]}</span>
-          <button style={btnStyle} onClick={() => cycleFont(1)} type="button">›</button>
+        <div class={styles.control}>
+          <button class={styles.btn} onClick={() => cycleFont(-1)} type="button">‹</button>
+          <span class={styles.valMedium}>{FONTS[fontIdx()]}</span>
+          <button class={styles.btn} onClick={() => cycleFont(1)} type="button">›</button>
         </div>
       </div>
       {rows.map((r) => (
-        <div style={rowStyle}>
+        <div class={styles.row}>
           <span>{r.label}</span>
-          <div style={controlStyle}>
-            <button style={btnStyle} onClick={r.dec} type="button">−</button>
-            <span style={valStyle}>{r.fmt(r.value())}</span>
-            <button style={btnStyle} onClick={r.inc} type="button">+</button>
+          <div class={styles.control}>
+            <button class={styles.btn} onClick={r.dec} type="button">−</button>
+            <span class={styles.val}>{r.fmt(r.value())}</span>
+            <button class={styles.btn} onClick={r.inc} type="button">+</button>
           </div>
         </div>
       ))}

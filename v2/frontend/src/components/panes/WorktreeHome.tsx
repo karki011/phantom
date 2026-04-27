@@ -1,13 +1,15 @@
 // PhantomOS v2 — Worktree home pane (Hunter's Terminal)
 // Author: Subash Karki
 
-import { createMemo, createSignal, createEffect, on, onCleanup, Show, For } from 'solid-js';
-import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw, Shield } from 'lucide-solid';
+import { createMemo, createSignal, createEffect, on, onCleanup, Show, For, Index } from 'solid-js';
+import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw, Shield, Activity } from 'lucide-solid';
 import { activeWorktreeId } from '@/core/signals/app';
 import { worktreeMap } from '@/core/signals/worktrees';
 import { projects } from '@/core/signals/projects';
 import { addTabWithData } from '@/core/panes/signals';
 import { sessions } from '@/core/signals/sessions';
+import { cwdMatchesBidirectional } from '@/core/utils/path-match';
+import { activeProviderCommand, activeProviderLabel } from '@/core/signals/active-provider';
 import { getPref } from '@/core/signals/preferences';
 import { prStatus, setPrStatus, isCreatingPr, setIsCreatingPr, ghAvailable, setGhAvailable } from '@/core/signals/activity';
 import { SessionControls } from '@/shared/SessionControls/SessionControls';
@@ -44,45 +46,21 @@ function WardSummaryCard() {
 
   return (
     <>
-      <div style={{
-        display: 'flex',
-        'flex-direction': 'column',
-        gap: vars.space.sm,
-        padding: vars.space.lg,
-        background: vars.color.bgTertiary,
-        'border-radius': vars.radius.lg,
-        border: `1px solid ${vars.color.border}`,
-        'font-family': vars.font.mono,
-      }}>
+      <div class={styles.wardCard}>
         {/* Header */}
-        <div style={{ display: 'flex', 'align-items': 'center', 'justify-content': 'space-between' }}>
-          <div style={{ display: 'flex', 'align-items': 'center', gap: vars.space.xs }}>
-            <span style={{ color: vars.color.accent, display: 'flex', 'align-items': 'center' }}>
+        <div class={styles.wardHeader}>
+          <div class={styles.wardHeaderLeft}>
+            <span class={styles.wardHeaderIcon}>
               <Shield size={14} />
             </span>
-            <span style={{
-              'font-size': vars.fontSize.xs,
-              color: vars.color.textSecondary,
-              'text-transform': 'uppercase',
-              'letter-spacing': '0.12em',
-            }}>
+            <span class={styles.wardSectionLabel}>
               Session Guard
             </span>
           </div>
           <button
             type="button"
             onClick={() => setShowManager(true)}
-            style={{
-              background: 'none',
-              border: `1px solid ${vars.color.border}`,
-              'border-radius': vars.radius.md,
-              color: vars.color.textSecondary,
-              'font-family': vars.font.mono,
-              'font-size': vars.fontSize.xs,
-              padding: `2px ${vars.space.sm}`,
-              cursor: 'pointer',
-              transition: `all ${vars.animation.fast} ease`,
-            }}
+            class={styles.wardManageButton}
           >
             Manage Wards
           </button>
@@ -92,48 +70,27 @@ function WardSummaryCard() {
         <Show
           when={enabledRules().length > 0}
           fallback={
-            <span style={{ 'font-size': vars.fontSize.xs, color: vars.color.textDisabled }}>
+            <span class={styles.wardFallbackText}>
               No ward rules defined — create rules to protect your sessions
             </span>
           }
         >
-          <div style={{ display: 'flex', 'align-items': 'center', gap: vars.space.sm, 'flex-wrap': 'wrap' }}>
-            <span style={{ 'font-size': vars.fontSize.xs, color: vars.color.textSecondary }}>
+          <div class={styles.wardSummaryRow}>
+            <span class={styles.wardRuleCount}>
               {enabledRules().length} rule{enabledRules().length !== 1 ? 's' : ''} active
             </span>
             <Show when={blockCount() > 0}>
-              <span style={{
-                'font-size': '10px',
-                padding: `1px ${vars.space.xs}`,
-                'border-radius': vars.radius.sm,
-                background: `color-mix(in srgb, ${vars.color.danger} 18%, transparent)`,
-                color: vars.color.danger,
-                border: `1px solid color-mix(in srgb, ${vars.color.danger} 35%, transparent)`,
-              }}>
+              <span class={styles.wardBadgeBlock}>
                 {blockCount()} block
               </span>
             </Show>
             <Show when={warnCount() > 0}>
-              <span style={{
-                'font-size': '10px',
-                padding: `1px ${vars.space.xs}`,
-                'border-radius': vars.radius.sm,
-                background: `color-mix(in srgb, ${vars.color.warning} 18%, transparent)`,
-                color: vars.color.warning,
-                border: `1px solid color-mix(in srgb, ${vars.color.warning} 35%, transparent)`,
-              }}>
+              <span class={styles.wardBadgeWarn}>
                 {warnCount()} warn
               </span>
             </Show>
             <Show when={confirmCount() > 0}>
-              <span style={{
-                'font-size': '10px',
-                padding: `1px ${vars.space.xs}`,
-                'border-radius': vars.radius.sm,
-                background: `color-mix(in srgb, ${vars.color.accent} 18%, transparent)`,
-                color: vars.color.accent,
-                border: `1px solid color-mix(in srgb, ${vars.color.accent} 35%, transparent)`,
-              }}>
+              <span class={styles.wardBadgeConfirm}>
                 {confirmCount()} confirm
               </span>
             </Show>
@@ -144,39 +101,17 @@ function WardSummaryCard() {
       {/* WardManager drawer overlay */}
       <Show when={showManager()}>
         <div
-          style={{
-            position: 'fixed',
-            inset: '0',
-            'z-index': '100',
-            display: 'flex',
-            'align-items': 'stretch',
-          }}
+          class={styles.wardDrawerOverlay}
           onClick={(e) => { if (e.target === e.currentTarget) setShowManager(false); }}
         >
-          <div style={{ flex: 1, background: 'rgba(0,0,0,0.45)' }} />
-          <div style={{
-            width: '480px',
-            'max-width': '90vw',
-            background: vars.color.bgSecondary,
-            'border-left': `1px solid ${vars.color.border}`,
-            overflow: 'auto',
-            'box-shadow': `-8px 0 32px rgba(0,0,0,0.4)`,
-            padding: vars.space.xl,
-          }}>
-            <div style={{ display: 'flex', 'align-items': 'center', 'justify-content': 'space-between', 'margin-bottom': vars.space.lg }}>
-              <span style={{ 'font-family': vars.font.mono, 'font-size': vars.fontSize.sm, color: vars.color.textPrimary }}>Ward Manager</span>
+          <div class={styles.wardDrawerBackdrop} />
+          <div class={styles.wardDrawerPanel}>
+            <div class={styles.wardDrawerHeader}>
+              <span class={styles.wardDrawerTitle}>Ward Manager</span>
               <button
                 type="button"
                 onClick={() => setShowManager(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: vars.color.textDisabled,
-                  cursor: 'pointer',
-                  'font-size': vars.fontSize.md,
-                  'line-height': '1',
-                  padding: vars.space.xs,
-                }}
+                class={styles.wardDrawerCloseButton}
               >
                 ✕
               </button>
@@ -228,28 +163,31 @@ function RecentSessions(props: { repoPath: string | null }) {
     return st || 'Done';
   };
 
+  const providerColor = (prov: string): string => {
+    switch (prov) {
+      case 'claude': return '#a855f7';
+      case 'codex': return '#22c55e';
+      case 'gemini': return '#3b82f6';
+      default: return '#6b7280';
+    }
+  };
+
+  const providerLabel = (prov: string): string => {
+    switch (prov) {
+      case 'claude': return 'Claude';
+      case 'codex': return 'Codex';
+      case 'gemini': return 'Gemini';
+      default: return prov;
+    }
+  };
+
   return (
     <Show when={recentSessions().length > 0}>
       <div>
-        <div style={{
-          'font-family': vars.font.mono,
-          'font-size': vars.fontSize.xs,
-          'text-transform': 'uppercase',
-          'letter-spacing': '0.12em',
-          color: vars.color.textDisabled,
-          'margin-bottom': vars.space.sm,
-        }}>
+        <div class={styles.recentSectionLabel}>
           Recent Sessions
         </div>
-        <div style={{
-          display: 'flex',
-          'flex-direction': 'column',
-          gap: '1px',
-          background: vars.color.bgTertiary,
-          'border-radius': vars.radius.lg,
-          border: `1px solid ${vars.color.border}`,
-          overflow: 'hidden',
-        }}>
+        <div class={styles.recentSessionList}>
           <For each={recentSessions()}>
             {(session) => {
               const prompt = () => {
@@ -258,62 +196,38 @@ function RecentSessions(props: { repoPath: string | null }) {
                 return fp.length > 50 ? fp.slice(0, 47) + '...' : fp;
               };
               return (
-                <div style={{
-                  display: 'flex',
-                  'align-items': 'center',
-                  gap: vars.space.sm,
-                  padding: `${vars.space.xs} ${vars.space.sm}`,
-                  'font-family': vars.font.mono,
-                  'font-size': vars.fontSize.xs,
-                  background: vars.color.bgSecondary,
-                }}>
-                  <span style={{
-                    color: vars.color.textDisabled,
-                    'min-width': '52px',
-                    'text-align': 'right',
-                    'flex-shrink': '0',
-                  }}>
+                <div class={styles.sessionRow}>
+                  <Show when={session.provider && session.provider !== 'claude'}>
+                    <span
+                      title={providerLabel(session.provider)}
+                      class={styles.providerBadge}
+                      style={{ '--provider-color': providerColor(session.provider) }}
+                    >
+                      <span class={styles.providerDot} style={{ '--provider-color': providerColor(session.provider) }} />
+                      {providerLabel(session.provider)}
+                    </span>
+                  </Show>
+                  <span class={styles.sessionTimeAgo}>
                     {timeAgo(session.started_at)}
                   </span>
-                  <span style={{ color: vars.color.textDisabled }}>&middot;</span>
-                  <span style={{
-                    color: vars.color.textSecondary,
-                    'min-width': '32px',
-                    'flex-shrink': '0',
-                  }}>
+                  <span class={styles.sessionSeparatorDot}>&middot;</span>
+                  <span class={styles.sessionDuration}>
                     {formatDuration(session.started_at, session.ended_at)}
                   </span>
-                  <span style={{ color: vars.color.textDisabled }}>&middot;</span>
+                  <span class={styles.sessionSeparatorDot}>&middot;</span>
                   <Show when={prompt()}>
-                    <span style={{
-                      color: vars.color.textSecondary,
-                      flex: '1',
-                      overflow: 'hidden',
-                      'text-overflow': 'ellipsis',
-                      'white-space': 'nowrap',
-                    }}>
+                    <span class={styles.sessionPrompt}>
                       "{prompt()}"
                     </span>
                   </Show>
-                  <span style={{
-                    color: vars.color.textSecondary,
-                    'flex-shrink': '0',
-                  }}>
+                  <span class={styles.sessionCost}>
                     {formatCost(session.estimated_cost_micros)}
                   </span>
-                  <span style={{
-                    display: 'flex',
-                    'align-items': 'center',
-                    gap: '3px',
-                    color: statusColor(session.status),
-                    'flex-shrink': '0',
-                  }}>
-                    <span style={{
-                      width: '5px',
-                      height: '5px',
-                      'border-radius': '50%',
-                      background: statusColor(session.status),
-                    }} />
+                  <span
+                    class={styles.sessionStatusBadge}
+                    style={{ '--status-color': statusColor(session.status) }}
+                  >
+                    <span class={styles.sessionStatusDot} style={{ '--status-color': statusColor(session.status) }} />
                     {statusLabel(session.status)}
                   </span>
                 </div>
@@ -362,12 +276,17 @@ export default function WorktreeHome() {
     const wt = activeWorktree();
     if (!wt?.worktree_path) return [];
     const wtPath = wt.worktree_path;
-    return sessions().filter(
-      (s) =>
-        (s.status === 'active' || s.status === 'paused') &&
-        s.cwd != null &&
-        (s.cwd === wtPath || s.cwd.startsWith(wtPath + '/')),
-    );
+    const proj = activeProject();
+    const repoPath = proj?.repo_path ?? '';
+    return sessions().filter((s) => {
+      if (s.status !== 'active' && s.status !== 'paused') return false;
+      if (!s.cwd) return false;
+      // Match sessions in this worktree path (bidirectional)
+      if (cwdMatchesBidirectional(s.cwd, wtPath)) return true;
+      // Match sessions started in the repo root (shared across worktrees)
+      if (repoPath && cwdMatchesBidirectional(s.cwd, repoPath)) return true;
+      return false;
+    });
   });
 
   async function refreshAll() {
@@ -519,6 +438,83 @@ export default function WorktreeHome() {
         <div class={styles.statusHeader}>
           <span class={styles.statusIcon}><GitBranch size={14} /></span>
           <span class={styles.statusTitle}>Workspace Status</span>
+
+          {/* Inline Quick Actions */}
+          <div class={styles.quickActionsInline}>
+            {/* Terminal */}
+            <Tip label="Open terminal in this worktree" placement="bottom">
+              <button class={styles.quickActionInlineButton} type="button" onClick={() => addTabWithData('terminal', 'Terminal', { cwd: activeWorktree()?.worktree_path ?? '' })}>
+                <svg class={styles.quickActionInlineIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <rect x="1.5" y="3" width="13" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3" />
+                  <path d="M4.5 6.5l2 1.5-2 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M8.5 9.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+                </svg>
+                Terminal
+              </button>
+            </Tip>
+
+            {/* New Session */}
+            <Tip label={activeWorktree()?.type === 'branch' ? 'Create worktree + start AI session' : 'Start AI session in this worktree'} placement="bottom">
+              <button
+                class={styles.quickActionInlineButton}
+                type="button"
+                onClick={() => {
+                  if (activeWorktree()?.type === 'branch') {
+                    setWorktreeOpen(true);
+                  } else {
+                    addTabWithData('terminal', activeProviderLabel(), {
+                      cwd: activeWorktree()?.worktree_path ?? '',
+                      command: activeProviderCommand(),
+                    });
+                  }
+                }}
+              >
+                <svg class={styles.quickActionInlineIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M8 2l1.1 2.6L12 5.2l-2 2.1.3 2.7L8 8.8 5.7 10l.3-2.7-2-2.1 2.9-.6L8 2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none" />
+                  <circle cx="12.5" cy="12" r="2" stroke="currentColor" stroke-width="1.2" fill="none" />
+                  <path d="M12.5 11v2M11.5 12h2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" />
+                </svg>
+                New Session
+              </button>
+            </Tip>
+
+            {/* Editor */}
+            <Tip label="Code editor (coming soon)" placement="bottom">
+              <button class={styles.quickActionInlineButton} type="button">
+                <svg class={styles.quickActionInlineIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <rect x="2.5" y="2" width="11" height="12" rx="1.5" stroke="currentColor" stroke-width="1.3" />
+                  <path d="M5 5.5h6M5 8h6M5 10.5h3.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+                </svg>
+                Editor
+                <span class={styles.quickActionInlineHint}>soon</span>
+              </button>
+            </Tip>
+
+            {/* Chat */}
+            <Tip label="Chat with AI (coming soon)" placement="bottom">
+              <button class={styles.quickActionInlineButton} type="button">
+                <svg class={styles.quickActionInlineIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M2.5 4A1.5 1.5 0 014 2.5h8A1.5 1.5 0 0113.5 4v6A1.5 1.5 0 0112 11.5H9l-2.5 2v-2H4A1.5 1.5 0 012.5 10V4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
+                  <path d="M5.5 5.5h5M5.5 8h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+                </svg>
+                Chat
+                <span class={styles.quickActionInlineHint}>soon</span>
+              </button>
+            </Tip>
+
+            {/* Recipe */}
+            <Tip label="Run a recipe (coming soon)" placement="bottom">
+              <button class={styles.quickActionInlineButton} type="button">
+                <svg class={styles.quickActionInlineIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.3" />
+                  <path d="M6.8 5.5l3.5 2.5-3.5 2.5V5.5z" fill="currentColor" stroke="currentColor" stroke-width="0.5" stroke-linejoin="round" />
+                </svg>
+                Recipe
+                <span class={styles.quickActionInlineHint}>soon</span>
+              </button>
+            </Tip>
+          </div>
+
           <Tip label={refreshing() ? 'Refreshing...' : 'Refresh workspace status, PR, and CI data'} placement="bottom">
             <button
               type="button"
@@ -589,21 +585,21 @@ export default function WorktreeHome() {
                 <div class={styles.statusGitInfo}>
                   <Show when={failed() > 0}>
                     <Tip content={buildCiTooltip(runs())}>
-                      <span class={styles.statusBadge} style={{ color: vars.color.danger, 'background-color': `color-mix(in srgb, ${vars.color.danger} 15%, transparent)` }}>
+                      <span class={`${styles.statusBadge} ${styles.wardBadgeBlock}`}>
                         <XCircle size={11} />{failed()} failed
                       </span>
                     </Tip>
                   </Show>
                   <Show when={failed() === 0 && pending() > 0}>
                     <Tip content={buildCiTooltip(runs())}>
-                      <span class={styles.statusBadge} style={{ color: vars.color.warning, 'background-color': `color-mix(in srgb, ${vars.color.warning} 15%, transparent)` }}>
+                      <span class={`${styles.statusBadge} ${styles.wardBadgeWarn}`}>
                         <LoaderCircle size={11} style={{ animation: 'spin 1s linear infinite' }} />{pending()} pending
                       </span>
                     </Tip>
                   </Show>
                   <Show when={failed() === 0 && pending() === 0 && passed() > 0}>
                     <Tip content={buildCiTooltip(runs())}>
-                      <span class={styles.statusBadge} style={{ color: vars.color.success, 'background-color': `color-mix(in srgb, ${vars.color.success} 15%, transparent)` }}>
+                      <span class={`${styles.statusBadge} ${styles.wardBadgeConfirm}`}>
                         <CheckCircle size={11} />{passed()} passed
                       </span>
                     </Tip>
@@ -618,7 +614,7 @@ export default function WorktreeHome() {
           {activeWorktree()?.type === 'branch' ? 'Local' : 'Worktree'}
           <Show when={activeWorktree()?.base_branch}>
             {' · from '}
-            <span style={{ color: vars.color.accent }}>{activeWorktree()!.base_branch}</span>
+            <span class={styles.wardHeaderIcon}>{activeWorktree()!.base_branch}</span>
           </Show>
           {' · '}
           <span>{activeWorktree()?.worktree_path ?? '—'}</span>
@@ -672,7 +668,7 @@ export default function WorktreeHome() {
                 <div class={styles.prCardRow}>
                   <span class={styles.prCardTitle}>{prStatus()!.title}</span>
                   <span class={styles.prCardNumber}>#{prStatus()!.number}</span>
-                  <ExternalLink size={10} style={{ color: vars.color.textDisabled, 'flex-shrink': '0' }} />
+                  <ExternalLink size={10} class={styles.iconExternalLink} />
                 </div>
                 <div class={styles.prCardRow}>
                   <span class={styles.prCardBranch}>{prStatus()!.head_ref_name} → {prStatus()!.base_ref_name}</span>
@@ -700,7 +696,7 @@ export default function WorktreeHome() {
                             <ChevronRight size={12}
                               class={`${styles.ciFailureChevron} ${expanded() ? styles.ciFailureChevronOpen : ''}`}
                             />
-                            <XCircle size={11} style={{ color: vars.color.danger }} />
+                            <XCircle size={11} class={styles.iconDanger} />
                             {failedRuns().length} failed check{failedRuns().length > 1 ? 's' : ''}
                           </button>
 
@@ -740,90 +736,29 @@ export default function WorktreeHome() {
         </Show>
       </div>
 
-      {/* Separator */}
-      <div class={styles.sectionSeparator} />
+      {/* Active Sessions — one card, sessions as rows inside */}
+      <Show when={worktreeSessions().length > 0}>
+        <div class={styles.activeSessionsCard}>
+          <div class={styles.activeSessionsHeader}>
+            <span class={styles.activityCardIcon}><Activity size={14} /></span>
+            <span class={styles.activityCardTitle}>Active Sessions</span>
+            <span class={styles.activeSessionsCount}>{worktreeSessions().length}</span>
+          </div>
+          <div class={styles.activeSessionsScroll}>
+            <Index each={worktreeSessions()}>
+              {(session) => <SessionControls session={session()} />}
+            </Index>
+          </div>
+        </div>
+      </Show>
 
-      {/* Session Guard — visible whenever wards are enabled, regardless of active sessions */}
+      {/* Ward Summary — only when wards feature is enabled */}
       <Show when={getPref('wards_enabled') === 'true'}>
         <WardSummaryCard />
-        <Show when={worktreeSessions().length > 0}>
-          <For each={worktreeSessions()}>
-            {(session) => <SessionControls session={session} />}
-          </For>
-        </Show>
       </Show>
 
       {/* Recent Sessions */}
       <RecentSessions repoPath={activeProject()?.repo_path ?? null} />
-
-      {/* Quick Actions */}
-      <div>
-        <div class={styles.sectionTitle}>Quick Actions</div>
-        <div class={styles.quickActions}>
-          {/* Terminal */}
-          <button class={styles.quickActionButton} type="button" title="Open a terminal in this worktree" onClick={() => addTabWithData('terminal', 'Terminal', { cwd: activeWorktree()?.worktree_path ?? '' })}>
-            <svg class={styles.quickActionIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <rect x="1.5" y="2.5" width="13" height="11" rx="2" stroke="currentColor" stroke-width="1.4" />
-              <path d="M4 6l2.5 2L4 10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
-              <path d="M8 10h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-            </svg>
-            <span class={styles.quickActionLabel}>Terminal</span>
-          </button>
-
-          {/* New Session — worktree flow from local branch, direct Claude from worktree */}
-          <button
-            class={styles.quickActionButton}
-            type="button"
-            title={activeWorktree()?.type === 'branch' ? 'Create a worktree and start Claude session' : 'Start Claude in this worktree'}
-            onClick={() => {
-              if (activeWorktree()?.type === 'branch') {
-                setWorktreeOpen(true);
-              } else {
-                addTabWithData('terminal', 'Claude', {
-                  cwd: activeWorktree()?.worktree_path ?? '',
-                  command: 'claude --dangerously-skip-permissions',
-                });
-              }
-            }}
-          >
-            <svg class={styles.quickActionIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <rect x="1.5" y="2.5" width="13" height="11" rx="2" stroke="currentColor" stroke-width="1.4" />
-              <path d="M9 5.5L7 8.5h2.5L7 11.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            <span class={styles.quickActionLabel}>New Session</span>
-          </button>
-
-          {/* Editor */}
-          <button class={styles.quickActionButton} type="button" title="Open code editor (coming soon)">
-            <svg class={styles.quickActionIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <rect x="2" y="1.5" width="12" height="13" rx="1.5" stroke="currentColor" stroke-width="1.4" />
-              <path d="M5 5h6M5 8h6M5 11h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-            </svg>
-            <span class={styles.quickActionLabel}>Editor</span>
-            <span class={styles.quickActionHint}>coming soon</span>
-          </button>
-
-          {/* Chat */}
-          <button class={styles.quickActionButton} type="button" title="Chat with Claude (coming soon)">
-            <svg class={styles.quickActionIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M2 3.5A1.5 1.5 0 013.5 2h9A1.5 1.5 0 0114 3.5v7A1.5 1.5 0 0112.5 12H9l-3 2v-2H3.5A1.5 1.5 0 012 10.5v-7z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" />
-              <path d="M5 6h6M5 8.5h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-            </svg>
-            <span class={styles.quickActionLabel}>Chat</span>
-            <span class={styles.quickActionHint}>coming soon</span>
-          </button>
-
-          {/* Recipe / Run */}
-          <button class={styles.quickActionButton} type="button" title="Run a project recipe (coming soon)">
-            <svg class={styles.quickActionIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4" />
-              <path d="M6.5 5.5l4 2.5-4 2.5V5.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" fill="currentColor" />
-            </svg>
-            <span class={styles.quickActionLabel}>Recipe</span>
-            <span class={styles.quickActionHint}>coming soon</span>
-          </button>
-        </div>
-      </div>
 
       {activeProject() && (
         <NewWorktreeDialog
@@ -877,40 +812,40 @@ function OpenPrCard(props: {
               <span class={styles.ciTooltipHeader}>CI/CD Checks</span>
               <Show when={pr.checks_passed > 0}>
                 <div class={styles.ciTooltipRow}>
-                  <CheckCircle size={10} style={{ color: vars.color.success, 'flex-shrink': '0' }} />
+                  <CheckCircle size={10} class={styles.iconSuccess} />
                   <span class={styles.ciTooltipName}>{pr.checks_passed} passed</span>
                 </div>
               </Show>
               <Show when={pr.checks_failed > 0}>
                 <div class={styles.ciTooltipRow}>
-                  <XCircle size={10} style={{ color: vars.color.danger, 'flex-shrink': '0' }} />
+                  <XCircle size={10} class={styles.iconDanger} />
                   <span class={styles.ciTooltipName}>{pr.checks_failed} failed</span>
                 </div>
               </Show>
               <Show when={pr.checks_pending > 0}>
                 <div class={styles.ciTooltipRow}>
-                  <LoaderCircle size={10} style={{ color: vars.color.warning, 'flex-shrink': '0', animation: 'spin 1s linear infinite' }} />
+                  <LoaderCircle size={10} class={styles.iconWarning} style={{ animation: 'spin 1s linear infinite' }} />
                   <span class={styles.ciTooltipName}>{pr.checks_pending} pending</span>
                 </div>
               </Show>
-              <div class={styles.ciTooltipRow} style={{ 'margin-top': '2px', color: vars.color.textDisabled }}>
-                <span style={{ 'font-size': '0.55rem' }}>{pr.checks_total} total checks</span>
+              <div class={styles.ciTooltipRowTotal}>
+                <span class={styles.ciTotalText}>{pr.checks_total} total checks</span>
               </div>
             </div>
           }>
             <span class={styles.prCiIcon}>
               {pr.checks_failed > 0
-                ? <XCircle size={10} style={{ color: vars.color.danger }} />
+                ? <XCircle size={10} class={styles.iconDanger} />
                 : pr.checks_pending > 0
-                ? <LoaderCircle size={10} style={{ color: vars.color.warning, animation: 'spin 1s linear infinite' }} />
-                : <CheckCircle size={10} style={{ color: vars.color.success }} />
+                ? <LoaderCircle size={10} class={styles.iconWarning} style={{ animation: 'spin 1s linear infinite' }} />
+                : <CheckCircle size={10} class={styles.iconSuccess} />
               }
             </span>
           </Tip>
         </Show>
         <span class={styles.prCardTitle}>{pr.title}</span>
         <span class={styles.prCardNumber}>#{pr.number}</span>
-        <ExternalLink size={10} style={{ color: vars.color.textDisabled, 'flex-shrink': '0' }} />
+        <ExternalLink size={10} class={styles.iconExternalLink} />
       </div>
       <div class={styles.prCardRow} onClick={() => openURL(pr.url)}>
         <span class={styles.prCardBranch}>{pr.head_ref_name}</span>
@@ -927,7 +862,7 @@ function OpenPrCard(props: {
             <ChevronRight size={12}
               class={`${styles.ciFailureChevron} ${expanded() ? styles.ciFailureChevronOpen : ''}`}
             />
-            <XCircle size={11} style={{ color: vars.color.danger }} />
+            <XCircle size={11} class={styles.iconDanger} />
             {pr.checks_failed} failed check{pr.checks_failed > 1 ? 's' : ''}
             <Show when={loadingRuns()}>
               <LoaderCircle size={10} style={{ color: vars.color.textDisabled, animation: 'spin 1s linear infinite', 'margin-left': 'auto' }} />
@@ -967,15 +902,15 @@ function FailedCheckItem(props: { run: CiRun }) {
         style={{ cursor: props.run.url ? 'pointer' : 'default' }}
         onClick={(e) => { e.stopPropagation(); if (props.run.url) openURL(props.run.url); }}
       >
-        <XCircle size={10} style={{ color: vars.color.danger, 'flex-shrink': '0' }} />
-        <span style={{ flex: '1', overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap' }}>
+        <XCircle size={10} class={styles.iconDanger} />
+        <span class={styles.failureRunName}>
           {props.run.name}
         </span>
         <Show when={props.run.workflow}>
-          <span style={{ color: vars.color.textDisabled, 'font-size': '0.55rem' }}>{props.run.workflow}</span>
+          <span class={styles.failureWorkflow}>{props.run.workflow}</span>
         </Show>
         <Show when={props.run.url}>
-          <ExternalLink size={9} style={{ color: vars.color.textDisabled, 'flex-shrink': '0' }} />
+          <ExternalLink size={9} class={styles.failureExternalLink} />
         </Show>
       </div>
 
@@ -989,8 +924,8 @@ function FailedCheckItem(props: { run: CiRun }) {
             {(step) => (
               <>
                 <div class={styles.ciTooltipRow}>
-                  <XCircle size={8} style={{ color: vars.color.danger, 'flex-shrink': '0' }} />
-                  <span style={{ 'font-size': '0.6rem', color: vars.color.textPrimary }}>Step {step.number}: {step.name}</span>
+                  <XCircle size={8} class={styles.iconDanger} />
+                  <span class={styles.ciStepText}>Step {step.number}: {step.name}</span>
                 </div>
                 <Show when={step.errors?.length > 0}>
                   <For each={step.errors}>

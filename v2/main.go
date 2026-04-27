@@ -9,14 +9,17 @@ import (
 
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/subashkarki/phantom-os-v2/internal/app"
+	"github.com/subashkarki/phantom-os-v2/internal/chat"
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
 	"github.com/subashkarki/phantom-os-v2/internal/journal"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/linker"
+	"github.com/subashkarki/phantom-os-v2/internal/provider"
+	"github.com/subashkarki/phantom-os-v2/internal/provider/claude"
+	"github.com/subashkarki/phantom-os-v2/internal/provider/codex"
 	"github.com/subashkarki/phantom-os-v2/internal/safety"
 	"github.com/subashkarki/phantom-os-v2/internal/session"
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
@@ -67,7 +70,48 @@ func main() {
 	})
 	a.SetLinker(lnk)
 
-	// 6. Build collector registry with all 5 collectors.
+	// 6. Set up provider registry with 3-tier config loading.
+	//    Ensure user config directories exist for overrides and custom providers.
+	if err := provider.EnsureConfigDir(); err != nil {
+		log.Printf("phantomos: warning: config dir setup: %v", err)
+	}
+
+	provRegistry := provider.NewRegistry()
+
+	// Register adapter factories so InstantiateAll can create the right Go adapter.
+	provRegistry.RegisterAdapterFactory("claude", func(cfg *provider.ProviderConfig) provider.Provider {
+		return claude.New(cfg)
+	})
+	provRegistry.RegisterAdapterFactory("codex", func(cfg *provider.ProviderConfig) provider.Provider {
+		return codex.New(cfg)
+	})
+
+	// LoadAll: embedded (fatal) -> user overrides (warn+skip) -> custom (warn+skip).
+	if err := provRegistry.LoadAll(); err != nil {
+		log.Fatalf("phantomos: provider registry: %v", err)
+	}
+
+	// Instantiate all providers using registered adapter factories.
+	provRegistry.InstantiateAll()
+
+	// Select the active provider: prefer Claude if available, else first enabled.
+	var activeProv provider.Provider
+	if p, ok := provRegistry.Get("claude"); ok {
+		activeProv = p
+	} else {
+		enabled := provRegistry.Enabled()
+		if len(enabled) > 0 {
+			activeProv = enabled[0]
+		} else {
+			log.Fatal("phantomos: no providers available")
+		}
+	}
+
+	// Inject provider into app for bindings_stream and boot_scan.
+	a.SetProvider(activeProv)
+	a.SetProviderRegistry(provRegistry)
+
+	// 7. Build collector registry with all 5 collectors.
 	//    emitEvent is a closure; it captures `a` but only calls EmitEvent after
 	//    Wails has called Startup (which sets a.Ctx()). Collectors are started
 	//    inside OnStartup below, so the context is always valid by that time.
@@ -78,7 +122,7 @@ func main() {
 		log.Printf("phantomos: task completed session=%s task=%s", sessionID, taskID)
 	}
 
-	sessionWatcher := collector.NewSessionWatcher(queries, func(name string, data interface{}) {
+	sessionWatcher := collector.NewSessionWatcher(queries, activeProv, func(name string, data interface{}) {
 		app.EmitEvent(a.Ctx(), name, data)
 	})
 	sessionWatcher.SetLinker(lnk)
@@ -89,25 +133,25 @@ func main() {
 	sessionWatcher.SetJournal(journalSvc)
 	go enricher.StartPeriodicEnrichment(context.Background())
 	registry.Register(sessionWatcher)
-	registry.Register(collector.NewJSONLScanner(queries, func(name string, data interface{}) {
+	registry.Register(collector.NewJSONLScanner(queries, activeProv, func(name string, data interface{}) {
 		app.EmitEvent(a.Ctx(), name, data)
 	}))
-	activityPoller := collector.NewActivityPoller(queries, func(name string, data interface{}) {
+	activityPoller := collector.NewActivityPoller(queries, activeProv, func(name string, data interface{}) {
 		app.EmitEvent(a.Ctx(), name, data)
 	})
 	activityPoller.SetJournal(journalSvc)
 	registry.Register(activityPoller)
-	registry.Register(collector.NewTaskWatcher(queries, func(name string, data interface{}) {
+	registry.Register(collector.NewTaskWatcher(queries, activeProv, func(name string, data interface{}) {
 		app.EmitEvent(a.Ctx(), name, data)
 	}, onTaskComplete))
-	registry.Register(collector.NewTodoWatcher(queries, func(name string, data interface{}) {
+	registry.Register(collector.NewTodoWatcher(queries, activeProv, func(name string, data interface{}) {
 		app.EmitEvent(a.Ctx(), name, data)
 	}, onTaskComplete))
 
 	// Inject registry into app so Startup/Shutdown can manage it.
 	a.SetCollectorRegistry(registry)
 
-	// 7. Create stream service (JSONL event parser + live tailing).
+	// 8. Create stream service (JSONL event parser + live tailing).
 	emitFn := func(name string, data interface{}) {
 		app.EmitEvent(a.Ctx(), name, data)
 	}
@@ -115,6 +159,7 @@ func main() {
 	a.SetStream(streamSvc)
 
 	// Auto-start JSONL tailing when session watcher discovers active sessions.
+	// Uses the provider's FindConversationFile instead of hardcoded path walking.
 	tailedSessions := make(map[string]bool)
 	var tailedMu sync.Mutex
 	sessionWatcher.SetOnActive(func(sessionID, _ string) {
@@ -126,21 +171,8 @@ func main() {
 		tailedSessions[sessionID] = true
 		tailedMu.Unlock()
 
-		h, _ := os.UserHomeDir()
-		projectsRoot := filepath.Join(h, ".claude", "projects")
-		target := sessionID + ".jsonl"
-		var jsonlPath string
-		_ = filepath.WalkDir(projectsRoot, func(p string, d os.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
-				return nil
-			}
-			if strings.EqualFold(d.Name(), target) {
-				jsonlPath = p
-				return filepath.SkipAll
-			}
-			return nil
-		})
-		if jsonlPath == "" {
+		jsonlPath, err := activeProv.FindConversationFile(sessionID, "")
+		if err != nil {
 			tailedMu.Lock()
 			delete(tailedSessions, sessionID)
 			tailedMu.Unlock()
@@ -152,7 +184,11 @@ func main() {
 		}
 	})
 
-	// 8. Create safety service (YAML ward rules + audit).
+	// 8a. Create chat service (conversations + Anthropic Messages API streaming).
+	chatSvc := chat.NewService(database.Writer, emitFn)
+	a.SetChat(chatSvc)
+
+	// 9. Create safety service (YAML ward rules + audit).
 	home, _ := os.UserHomeDir()
 	wardsDir := filepath.Join(home, ".phantom-os", "wards")
 	os.MkdirAll(wardsDir, 0o755)
@@ -165,12 +201,12 @@ func main() {
 		a.SetSafety(safetySvc)
 	}
 
-	// 9. Create session controller (pause/resume/branch/rewind).
+	// 10. Create session controller (pause/resume/branch/rewind).
 	streamStore := stream.NewStore(database.Writer)
 	sessionCtrl := session.NewController(database.Writer, streamStore, emitFn)
 	a.SetSessionCtrl(sessionCtrl)
 
-	// 10. Run Wails. OnStartup / OnShutdown delegate to App methods which
+	// 11. Run Wails. OnStartup / OnShutdown delegate to App methods which
 	//    also start/stop the registry and close the DB in correct order.
 	err = wails.Run(&options.App{
 		Title:            "PhantomOS",

@@ -30,6 +30,16 @@ interface Window {
         GetPreference(key: string): Promise<string>;
         SetPreference(key: string, value: string): Promise<void>;
         GetGitUserName(): Promise<string>;
+        GetProviders(): Promise<import('./core/types/provider').ProviderInfo[]>;
+        GetProviderDetail(name: string): Promise<import('./core/types/provider').ProviderInfo>;
+        SetProviderEnabled(name: string, enabled: boolean): Promise<void>;
+        SetActiveProvider(name: string): Promise<void>;
+        TestProvider(name: string): Promise<import('./core/types/provider').HealthStatus>;
+        AutoDetectProviders(): Promise<Record<string, import('./core/types/provider').HealthStatus>>;
+        AddCustomProvider(yaml: string): Promise<void>;
+        RemoveCustomProvider(name: string): Promise<void>;
+        ResetProviderOverride(name: string): Promise<void>;
+        GetActiveProvider(): Promise<string>;
       };
     };
   };

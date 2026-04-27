@@ -9,6 +9,8 @@ export interface SystemStats {
   cpu_percent: number;
   mem_used_gb: number;
   mem_total_gb: number;
+  disk_used_gb: number;
+  disk_total_gb: number;
   battery_percent: number;
   battery_charging: boolean;
 }
@@ -17,6 +19,8 @@ const defaultStats: SystemStats = {
   cpu_percent: 0,
   mem_used_gb: 0,
   mem_total_gb: 0,
+  disk_used_gb: 0,
+  disk_total_gb: 0,
   battery_percent: -1,
   battery_charging: false,
 };

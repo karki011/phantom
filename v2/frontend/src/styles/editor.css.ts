@@ -504,3 +504,29 @@ globalStyle('.phantom-blame-line-even', {
 globalStyle('.phantom-blame-line-odd', {
   background: `color-mix(in srgb, ${vars.color.textPrimary} 5%, transparent)`,
 });
+
+// ── DiffPane static styles ────────────────────────────────────────────────────
+
+export const diffFileLink = style({
+  cursor: 'pointer',
+  textDecoration: 'underline',
+  textUnderlineOffset: '3px',
+});
+
+export const diffEditorWrap = style({
+  position: 'relative',
+  flex: 1,
+  overflow: 'hidden',
+});
+
+export const diffEditorFill = style({
+  width: '100%',
+  height: '100%',
+});
+
+// ── EditorPane status bar accent text ─────────────────────────────────────────
+
+export const statusBarItemAccent = style({
+  color: vars.color.accent,
+});
+

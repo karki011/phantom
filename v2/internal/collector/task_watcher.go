@@ -16,12 +16,14 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
+	"github.com/subashkarki/phantom-os-v2/internal/provider"
 )
 
 // TaskWatcher watches ~/.claude/tasks/<sessionId>/<taskId>.json and upserts
 // task records into the DB.
 type TaskWatcher struct {
 	queries        *db.Queries
+	prov           provider.Provider
 	watcher        *fsnotify.Watcher
 	ctx            context.Context
 	cancel         context.CancelFunc
@@ -48,11 +50,13 @@ var crewPatterns = regexp.MustCompile(`\[(Cortex|Solo|Spark|Sentinel|Prism|Oracl
 // NewTaskWatcher creates a new TaskWatcher.
 func NewTaskWatcher(
 	queries *db.Queries,
+	prov provider.Provider,
 	emitEvent func(string, interface{}),
 	onTaskComplete func(sessionID, taskID string),
 ) *TaskWatcher {
 	return &TaskWatcher{
 		queries:        queries,
+		prov:           prov,
 		emitEvent:      emitEvent,
 		onTaskComplete: onTaskComplete,
 		debounce:       make(map[string]time.Time),
@@ -117,10 +121,9 @@ func (w *TaskWatcher) Stop() error {
 	return nil
 }
 
-// tasksDir returns ~/.claude/tasks/.
+// tasksDir returns the tasks directory path from the provider config.
 func (w *TaskWatcher) tasksDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".claude", "tasks")
+	return w.prov.TasksDir()
 }
 
 // addSubdirectories adds watchers for all subdirectories of dir.

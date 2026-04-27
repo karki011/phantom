@@ -13,10 +13,14 @@ import (
 
 	"github.com/charmbracelet/log"
 
+	graphctx "github.com/subashkarki/phantom-os-v2/internal/ai/graph"
+	"github.com/subashkarki/phantom-os-v2/internal/ai/strategies"
+	"github.com/subashkarki/phantom-os-v2/internal/chat"
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/git"
 	"github.com/subashkarki/phantom-os-v2/internal/linker"
+	"github.com/subashkarki/phantom-os-v2/internal/provider"
 	"github.com/subashkarki/phantom-os-v2/internal/safety"
 	"github.com/subashkarki/phantom-os-v2/internal/session"
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
@@ -60,6 +64,10 @@ type App struct {
 	// journal appends notable events to the daily work log.
 	journal journalAppender
 
+	// Provider — injected before Startup via setter methods.
+	prov         provider.Provider
+	provRegistry *provider.Registry
+
 	// Services — injected before Startup via setter methods.
 	DB                *db.DB
 	Terminal          *terminal.Manager
@@ -67,7 +75,15 @@ type App struct {
 	Stream            *stream.Service
 	SessionCtrl       *session.Controller
 	Safety            *safety.Service
+	Chat              *chat.Service
 	collectorRegistry *collector.Registry
+
+	// AI context injection — initialized during Startup from DB connections.
+	ctxProvider *graphctx.ContextProvider
+	ctxInjector *strategies.ContextInjector
+
+	// Chat safety middleware — initialized during Startup from Safety service.
+	chatMiddleware *safety.ChatMiddleware
 }
 
 func New() *App {
@@ -96,6 +112,15 @@ func (a *App) SetSafety(s *safety.Service) { a.Safety = s }
 
 // SetSessionCtrl injects the session controller before Wails calls Startup.
 func (a *App) SetSessionCtrl(c *session.Controller) { a.SessionCtrl = c }
+
+// SetChat injects the chat service before Wails calls Startup.
+func (a *App) SetChat(c *chat.Service) { a.Chat = c }
+
+// SetProvider injects the active AI provider before Wails calls Startup.
+func (a *App) SetProvider(p provider.Provider) { a.prov = p }
+
+// SetProviderRegistry injects the provider registry before Wails calls Startup.
+func (a *App) SetProviderRegistry(r *provider.Registry) { a.provRegistry = r }
 
 // journalAppender is the subset of journal.Service used by App to append
 // work log lines without importing the full journal package.
@@ -156,6 +181,24 @@ func (a *App) Startup(ctx context.Context) {
 		}
 	}
 
+	// Initialize AI graph context injection.
+	if a.DB != nil {
+		queries := db.New(a.DB.Reader)
+		a.ctxProvider = graphctx.NewContextProvider(queries, a.DB.Reader)
+		a.ctxInjector = strategies.NewContextInjector(a.ctxProvider)
+		log.Info("app: AI context injector initialized")
+	}
+
+	// Initialize chat safety middleware.
+	if a.Safety != nil {
+		emitFn := func(name string, data interface{}) {
+			wailsRuntime.EventsEmit(a.ctx, name, data)
+		}
+		piiEnabled := a.GetPreference("chat_pii_scan") != "false" // enabled by default
+		a.chatMiddleware = safety.NewChatMiddleware(a.Safety, piiEnabled, emitFn)
+		log.Info("app: chat safety middleware initialized", "pii_scan", piiEnabled)
+	}
+
 	// Mark orphaned terminals (active in DB but no live PTY) as ended.
 	// Handles crash recovery: terminals that were active when the app last exited.
 	if a.DB != nil {
@@ -180,22 +223,36 @@ func (a *App) Startup(ctx context.Context) {
 		})
 	}
 
-	// Wire safety evaluation into the stream pipeline.
-	// Ward system is off by default — only evaluate when the user has opted in.
-	if a.Stream != nil && a.Safety != nil && a.SessionCtrl != nil {
+	// Wire stream event hook — chains safety evaluation + chat safety + activity detection.
+	if a.Stream != nil {
+		// Capture the chat middleware hook (may be nil if safety isn't initialized).
+		var chatHook func(ctx context.Context, ev *stream.Event)
+		if a.chatMiddleware != nil {
+			chatHook = a.chatMiddleware.StreamEventHook()
+		}
+
 		a.Stream.SetEventHook(func(ctx context.Context, ev *stream.Event) {
-			if a.GetPreference("wards_enabled") != "true" {
-				return
-			}
-			evals := a.Safety.Evaluate(ctx, ev)
-			for _, eval := range evals {
-				log.Warn("app: ward triggered", "rule", eval.RuleID, "level", eval.Level, "session_id", ev.SessionID)
-				if eval.Level == safety.LevelBlock || eval.Level == safety.LevelConfirm {
-					if err := a.SessionCtrl.Pause(ctx, ev.SessionID); err != nil {
-						log.Error("app: safety pause failed", "session_id", ev.SessionID, "rule", eval.RuleID, "err", err)
+			// Activity detection (async, zero-blocking) — runs for all providers.
+			a.detectActivityEvents(ev)
+
+			// Ward safety evaluation — synchronous, can pause sessions.
+			if a.Safety != nil && a.SessionCtrl != nil && a.GetPreference("wards_enabled") == "true" {
+				evals := a.Safety.Evaluate(ctx, ev)
+				for _, eval := range evals {
+					log.Warn("app: ward triggered", "rule", eval.RuleID, "level", eval.Level, "session_id", ev.SessionID)
+					if eval.Level == safety.LevelBlock || eval.Level == safety.LevelConfirm {
+						if err := a.SessionCtrl.Pause(ctx, ev.SessionID); err != nil {
+							log.Error("app: safety pause failed", "session_id", ev.SessionID, "rule", eval.RuleID, "err", err)
+						}
+						break
 					}
-					break
 				}
+			}
+
+			// Chat safety evaluation — lightweight, non-blocking.
+			// Evaluates user/assistant messages in the stream for PII and chat-specific rules.
+			if chatHook != nil {
+				chatHook(ctx, ev)
 			}
 		})
 	}

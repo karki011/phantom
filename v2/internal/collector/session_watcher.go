@@ -1,4 +1,4 @@
-// session_watcher.go watches ~/.claude/sessions/ for session JSON files,
+// session_watcher.go watches the provider's sessions directory for session JSON files,
 // syncs them to the SQLite database, and detects stale sessions.
 // Author: Subash Karki
 package collector
@@ -13,11 +13,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
+	"github.com/subashkarki/phantom-os-v2/internal/provider"
 )
 
 // terminalLinker is the subset of linker.Linker used by SessionWatcher.
@@ -34,9 +34,10 @@ type journalAppender interface {
 	AppendWorkLog(date, line string)
 }
 
-// SessionWatcher watches ~/.claude/sessions/ for session lifecycle events.
+// SessionWatcher watches the provider's sessions directory for session lifecycle events.
 type SessionWatcher struct {
 	queries   *db.Queries
+	prov      provider.Provider
 	watcher   *fsnotify.Watcher
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -59,9 +60,10 @@ type SessionWatcher struct {
 const staleFailureThreshold = 3
 
 // NewSessionWatcher creates a SessionWatcher. queries must be backed by db.Writer.
-func NewSessionWatcher(queries *db.Queries, emitEvent func(string, interface{})) *SessionWatcher {
+func NewSessionWatcher(queries *db.Queries, prov provider.Provider, emitEvent func(string, interface{})) *SessionWatcher {
 	return &SessionWatcher{
 		queries:       queries,
+		prov:          prov,
 		emitEvent:     emitEvent,
 		debounce:      make(map[string]*time.Timer),
 		staleFailures: make(map[string]int),
@@ -98,7 +100,7 @@ func (sw *SessionWatcher) SetJournal(j journalAppender) {
 func (sw *SessionWatcher) Start(ctx context.Context) error {
 	sw.ctx, sw.cancel = context.WithCancel(ctx)
 
-	sessDir := sessionsDir()
+	sessDir := sw.sessionsDir()
 	if err := os.MkdirAll(sessDir, 0o755); err != nil {
 		return fmt.Errorf("session_watcher: create sessions dir: %w", err)
 	}
@@ -145,10 +147,9 @@ func (sw *SessionWatcher) Stop() error {
 	return nil
 }
 
-// sessionsDir returns ~/.claude/sessions/.
-func sessionsDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".claude", "sessions")
+// sessionsDir returns the sessions directory path from the provider.
+func (sw *SessionWatcher) sessionsDir() string {
+	return sw.prov.SessionsDir()
 }
 
 // scanExisting processes all .json files already present in the sessions directory.
@@ -292,11 +293,11 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 		repo = filepath.Base(raw.Cwd)
 	}
 
-	// Check PID liveness
+	// Check PID liveness via provider
 	status := "active"
 	if pid > 0 {
-		if err := syscall.Kill(int(pid), 0); err != nil {
-			slog.Warn("session_watcher: PID check failed", "session_id", sessionID, "pid", pid, "err", err)
+		if !sw.prov.IsSessionAlive(provider.RawSession{PID: int(pid)}) {
+			slog.Warn("session_watcher: PID check failed", "session_id", sessionID, "pid", pid)
 			status = "completed"
 		} else {
 			slog.Info("session_watcher: PID alive", "session_id", sessionID, "pid", pid)
@@ -316,9 +317,9 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 		slog.Info("session_watcher: update existing", "session_id", sessionID, "pid", pid, "pid_status", status, "db_status", dbStatus)
 		if status == "active" {
 			// PID alive — force active regardless of DB state
-		} else if existing.Status.Valid && existing.Status.String == "active" {
-			status = "active"
 		}
+		// When PID is dead, respect the DB status — don't resurrect a session
+		// that was explicitly killed or marked completed.
 		// Clear ended_at when session is active (resurrect case)
 		endedAt := existing.EndedAt
 		if status == "active" {
@@ -370,6 +371,7 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 			Entrypoint: nullString(raw.Entrypoint),
 			StartedAt:  nullInt64(startedEpoch),
 			Status:     nullString(status),
+			Provider:   sw.prov.Name(),
 		}); err != nil {
 			slog.Error("session_watcher: create session", "session_id", sessionID, "err", err)
 			return
@@ -396,13 +398,16 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 		if raw.Cwd != "" {
 			repoLabel = filepath.Base(raw.Cwd)
 		}
-		var line string
+		var parts []string
 		if repoLabel != "" {
-			line = fmt.Sprintf("%s [%s] Session started", ts, repoLabel)
+			parts = append(parts, fmt.Sprintf("%s [%s] Started", ts, repoLabel))
 		} else {
-			line = fmt.Sprintf("%s Session started", ts)
+			parts = append(parts, fmt.Sprintf("%s Started", ts))
 		}
-		sw.journal.AppendWorkLog(today, line)
+		if raw.Model != "" {
+			parts = append(parts, shortModel(raw.Model))
+		}
+		sw.journal.AppendWorkLog(today, strings.Join(parts, " · "))
 	}
 
 	// Best-effort: link unlinked terminals whose CWD matches this session.
@@ -483,10 +488,10 @@ func (sw *SessionWatcher) checkStale() {
 		stale := false
 
 		if s.Pid.Valid && s.Pid.Int64 > 0 {
-			// Check PID liveness: signal 0 checks alive without sending signal.
+			// Check PID liveness via provider.
 			// Require consecutive failures to avoid flipping on transient ESRCH
 			// (zombie reap, exec transitions, etc.)
-			if err := syscall.Kill(int(s.Pid.Int64), 0); err != nil {
+			if !sw.prov.IsSessionAlive(provider.RawSession{PID: int(s.Pid.Int64)}) {
 				sw.staleMu.Lock()
 				sw.staleFailures[s.ID]++
 				count := sw.staleFailures[s.ID]
@@ -546,11 +551,10 @@ func (sw *SessionWatcher) checkStale() {
 	}
 }
 
-// contextBridge watches ~/.claude/phantom-os/context/ for session context JSON
+// contextBridge watches the provider's context directory for session context JSON
 // updates via fsnotify. Falls back to 10s polling if fsnotify fails.
 func (sw *SessionWatcher) contextBridge() {
-	home, _ := os.UserHomeDir()
-	ctxDir := filepath.Join(home, ".claude", "phantom-os", "context")
+	ctxDir := sw.prov.ContextDir()
 	_ = os.MkdirAll(ctxDir, 0o755)
 
 	watcher, err := fsnotify.NewWatcher()
@@ -638,8 +642,7 @@ func (sw *SessionWatcher) pollContext() {
 		return
 	}
 
-	home, _ := os.UserHomeDir()
-	ctxDir := filepath.Join(home, ".claude", "phantom-os", "context")
+	ctxDir := sw.prov.ContextDir()
 
 	for _, s := range sessions {
 		ctxFile := filepath.Join(ctxDir, s.ID+".json")
@@ -697,7 +700,7 @@ func (sw *SessionWatcher) resurrectAlive() {
 		if !s.Pid.Valid || s.Pid.Int64 <= 0 {
 			continue
 		}
-		if err := syscall.Kill(int(s.Pid.Int64), 0); err != nil {
+		if !sw.prov.IsSessionAlive(provider.RawSession{PID: int(s.Pid.Int64)}) {
 			continue
 		}
 		// PID is alive — resurrect
@@ -736,24 +739,48 @@ func (sw *SessionWatcher) triggerEodIfLastSession() {
 }
 
 // appendSessionEndLog looks up the session in the DB and writes a formatted
-// work log line like: "10:43 Session ended (9b917f44), 2K tokens, $0.83"
+// work log line like: "10:43 [repo] Ended · 29m · opus-4 · 12 msgs · 45K tokens · $1.23 · "fix auth""
 func (sw *SessionWatcher) appendSessionEndLog(sessionID string) {
 	today := time.Now().Format("2006-01-02")
 	ts := time.Now().Format("15:04")
-	shortID := sessionID
-	if len(shortID) > 8 {
-		shortID = shortID[:8]
-	}
 
-	// Best-effort: look up session stats from the DB.
 	s, err := sw.queries.GetSession(sw.ctx, sessionID)
 	if err != nil {
-		sw.journal.AppendWorkLog(today, fmt.Sprintf("%s Session ended (%s)", ts, shortID))
+		sw.journal.AppendWorkLog(today, fmt.Sprintf("%s Ended", ts))
 		return
 	}
 
+	repoLabel := ""
+	if s.Cwd.Valid && s.Cwd.String != "" {
+		repoLabel = filepath.Base(s.Cwd.String)
+	}
+
 	var parts []string
-	parts = append(parts, fmt.Sprintf("%s Session ended (%s)", ts, shortID))
+	if repoLabel != "" {
+		parts = append(parts, fmt.Sprintf("%s [%s] Ended", ts, repoLabel))
+	} else {
+		parts = append(parts, fmt.Sprintf("%s Ended", ts))
+	}
+
+	if s.StartedAt.Valid && s.StartedAt.Int64 > 0 {
+		dur := time.Since(time.Unix(s.StartedAt.Int64, 0))
+		if dur >= time.Hour {
+			parts = append(parts, fmt.Sprintf("%dh%dm", int(dur.Hours()), int(dur.Minutes())%60))
+		} else if dur >= time.Minute {
+			parts = append(parts, fmt.Sprintf("%dm", int(dur.Minutes())))
+		} else {
+			parts = append(parts, "<1m")
+		}
+	}
+
+	if s.Model.Valid && s.Model.String != "" {
+		parts = append(parts, shortModel(s.Model.String))
+	}
+
+	msgCount := int64OrZeroCollector(s.MessageCount)
+	if msgCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d msgs", msgCount))
+	}
 
 	totalTokens := int64OrZeroCollector(s.InputTokens) + int64OrZeroCollector(s.OutputTokens)
 	if totalTokens > 0 {
@@ -772,7 +799,40 @@ func (sw *SessionWatcher) appendSessionEndLog(sessionID string) {
 		parts = append(parts, fmt.Sprintf("$%.2f", float64(s.EstimatedCostMicros.Int64)/1_000_000))
 	}
 
-	sw.journal.AppendWorkLog(today, strings.Join(parts, ", "))
+	if s.FirstPrompt.Valid && s.FirstPrompt.String != "" {
+		prompt := s.FirstPrompt.String
+		if len(prompt) > 60 {
+			prompt = prompt[:57] + "..."
+		}
+		parts = append(parts, fmt.Sprintf("\"%s\"", prompt))
+	}
+
+	sw.journal.AppendWorkLog(today, strings.Join(parts, " · "))
+}
+
+func shortModel(model string) string {
+	m := strings.ToLower(model)
+	switch {
+	case strings.Contains(m, "opus"):
+		return "opus"
+	case strings.Contains(m, "sonnet"):
+		return "sonnet"
+	case strings.Contains(m, "haiku"):
+		return "haiku"
+	case strings.Contains(m, "o3"):
+		return "o3"
+	case strings.Contains(m, "o4-mini"):
+		return "o4-mini"
+	case strings.Contains(m, "gpt-4"):
+		return "gpt-4"
+	case strings.Contains(m, "gemini"):
+		return "gemini"
+	default:
+		if len(model) > 20 {
+			return model[:20]
+		}
+		return model
+	}
 }
 
 func int64OrZeroCollector(n sql.NullInt64) int64 {

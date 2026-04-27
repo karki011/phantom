@@ -19,6 +19,7 @@ import {
   MAX_PANES_PER_TAB,
 } from './layout-utils';
 import { destroyTerminal } from '@/core/bindings';
+import { destroySession as destroyXtermSession } from '@/core/terminal/registry';
 
 // ---------------------------------------------------------------------------
 // Factories
@@ -181,8 +182,9 @@ export function removeTab(tabId: string): void {
     }),
   );
 
-  // Kill PTYs for all terminal panes in the removed tab.
+  // Kill PTYs and clean up xterm instances for all terminal panes in the removed tab.
   for (const paneId of terminalPaneIds) {
+    destroyXtermSession(paneId);
     void destroyTerminal(paneId);
   }
 }
@@ -238,8 +240,9 @@ export function closePane(paneId: string): void {
     }),
   );
 
-  // If the closed pane was a terminal, kill its PTY on the Go side.
+  // If the closed pane was a terminal, clean up xterm and kill its PTY.
   if (paneKind === 'terminal') {
+    destroyXtermSession(paneId);
     void destroyTerminal(paneId);
   }
 }
@@ -255,7 +258,10 @@ export function splitPane(
       if (!tab || !(paneId in tab.panes)) return;
       if (countPanes(tab.layout) >= MAX_PANES_PER_TAB) return;
 
-      const newPane = makePane(newPaneType);
+      const parentPane = tab.panes[paneId];
+      const parentData = parentPane?.data;
+      const inheritedData = parentData ? { cwd: parentData.cwd, worktreeId: parentData.worktreeId, projectId: parentData.projectId } : undefined;
+      const newPane = makePane(newPaneType, undefined, inheritedData);
       const newLeaf: PaneLeaf = { type: 'leaf', id: newPane.id, paneType: newPaneType };
 
       tab.layout = insertPaneAdjacentTo(tab.layout, paneId, newLeaf, direction, 'after');

@@ -35,6 +35,7 @@ import { ApprovalModal } from './shared/ApprovalModal/ApprovalModal';
 import { PromptComposer } from './shared/PromptComposer';
 import { composerVisible, closeComposer } from './core/signals/composer';
 import { DocsScreen } from './screens/docs';
+import { SystemCockpit } from './screens/system/SystemCockpit';
 
 export function App() {
   const [ready, setReady] = createSignal(false);
@@ -65,6 +66,10 @@ export function App() {
 
     const wardsEnabled = await loadPref('wards_enabled');
     if (wardsEnabled === 'true') bootstrapWards();
+
+    // Load active provider config (for new session commands)
+    const { loadActiveProvider } = await import('@/core/signals/active-provider');
+    loadActiveProvider();
 
     setReady(true);
   });
@@ -116,9 +121,7 @@ export function App() {
 
         <div class={shellStyles.mainContent}>
           <Show when={activeTopTab() === 'system'}>
-            <div class={shellStyles.systemPlaceholder}>
-              System / Cockpit — coming soon
-            </div>
+            <SystemCockpit />
           </Show>
 
           <Show when={activeTopTab() === 'worktree'}>

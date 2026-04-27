@@ -60,3 +60,7 @@ export const placeholderTitle = style({
   color: vars.color.accentMuted,
   letterSpacing: '0.15em',
 });
+
+export const dimmed = style({
+  opacity: 0.4,
+});

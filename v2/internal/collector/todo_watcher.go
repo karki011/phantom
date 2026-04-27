@@ -16,6 +16,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
+	"github.com/subashkarki/phantom-os-v2/internal/provider"
 )
 
 // todoItem represents a single entry in a todos JSON array.
@@ -29,6 +30,7 @@ type todoItem struct {
 // as tasks into the DB.
 type TodoWatcher struct {
 	queries        *db.Queries
+	prov           provider.Provider
 	watcher        *fsnotify.Watcher
 	ctx            context.Context
 	cancel         context.CancelFunc
@@ -42,11 +44,13 @@ type TodoWatcher struct {
 // NewTodoWatcher creates a new TodoWatcher.
 func NewTodoWatcher(
 	queries *db.Queries,
+	prov provider.Provider,
 	emitEvent func(string, interface{}),
 	onTaskComplete func(sessionID, taskID string),
 ) *TodoWatcher {
 	return &TodoWatcher{
 		queries:        queries,
+		prov:           prov,
 		emitEvent:      emitEvent,
 		onTaskComplete: onTaskComplete,
 		previousTodos:  make(map[string][]todoItem),
@@ -107,10 +111,9 @@ func (w *TodoWatcher) Stop() error {
 	return nil
 }
 
-// todosDir returns ~/.claude/todos/.
+// todosDir returns the todos directory path from the provider config.
 func (w *TodoWatcher) todosDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".claude", "todos")
+	return w.prov.TodosDir()
 }
 
 func (w *TodoWatcher) handleEvent(event fsnotify.Event) {

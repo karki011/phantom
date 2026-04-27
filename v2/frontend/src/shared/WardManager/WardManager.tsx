@@ -120,7 +120,7 @@ export function WardManager() {
       <div class={styles.stickyTop}>
         <div class={styles.header}>
           <span class={styles.title}>
-            <Shield size={14} style={{ 'vertical-align': 'middle', 'margin-right': '6px' }} />
+            <Shield size={14} class={styles.shieldIcon} />
             Ward Rules
           </span>
           <button class={styles.addButton} onClick={openCreator}>
@@ -147,7 +147,7 @@ export function WardManager() {
           <span class={styles.inlineFormTitle}>{isEditing() ? 'Edit Rule' : 'New Rule'}</span>
 
           <div class={styles.formRow}>
-            <div class={styles.formField} style={{ flex: '1' }}>
+            <div class={styles.formFieldFlex}>
               <label class={styles.formLabel}>ID</label>
               <input class={styles.formInput} value={editRule().id}
                 onInput={(e) => setEditRule(r => ({ ...r, id: e.currentTarget.value }))}
@@ -155,14 +155,14 @@ export function WardManager() {
                 readOnly={isEditing()}
                 style={isEditing() ? { opacity: '0.6' } : {}} />
             </div>
-            <div class={styles.formField} style={{ flex: '1' }}>
+            <div class={styles.formFieldFlex}>
               <label class={styles.formLabel}>Name</label>
               <input class={styles.formInput} value={editRule().name} onInput={(e) => setEditRule(r => ({ ...r, name: e.currentTarget.value }))} placeholder="My Rule Name" />
             </div>
           </div>
 
           <div class={styles.formRow}>
-            <div class={styles.formField} style={{ flex: '1' }}>
+            <div class={styles.formFieldFlex}>
               <label class={styles.formLabel}>Level</label>
               <select class={styles.formSelect} value={editRule().level} onChange={(e) => setEditRule(r => ({ ...r, level: e.currentTarget.value }))}>
                 <option value="block">Block (pause session)</option>
@@ -171,20 +171,20 @@ export function WardManager() {
                 <option value="log">Log (silent)</option>
               </select>
             </div>
-            <div class={styles.formField} style={{ flex: '1' }}>
+            <div class={styles.formFieldFlex}>
               <label class={styles.formLabel}>Event Type</label>
               <select class={styles.formSelect} value={editRule().event_type} onChange={(e) => setEditRule(r => ({ ...r, event_type: e.currentTarget.value }))}>
                 <option value="">All events</option>
                 <option value="tool_use">Tool calls</option>
                 <option value="user">User prompts</option>
-                <option value="assistant">Claude responses</option>
+                <option value="assistant">AI responses</option>
                 <option value="tool_result">Tool results</option>
               </select>
             </div>
           </div>
 
           <div class={styles.formRow}>
-            <div class={styles.formField} style={{ flex: '1' }}>
+            <div class={styles.formFieldFlex}>
               <label class={styles.formLabel}>Tool</label>
               <select class={styles.formSelect} value={editRule().tool} onChange={(e) => setEditRule(r => ({ ...r, tool: e.currentTarget.value }))}>
                 <option value="">Any tool</option>
@@ -194,11 +194,11 @@ export function WardManager() {
                 <option value="Read">Read</option>
               </select>
             </div>
-            <div class={styles.formField} style={{ flex: '1' }}>
+            <div class={styles.formFieldFlex}>
               <label class={styles.formLabel}>Pattern (regex)</label>
               <input class={styles.formInput} value={editRule().pattern} onInput={(e) => setEditRule(r => ({ ...r, pattern: e.currentTarget.value }))} placeholder="rm\s+-rf|DROP\s+TABLE" />
             </div>
-            <div class={styles.formField} style={{ flex: '1' }}>
+            <div class={styles.formFieldFlex}>
               <label class={styles.formLabel}>Path Pattern (regex)</label>
               <input class={styles.formInput} value={editRule().path_pattern}
                 onInput={(e) => setEditRule(r => ({ ...r, path_pattern: e.currentTarget.value }))}
@@ -218,20 +218,20 @@ export function WardManager() {
               placeholder="Internal note about this rule" />
           </div>
 
-          <div class={styles.formRow} style={{ 'align-items': 'center', gap: '16px' }}>
+          <div class={styles.formRowCenter}>
             <Checkbox class={styles.checkboxRoot} checked={editRule().allow_bypass} onChange={(checked) => setEditRule(r => ({ ...r, allow_bypass: checked }))}>
               <Checkbox.Input />
               <Checkbox.Control class={styles.checkboxControl}>
                 <Checkbox.Indicator class={styles.checkboxIndicator}>✓</Checkbox.Indicator>
               </Checkbox.Control>
-              <Checkbox.Label class={styles.formLabel} style={{ margin: '0', 'text-transform': 'none', 'letter-spacing': '0' }}>Allow bypass</Checkbox.Label>
+              <Checkbox.Label class={styles.checkboxLabelReset}>Allow bypass</Checkbox.Label>
             </Checkbox>
             <Checkbox class={styles.checkboxRoot} checked={editRule().audit} onChange={(checked) => setEditRule(r => ({ ...r, audit: checked }))}>
               <Checkbox.Input />
               <Checkbox.Control class={styles.checkboxControl}>
                 <Checkbox.Indicator class={styles.checkboxIndicator}>✓</Checkbox.Indicator>
               </Checkbox.Control>
-              <Checkbox.Label class={styles.formLabel} style={{ margin: '0', 'text-transform': 'none', 'letter-spacing': '0' }}>Audit trail</Checkbox.Label>
+              <Checkbox.Label class={styles.checkboxLabelReset}>Audit trail</Checkbox.Label>
             </Checkbox>
           </div>
 
@@ -247,7 +247,7 @@ export function WardManager() {
             <Checkbox.Control class={styles.checkboxControl}>
               <Checkbox.Indicator class={styles.checkboxIndicator}>✓</Checkbox.Indicator>
             </Checkbox.Control>
-            <Checkbox.Label class={styles.formLabel} style={{ margin: '0', 'text-transform': 'none', 'letter-spacing': '0' }}>Scope to specific session</Checkbox.Label>
+            <Checkbox.Label class={styles.checkboxLabelReset}>Scope to specific session</Checkbox.Label>
           </Checkbox>
 
           <Show when={scopeToSession()}>

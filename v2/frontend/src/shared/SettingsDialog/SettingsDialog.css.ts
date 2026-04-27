@@ -6,7 +6,7 @@ import { vars } from '../../styles/theme.css';
 export const settingsLayout = style({
   display: 'flex',
   flexDirection: 'row',
-  height: '480px',
+  height: '600px',
   overflow: 'hidden',
 });
 
@@ -272,4 +272,203 @@ export const switchThumb = style({
       transform: 'translateX(16px)',
     },
   },
+});
+
+// === System Section ===
+
+export const inlineIconLabel = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+});
+
+export const aboutTitle = style({
+  fontFamily: vars.font.display,
+  fontSize: vars.fontSize.lg,
+  color: vars.color.textPrimary,
+  fontWeight: 600,
+});
+
+export const aboutAuthor = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textSecondary,
+});
+
+// === Providers Section ===
+
+export const detectBanner = style({
+  background: vars.color.bgTertiary,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  padding: vars.space.lg,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.md,
+});
+
+export const detectBannerTitle = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+});
+
+export const detectBannerLabel = style({
+  fontFamily: vars.font.body,
+  fontSize: vars.fontSize.sm,
+  fontWeight: 600,
+  color: vars.color.textPrimary,
+});
+
+export const detectProviderList = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.xs,
+});
+
+export const detectProviderRow = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textPrimary,
+});
+
+export const detectProviderVersion = style({
+  color: vars.color.textSecondary,
+});
+
+export const detectButtonRow = style({
+  display: 'flex',
+  gap: vars.space.sm,
+});
+
+export const providerHeaderRow = style({
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+});
+
+export const providerHeaderButtons = style({
+  display: 'flex',
+  gap: vars.space.sm,
+});
+
+export const providerListContainer = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.md,
+});
+
+export const skeletonCard = style({
+  background: vars.color.bgTertiary,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  padding: vars.space.lg,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.sm,
+  animation: 'pulse 1.5s ease-in-out infinite',
+});
+
+export const skeletonRow = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.md,
+});
+
+export const skeletonAvatar = style({
+  width: '32px',
+  height: '32px',
+  borderRadius: vars.radius.md,
+  background: vars.color.bgHover,
+});
+
+export const skeletonTextContainer = style({
+  flex: 1,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+});
+
+export const skeletonName = style({
+  width: '140px',
+  height: '14px',
+  borderRadius: vars.radius.sm,
+  background: vars.color.bgHover,
+});
+
+export const skeletonDesc = style({
+  width: '200px',
+  height: '10px',
+  borderRadius: vars.radius.sm,
+  background: vars.color.bgHover,
+});
+
+export const skeletonToggle = style({
+  width: '36px',
+  height: '20px',
+  borderRadius: vars.radius.full,
+  background: vars.color.bgHover,
+});
+
+export const providerEmptyState = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textSecondary,
+  padding: vars.space.xl,
+  textAlign: 'center',
+  background: vars.color.bgTertiary,
+  borderRadius: vars.radius.lg,
+});
+
+export const defaultProviderRow = style({
+  display: 'flex',
+  gap: vars.space.sm,
+  marginTop: vars.space.sm,
+  flexWrap: 'wrap',
+});
+
+export const providerSelectorButton = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  borderRadius: vars.radius.md,
+  border: `2px solid ${vars.color.border}`,
+  background: vars.color.bgTertiary,
+  color: vars.color.textSecondary,
+  cursor: 'pointer',
+  fontFamily: vars.font.body,
+  fontSize: vars.fontSize.sm,
+  fontWeight: 400,
+  transition: 'all 150ms ease',
+  selectors: {
+    '&[data-active="true"]': {
+      border: `2px solid ${vars.color.accent}`,
+      background: vars.color.accentMuted,
+      color: vars.color.accent,
+      fontWeight: 600,
+    },
+  },
+});
+
+export const providerSelectorDot = style({
+  width: '8px',
+  height: '8px',
+  borderRadius: '50%',
+  background: vars.color.textDisabled,
+  flexShrink: 0,
+  selectors: {
+    '[data-active="true"] &': {
+      background: vars.color.accent,
+    },
+  },
+});
+
+export const providerSelectorVersion = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  opacity: 0.7,
 });

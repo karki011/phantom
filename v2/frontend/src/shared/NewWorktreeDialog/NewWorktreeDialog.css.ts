@@ -131,6 +131,11 @@ export const branchesLoaderText = style({
   letterSpacing: '0.05em',
 });
 
+export const optionalLabel = style({
+  fontWeight: 400,
+  opacity: 0.6,
+});
+
 export const branchPreview = style({
   fontFamily: vars.font.mono,
   fontSize: vars.fontSize.xs,

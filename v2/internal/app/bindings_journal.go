@@ -43,6 +43,7 @@ type JournalEntry struct {
 	ToolUseCount        int64  `json:"tool_use_count"`
 	FirstPrompt         string `json:"first_prompt"`
 	ToolBreakdown       string `json:"tool_breakdown"`
+	Provider            string `json:"provider"`
 }
 
 // DailyStatsEntry is the frontend-facing daily rollup.
@@ -87,6 +88,7 @@ func sessionToJournalEntry(s db.Session) JournalEntry {
 		ToolUseCount:        int64OrZero(s.ToolUseCount),
 		FirstPrompt:         stringOrEmpty(s.FirstPrompt),
 		ToolBreakdown:       stringOrEmpty(s.ToolBreakdown),
+		Provider:            s.Provider,
 	}
 }
 

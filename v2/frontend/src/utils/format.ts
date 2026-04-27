@@ -39,14 +39,28 @@ export function relativeTime(epoch: number | null): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-/** Short model name: "claude-3-opus-20240229" → "opus" */
+/** Known model substring → short display name */
+const MODEL_SHORT_NAMES: Record<string, string> = {
+  opus: 'Opus',
+  sonnet: 'Sonnet',
+  haiku: 'Haiku',
+  'gpt-4o': 'GPT-4o',
+  'gpt-4.1': 'GPT-4.1',
+  o3: 'o3',
+  flash: 'Flash',
+  pro: 'Pro',
+  ultra: 'Ultra',
+};
+
+/** Short model name: "claude-3-opus-20240229" → "Opus", "gpt-4o-2024" → "GPT-4o" */
 export function shortModel(model: string | null): string {
   if (!model) return '—';
-  const parts = model.split('-');
-  const known = ['opus', 'sonnet', 'haiku'];
-  for (const p of parts) {
-    if (known.includes(p)) return p;
+  const lower = model.toLowerCase();
+  for (const [key, label] of Object.entries(MODEL_SHORT_NAMES)) {
+    if (lower.includes(key)) return label;
   }
+  // Fallback: last segment of the model string
+  const parts = model.split('-');
   return parts[parts.length - 1] ?? model;
 }
 

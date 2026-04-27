@@ -407,7 +407,7 @@ export const PromptComposer = (props: PromptComposerProps) => {
             ref={fileInputRef}
             type="file"
             multiple
-            style={{ display: 'none' }}
+            class={styles.hidden}
             onChange={handleFileSelect}
           />
 

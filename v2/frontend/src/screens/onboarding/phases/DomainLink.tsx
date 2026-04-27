@@ -66,11 +66,11 @@ export function DomainLink(props: DomainLinkProps) {
 
   return (
     <PhasePanel title="Link Your Domain" subtitle="The System needs a project to bind to.">
-      <div style={{ display: 'flex', 'flex-direction': 'column', gap: '20px' }}>
+      <div class={styles.phaseStack20}>
         <div class={styles.field}>
           <label class={styles.label}>Project Directory</label>
-          <div style={{ display: 'flex', gap: '10px', 'align-items': 'stretch' }}>
-            <TextField style={{ flex: '1' }}>
+          <div class={styles.inputRow}>
+            <TextField class={styles.inputFlex}>
               <TextField.Input
                 class={styles.input}
                 placeholder="/path/to/your/project"
@@ -110,7 +110,7 @@ export function DomainLink(props: DomainLinkProps) {
         </Show>
 
         <Show when={detected() && !added()}>
-          <div style={{ display: 'flex', 'justify-content': 'center' }}>
+          <div class={styles.linkActionCenter}>
             <button
               class={buttonRecipe({ variant: 'primary', size: 'lg' })}
               onClick={handleAdd}
@@ -126,7 +126,7 @@ export function DomainLink(props: DomainLinkProps) {
           </div>
         </Show>
 
-        <div style={{ display: 'flex', 'justify-content': 'center', gap: '16px', 'padding-top': '12px' }}>
+        <div class={styles.footerRow}>
           <Show when={!added()}>
             <button
               class={buttonRecipe({ variant: 'ghost', size: 'lg' })}

@@ -4,8 +4,11 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"log"
+	"time"
 
+	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/session"
 )
 
@@ -74,11 +77,25 @@ func (a *App) GetSessionBranches(sessionID string) []session.BranchInfo {
 	return branches
 }
 
-// KillSession terminates a running Claude session by sending SIGTERM to its process group.
+// KillSession terminates a running Claude session by sending SIGTERM to its process group
+// and marks it completed in the sessions table so the session watcher won't resurrect it.
 func (a *App) KillSession(sessionID string) error {
 	if err := a.SessionCtrl.Kill(context.Background(), sessionID); err != nil {
 		log.Printf("app: KillSession %s: %v", sessionID, err)
 		return err
 	}
+
+	if a.DB != nil {
+		q := db.New(a.DB.Writer)
+		now := time.Now().Unix()
+		if err := q.UpdateSessionStatus(context.Background(), db.UpdateSessionStatusParams{
+			ID:      sessionID,
+			Status:  sql.NullString{String: "completed", Valid: true},
+			EndedAt: sql.NullInt64{Int64: now, Valid: true},
+		}); err != nil {
+			log.Printf("app: KillSession %s: mark completed: %v", sessionID, err)
+		}
+	}
+
 	return nil
 }
