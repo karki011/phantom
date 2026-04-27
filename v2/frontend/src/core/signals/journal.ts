@@ -1,32 +1,46 @@
-// PhantomOS v2 — Activity Journal signals
+// PhantomOS v2 — Daily Journal signals
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';
-import type { JournalEntry, DailyStats } from '../types';
-import { getSessionsByDate, getRecentSessions, getDailyStatsRange, getLastActiveSession } from '../bindings/journal';
+import type { DailyJournalEntry, DailyStats } from '../types';
+import { getDailyJournalEntry, getDailyStatsRange } from '../bindings/journal';
 
 // Selected date for the journal view
 export const [selectedDate, setSelectedDate] = createSignal<string>(
-  new Date().toISOString().slice(0, 10)
+  new Date().toISOString().slice(0, 10),
 );
 
-// Sessions for the selected date
-export const [daySessions, setDaySessions] = createSignal<JournalEntry[]>([]);
+// Current daily journal entry
+export const [journalEntry, setJournalEntry] = createSignal<DailyJournalEntry>({
+  date: new Date().toISOString().slice(0, 10),
+  morning_brief: '',
+  morning_generated_at: 0,
+  work_log: [],
+  end_of_day_recap: '',
+  eod_generated_at: 0,
+  notes: '',
+});
 
 // Daily stats for calendar heatmap (current month by default)
 export const [monthStats, setMonthStats] = createSignal<DailyStats[]>([]);
 
-// Last active session for resume bar
-export const [resumeSession, setResumeSession] = createSignal<JournalEntry | null>(null);
+// Selected project filter for the journal view (null = all projects)
+export const [selectedProject, setSelectedProject] = createSignal<string | null>(null);
 
-// View mode
-export const [journalView, setJournalView] = createSignal<'today' | 'week' | 'all'>('today');
+// Loading state
+export const [journalLoading, setJournalLoading] = createSignal(false);
 
-// Load sessions for a specific date
-export const loadDaySessions = async (date: string): Promise<void> => {
+// Load journal entry for a specific date, optionally filtered by project
+export const loadJournalEntry = async (date: string, project?: string | null): Promise<void> => {
   setSelectedDate(date);
-  const sessions = await getSessionsByDate(date);
-  setDaySessions(sessions);
+  if (project !== undefined) setSelectedProject(project);
+  setJournalLoading(true);
+  try {
+    const entry = await getDailyJournalEntry(date, selectedProject() ?? undefined);
+    setJournalEntry(entry);
+  } finally {
+    setJournalLoading(false);
+  }
 };
 
 // Load month stats for calendar heatmap
@@ -37,28 +51,14 @@ export const loadMonthStats = async (year: number, month: number): Promise<void>
   setMonthStats(stats);
 };
 
-// Load resume session on app startup
-export const loadResumeSession = async (): Promise<void> => {
-  const session = await getLastActiveSession();
-  setResumeSession(session);
-};
-
 // Bootstrap journal data
 export const bootstrapJournal = async (): Promise<void> => {
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
   await Promise.all([
-    loadDaySessions(today),
+    loadJournalEntry(today),
     loadMonthStats(now.getFullYear(), now.getMonth() + 1),
-    loadResumeSession(),
   ]);
-};
-
-// Helper: parse files_touched JSON string
-export const parseFilesTouched = (json: string | null): string[] => {
-  if (!json) return [];
-  try { return JSON.parse(json); }
-  catch { return []; }
 };
 
 // Helper: format cost from microdollars
@@ -67,13 +67,27 @@ export const formatCost = (micros: number | null): string => {
   return `$${(micros / 1_000_000).toFixed(2)}`;
 };
 
-// Helper: format duration from seconds
+// Helper: normalize timestamp to seconds (handles both ms and s)
+const toSecs = (t: number): number => (t > 1e12 ? Math.floor(t / 1000) : t);
+
+// Helper: format duration
 export const formatDuration = (startedAt: number | null, endedAt: number | null): string => {
   if (!startedAt) return '0m';
-  const end = endedAt || Math.floor(Date.now() / 1000);
-  const mins = Math.round((end - startedAt) / 60);
+  const start = toSecs(startedAt);
+  const end = endedAt ? toSecs(endedAt) : Math.floor(Date.now() / 1000);
+  const mins = Math.max(0, Math.round((end - start) / 60));
   if (mins < 60) return `${mins}m`;
   const hrs = Math.floor(mins / 60);
   const rem = mins % 60;
   return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
+};
+
+// Helper: parse files_touched JSON string
+export const parseFilesTouched = (json: string | null): string[] => {
+  if (!json) return [];
+  try {
+    return JSON.parse(json);
+  } catch {
+    return [];
+  }
 };

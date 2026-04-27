@@ -36,6 +36,7 @@ type ActivityPoller struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	emitEvent func(name string, data interface{})
+	journal   journalAppender // optional — appends notable events to journal work log
 
 	mu          sync.Mutex
 	fileOffsets map[string]int64 // byte offset per JSONL file path
@@ -64,6 +65,12 @@ func NewActivityPoller(queries *db.Queries, emitEvent func(string, interface{}))
 }
 
 func (p *ActivityPoller) Name() string { return "activity-poller" }
+
+// SetJournal injects the journal appender so the poller can log notable
+// events (git commits, pushes, agent spawns) to the daily work log.
+func (p *ActivityPoller) SetJournal(j journalAppender) {
+	p.journal = j
+}
 
 func (p *ActivityPoller) Start(ctx context.Context) error {
 	p.ctx, p.cancel = context.WithCancel(ctx)
@@ -265,6 +272,43 @@ func (p *ActivityPoller) persistAndEmit(events []activityEvent) {
 
 	if p.emitEvent != nil {
 		p.emitEvent(EventActivity, events)
+	}
+
+	// Append notable events to the daily journal work log.
+	// Only log git commits, pushes, and agent spawns — skip noisy events
+	// like tool:read, tool:edit, message:assistant, etc.
+	if p.journal != nil {
+		today := time.Now().Format("2006-01-02")
+		ts := time.Now().Format("15:04")
+		for _, ev := range events {
+			var line string
+			switch ev.Type {
+			case "git:commit":
+				detail := ev.Detail
+				if len(detail) > 120 {
+					detail = detail[:120] + "..."
+				}
+				line = fmt.Sprintf("%s Committed: %s", ts, detail)
+			case "git:push":
+				line = fmt.Sprintf("%s Pushed to remote", ts)
+			case "tool:agent":
+				if ev.Detail != "" && ev.Detail != "Agent" {
+					detail := ev.Detail
+					if len(detail) > 100 {
+						detail = detail[:100] + "..."
+					}
+					line = fmt.Sprintf("%s Spawned agent: %s", ts, detail)
+				}
+			}
+			if line != "" {
+				// Prefix with project name from session if available
+				sess, err := p.queries.GetSession(p.ctx, ev.SessionID)
+				if err == nil && sess.Repo.Valid && sess.Repo.String != "" {
+					line = fmt.Sprintf("%s [%s] %s", ts, sess.Repo.String, line[6:]) // replace ts prefix
+				}
+				p.journal.AppendWorkLog(today, line)
+			}
+		}
 	}
 }
 

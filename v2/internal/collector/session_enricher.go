@@ -28,6 +28,37 @@ func NewSessionEnricher(queries *db.Queries, rawDB db.DBTX, emitEvent func(strin
 	return &SessionEnricher{queries: queries, rawDB: rawDB, emitEvent: emitEvent}
 }
 
+// StartPeriodicEnrichment runs every 60s, enriching all active sessions so the journal stays fresh.
+func (se *SessionEnricher) StartPeriodicEnrichment(ctx context.Context) {
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+
+	slog.Info("session_enricher: periodic enrichment started (60s interval)")
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			se.enrichActiveSessions(ctx)
+		}
+	}
+}
+
+func (se *SessionEnricher) enrichActiveSessions(ctx context.Context) {
+	sessions, err := se.queries.ListActiveSessions(ctx)
+	if err != nil {
+		slog.Error("session_enricher: list active for periodic", "err", err)
+		return
+	}
+	for _, s := range sessions {
+		se.EnrichSession(ctx, s.ID)
+	}
+	if len(sessions) > 0 {
+		slog.Debug("session_enricher: periodic enrichment", "sessions", len(sessions))
+	}
+}
+
 // EnrichSession runs after a session ends — aggregates activity data into journal fields.
 func (se *SessionEnricher) EnrichSession(ctx context.Context, sessionID string) {
 	session, err := se.queries.GetSession(ctx, sessionID)

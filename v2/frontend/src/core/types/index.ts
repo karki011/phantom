@@ -269,6 +269,17 @@ export interface JournalEntry {
   tool_breakdown: string | null;
 }
 
+/** File-based daily journal entry (v2 — Morning Brief / Work Log / End of Day / Notes). */
+export interface DailyJournalEntry {
+  date: string;
+  morning_brief: string;
+  morning_generated_at: number;
+  work_log: string[];
+  end_of_day_recap: string;
+  eod_generated_at: number;
+  notes: string;
+}
+
 export interface DailyStats {
   date: string;
   project_id: string | null;

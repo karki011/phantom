@@ -232,8 +232,8 @@ export function SystemHeader() {
             <BookIcon />
           </button>
         </Tip>
-        <Tip label="Journal" placement="bottom">
-          <button class={shellStyles.headerIconButton} type="button" aria-label="Open journal" onClick={() => focusOrCreateTab('journal', 'Journal')}>
+        <Tip label="Daily Digest" placement="bottom">
+          <button class={shellStyles.headerIconButton} type="button" aria-label="Open daily digest" onClick={() => focusOrCreateTab('journal', 'Daily Digest')}>
             <JournalIcon />
           </button>
         </Tip>

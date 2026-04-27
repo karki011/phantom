@@ -57,6 +57,9 @@ type App struct {
 	// gitWatcher provides instant change detection via .git file watching.
 	gitWatcher *git.Watcher
 
+	// journal appends notable events to the daily work log.
+	journal journalAppender
+
 	// Services — injected before Startup via setter methods.
 	DB                *db.DB
 	Terminal          *terminal.Manager
@@ -93,6 +96,15 @@ func (a *App) SetSafety(s *safety.Service) { a.Safety = s }
 
 // SetSessionCtrl injects the session controller before Wails calls Startup.
 func (a *App) SetSessionCtrl(c *session.Controller) { a.SessionCtrl = c }
+
+// journalAppender is the subset of journal.Service used by App to append
+// work log lines without importing the full journal package.
+type journalAppender interface {
+	AppendWorkLog(date, line string)
+}
+
+// SetJournal injects the journal service for work log event capture.
+func (a *App) SetJournal(j journalAppender) { a.journal = j }
 
 // Ctx returns the app-level context (valid after Startup is called).
 func (a *App) Ctx() context.Context { return a.ctx }
@@ -220,6 +232,11 @@ func (a *App) handleGitWatcherEvents() {
 		case git.GitEventBranchChanged:
 			wailsRuntime.EventsEmit(a.ctx, EventGitBranchChanged)
 			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+			if a.journal != nil {
+				today := time.Now().Format("2006-01-02")
+				ts := time.Now().Format("15:04")
+				a.journal.AppendWorkLog(today, fmt.Sprintf("%s Switched branch", ts))
+			}
 			select {
 			case a.branchRefresh <- struct{}{}:
 			default:

@@ -15,6 +15,16 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+// journalWorktreeEvent logs a worktree lifecycle event to the daily work log.
+func (a *App) journalWorktreeEvent(action, branch string) {
+	if a.journal == nil {
+		return
+	}
+	today := time.Now().Format("2006-01-02")
+	ts := time.Now().Format("15:04")
+	a.journal.AppendWorkLog(today, fmt.Sprintf("%s %s worktree: %s", ts, action, branch))
+}
+
 // CreateWorktree creates a git worktree for the given project and branch,
 // then persists the workspace record in the database.
 func (a *App) CreateWorktree(projectId, branch, baseBranch string) (*db.Workspace, error) {
@@ -79,6 +89,7 @@ func (a *App) CreateWorktree(projectId, branch, baseBranch string) (*db.Workspac
 		return nil, fmt.Errorf("CreateWorktree: GetWorkspace after create: %w", err)
 	}
 	wailsRuntime.EventsEmit(a.ctx, EventWorktreeCreated)
+	a.journalWorktreeEvent("Created", branch)
 	log.Info("app/CreateWorktree: success", "id", ws.ID, "branch", ws.Branch, "path", ws.WorktreePath.String)
 	return &ws, nil
 }
@@ -109,6 +120,7 @@ func (a *App) RemoveWorktree(worktreeId string) error {
 		return err
 	}
 	wailsRuntime.EventsEmit(a.ctx, EventWorktreeRemoved)
+	a.journalWorktreeEvent("Removed", ws.Branch)
 	log.Info("app/RemoveWorktree: success", "worktreeId", worktreeId)
 	return nil
 }

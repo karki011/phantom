@@ -28,6 +28,12 @@ type terminalLinker interface {
 	UnlinkSession(ctx context.Context, sessionID string) error
 }
 
+// journalAppender is the subset of journal.Service used by SessionWatcher
+// to append work log lines without importing the full journal package.
+type journalAppender interface {
+	AppendWorkLog(date, line string)
+}
+
 // SessionWatcher watches ~/.claude/sessions/ for session lifecycle events.
 type SessionWatcher struct {
 	queries   *db.Queries
@@ -38,6 +44,7 @@ type SessionWatcher struct {
 	onActive  func(sessionID, jsonlPath string)
 	linker    terminalLinker
 	enricher  *SessionEnricher
+	journal   journalAppender
 
 	// debounce per-file fsnotify events
 	mu       sync.Mutex
@@ -79,6 +86,12 @@ func (sw *SessionWatcher) SetLinker(l terminalLinker) {
 // journal data (summary, files touched, git stats, daily aggregates).
 func (sw *SessionWatcher) SetEnricher(e *SessionEnricher) {
 	sw.enricher = e
+}
+
+// SetJournal injects the journal appender so the watcher can auto-log
+// session start/end events to the daily journal work log.
+func (sw *SessionWatcher) SetJournal(j journalAppender) {
+	sw.journal = j
 }
 
 // Start begins watching the sessions directory and launches background goroutines.
@@ -374,6 +387,24 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 		sw.onActive(sessionID, "")
 	}
 
+	// Append work log entry for new active sessions.
+	if status == "active" && err != nil && sw.journal != nil {
+		// err != nil means this was a Create (not an Update)
+		today := time.Now().Format("2006-01-02")
+		ts := time.Now().Format("15:04")
+		repoLabel := ""
+		if raw.Cwd != "" {
+			repoLabel = filepath.Base(raw.Cwd)
+		}
+		var line string
+		if repoLabel != "" {
+			line = fmt.Sprintf("%s [%s] Session started", ts, repoLabel)
+		} else {
+			line = fmt.Sprintf("%s Session started", ts)
+		}
+		sw.journal.AppendWorkLog(today, line)
+	}
+
 	// Best-effort: link unlinked terminals whose CWD matches this session.
 	if status == "active" && raw.Cwd != "" && sw.linker != nil {
 		if err := sw.linker.LinkSessionToUnlinkedTerminals(sw.ctx, sessionID, raw.Cwd, pid); err != nil {
@@ -411,10 +442,18 @@ func (sw *SessionWatcher) handleRemove(path string) {
 		go sw.enricher.EnrichSession(sw.ctx, sessionID)
 	}
 
+	// Append work log entry for session end.
+	if sw.journal != nil {
+		sw.appendSessionEndLog(sessionID)
+	}
+
 	sw.emitEvent(EventSessionEnd, map[string]interface{}{
 		"sessionId": sessionID,
 		"reason":    "file_removed",
 	})
+
+	// If this was the last active session, trigger EOD generation.
+	sw.triggerEodIfLastSession()
 }
 
 // staleDetector periodically checks active sessions for dead PIDs.
@@ -491,10 +530,18 @@ func (sw *SessionWatcher) checkStale() {
 				go sw.enricher.EnrichSession(sw.ctx, s.ID)
 			}
 
+			// Append work log entry for session end.
+			if sw.journal != nil {
+				sw.appendSessionEndLog(s.ID)
+			}
+
 			sw.emitEvent(EventSessionStale, map[string]interface{}{
 				"sessionId": s.ID,
 				"reason":    "pid_dead",
 			})
+
+			// If this was the last active session, trigger EOD generation.
+			sw.triggerEodIfLastSession()
 		}
 	}
 }
@@ -671,6 +718,68 @@ func (sw *SessionWatcher) resurrectAlive() {
 			sw.onActive(s.ID, "")
 		}
 	}
+}
+
+// triggerEodIfLastSession checks whether all sessions have ended for the day.
+// If so, emits a "journal:eod-trigger" event so the frontend can auto-generate
+// the End of Day recap without the user clicking a button.
+func (sw *SessionWatcher) triggerEodIfLastSession() {
+	activeSessions, err := sw.queries.ListActiveSessions(sw.ctx)
+	if err != nil {
+		slog.Error("session_watcher: check active for eod trigger", "err", err)
+		return
+	}
+	if len(activeSessions) == 0 && sw.emitEvent != nil {
+		slog.Info("session_watcher: last session ended, emitting eod-trigger")
+		sw.emitEvent("journal:eod-trigger", nil)
+	}
+}
+
+// appendSessionEndLog looks up the session in the DB and writes a formatted
+// work log line like: "10:43 Session ended (9b917f44), 2K tokens, $0.83"
+func (sw *SessionWatcher) appendSessionEndLog(sessionID string) {
+	today := time.Now().Format("2006-01-02")
+	ts := time.Now().Format("15:04")
+	shortID := sessionID
+	if len(shortID) > 8 {
+		shortID = shortID[:8]
+	}
+
+	// Best-effort: look up session stats from the DB.
+	s, err := sw.queries.GetSession(sw.ctx, sessionID)
+	if err != nil {
+		sw.journal.AppendWorkLog(today, fmt.Sprintf("%s Session ended (%s)", ts, shortID))
+		return
+	}
+
+	var parts []string
+	parts = append(parts, fmt.Sprintf("%s Session ended (%s)", ts, shortID))
+
+	totalTokens := int64OrZeroCollector(s.InputTokens) + int64OrZeroCollector(s.OutputTokens)
+	if totalTokens > 0 {
+		var tokenStr string
+		if totalTokens >= 1_000_000 {
+			tokenStr = fmt.Sprintf("%.1fM", float64(totalTokens)/1_000_000)
+		} else if totalTokens >= 1_000 {
+			tokenStr = fmt.Sprintf("%dK", totalTokens/1_000)
+		} else {
+			tokenStr = fmt.Sprintf("%d", totalTokens)
+		}
+		parts = append(parts, tokenStr+" tokens")
+	}
+
+	if s.EstimatedCostMicros.Valid && s.EstimatedCostMicros.Int64 > 0 {
+		parts = append(parts, fmt.Sprintf("$%.2f", float64(s.EstimatedCostMicros.Int64)/1_000_000))
+	}
+
+	sw.journal.AppendWorkLog(today, strings.Join(parts, ", "))
+}
+
+func int64OrZeroCollector(n sql.NullInt64) int64 {
+	if n.Valid {
+		return n.Int64
+	}
+	return 0
 }
 
 // --- helpers ---

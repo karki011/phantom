@@ -5,10 +5,18 @@ package safety
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
 )
+
+// journalAppender is the subset of journal.Service used by Safety
+// to append ward trigger events to the daily work log.
+type journalAppender interface {
+	AppendWorkLog(date, line string)
+}
 
 // Service is the entry point for the PhantomOS Safety Rules Engine.
 type Service struct {
@@ -17,6 +25,7 @@ type Service struct {
 	audit     *AuditStore
 	pii       bool // enable PII scanning on tool input before evaluation
 	emitEvent func(string, interface{})
+	journal   journalAppender
 }
 
 // NewService creates a Service. wardsDir is the directory containing ward YAML files.
@@ -39,6 +48,10 @@ func NewService(wardsDir string, writer *sql.DB, emitEvent func(string, interfac
 	svc.evaluator = NewEvaluator(svc.loader)
 	return svc, nil
 }
+
+// SetJournal injects the journal service so ward triggers are logged
+// to the daily work log.
+func (s *Service) SetJournal(j journalAppender) { s.journal = j }
 
 // EnablePIIScanning turns on PII masking of tool inputs before evaluation.
 func (s *Service) EnablePIIScanning() { s.pii = true }
@@ -75,6 +88,13 @@ func (s *Service) Evaluate(ctx context.Context, ev *stream.Event) []Evaluation {
 			case LevelWarn:
 				s.emitEvent("ward:warned", eval)
 			}
+		}
+
+		// Journal: log ward trigger to daily work log.
+		if s.journal != nil {
+			today := time.Now().Format("2006-01-02")
+			ts := time.Now().Format("15:04")
+			s.journal.AppendWorkLog(today, fmt.Sprintf("%s ⚠️ Ward triggered: %s", ts, eval.RuleName))
 		}
 
 		// Look up the rule to check Audit flag.

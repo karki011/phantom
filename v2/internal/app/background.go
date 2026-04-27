@@ -4,6 +4,7 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -21,6 +22,10 @@ func (a *App) startGitHubPoller() {
 		cachedCi      string // JSON of last-emitted []git.CiRun
 		cachedPrsList string // JSON of last-emitted []git.PrStatus
 		lastWorktree  string
+
+		// Journal state — tracks what we've already logged to avoid duplicates.
+		journalPrState  string // last logged PR state (e.g. "OPEN", "MERGED")
+		journalCiState  string // last logged CI outcome (e.g. "pass", "fail")
 	)
 
 	marshalOrEmpty := func(v any) string {
@@ -42,6 +47,8 @@ func (a *App) startGitHubPoller() {
 			cachedPr = ""
 			cachedCi = ""
 			cachedPrsList = ""
+			journalPrState = ""
+			journalCiState = ""
 			lastWorktree = wtId
 		}
 
@@ -100,6 +107,23 @@ func (a *App) startGitHubPoller() {
 			cachedPr = prJ
 			wailsRuntime.EventsEmit(a.ctx, EventPrUpdated, pr)
 			log.Info("app/GitHubPoller: pr:updated emitted", "hasPR", pr != nil)
+
+			// Journal: log PR state transitions (opened / merged).
+			if a.journal != nil && pr != nil {
+				projName := resolveProjectName(a, wtId)
+				newState := pr.State // OPEN, MERGED, CLOSED
+				if newState != journalPrState {
+					ts := time.Now().Format("15:04")
+					today := time.Now().Format("2006-01-02")
+					switch newState {
+					case "OPEN":
+						a.journal.AppendWorkLog(today, fmt.Sprintf("%s [%s] PR #%d opened: '%s'", ts, projName, pr.Number, pr.Title))
+					case "MERGED":
+						a.journal.AppendWorkLog(today, fmt.Sprintf("%s [%s] PR #%d merged", ts, projName, pr.Number))
+					}
+					journalPrState = newState
+				}
+			}
 		}
 
 		runs, _ := git.GetCiRuns(a.ctx, repoPath, branch)
@@ -111,6 +135,40 @@ func (a *App) startGitHubPoller() {
 			cachedCi = ciJ
 			wailsRuntime.EventsEmit(a.ctx, EventCiUpdated, runs)
 			log.Info("app/GitHubPoller: ci:updated emitted", "count", len(runs))
+
+			// Journal: log CI pass/fail transitions (only when all runs are complete).
+			if a.journal != nil && len(runs) > 0 {
+				allDone := true
+				anyFailed := false
+				for _, r := range runs {
+					if r.Conclusion == "" {
+						allDone = false
+						break
+					}
+					if r.Conclusion == "failure" {
+						anyFailed = true
+					}
+				}
+				if allDone {
+					var newCiState string
+					if anyFailed {
+						newCiState = "fail"
+					} else {
+						newCiState = "pass"
+					}
+					if newCiState != journalCiState {
+						ts := time.Now().Format("15:04")
+						today := time.Now().Format("2006-01-02")
+						projName := resolveProjectName(a, wtId)
+						if newCiState == "pass" {
+							a.journal.AppendWorkLog(today, fmt.Sprintf("%s [%s] CI: ✓ all checks passed", ts, projName))
+						} else {
+							a.journal.AppendWorkLog(today, fmt.Sprintf("%s [%s] CI: ✗ failed", ts, projName))
+						}
+						journalCiState = newCiState
+					}
+				}
+			}
 		}
 
 		// Shorten interval while any run is still in-progress.
@@ -153,6 +211,24 @@ func (a *App) startGitHubPoller() {
 			timer.Reset(interval)
 		}
 	}
+}
+
+// resolveProjectName returns a short project name for journal entries.
+// Falls back to the branch name if the workspace/project cannot be resolved.
+func resolveProjectName(a *App, worktreeId string) string {
+	if a.DB == nil || worktreeId == "" {
+		return "unknown"
+	}
+	q := db.New(a.DB.Reader)
+	ws, err := q.GetWorkspace(a.ctx, worktreeId)
+	if err != nil {
+		return "unknown"
+	}
+	proj, err := q.GetProject(a.ctx, ws.ProjectID)
+	if err != nil {
+		return ws.Name
+	}
+	return proj.Name
 }
 
 // startBackgroundFetch periodically fetches origin for all known projects.

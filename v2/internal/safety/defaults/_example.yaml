@@ -1,0 +1,21 @@
+# _example.yaml — Ward rule template
+# Copy this file, remove the leading underscore, and edit to taste.
+# The app auto-detects new .yaml files in ~/.phantom-os/wards/ via fsnotify.
+#
+# rules:
+#   - id: my-custom-rule
+#     name: My Custom Rule
+#     level: warn            # block | confirm | warn | log
+#     description: Describe what this rule does
+#     event_type: tool_use   # tool_use | user | assistant | tool_result | "" (all)
+#     tool: Bash             # Bash | Edit | Write | Read | "" (any tool)
+#     pattern: "rm\\s+-rf"   # Regex matched against tool input or message content
+#     path_pattern: ""       # Regex matched against file paths
+#     message: "Dangerous delete detected"
+#     allow_bypass: true     # Whether the user can dismiss and continue
+#     enabled: true
+#     audit: true            # Record matches to the audit trail
+#     tags:
+#       - custom
+#       - filesystem
+#     session_ids: []        # Empty = all sessions; or ["session-id-1"] to scope

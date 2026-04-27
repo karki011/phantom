@@ -1,7 +1,7 @@
 // PhantomOS v2 — Activity Journal styles
 // Author: Subash Karki
 
-import { style, keyframes } from '@vanilla-extract/css';
+import { style, keyframes, globalStyle } from '@vanilla-extract/css';
 import { vars } from './theme.css';
 
 // ── Animations ───────────────────────────────────────────────────────────────
@@ -621,4 +621,75 @@ export const weeklyFooter = style({
   fontFamily: vars.font.mono,
   fontSize: vars.fontSize.xs,
   color: vars.color.textSecondary,
+});
+
+// ── Dropdown Menu (project filter) ──────────────────────────────────────────
+
+export const dropdownTrigger = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  backgroundColor: vars.color.bgTertiary,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.sm,
+  padding: `4px ${vars.space.md}`,
+  fontSize: '0.73rem',
+  fontFamily: vars.font.mono,
+  color: vars.color.textPrimary,
+  cursor: 'pointer',
+  outline: 'none',
+  minWidth: '120px',
+  transition: `border-color ${vars.animation.fast} ease`,
+  selectors: {
+    '&:hover': { borderColor: vars.color.borderHover },
+    '&[data-expanded]': { borderColor: vars.color.accent },
+  },
+});
+
+export const dropdownTriggerIcon = style({
+  height: '12px',
+  width: '12px',
+  flexShrink: 0,
+  color: vars.color.textDisabled,
+  transition: `transform ${vars.animation.fast} ease`,
+  selectors: {
+    '&[data-expanded]': { transform: 'rotate(180deg)' },
+  },
+});
+
+export const dropdownContent = style({
+  backgroundColor: vars.color.bgSecondary,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+  padding: `${vars.space.xs} 0`,
+  boxShadow: vars.shadow.md,
+  zIndex: 500,
+  maxHeight: '200px',
+  overflowY: 'auto',
+  outline: 'none',
+  transformOrigin: 'var(--kb-menu-content-transform-origin)',
+});
+
+export const dropdownItem = style({
+  display: 'flex',
+  alignItems: 'center',
+  padding: `${vars.space.xs} ${vars.space.md}`,
+  fontFamily: vars.font.mono,
+  fontSize: '0.73rem',
+  color: vars.color.textPrimary,
+  cursor: 'pointer',
+  outline: 'none',
+  borderRadius: 0,
+  userSelect: 'none',
+  transition: `background ${vars.animation.fast} ease, color ${vars.animation.fast} ease`,
+  selectors: {
+    '&[data-highlighted]': {
+      backgroundColor: vars.color.bgHover,
+      color: vars.color.accent,
+    },
+  },
+});
+
+export const dropdownItemActive = style({
+  color: vars.color.accent,
 });

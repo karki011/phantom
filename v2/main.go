@@ -14,6 +14,7 @@ import (
 
 	"github.com/subashkarki/phantom-os-v2/internal/app"
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
+	"github.com/subashkarki/phantom-os-v2/internal/journal"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/linker"
 	"github.com/subashkarki/phantom-os-v2/internal/safety"
@@ -51,10 +52,14 @@ func main() {
 	// 4. Create terminal manager.
 	term := terminal.New()
 
-	// 5. Create App and inject services.
+	// 5. Create shared journal service (single instance for all components).
+	journalSvc := journal.NewService("")
+
+	// 5a. Create App and inject services.
 	a := app.New()
 	a.SetDB(database)
 	a.SetTerminal(term)
+	a.SetJournal(journalSvc)
 
 	// 5b. Create terminal-session linker.
 	lnk := linker.New(queries, term, func(name string, data interface{}) {
@@ -81,13 +86,17 @@ func main() {
 		app.EmitEvent(a.Ctx(), name, data)
 	})
 	sessionWatcher.SetEnricher(enricher)
+	sessionWatcher.SetJournal(journalSvc)
+	go enricher.StartPeriodicEnrichment(context.Background())
 	registry.Register(sessionWatcher)
 	registry.Register(collector.NewJSONLScanner(queries, func(name string, data interface{}) {
 		app.EmitEvent(a.Ctx(), name, data)
 	}))
-	registry.Register(collector.NewActivityPoller(queries, func(name string, data interface{}) {
+	activityPoller := collector.NewActivityPoller(queries, func(name string, data interface{}) {
 		app.EmitEvent(a.Ctx(), name, data)
-	}))
+	})
+	activityPoller.SetJournal(journalSvc)
+	registry.Register(activityPoller)
 	registry.Register(collector.NewTaskWatcher(queries, func(name string, data interface{}) {
 		app.EmitEvent(a.Ctx(), name, data)
 	}, onTaskComplete))
@@ -152,6 +161,7 @@ func main() {
 	if err != nil {
 		log.Printf("phantomos: safety service warning: %v", err)
 	} else {
+		safetySvc.SetJournal(journalSvc)
 		a.SetSafety(safetySvc)
 	}
 

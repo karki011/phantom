@@ -1,14 +1,20 @@
-// Wails bindings for Activity Journal — session enrichment and daily stats.
+// Wails bindings for Activity Journal — session enrichment, daily stats,
+// and file-based daily journal (v2: Morning Brief, Work Log, End of Day, Notes).
 // Author: Subash Karki
 package app
 
 import (
 	"database/sql"
+	"fmt"
+	"time"
 
 	"github.com/charmbracelet/log"
 
 	"github.com/subashkarki/phantom-os-v2/internal/db"
+	"github.com/subashkarki/phantom-os-v2/internal/journal"
 )
+
+// ── Legacy types (session-based journal) ─────────────────────────────────────
 
 // JournalEntry is the frontend-facing journal data for a session.
 // It unwraps sql.Null* types from the generated Session struct.
@@ -108,6 +114,8 @@ func int64OrZero(n sql.NullInt64) int64 {
 	}
 	return 0
 }
+
+// ── Legacy session-based bindings ────────────────────────────────────────────
 
 // GetSessionsByDate returns all sessions for a specific day.
 func (a *App) GetSessionsByDate(date string) []JournalEntry {
@@ -212,4 +220,116 @@ func (a *App) GetLastActiveSession() *JournalEntry {
 	}
 	entry := sessionToJournalEntry(session)
 	return &entry
+}
+
+// ── v2 Daily Journal bindings ────────────────────────────────────────────────
+
+// getJournalService returns a lazily-initialized journal service.
+func (a *App) getJournalService() *journal.Service {
+	return journal.NewService("")
+}
+
+// getJournalGenerator returns a generator backed by the reader DB.
+func (a *App) getJournalGenerator() *journal.Generator {
+	q := db.New(a.DB.Reader)
+	return journal.NewGenerator(q)
+}
+
+// getProjectInfos returns ProjectInfo for all registered projects.
+func (a *App) getProjectInfos() []journal.ProjectInfo {
+	q := db.New(a.DB.Reader)
+	projects, err := q.ListProjects(a.ctx)
+	if err != nil {
+		log.Error("app/bindings_journal: ListProjects for journal", "err", err)
+		return []journal.ProjectInfo{}
+	}
+	infos := make([]journal.ProjectInfo, 0, len(projects))
+	for _, p := range projects {
+		infos = append(infos, journal.ProjectInfo{
+			ID:       p.ID,
+			Name:     p.Name,
+			RepoPath: p.RepoPath,
+		})
+	}
+	return infos
+}
+
+// GetDailyJournalEntry returns the file-based journal entry for a date.
+// If project is non-empty, returns the project-scoped entry.
+func (a *App) GetDailyJournalEntry(date string, project string) journal.JournalEntry {
+	return a.getJournalService().GetEntry(date, project)
+}
+
+// GenerateMorningBrief generates the morning brief for a date (immutable once set).
+// If project is non-empty, generates a project-scoped brief.
+// Returns the updated entry.
+func (a *App) GenerateMorningBrief(date string, project string) journal.JournalEntry {
+	svc := a.getJournalService()
+	entry := svc.GetEntry(date, project)
+
+	// Already generated — return as-is.
+	if entry.MorningGeneratedAt > 0 {
+		return entry
+	}
+
+	gen := a.getJournalGenerator()
+	projects := a.getProjectInfos()
+	content := gen.GenerateMorningBrief(a.ctx, projects, project)
+
+	svc.SetMorningBrief(date, content, project)
+	return svc.GetEntry(date, project)
+}
+
+// GenerateEndOfDay generates the end-of-day recap for a date (immutable once set).
+// If project is non-empty, generates a project-scoped recap.
+// Returns the updated entry.
+func (a *App) GenerateEndOfDay(date string, project string) journal.JournalEntry {
+	svc := a.getJournalService()
+	entry := svc.GetEntry(date, project)
+
+	// Already generated — return as-is.
+	if entry.EodGeneratedAt > 0 {
+		return entry
+	}
+
+	gen := a.getJournalGenerator()
+	projects := a.getProjectInfos()
+	content := gen.GenerateEndOfDay(a.ctx, projects, project)
+
+	svc.SetEndOfDay(date, content, project)
+	return svc.GetEntry(date, project)
+}
+
+// UpdateJournalNotes updates the user-editable notes section for a date.
+// If project is non-empty, updates the project-scoped entry.
+// Returns the updated entry.
+func (a *App) UpdateJournalNotes(date string, project string, notes string) journal.JournalEntry {
+	svc := a.getJournalService()
+	svc.SetNotes(date, notes, project)
+	return svc.GetEntry(date, project)
+}
+
+// ListJournalDates returns the most recent dates that have journal files.
+func (a *App) ListJournalDates(limit int) []string {
+	return a.getJournalService().ListDates(limit)
+}
+
+// AppendJournalWorkLog appends a line to the work log for a date.
+func (a *App) AppendJournalWorkLog(date, line string) {
+	a.getJournalService().AppendWorkLog(date, line)
+}
+
+// AppendTodayWorkLog is a convenience helper called from the session watcher.
+func (a *App) AppendTodayWorkLog(line string) {
+	today := time.Now().Format("2006-01-02")
+	a.getJournalService().AppendWorkLog(today, line)
+}
+
+// FormatWorkLogLine creates a formatted work log line with timestamp.
+func FormatWorkLogLine(projectName, message string) string {
+	ts := time.Now().Format("15:04")
+	if projectName != "" {
+		return fmt.Sprintf("%s [%s] %s", ts, projectName, message)
+	}
+	return fmt.Sprintf("%s %s", ts, message)
 }
