@@ -15,7 +15,7 @@ import { prStatus, setPrStatus, isCreatingPr, setIsCreatingPr, ghAvailable, setG
 import { SessionControls } from '@/shared/SessionControls/SessionControls';
 import { NewWorktreeDialog } from '@/shared/NewWorktreeDialog/NewWorktreeDialog';
 import { WardManager } from '@/shared/WardManager/WardManager';
-import { getWorkspaceStatus, gitPull, gitPush, getPrStatus, getCiRuns, getCiRunsForBranch, createPrWithAI, listOpenPrs, isGhCliAvailable, getCheckAnnotations, getFailedSteps, getSessionsByProject } from '@/core/bindings';
+import { getWorkspaceStatus, gitPull, gitPush, getPrStatus, getCiRuns, getCiRunsForBranch, createPrWithAI, listOpenPrs, isGhCliAvailable, getCheckAnnotations, getFailedSteps, getSessionsByProject, getAllRecipes, getFavoriteRecipes, toggleRecipeFavorite } from '@/core/bindings';
 import { openURL } from '@/core/bindings/shell';
 import { getWards } from '@/core/bindings/wards';
 import type { WardRule } from '@/core/bindings/wards';
@@ -24,7 +24,8 @@ import { showToast, showWarningToast } from '@/shared/Toast/Toast';
 import { Tip } from '@/shared/Tip/Tip';
 import { vars } from '@/styles/theme.css';
 import { formatCost, formatDuration } from '@/core/signals/journal';
-import type { RepoStatus, PrStatus as PrStatusType, CiRun, CheckAnnotation, FailedStep, JournalEntry } from '@/core/types';
+import { openRecipePicker, recipePickerOpen } from '@/core/signals/recipes';
+import type { RepoStatus, PrStatus as PrStatusType, CiRun, CheckAnnotation, FailedStep, JournalEntry, EnrichedRecipe } from '@/core/types';
 import * as styles from '@/styles/home.css';
 
 
@@ -240,6 +241,108 @@ function RecentSessions(props: { repoPath: string | null }) {
   );
 }
 
+function RecipesCard(props: { projectId: string | null; repoPath: string | null }) {
+  const [allRecipes, setAllRecipes] = createSignal<EnrichedRecipe[]>([]);
+  const [activeTab, setActiveTab] = createSignal<'all' | 'favorites'>('favorites');
+
+  const loadRecipes = () => {
+    const projId = props.projectId;
+    if (!projId) { setAllRecipes([]); return; }
+    getAllRecipes(projId).then(setAllRecipes);
+  };
+
+  createEffect(on(() => props.projectId, loadRecipes));
+  createEffect(on(recipePickerOpen, (open) => {
+    if (!open) loadRecipes();
+  }));
+
+  const favoriteRecipes = () => allRecipes().filter((r) => r.favorite);
+  const displayedRecipes = () => activeTab() === 'favorites' ? favoriteRecipes() : allRecipes();
+
+  const handleRun = (recipe: EnrichedRecipe) => {
+    addTabWithData('terminal', recipe.label, {
+      cwd: props.repoPath ?? '',
+      command: recipe.command,
+    });
+  };
+
+  const handleToggleFavorite = async (e: MouseEvent, recipe: EnrichedRecipe) => {
+    e.stopPropagation();
+    const projId = props.projectId;
+    if (!projId) return;
+    if (!recipe.favorite && favoriteRecipes().length >= 3) return;
+    const newState = await toggleRecipeFavorite(projId, recipe.id);
+    setAllRecipes((prev) => prev.map((r) => r.id === recipe.id ? { ...r, favorite: newState } : r));
+  };
+
+  return (
+    <div class={styles.recipesCard}>
+      <div class={styles.recipesCardHeader}>
+        <span class={styles.recipesCardTitle}>Recipes</span>
+        <Show when={allRecipes().length > 0}>
+          <span class={styles.recipesCardCount}>{allRecipes().length}</span>
+        </Show>
+        <button type="button" class={styles.wardManageButton} onClick={() => openRecipePicker()}>
+          + Custom
+        </button>
+      </div>
+
+      <Show when={allRecipes().length > 0} fallback={
+        <div class={styles.pinnedRecipesEmpty}>
+          No recipes detected — add a package.json or Makefile
+        </div>
+      }>
+        <div class={styles.recipesTabBar}>
+          <button
+            type="button"
+            class={`${styles.recipesTab} ${activeTab() === 'all' ? styles.recipesTabActive : ''}`}
+            onClick={() => setActiveTab('all')}
+          >
+            All ({allRecipes().length})
+          </button>
+          <button
+            type="button"
+            class={`${styles.recipesTab} ${activeTab() === 'favorites' ? styles.recipesTabActive : ''}`}
+            onClick={() => setActiveTab('favorites')}
+          >
+            ★ Favorites ({favoriteRecipes().length})
+          </button>
+        </div>
+
+        <div class={styles.recipesListScroll}>
+          <Show when={displayedRecipes().length > 0} fallback={
+            <div class={styles.pinnedRecipesEmpty}>
+              {activeTab() === 'favorites'
+                ? 'No favorites yet — star recipes to pin them here'
+                : 'No recipes found'}
+            </div>
+          }>
+            <For each={displayedRecipes()}>
+              {(recipe) => (
+                <div class={styles.recipeRow} onClick={() => handleRun(recipe)}>
+                  <button
+                    type="button"
+                    class={styles.recipeStarButton}
+                    onClick={(e) => handleToggleFavorite(e, recipe)}
+                  >
+                    <span style={{ color: recipe.favorite ? vars.color.accent : vars.color.textDisabled }}>
+                      {recipe.favorite ? '★' : '☆'}
+                    </span>
+                  </button>
+                  <span class={styles.recipeIcon}>{recipe.icon || '▶'}</span>
+                  <span class={styles.recipeLabel}>{recipe.label}</span>
+                  <span class={styles.recipeCommand}>{recipe.command}</span>
+                  <span class={styles.recipeCategoryBadge}>{recipe.category}</span>
+                </div>
+              )}
+            </For>
+          </Show>
+        </div>
+      </Show>
+    </div>
+  );
+}
+
 export default function WorktreeHome() {
   const activeWorktree = createMemo(() => {
     const wtId = activeWorktreeId();
@@ -433,87 +536,69 @@ export default function WorktreeHome() {
 
   return (
     <div class={styles.homeContainer}>
+      {/* Two-column layout: Quick Actions + Recipes */}
+      <div class={styles.homeDashboardGrid}>
+        {/* Left: Quick Actions */}
+        <div class={styles.quickLaunchGrid}>
+          <button
+            class={styles.quickLaunchCard}
+            type="button"
+            onClick={() => addTabWithData('terminal', 'Terminal', { cwd: activeWorktree()?.worktree_path ?? '' })}
+          >
+            <div class={styles.quickLaunchShimmer} />
+            <svg class={styles.quickLaunchIcon} viewBox="0 0 32 32" fill="none" aria-hidden="true">
+              <rect x="3" y="6" width="26" height="20" rx="3" stroke="currentColor" stroke-width="1.8" />
+              <path d="M9 13l4 3-4 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M17 19h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+            <span class={styles.quickLaunchLabel}>Terminal</span>
+            <span class={styles.quickLaunchDesc}>Shell in this worktree</span>
+          </button>
+
+          <button
+            class={styles.quickLaunchCard}
+            type="button"
+            onClick={() => {
+              if (activeWorktree()?.type === 'branch') {
+                setWorktreeOpen(true);
+              } else {
+                addTabWithData('terminal', activeProviderLabel(), {
+                  cwd: activeWorktree()?.worktree_path ?? '',
+                  command: activeProviderCommand(),
+                });
+              }
+            }}
+          >
+            <div class={styles.quickLaunchShimmer} />
+            <svg class={styles.quickLaunchIcon} viewBox="0 0 32 32" fill="none" aria-hidden="true">
+              <path d="M16 4l2.2 5.2L24 10.4l-4 4.2.6 5.4L16 17.6 11.4 20l.6-5.4-4-4.2 5.8-1.2L16 4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none" />
+              <circle cx="25" cy="24" r="4" stroke="currentColor" stroke-width="1.6" fill="none" />
+              <path d="M25 22v4M23 24h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+            </svg>
+            <span class={styles.quickLaunchLabel}>New Session</span>
+            <span class={styles.quickLaunchDesc}>AI-powered workspace</span>
+          </button>
+
+          <button class={`${styles.quickLaunchCard} ${styles.quickLaunchCardDisabled}`} type="button">
+            <span class={styles.quickLaunchBadge}>Soon</span>
+            <svg class={styles.quickLaunchIcon} viewBox="0 0 32 32" fill="none" aria-hidden="true">
+              <path d="M5 8A3 3 0 018 5h16a3 3 0 013 3v12a3 3 0 01-3 3h-6l-5 4v-4H8a3 3 0 01-3-3V8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+              <path d="M11 11h10M11 16h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
+            <span class={styles.quickLaunchLabel}>Chat</span>
+            <span class={styles.quickLaunchDesc}>Talk with AI</span>
+          </button>
+        </div>
+
+        {/* Right: Recipes */}
+        <RecipesCard projectId={activeProject()?.id ?? null} repoPath={activeProject()?.repo_path ?? null} />
+      </div>
+
       {/* Combined Status + Activity Card */}
       <div class={styles.statusCard}>
         <div class={styles.statusHeader}>
           <span class={styles.statusIcon}><GitBranch size={14} /></span>
           <span class={styles.statusTitle}>Workspace Status</span>
-
-          {/* Inline Quick Actions */}
-          <div class={styles.quickActionsInline}>
-            {/* Terminal */}
-            <Tip label="Open terminal in this worktree" placement="bottom">
-              <button class={styles.quickActionInlineButton} type="button" onClick={() => addTabWithData('terminal', 'Terminal', { cwd: activeWorktree()?.worktree_path ?? '' })}>
-                <svg class={styles.quickActionInlineIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <rect x="1.5" y="3" width="13" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3" />
-                  <path d="M4.5 6.5l2 1.5-2 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
-                  <path d="M8.5 9.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-                </svg>
-                Terminal
-              </button>
-            </Tip>
-
-            {/* New Session */}
-            <Tip label={activeWorktree()?.type === 'branch' ? 'Create worktree + start AI session' : 'Start AI session in this worktree'} placement="bottom">
-              <button
-                class={styles.quickActionInlineButton}
-                type="button"
-                onClick={() => {
-                  if (activeWorktree()?.type === 'branch') {
-                    setWorktreeOpen(true);
-                  } else {
-                    addTabWithData('terminal', activeProviderLabel(), {
-                      cwd: activeWorktree()?.worktree_path ?? '',
-                      command: activeProviderCommand(),
-                    });
-                  }
-                }}
-              >
-                <svg class={styles.quickActionInlineIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path d="M8 2l1.1 2.6L12 5.2l-2 2.1.3 2.7L8 8.8 5.7 10l.3-2.7-2-2.1 2.9-.6L8 2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none" />
-                  <circle cx="12.5" cy="12" r="2" stroke="currentColor" stroke-width="1.2" fill="none" />
-                  <path d="M12.5 11v2M11.5 12h2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" />
-                </svg>
-                New Session
-              </button>
-            </Tip>
-
-            {/* Editor */}
-            <Tip label="Code editor (coming soon)" placement="bottom">
-              <button class={styles.quickActionInlineButton} type="button">
-                <svg class={styles.quickActionInlineIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <rect x="2.5" y="2" width="11" height="12" rx="1.5" stroke="currentColor" stroke-width="1.3" />
-                  <path d="M5 5.5h6M5 8h6M5 10.5h3.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
-                </svg>
-                Editor
-                <span class={styles.quickActionInlineHint}>soon</span>
-              </button>
-            </Tip>
-
-            {/* Chat */}
-            <Tip label="Chat with AI (coming soon)" placement="bottom">
-              <button class={styles.quickActionInlineButton} type="button">
-                <svg class={styles.quickActionInlineIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path d="M2.5 4A1.5 1.5 0 014 2.5h8A1.5 1.5 0 0113.5 4v6A1.5 1.5 0 0112 11.5H9l-2.5 2v-2H4A1.5 1.5 0 012.5 10V4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
-                  <path d="M5.5 5.5h5M5.5 8h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
-                </svg>
-                Chat
-                <span class={styles.quickActionInlineHint}>soon</span>
-              </button>
-            </Tip>
-
-            {/* Recipe */}
-            <Tip label="Run a recipe (coming soon)" placement="bottom">
-              <button class={styles.quickActionInlineButton} type="button">
-                <svg class={styles.quickActionInlineIcon} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.3" />
-                  <path d="M6.8 5.5l3.5 2.5-3.5 2.5V5.5z" fill="currentColor" stroke="currentColor" stroke-width="0.5" stroke-linejoin="round" />
-                </svg>
-                Recipe
-                <span class={styles.quickActionInlineHint}>soon</span>
-              </button>
-            </Tip>
-          </div>
 
           <Tip label={refreshing() ? 'Refreshing...' : 'Refresh workspace status, PR, and CI data'} placement="bottom">
             <button

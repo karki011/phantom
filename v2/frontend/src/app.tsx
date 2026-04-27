@@ -17,6 +17,7 @@ import { initTerminalPrefs } from './core/terminal/registry';
 import { initZoom } from './core/signals/zoom';
 import { OnboardingFlow } from './screens/onboarding';
 import { BootScreen } from './screens/boot';
+import { ShutdownCeremony, type ShutdownStats } from './screens/shutdown';
 import { playSound } from './core/audio/engine';
 import { SystemHeader } from './components/layout/SystemHeader';
 import { TopTabBar } from './components/layout/TopTabBar';
@@ -31,9 +32,12 @@ import { ToastRegion } from './shared/Toast/Toast';
 import { SettingsDialog } from './shared/SettingsDialog/SettingsDialog';
 import { QuickOpen } from './shared/QuickOpen/QuickOpen';
 import { CommandPalette } from './shared/CommandPalette';
+import { RecipePicker } from './shared/RecipePicker';
 import { ApprovalModal } from './shared/ApprovalModal/ApprovalModal';
 import { PromptComposer } from './shared/PromptComposer';
 import { composerVisible, closeComposer } from './core/signals/composer';
+import { registerShutdownHandler } from './core/signals/shutdown';
+import { generateEndOfDay, generateMorningBrief } from './core/bindings/journal';
 import { DocsScreen } from './screens/docs';
 import { SystemCockpit } from './screens/system/SystemCockpit';
 
@@ -42,6 +46,8 @@ export function App() {
   const [showOnboarding, setShowOnboarding] = createSignal(false);
   const [bootingUp, setBootingUp] = createSignal(false);
   const [bootCeremonyDone, setBootCeremonyDone] = createSignal(false);
+  const [shuttingDown, setShuttingDown] = createSignal(false);
+  const [shutdownStats, setShutdownStats] = createSignal<ShutdownStats | undefined>();
 
   onMount(async () => {
     document.body.classList.add(shadowMonarchDarkTheme);
@@ -71,6 +77,10 @@ export function App() {
     const { loadActiveProvider } = await import('@/core/signals/active-provider');
     loadActiveProvider();
 
+    // Fire morning brief generation in background so it's ready when user opens digest
+    const today = new Date().toISOString().slice(0, 10);
+    generateMorningBrief(today).catch(() => {});
+
     setReady(true);
   });
 
@@ -83,6 +93,32 @@ export function App() {
     if (wtId) untrack(() => switchWorkspace(wtId));
   });
 
+
+  async function handleShutdown() {
+    if (shuttingDown()) return;
+    // Fire EOD generation in background while ceremony plays
+    const today = new Date().toISOString().slice(0, 10);
+    generateEndOfDay(today).catch(() => {});
+
+    try {
+      const raw = await window.go?.app.App.GetShutdownStats();
+      if (raw) {
+        setShutdownStats({
+          sessionCount: raw.session_count ?? 0,
+          totalTokens: raw.total_tokens ?? 0,
+          totalCost: raw.total_cost ?? 0,
+          uptime: raw.uptime ?? '',
+        });
+      }
+    } catch {}
+    setShuttingDown(true);
+  }
+
+  function handleShutdownComplete() {
+    window.go?.app.App.QuitApp();
+  }
+
+  registerShutdownHandler(handleShutdown);
 
   function handleOnboardingComplete() {
     setShowOnboarding(false);
@@ -99,8 +135,13 @@ export function App() {
       <SettingsDialog />
       <QuickOpen />
       <CommandPalette />
+      <RecipePicker />
       <DocsScreen />
       <PromptComposer visible={composerVisible()} onClose={closeComposer} />
+      <Show when={shuttingDown()}>
+        <ShutdownCeremony stats={shutdownStats()} onComplete={handleShutdownComplete} />
+      </Show>
+
       <Show when={showOnboarding()}>
         <OnboardingFlow onComplete={handleOnboardingComplete} />
       </Show>

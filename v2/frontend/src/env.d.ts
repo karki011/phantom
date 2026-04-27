@@ -40,6 +40,8 @@ interface Window {
         RemoveCustomProvider(name: string): Promise<void>;
         ResetProviderOverride(name: string): Promise<void>;
         GetActiveProvider(): Promise<string>;
+        QuitApp(): Promise<void>;
+        GetShutdownStats(): Promise<{ session_count: number; total_tokens: number; total_cost: number; uptime: string }>;
       };
     };
   };

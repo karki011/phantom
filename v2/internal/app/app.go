@@ -357,6 +357,65 @@ func (a *App) Shutdown(ctx context.Context) {
 	}
 }
 
+// QuitApp is called by the frontend after the shutdown ceremony completes.
+func (a *App) QuitApp() {
+	wailsRuntime.Quit(a.ctx)
+}
+
+// GetShutdownStats returns session stats for the shutdown ceremony display.
+func (a *App) GetShutdownStats() map[string]interface{} {
+	result := map[string]interface{}{
+		"session_count": 0,
+		"total_tokens":  int64(0),
+		"total_cost":    float64(0),
+		"uptime":        "",
+	}
+	if a.DB == nil {
+		return result
+	}
+
+	q := db.New(a.DB.Reader)
+	allSessions, err := q.ListSessions(a.ctx)
+	if err != nil {
+		return result
+	}
+
+	todayStart := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Local).Unix()
+	var count int
+	var totalTokens int64
+	var totalCostMicros int64
+	for _, s := range allSessions {
+		if s.StartedAt.Valid && s.StartedAt.Int64 >= todayStart {
+			count++
+			if s.InputTokens.Valid {
+				totalTokens += s.InputTokens.Int64
+			}
+			if s.OutputTokens.Valid {
+				totalTokens += s.OutputTokens.Int64
+			}
+			if s.EstimatedCostMicros.Valid {
+				totalCostMicros += s.EstimatedCostMicros.Int64
+			}
+		}
+	}
+	result["session_count"] = count
+	result["total_tokens"] = totalTokens
+	result["total_cost"] = float64(totalCostMicros) / 1_000_000
+
+	if a.startTime.IsZero() {
+		result["uptime"] = ""
+	} else {
+		dur := time.Since(a.startTime)
+		if dur >= time.Hour {
+			result["uptime"] = fmt.Sprintf("%dh%dm", int(dur.Hours()), int(dur.Minutes())%60)
+		} else {
+			result["uptime"] = fmt.Sprintf("%dm", int(dur.Minutes()))
+		}
+	}
+
+	return result
+}
+
 func snapshotPath() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".phantom-os", "terminal-snapshots.json")

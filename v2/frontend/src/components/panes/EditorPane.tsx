@@ -28,7 +28,6 @@ import { activeTab, activePaneId, setActivePaneInTab, closePane, removeTab, tabs
 import { activeWorktreeId } from '@/core/signals/app';
 import { worktreeMap } from '@/core/signals/worktrees';
 import { setSelectedFile, setRevealFilePath, setRightSidebarTab } from '@/core/signals/files';
-import { showToast } from '@/shared/Toast/Toast';
 import * as styles from '@/styles/editor.css';
 import * as ctxStyles from '@/styles/right-sidebar.css';
 
@@ -734,15 +733,15 @@ export default function EditorPane(props: EditorPaneProps) {
                 </ContextMenu.Trigger>
                 <ContextMenu.Portal>
                   <ContextMenu.Content class={ctxStyles.contextMenuContent}>
-                    <ContextMenu.Item class={ctxStyles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(file.label); showToast('Copied', file.label); }}>
+                    <ContextMenu.Item class={ctxStyles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(file.label); }}>
                       <Clipboard size={13} />
                       Copy File Name
                     </ContextMenu.Item>
-                    <ContextMenu.Item class={ctxStyles.contextMenuItem} onSelect={() => { const rel = relativePathFor(file.filePath); navigator.clipboard.writeText(rel); showToast('Copied', rel); }}>
+                    <ContextMenu.Item class={ctxStyles.contextMenuItem} onSelect={() => { const rel = relativePathFor(file.filePath); navigator.clipboard.writeText(rel); }}>
                       <Clipboard size={13} />
                       Copy Relative Path
                     </ContextMenu.Item>
-                    <ContextMenu.Item class={ctxStyles.contextMenuItem} onSelect={() => { const abs = absolutePathFor(file.filePath); navigator.clipboard.writeText(abs); showToast('Copied', abs); }}>
+                    <ContextMenu.Item class={ctxStyles.contextMenuItem} onSelect={() => { const abs = absolutePathFor(file.filePath); navigator.clipboard.writeText(abs); }}>
                       <Clipboard size={13} />
                       Copy Absolute Path
                     </ContextMenu.Item>

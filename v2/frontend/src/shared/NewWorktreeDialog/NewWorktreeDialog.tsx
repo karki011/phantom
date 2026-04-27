@@ -12,7 +12,7 @@ import { activeProviderCommand, activeProviderLabel } from '@/core/signals/activ
 import { refreshProjects } from '@/core/signals/projects';
 import { bootstrapWorktrees, selectWorktree } from '@/core/signals/worktrees';
 import { addTabWithData } from '@/core/panes/signals';
-import { showToast, showWarningToast } from '@/shared/Toast/Toast';
+import { showWarningToast } from '@/shared/Toast/Toast';
 import * as styles from './NewWorktreeDialog.css';
 
 interface NewWorktreeDialogProps {
@@ -107,7 +107,6 @@ export function NewWorktreeDialog(props: NewWorktreeDialogProps) {
           });
         }
         props.onOpenChange(false);
-        showToast('Worktree created', `Branch "${branch}" is ready`);
         props.onCreated?.();
       } else {
         showWarningToast('Failed to create worktree', 'Check that the branch name is valid');

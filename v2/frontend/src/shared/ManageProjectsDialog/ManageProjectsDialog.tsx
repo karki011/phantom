@@ -6,7 +6,6 @@ import { Checkbox } from '@kobalte/core/checkbox';
 import { PhantomLoader } from '@/shared/PhantomLoader/PhantomLoader';
 import { buttonRecipe } from '@/styles/recipes.css';
 import { removeProject } from '@/core/bindings';
-import { showToast } from '@/shared/Toast/Toast';
 import { refreshProjects } from '@/core/signals/projects';
 import { filteredProjects, worktreeMap, bootstrapWorktrees } from '@/core/signals/worktrees';
 import { PhantomModal, phantomModalStyles } from '@/shared/PhantomModal/PhantomModal';
@@ -60,7 +59,6 @@ export function ManageProjectsDialog(props: ManageProjectsDialogProps) {
     await bootstrapWorktrees();
     setRemoving(false);
     props.onOpenChange(false);
-    showToast('Projects removed', `Successfully removed ${count} ${count === 1 ? 'project' : 'projects'}`);
   }
 
   const selectedCount = () => selected().size;

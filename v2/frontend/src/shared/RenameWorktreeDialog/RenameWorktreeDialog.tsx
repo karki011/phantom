@@ -4,7 +4,7 @@
 import { createSignal } from 'solid-js';
 import { TextField } from '@kobalte/core/text-field';
 import { PhantomModal, phantomModalStyles } from '@/shared/PhantomModal/PhantomModal';
-import { showToast, showWarningToast } from '@/shared/Toast/Toast';
+import { showWarningToast } from '@/shared/Toast/Toast';
 import { renameWorktree } from '@/core/bindings';
 import { refreshAllWorktrees } from '@/core/signals/worktrees';
 import { buttonRecipe } from '@/styles/recipes.css';
@@ -28,7 +28,6 @@ export function RenameWorktreeDialog(props: RenameWorktreeDialogProps) {
     const ok = await renameWorktree(props.worktreeId, newName);
     setLoading(false);
     if (ok) {
-      showToast('Renamed', `Worktree renamed to ${newName}`);
       await refreshAllWorktrees();
       props.onClose();
     } else {

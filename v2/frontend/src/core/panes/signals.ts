@@ -126,7 +126,7 @@ export function focusOrCreateTab(paneType: PaneType, label?: string, data?: Reco
   if (data) {
     addTabWithData(paneType, label ?? paneType, data);
   } else {
-    addTab(paneType);
+    addTabWithData(paneType, label ?? paneType, {});
   }
 }
 

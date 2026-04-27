@@ -20,7 +20,7 @@ import {
   bootstrapWorktrees,
 } from '@/core/signals/worktrees';
 import { addProject, browseDirectory, cloneRepository, isGitRepo, initGitRepo } from '@/core/bindings';
-import { showToast, showWarningToast } from '@/shared/Toast/Toast';
+import { showWarningToast } from '@/shared/Toast/Toast';
 import { refreshProjects } from '@/core/signals/projects';
 import { ProjectSection } from './ProjectSection';
 import { ResizeHandle } from './ResizeHandle';
@@ -50,7 +50,6 @@ export function WorktreeSidebar() {
     await addProject(path);
     await refreshProjects();
     await bootstrapWorktrees();
-    showToast('Project added', path.split('/').pop() ?? path);
   }
 
   async function handleConfirmGitInit() {
@@ -60,7 +59,6 @@ export function WorktreeSidebar() {
     await addProject(path);
     await refreshProjects();
     await bootstrapWorktrees();
-    showToast('Project initialized', `Git repo created and project added`);
   }
 
   const [scanOpen, setScanOpen] = createSignal(false);

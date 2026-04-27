@@ -21,7 +21,6 @@ import { worktreeMap } from '@/core/signals/worktrees';
 import { listWorkspaceFiles, listWorkspaceDir, searchWorkspaceFiles, revealInFinder, openInFinder, openInDefaultApp, createFile, createFolder, deleteFile } from '@/core/bindings';
 import { addTabWithData } from '@/core/panes/signals';
 import { openFileInEditor } from '@/core/editor/open-file';
-import { showToast } from '@/shared/Toast/Toast';
 import type { FileEntry } from '@/core/types';
 
 // ── Base path helper ─────────────────────────────────────────────────────────
@@ -167,24 +166,21 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
             <ContextMenu.Item class={styles.contextMenuItem} onSelect={async () => {
               const wtId = activeWorktreeId();
               if (!wtId) return;
-              const ok = await deleteFile(wtId, props.node.path);
-              if (ok) {
-                showToast('Deleted', props.node.name);
-              }
+              await deleteFile(wtId, props.node.path);
             }}>
               <Trash2 size={13} />
               Delete
             </ContextMenu.Item>
             <ContextMenu.Separator class={styles.contextMenuSeparator} />
-            <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.node.name); showToast('Copied', props.node.name); }}>
+            <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.node.name); }}>
               <Clipboard size={13} />
               Copy File Name
             </ContextMenu.Item>
-            <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.node.path); showToast('Copied', props.node.path); }}>
+            <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.node.path); }}>
               <Clipboard size={13} />
               Copy Path
             </ContextMenu.Item>
-            <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(absolutePath()); showToast('Copied', absolutePath()); }}>
+            <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(absolutePath()); }}>
               <Clipboard size={13} />
               Copy Absolute Path
             </ContextMenu.Item>
@@ -228,7 +224,6 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
                     ? await createFile(wtId, newPath)
                     : await createFolder(wtId, newPath);
                   if (ok) {
-                    showToast('Created', newPath);
                     setLoaded(false);
                     handleExpand(true);
                     if (type() === 'file') openFileInEditor({ workspaceId: wtId, filePath: newPath });
@@ -284,24 +279,21 @@ function FileTreeItem(props: { node: FileNode; depth: number }) {
           <ContextMenu.Item class={styles.contextMenuItem} onSelect={async () => {
             const wtId = activeWorktreeId();
             if (!wtId) return;
-            const ok = await deleteFile(wtId, props.node.path);
-            if (ok) {
-              showToast('Deleted', props.node.name);
-            }
+            await deleteFile(wtId, props.node.path);
           }}>
             <Trash2 size={13} />
             Delete Folder
           </ContextMenu.Item>
           <ContextMenu.Separator class={styles.contextMenuSeparator} />
-          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.node.name); showToast('Copied', props.node.name); }}>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.node.name); }}>
             <Clipboard size={13} />
             Copy Folder Name
           </ContextMenu.Item>
-          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.node.path); showToast('Copied', props.node.path); }}>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.node.path); }}>
             <Clipboard size={13} />
             Copy Path
           </ContextMenu.Item>
-          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(absolutePath()); showToast('Copied', absolutePath()); }}>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(absolutePath()); }}>
             <Clipboard size={13} />
             Copy Absolute Path
           </ContextMenu.Item>

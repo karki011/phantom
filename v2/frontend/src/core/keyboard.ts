@@ -10,7 +10,7 @@ import { openSettings } from './signals/settings';
 import { toggleQuickOpen } from './signals/quickopen';
 import { toggleComposer } from './signals/composer';
 import { toggleCommandPalette } from './signals/command-palette';
-// TODO(Phase 7h): import { runRecipe } from './bindings'; import { activeWorktreeId } from './signals/app';
+import { openRecipePicker } from './signals/recipes';
 
 const HMR_KEY = '__phantom_keyboard_handler';
 
@@ -84,11 +84,10 @@ export function registerKeyboardShortcuts(): () => void {
       return;
     }
 
-    // Cmd+Shift+R: Run recipe on active worktree
-    // TODO(Phase 7h): open a recipe picker UI, then call runRecipe(activeProjectId, selectedRecipeId)
+    // Cmd+Shift+R: Open recipe picker
     if (meta && e.key === 'r' && e.shiftKey) {
       e.preventDefault();
-      console.log('[PhantomOS] Run recipe — recipe picker coming in Phase 7h');
+      openRecipePicker();
       return;
     }
 

@@ -6,7 +6,6 @@ import { Checkbox } from '@kobalte/core/checkbox';
 import { PhantomLoader } from '@/shared/PhantomLoader/PhantomLoader';
 import { buttonRecipe } from '@/styles/recipes.css';
 import { addProject, scanDirectory } from '@/core/bindings';
-import { showToast } from '@/shared/Toast/Toast';
 import { refreshProjects } from '@/core/signals/projects';
 import { filteredProjects, bootstrapWorktrees } from '@/core/signals/worktrees';
 import { PhantomModal, phantomModalStyles } from '@/shared/PhantomModal/PhantomModal';
@@ -79,7 +78,6 @@ export function ScanResultsDialog(props: ScanResultsDialogProps) {
     await bootstrapWorktrees();
     setAdding(false);
     props.onOpenChange(false);
-    showToast('Projects added', `Successfully added ${count} ${count === 1 ? 'project' : 'projects'}`);
   }
 
   function handleOpenChange(open: boolean) {

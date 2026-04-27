@@ -10,7 +10,9 @@ import {
 } from '@/core/signals/system-stats';
 import { openSettings } from '@/core/signals/settings';
 import { toggleDocs } from '@/core/signals/docs';
-import { focusOrCreateTab } from '@/core/panes/signals';
+import { focusOrCreateTab, addTab } from '@/core/panes/signals';
+import { toggleCommandPalette } from '@/core/signals/command-palette';
+import { requestShutdown } from '@/core/signals/shutdown';
 import { Tip } from '@/shared/Tip/Tip';
 import * as shellStyles from '@/styles/app-shell.css';
 
@@ -167,6 +169,32 @@ function TerminalIcon() {
   );
 }
 
+function PowerIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M12 2v10"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+      />
+      <path
+        d="M18.36 6.64A9 9 0 1 1 5.64 6.64"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+      />
+    </svg>
+  );
+}
+
 export function SystemHeader() {
   onMount(() => {
     startSystemStatsPoll();
@@ -218,12 +246,12 @@ export function SystemHeader() {
       {/* Right: Action buttons */}
       <div class={shellStyles.headerActions}>
         <Tip label="Terminal" placement="bottom">
-          <button class={shellStyles.headerIconButton} type="button" aria-label="Open terminal">
+          <button class={shellStyles.headerIconButton} type="button" aria-label="Open terminal" onClick={() => addTab('terminal')}>
             <TerminalIcon />
           </button>
         </Tip>
         <Tip label="Command Palette" placement="bottom">
-          <button class={shellStyles.headerIconButton} type="button" aria-label="Open command palette">
+          <button class={shellStyles.headerIconButton} type="button" aria-label="Open command palette" onClick={() => toggleCommandPalette()}>
             <CommandIcon />
           </button>
         </Tip>
@@ -240,6 +268,11 @@ export function SystemHeader() {
         <Tip label="Settings" placement="bottom">
           <button class={shellStyles.headerIconButton} type="button" aria-label="Open settings" onClick={() => openSettings()}>
             <GearIcon />
+          </button>
+        </Tip>
+        <Tip label="Shutdown" placement="bottom">
+          <button class={shellStyles.headerIconButton} type="button" aria-label="Shutdown PhantomOS" onClick={() => requestShutdown()}>
+            <PowerIcon />
           </button>
         </Tip>
       </div>

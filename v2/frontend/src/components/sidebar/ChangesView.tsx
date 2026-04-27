@@ -100,11 +100,11 @@ function StagedFileRow(props: {
             Unstage
           </ContextMenu.Item>
           <ContextMenu.Separator class={styles.contextMenuSeparator} />
-          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.file.path); showToast('Copied', props.file.path); }}>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.file.path); }}>
             <Clipboard size={13} />
             Copy Path
           </ContextMenu.Item>
-          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(absolutePath()); showToast('Copied', absolutePath()); }}>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(absolutePath()); }}>
             <Clipboard size={13} />
             Copy Absolute Path
           </ContextMenu.Item>
@@ -176,11 +176,11 @@ function UnstagedFileRow(props: {
             </ContextMenu.Item>
           </Show>
           <ContextMenu.Separator class={styles.contextMenuSeparator} />
-          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.file.path); showToast('Copied', props.file.path); }}>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(props.file.path); }}>
             <Clipboard size={13} />
             Copy Path
           </ContextMenu.Item>
-          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(absolutePath()); showToast('Copied', absolutePath()); }}>
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => { navigator.clipboard.writeText(absolutePath()); }}>
             <Clipboard size={13} />
             Copy Absolute Path
           </ContextMenu.Item>
@@ -322,7 +322,6 @@ export function ChangesView() {
     if (!msg || stagedFiles().length === 0 || !wtId) return;
     const ok = await gitCommit(wtId, msg);
     if (ok) {
-      showToast('Committed', msg.substring(0, 50));
       setCommitMessage('');
       await refreshStatus();
     } else {

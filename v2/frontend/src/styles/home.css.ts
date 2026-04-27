@@ -203,6 +203,7 @@ export const statusRefreshButton = style({
   background: 'transparent',
   color: vars.color.textSecondary,
   cursor: 'pointer',
+  marginLeft: 'auto',
   transition: `all ${vars.animation.fast} ease`,
   ':hover': {
     color: vars.color.accent,
@@ -1170,5 +1171,339 @@ export const quickActionInlineHint = style({
   textTransform: 'uppercase',
   letterSpacing: '0.06em',
   marginLeft: '2px',
+});
+
+// === Quick Launch Grid ===
+
+const cardShimmer = keyframes({
+  '0%': { backgroundPosition: '-200% 0' },
+  '100%': { backgroundPosition: '200% 0' },
+});
+
+const subtlePulse = keyframes({
+  '0%, 100%': { opacity: 0.6 },
+  '50%': { opacity: 1 },
+});
+
+export const quickLaunchGrid = style({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+  gap: vars.space.md,
+});
+
+export const quickLaunchCard = style({
+  position: 'relative',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: vars.space.sm,
+  padding: `${vars.space.xl} ${vars.space.md}`,
+  borderRadius: vars.radius.lg,
+  background: vars.color.bgTertiary,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 12%, ${vars.color.border})`,
+  cursor: 'pointer',
+  transition: `all 200ms ease`,
+  overflow: 'hidden',
+  ':hover': {
+    background: `color-mix(in srgb, ${vars.color.accent} 6%, ${vars.color.bgTertiary})`,
+    borderColor: `color-mix(in srgb, ${vars.color.accent} 40%, ${vars.color.border})`,
+    transform: 'translateY(-2px)',
+    boxShadow: `0 4px 20px color-mix(in srgb, ${vars.color.accent} 15%, transparent), 0 0 0 1px color-mix(in srgb, ${vars.color.accent} 10%, transparent)`,
+  },
+  '::before': {
+    content: '""',
+    position: 'absolute',
+    inset: 0,
+    borderRadius: 'inherit',
+    background: `linear-gradient(135deg, color-mix(in srgb, ${vars.color.accent} 4%, transparent), transparent 60%)`,
+    pointerEvents: 'none',
+  },
+});
+
+export const quickLaunchCardDisabled = style({
+  cursor: 'default',
+  opacity: 0.5,
+  ':hover': {
+    background: vars.color.bgTertiary,
+    borderColor: `color-mix(in srgb, ${vars.color.accent} 12%, ${vars.color.border})`,
+    transform: 'none',
+    boxShadow: 'none',
+  },
+});
+
+export const quickLaunchIcon = style({
+  width: '32px',
+  height: '32px',
+  color: vars.color.accent,
+  flexShrink: 0,
+  filter: `drop-shadow(0 0 6px color-mix(in srgb, ${vars.color.accent} 30%, transparent))`,
+});
+
+export const quickLaunchLabel = style({
+  fontFamily: vars.font.body,
+  fontSize: vars.fontSize.sm,
+  fontWeight: 600,
+  color: vars.color.textPrimary,
+  textAlign: 'center',
+});
+
+export const quickLaunchDesc = style({
+  fontFamily: vars.font.mono,
+  fontSize: '0.6rem',
+  color: vars.color.textDisabled,
+  textAlign: 'center',
+  lineHeight: 1.4,
+});
+
+export const quickLaunchBadge = style({
+  position: 'absolute',
+  top: vars.space.sm,
+  right: vars.space.sm,
+  fontFamily: vars.font.mono,
+  fontSize: '0.5rem',
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.1em',
+  padding: '2px 6px',
+  borderRadius: vars.radius.full,
+  background: `color-mix(in srgb, ${vars.color.accent} 12%, transparent)`,
+  color: vars.color.accent,
+  animation: `${subtlePulse} 3s ease-in-out infinite`,
+});
+
+export const quickLaunchShimmer = style({
+  position: 'absolute',
+  inset: 0,
+  background: `linear-gradient(90deg, transparent, color-mix(in srgb, ${vars.color.accent} 5%, transparent), transparent)`,
+  backgroundSize: '200% 100%',
+  animation: `${cardShimmer} 4s ease-in-out infinite`,
+  pointerEvents: 'none',
+  borderRadius: 'inherit',
+});
+
+// === Pinned Recipes ===
+
+export const pinnedRecipesCard = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.sm,
+  padding: vars.space.lg,
+  borderRadius: vars.radius.lg,
+  background: vars.color.bgTertiary,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 12%, ${vars.color.border})`,
+});
+
+export const pinnedRecipesHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  fontWeight: 600,
+  color: vars.color.textSecondary,
+  textTransform: 'uppercase',
+  letterSpacing: '0.1em',
+});
+
+export const pinnedRecipesHeaderIcon = style({
+  color: vars.color.accent,
+  display: 'flex',
+  alignItems: 'center',
+});
+
+export const pinnedRecipesList = style({
+  display: 'flex',
+  gap: vars.space.sm,
+  flexWrap: 'wrap',
+});
+
+export const pinnedRecipeButton = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `${vars.space.xs} ${vars.space.md}`,
+  borderRadius: vars.radius.md,
+  background: vars.color.bgSecondary,
+  border: `1px solid ${vars.color.border}`,
+  cursor: 'pointer',
+  transition: `all 200ms ease`,
+  fontFamily: vars.font.body,
+  fontSize: vars.fontSize.sm,
+  fontWeight: 500,
+  color: vars.color.textPrimary,
+  ':hover': {
+    background: `color-mix(in srgb, ${vars.color.accent} 8%, ${vars.color.bgSecondary})`,
+    borderColor: `color-mix(in srgb, ${vars.color.accent} 30%, ${vars.color.border})`,
+    transform: 'translateY(-1px)',
+    boxShadow: `0 2px 8px color-mix(in srgb, ${vars.color.accent} 10%, transparent)`,
+  },
+});
+
+export const pinnedRecipesEmpty = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textDisabled,
+  padding: `${vars.space.sm} 0`,
+  lineHeight: 1.5,
+});
+
+// === Two-column dashboard grid ===
+
+export const homeDashboardGrid = style({
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
+  gap: vars.space.xl,
+  alignItems: 'start',
+});
+
+// === Recipes Card (All + Favorites tabs) ===
+
+export const recipesCard = style({
+  display: 'flex',
+  flexDirection: 'column',
+  padding: vars.space.lg,
+  borderRadius: vars.radius.lg,
+  background: vars.color.bgTertiary,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 20%, ${vars.color.border})`,
+  maxHeight: '420px',
+  overflow: 'hidden',
+});
+
+export const recipesCardHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  marginBottom: vars.space.sm,
+});
+
+export const recipesCardTitle = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  fontWeight: 600,
+  color: vars.color.textSecondary,
+  textTransform: 'uppercase',
+  letterSpacing: '0.1em',
+});
+
+export const recipesCardCount = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textDisabled,
+});
+
+export const recipesTabBar = style({
+  display: 'flex',
+  gap: '2px',
+  borderBottom: `1px solid ${vars.color.border}`,
+  marginBottom: vars.space.sm,
+  flexShrink: 0,
+});
+
+export const recipesTab = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: `${vars.space.xs} ${vars.space.md}`,
+  background: 'transparent',
+  border: 'none',
+  borderBottom: '2px solid transparent',
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textDisabled,
+  cursor: 'pointer',
+  transition: `color ${vars.animation.fast} ease, border-color ${vars.animation.fast} ease`,
+  ':hover': {
+    color: vars.color.textSecondary,
+  },
+});
+
+export const recipesTabActive = style({
+  color: vars.color.accent,
+  borderBottomColor: vars.color.accent,
+  ':hover': {
+    color: vars.color.accent,
+  },
+});
+
+export const recipesListScroll = style({
+  flex: 1,
+  overflowY: 'auto',
+  minHeight: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '2px',
+  scrollbarWidth: 'thin',
+  scrollbarColor: `${vars.color.border} transparent`,
+  '::-webkit-scrollbar': { width: '4px' },
+  '::-webkit-scrollbar-thumb': { background: vars.color.border, borderRadius: '2px' },
+  '::-webkit-scrollbar-track': { background: 'transparent' },
+});
+
+export const recipeRow = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `5px ${vars.space.sm}`,
+  borderRadius: vars.radius.sm,
+  cursor: 'pointer',
+  transition: `background ${vars.animation.fast} ease`,
+  flexShrink: 0,
+  ':hover': {
+    background: vars.color.bgHover,
+  },
+});
+
+export const recipeStarButton = style({
+  background: 'transparent',
+  border: 'none',
+  cursor: 'pointer',
+  padding: 0,
+  fontSize: '14px',
+  lineHeight: 1,
+  flexShrink: 0,
+  display: 'flex',
+  alignItems: 'center',
+});
+
+export const recipeIcon = style({
+  fontSize: '14px',
+  flexShrink: 0,
+  width: '18px',
+  textAlign: 'center',
+});
+
+export const recipeLabel = style({
+  fontFamily: vars.font.body,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textPrimary,
+  fontWeight: 500,
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+});
+
+export const recipeCommand = style({
+  fontFamily: vars.font.mono,
+  fontSize: '0.65rem',
+  color: vars.color.textDisabled,
+  marginLeft: 'auto',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  maxWidth: '180px',
+});
+
+export const recipeCategoryBadge = style({
+  fontFamily: vars.font.mono,
+  fontSize: '0.55rem',
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  padding: '1px 5px',
+  borderRadius: vars.radius.sm,
+  background: `color-mix(in srgb, ${vars.color.accent} 10%, transparent)`,
+  color: vars.color.accent,
+  flexShrink: 0,
 });
 
