@@ -16,12 +16,22 @@ export function AutoTimer(props: AutoTimerProps) {
 
   onMount(() => {
     let intervalId: ReturnType<typeof setInterval> | undefined;
+    let lastTick = Date.now();
 
     intervalId = setInterval(() => {
-      if (props.paused || resolved()) return;
+      if (resolved()) return;
+
+      const now = Date.now();
+      if (props.paused) {
+        lastTick = now;
+        return;
+      }
+
+      const elapsed = now - lastTick;
+      lastTick = now;
 
       setRemaining((prev) => {
-        const next = prev - 100;
+        const next = prev - elapsed;
         if (next <= 0) {
           clearInterval(intervalId);
           setResolved(true);

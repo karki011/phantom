@@ -30,11 +30,11 @@ type SendRequest struct {
 	Model          string `json:"model"`
 }
 
-// StreamChunk is emitted via Wails events during streaming responses.
-type StreamChunk struct {
-	ConversationID string `json:"conversation_id"`
-	MessageID      string `json:"message_id"`
-	Delta          string `json:"delta"`
-	Done           bool   `json:"done"`
-	Error          string `json:"error,omitempty"`
+// StreamEvent is emitted via Wails events during streaming responses.
+// It matches the frontend's expected payload shape on the "chat:stream" event.
+type StreamEvent struct {
+	Type      string `json:"type"`                 // "delta" | "done" | "error" | "thinking" | "tool_use"
+	Content   string `json:"content,omitempty"`     // text content for delta/thinking/error
+	ToolName  string `json:"tool_name,omitempty"`   // tool name for tool_use events
+	ToolInput string `json:"tool_input,omitempty"`  // tool input for tool_use events
 }

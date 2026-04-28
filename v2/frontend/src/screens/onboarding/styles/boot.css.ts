@@ -8,6 +8,11 @@ const textGlow = keyframes({
   '50%': { textShadow: `0 0 25px ${vars.color.accent}, 0 0 50px ${vars.color.accentGlow}` },
 });
 
+const cursorBlink = keyframes({
+  '0%, 49%': { opacity: 1 },
+  '50%, 100%': { opacity: 0 },
+});
+
 export const terminal = style({
   position: 'absolute',
   inset: 0,
@@ -24,6 +29,8 @@ export const terminal = style({
 });
 
 export const linesContainer = style({
+  position: 'relative',
+  zIndex: 1,
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
@@ -86,8 +93,20 @@ export const lineDramatic = style({
 });
 
 export const cursor = style({
-  color: vars.color.terminalCursor,
+  display: 'inline-block',
+  width: '8px',
+  height: '1.2em',
   marginLeft: '2px',
+  background: vars.color.terminalCursor,
+  animation: `${cursorBlink} 1s step-end infinite`,
+  verticalAlign: 'text-bottom',
+});
+
+export const promptSymbol = style({
+  color: vars.color.success,
+  fontWeight: 600,
+  marginRight: '8px',
+  userSelect: 'none',
 });
 
 export const separator = style({

@@ -35,6 +35,18 @@ func (a *App) CreateConversation(workspaceID, title, model string) *chat.Convers
 	return conv
 }
 
+// UpdateConversationTitle updates the title of a conversation.
+func (a *App) UpdateConversationTitle(conversationID, title string) error {
+	if a.Chat == nil {
+		return nil
+	}
+	if err := a.Chat.UpdateTitle(a.ctx, conversationID, title); err != nil {
+		log.Printf("app/bindings_chat: UpdateConversationTitle(%s): %v", conversationID, err)
+		return err
+	}
+	return nil
+}
+
 // DeleteConversation removes a conversation and all its messages.
 func (a *App) DeleteConversation(conversationID string) error {
 	if a.Chat == nil {
@@ -60,9 +72,9 @@ func (a *App) GetChatHistory(conversationID string) []chat.Message {
 	return msgs
 }
 
-// SendChatMessage sends a user message, streams the AI response via "chat:chunk"
+// SendChatMessage sends a user message, streams the AI response via "chat:stream"
 // events, and returns the completed assistant message. The frontend should
-// listen for "chat:chunk" events to display the response in real time.
+// listen for "chat:stream" events to display the response in real time.
 func (a *App) SendChatMessage(conversationID, content, model string) *chat.Message {
 	if a.Chat == nil {
 		log.Println("app/bindings_chat: SendChatMessage: chat service not initialised")

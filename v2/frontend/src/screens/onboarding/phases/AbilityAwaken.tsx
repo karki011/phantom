@@ -1,6 +1,6 @@
 // Author: Subash Karki
 
-import { createSignal, onMount, onCleanup, Show } from 'solid-js';
+import { createSignal, onMount, Show } from 'solid-js';
 import { playSound } from '../../../core/audio/engine';
 import { speakSystem } from '../config/voice';
 import { abilities } from '../config/phases';
@@ -11,11 +11,12 @@ import * as styles from '../styles/awakening.css';
 
 export function AbilityAwaken(props: { onComplete: (data: Record<string, string>) => void }) {
   const [allRevealed, setAllRevealed] = createSignal(false);
+  const [revealReady, setRevealReady] = createSignal(false);
 
-  onMount(() => {
+  onMount(async () => {
     playSound('bass');
-    const speechTimer = setTimeout(() => speakSystem('Your abilities are being prepared.'), 250);
-    onCleanup(() => clearTimeout(speechTimer));
+    await speakSystem('Your abilities are being prepared.');
+    setRevealReady(true);
   });
 
   function handleAllRevealed() {
@@ -25,7 +26,9 @@ export function AbilityAwaken(props: { onComplete: (data: Record<string, string>
 
   return (
     <PhasePanel title="Ability Awakening" subtitle="Final calibration in progress.">
-      <AbilityReveal abilities={abilities} onAllRevealed={handleAllRevealed} />
+      <Show when={revealReady()}>
+        <AbilityReveal abilities={abilities} onAllRevealed={handleAllRevealed} />
+      </Show>
       <Show when={allRevealed()}>
         <div class={styles.continueRow}>
           <button

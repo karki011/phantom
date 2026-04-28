@@ -23,6 +23,7 @@ export interface BootLine {
   speechRate?: number;
   waitForSpeech?: boolean;
   charDelay?: number;
+  prompt?: string;
 }
 
 export interface PhaseAnnouncement {
@@ -55,6 +56,18 @@ export interface PhaseConfig {
   announcement: PhaseAnnouncement;
   autoResolve?: AutoResolve;
   persistKeys: string[];
+}
+
+export interface DetectedAgent {
+  name: string;
+  installed: boolean;
+  version?: string;
+}
+
+export interface BootScanData {
+  gitInstalled: boolean;
+  gitVersion?: string;
+  agents: DetectedAgent[];
 }
 
 export interface PhaseContext {

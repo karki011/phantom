@@ -34,24 +34,38 @@ export function ShutdownCeremony(props: ShutdownCeremonyProps) {
   }
 
   async function typewriterLine(text: string, charDelay = 20) {
+    if (!text.length) return;
     setTyping(true);
-    let current = '';
-    let charCount = 0;
-    for (const char of text) {
-      if (cancelled) return;
-      current += char;
-      charCount++;
-      setLines((prev) => {
-        const copy = [...prev];
-        copy[copy.length - 1] = { ...copy[copy.length - 1], text: current };
-        return copy;
-      });
-      if (charCount % 4 === 0) {
-        try { playSound('typing'); } catch {}
-      }
-      await sleep(charDelay + Math.random() * 15);
-    }
-    setTyping(false);
+    const avgDelay = charDelay + 8;
+
+    return new Promise<void>((resolve) => {
+      const start = Date.now();
+      let rendered = 0;
+
+      const tick = () => {
+        if (cancelled) { setTyping(false); resolve(); return; }
+
+        const target = Math.min(text.length, Math.floor((Date.now() - start) / avgDelay) + 1);
+        if (target > rendered) {
+          rendered = target;
+          setLines((prev) => {
+            const copy = [...prev];
+            copy[copy.length - 1] = { ...copy[copy.length - 1], text: text.slice(0, rendered) };
+            return copy;
+          });
+          try { playSound('typing'); } catch {}
+        }
+
+        if (rendered >= text.length) {
+          setTyping(false);
+          resolve();
+        } else {
+          setTimeout(tick, avgDelay);
+        }
+      };
+
+      tick();
+    });
   }
 
   async function addLine(line: ShutdownLine) {

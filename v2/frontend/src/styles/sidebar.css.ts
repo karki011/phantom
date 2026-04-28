@@ -1,7 +1,7 @@
 // PhantomOS v2 — Sidebar styles (Vanilla Extract)
 // Author: Subash Karki
 
-import { globalStyle, style, styleVariants } from '@vanilla-extract/css';
+import { globalStyle, style, styleVariants, keyframes } from '@vanilla-extract/css';
 import { vars } from './theme.css';
 
 export const sidebar = style({
@@ -121,6 +121,33 @@ export const worktreeCount = style({
   lineHeight: 1.4,
   flexShrink: 0,
 });
+
+const graphPulse = keyframes({
+  '0%, 100%': { opacity: 0.3 },
+  '50%': { opacity: 1 },
+});
+
+const graphIconBase = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
+  lineHeight: 0,
+});
+
+export const graphIconReady = style([graphIconBase, {
+  color: vars.color.success,
+}]);
+
+export const graphIconIndexing = style([graphIconBase, {
+  color: vars.color.warning,
+  animation: `${graphPulse} 1.5s ease-in-out infinite`,
+}]);
+
+export const graphIconNone = style([graphIconBase, {
+  color: vars.color.textDisabled,
+  opacity: 0.3,
+}]);
 
 export const chevron = style({
   color: vars.color.textDisabled,

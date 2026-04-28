@@ -1,10 +1,10 @@
 // PhantomOS v2 — Collapsible project section with nested worktrees
 // Author: Subash Karki
 
-import { For, createSignal } from 'solid-js';
+import { For, createSignal, onMount, createEffect } from 'solid-js';
 import { Collapsible } from '@kobalte/core/collapsible';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { ChevronRight, Plus, FolderOpen, Folder, Trash2, Star } from 'lucide-solid';
+import { ChevronRight, Plus, FolderOpen, Folder, Trash2, Star, BrainCircuit } from 'lucide-solid';
 import { Tip } from '@/shared/Tip/Tip';
 import * as styles from '@/styles/sidebar.css';
 import {
@@ -29,6 +29,50 @@ export function ProjectSection(props: ProjectSectionProps) {
   const worktrees = () => worktreeMap()[props.project.id] ?? [];
   const isExpanded = () => expandedProjects().has(props.project.id);
   const [worktreeOpen, setWorktreeOpen] = createSignal(false);
+  const [graphStatus, setGraphStatus] = createSignal<'none' | 'indexing' | 'ready'>('none');
+  const [graphStats, setGraphStats] = createSignal({ files: 0, symbols: 0 });
+  let graphStarted = false;
+  let pollInterval: ReturnType<typeof setInterval> | undefined;
+
+  async function pollGraphStats() {
+    try {
+      const stats = await window.go?.app.App.GetFileGraphStats(props.project.id);
+      if (stats?.indexed) {
+        setGraphStats({ files: stats.files, symbols: stats.symbols });
+        setGraphStatus(stats.indexing ? 'indexing' : 'ready');
+        if (!stats.indexing && pollInterval) {
+          clearInterval(pollInterval);
+          pollInterval = undefined;
+        }
+      }
+    } catch {}
+  }
+
+  async function ensureGraphStarted() {
+    if (graphStarted) return;
+    graphStarted = true;
+    setGraphStatus('indexing');
+    await window.go?.app.App.StartFileGraph(props.project.id);
+    pollInterval = setInterval(pollGraphStats, 2000);
+    pollGraphStats();
+  }
+
+  async function handleRefreshGraph() {
+    setGraphStatus('indexing');
+    setGraphStats({ files: 0, symbols: 0 });
+    await window.go?.app.App.RefreshFileGraph(props.project.id);
+    graphStarted = true;
+    pollInterval = setInterval(pollGraphStats, 2000);
+    pollGraphStats();
+  }
+
+  // Auto-start graph when project is expanded.
+  createEffect(() => {
+    if (isExpanded()) ensureGraphStarted();
+  });
+
+  // Check if graph is already running on mount (e.g. re-mount after tab switch).
+  onMount(() => { pollGraphStats(); });
 
   const activeSessions = () => sessions().filter(
     (s) => s.status === 'active' || s.status === 'running',
@@ -97,6 +141,25 @@ export function ProjectSection(props: ProjectSectionProps) {
               {props.project.name}
             </span>
             <span class={styles.worktreeCount}>{worktrees().length}</span>
+            <Tip label={
+              graphStatus() === 'ready'
+                ? `Code graph: ${graphStats().files} files, ${graphStats().symbols} definitions`
+                : graphStatus() === 'indexing'
+                  ? 'Code graph indexing...'
+                  : 'Code graph not started'
+            }>
+              <span
+                class={
+                  graphStatus() === 'ready'
+                    ? styles.graphIconReady
+                    : graphStatus() === 'indexing'
+                      ? styles.graphIconIndexing
+                      : styles.graphIconNone
+                }
+              >
+                <BrainCircuit size={12} />
+              </span>
+            </Tip>
             <Tip label={isStarred() ? "Unstar project" : "Star project (max 10)"}>
               <button
                 class={isStarred() ? styles.starButtonActive : styles.starButton}
@@ -162,6 +225,13 @@ export function ProjectSection(props: ProjectSectionProps) {
           >
             <FolderOpen size={13} />
             {isExpanded() ? 'Collapse' : 'Expand'}
+          </ContextMenu.Item>
+          <ContextMenu.Item
+            class={styles.contextMenuItem}
+            onSelect={handleRefreshGraph}
+          >
+            <BrainCircuit size={13} />
+            Refresh Code Graph
           </ContextMenu.Item>
           <ContextMenu.Separator class={styles.contextMenuSeparator} />
           <ContextMenu.Item

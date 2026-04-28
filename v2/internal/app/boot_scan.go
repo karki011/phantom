@@ -37,6 +37,8 @@ type BootScanResult struct {
 	GithubAuth     bool          `json:"githubAuth"`
 	AWSConfigured  bool          `json:"awsConfigured"`
 	GCPConfigured  bool          `json:"gcpConfigured"`
+	GitInstalled   bool          `json:"gitInstalled"`
+	GitVersion     string        `json:"gitVersion,omitempty"`
 	Agents         []AgentStatus `json:"agents"`
 }
 
@@ -244,6 +246,11 @@ func detectAgents(home string, provReg *provider.Registry) []AgentStatus {
 func (a *App) BootScan() (*BootScanResult, error) {
 	home, _ := os.UserHomeDir()
 	r := &BootScanResult{}
+
+	if _, err := exec.LookPath("git"); err == nil {
+		r.GitInstalled = true
+		r.GitVersion = versionWithTimeout("git", "--version")
+	}
 
 	if out, err := exec.Command("git", "config", "--global", "user.name").Output(); err == nil {
 		r.Operator = strings.TrimSpace(string(out))

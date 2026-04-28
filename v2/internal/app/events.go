@@ -41,7 +41,7 @@ const (
 	EventCiUpdated      = "ci:updated"       // payload: []git.CiRun
 	EventPrsListUpdated = "prs:list-updated" // payload: []git.PrStatus
 
-	EventChatChunk           = "chat:chunk"            // payload: chat.StreamChunk
+	EventChatStream          = "chat:stream"             // payload: chat.StreamEvent
 	EventChatMessageComplete = "chat:message-complete"  // payload: *chat.Message
 )
 

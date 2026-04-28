@@ -57,8 +57,8 @@ func TestFormatRecentFiles(t *testing.T) {
 }
 
 func TestMaxContextChars(t *testing.T) {
-	if MaxContextChars != 2000 {
-		t.Errorf("expected MaxContextChars=2000, got %d", MaxContextChars)
+	if MaxContextChars != 8000 {
+		t.Errorf("expected MaxContextChars=8000, got %d", MaxContextChars)
 	}
 }
 

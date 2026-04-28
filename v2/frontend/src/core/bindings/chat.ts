@@ -30,6 +30,15 @@ export async function createConversation(
   }
 }
 
+export async function updateConversationTitle(id: string, title: string): Promise<boolean> {
+  try {
+    await App()?.UpdateConversationTitle(id, title);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function deleteConversation(id: string): Promise<boolean> {
   try {
     await App()?.DeleteConversation(id);

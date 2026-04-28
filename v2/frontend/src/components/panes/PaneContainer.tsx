@@ -63,7 +63,7 @@ export function PaneContainer(props: PaneContainerProps) {
       onClick={handleClick}
     >
       {/* Floating overlay header — hidden when solo+home, shown on hover otherwise */}
-      <Show when={paneId() && (!props.isSolo || paneType() !== 'home') && paneType() !== 'editor' && paneType() !== 'diff'}>
+      <Show when={paneId() && (!props.isSolo || paneType() !== 'home') && paneType() !== 'editor' && paneType() !== 'diff' && paneType() !== 'chat'}>
         <div class={styles.paneHeaderFloat}>
           <Show when={!props.isSolo}>
             <span class={styles.paneHeaderTitle}>

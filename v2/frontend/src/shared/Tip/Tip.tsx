@@ -14,13 +14,15 @@ interface TipProps {
 }
 
 export function Tip(props: TipProps) {
+  const contentClass = () => props.content ? styles.contentMultiline : styles.content;
+
   return (
     <Tooltip openDelay={props.openDelay ?? 0} closeDelay={0} placement={props.placement ?? 'top'}>
       <Tooltip.Trigger as="span" class={styles.trigger}>
         {props.children}
       </Tooltip.Trigger>
       <Tooltip.Portal>
-        <Tooltip.Content class={styles.content}>
+        <Tooltip.Content class={contentClass()}>
           <Tooltip.Arrow class={styles.arrow} />
           {props.content ?? props.label}
         </Tooltip.Content>

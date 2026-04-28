@@ -1,19 +1,17 @@
 // Package chat provides the chat service for Phantom OS v2.
-// It manages conversations and messages, sends prompts to the Anthropic
-// Messages API, and streams responses back via Wails events.
+// It manages conversations and messages, spawns the claude CLI
+// for streaming responses, and emits events to the frontend.
 // Author: Subash Karki
 package chat
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -24,19 +22,16 @@ import (
 )
 
 const (
-	anthropicAPIURL     = "https://api.anthropic.com/v1/messages"
-	anthropicAPIVersion = "2023-06-01"
-	defaultModel        = "claude-sonnet-4-20250514"
-	defaultMaxTokens    = 8192
+	defaultModel    = "sonnet"
+	defaultMaxTokens = 8192
 )
 
 // Service manages chat conversations, message persistence, and streaming
-// responses from the Anthropic Messages API.
+// responses via the claude CLI.
 type Service struct {
 	queries   *db.Queries
 	writer    *sql.DB
 	emitEvent func(name string, data interface{})
-	client    *http.Client
 }
 
 // NewService creates a chat Service backed by the given DB connections.
@@ -46,9 +41,6 @@ func NewService(writer *sql.DB, emitEvent func(string, interface{})) *Service {
 		queries:   db.New(writer),
 		writer:    writer,
 		emitEvent: emitEvent,
-		client: &http.Client{
-			Timeout: 5 * time.Minute, // streaming responses can take a while
-		},
 	}
 }
 
@@ -119,6 +111,19 @@ func (s *Service) DeleteConversation(ctx context.Context, conversationID string)
 	return nil
 }
 
+// UpdateTitle updates the title of a conversation.
+func (s *Service) UpdateTitle(ctx context.Context, conversationID, title string) error {
+	now := time.Now().Unix()
+	if err := s.queries.UpdateConversationTitle(ctx, db.UpdateConversationTitleParams{
+		Title:     title,
+		UpdatedAt: now,
+		ID:        conversationID,
+	}); err != nil {
+		return fmt.Errorf("chat: update conversation title: %w", err)
+	}
+	return nil
+}
+
 // GetHistory returns all messages for a conversation in chronological order.
 func (s *Service) GetHistory(ctx context.Context, conversationID string) ([]Message, error) {
 	rows, err := s.queries.ListMessagesByConversation(ctx, sql.NullString{
@@ -175,192 +180,289 @@ func (s *Service) SaveMessage(ctx context.Context, conversationID, role, content
 }
 
 // ---------------------------------------------------------------------------
-// SendMessage — streams an AI response via the Anthropic Messages API
+// SendMessage — streams an AI response via the claude CLI
 // ---------------------------------------------------------------------------
 
-// SendMessage saves the user message, calls the Anthropic Messages API with
-// streaming, persists the assistant response, and emits "chat:chunk" events
-// for each text delta. Returns the completed assistant message.
+// SendMessage saves the user message, spawns the claude CLI with streaming,
+// persists the assistant response, and emits "chat:stream" events for each
+// text delta. Returns the completed assistant message.
 func (s *Service) SendMessage(ctx context.Context, conversationID, content, model string) (*Message, error) {
 	if model == "" {
 		model = defaultModel
 	}
 
-	// 1. Persist the user message.
+	// 1. Verify the claude binary is available.
+	claudePath, err := exec.LookPath("claude")
+	if err != nil {
+		s.emitEvent("chat:stream", StreamEvent{
+			Type:    "error",
+			Content: "claude CLI not found in PATH. Please install it with: npm install -g @anthropic-ai/claude-code",
+		})
+		return nil, fmt.Errorf("chat: claude CLI not found: %w", err)
+	}
+
+	// 2. Persist the user message.
 	if _, err := s.SaveMessage(ctx, conversationID, "user", content, model); err != nil {
 		return nil, err
 	}
 
-	// 2. Build conversation history for the API.
+	// 3. Build the prompt with conversation history.
 	history, err := s.GetHistory(ctx, conversationID)
 	if err != nil {
 		return nil, err
 	}
 
-	apiMessages := make([]apiMessage, 0, len(history))
-	for _, m := range history {
-		if m.Role == "user" || m.Role == "assistant" {
-			apiMessages = append(apiMessages, apiMessage{
-				Role:    m.Role,
-				Content: m.Content,
-			})
-		}
-	}
+	prompt := buildPrompt(history)
 
-	// 3. Call the Anthropic streaming API.
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("chat: ANTHROPIC_API_KEY environment variable not set")
-	}
-
-	msgID := uuid.New().String()
-	fullContent, err := s.streamFromAnthropic(ctx, apiKey, model, apiMessages, conversationID, msgID)
+	// 4. Spawn the claude CLI process.
+	fullContent, err := s.streamFromClaude(ctx, claudePath, model, prompt, conversationID)
 	if err != nil {
-		// Emit an error chunk so the frontend knows.
-		s.emitEvent("chat:chunk", StreamChunk{
-			ConversationID: conversationID,
-			MessageID:      msgID,
-			Done:           true,
-			Error:          err.Error(),
+		s.emitEvent("chat:stream", StreamEvent{
+			Type:    "error",
+			Content: err.Error(),
 		})
 		return nil, fmt.Errorf("chat: stream response: %w", err)
 	}
 
-	// 4. Persist the full assistant response.
+	// 5. Persist the full assistant response.
 	assistantMsg, err := s.SaveMessage(ctx, conversationID, "assistant", fullContent, model)
 	if err != nil {
 		return nil, err
 	}
 
-	// 5. Emit final done chunk.
-	s.emitEvent("chat:chunk", StreamChunk{
-		ConversationID: conversationID,
-		MessageID:      assistantMsg.ID,
-		Done:           true,
-	})
+	// 6. Emit final done event.
+	s.emitEvent("chat:stream", StreamEvent{Type: "done"})
 
 	return assistantMsg, nil
 }
 
 // ---------------------------------------------------------------------------
-// Anthropic API types and streaming
+// Claude CLI streaming
 // ---------------------------------------------------------------------------
 
-type apiMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+// buildPrompt constructs a prompt string from conversation history.
+// The latest user message is already included in history since we persist
+// it before calling this function.
+func buildPrompt(history []Message) string {
+	if len(history) == 0 {
+		return ""
+	}
+
+	// If there's only one message (the current user message), return it directly.
+	if len(history) == 1 {
+		return history[0].Content
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Previous conversation:\n")
+
+	// All messages except the last one are history context.
+	for _, m := range history[:len(history)-1] {
+		switch m.Role {
+		case "user":
+			sb.WriteString("User: ")
+		case "assistant":
+			sb.WriteString("Assistant: ")
+		default:
+			continue
+		}
+		sb.WriteString(m.Content)
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("\nCurrent message:\n")
+	sb.WriteString(history[len(history)-1].Content)
+
+	return sb.String()
 }
 
-type apiRequest struct {
-	Model     string       `json:"model"`
-	MaxTokens int          `json:"max_tokens"`
-	Messages  []apiMessage `json:"messages"`
-	Stream    bool         `json:"stream"`
-}
-
-// streamFromAnthropic calls the Anthropic Messages API with SSE streaming,
-// emits "chat:chunk" events for each text delta, and returns the full
+// streamFromClaude spawns the claude CLI with stream-json output, reads
+// NDJSON from stdout, emits "chat:stream" events, and returns the full
 // concatenated response text.
-func (s *Service) streamFromAnthropic(
+func (s *Service) streamFromClaude(
 	ctx context.Context,
-	apiKey, model string,
-	messages []apiMessage,
-	conversationID, messageID string,
+	claudePath, model, prompt, conversationID string,
 ) (string, error) {
-	reqBody := apiRequest{
-		Model:     model,
-		MaxTokens: defaultMaxTokens,
-		Messages:  messages,
-		Stream:    true,
+	args := []string{
+		"-p", prompt,
+		"--output-format", "stream-json",
+		"--verbose",
+		"--model", model,
+		"--no-session-persistence",
+		"--dangerously-skip-permissions",
+		"--system-prompt", "You are a helpful AI assistant in PhantomOS. Be concise, accurate, and friendly. Format responses with markdown when helpful. Do not reference any CLAUDE.md files, settings, hooks, skills, or project configuration.",
+		"--setting-sources", "",
 	}
 
-	bodyBytes, err := json.Marshal(reqBody)
+	// Use a temp directory as CWD so no CLAUDE.md or .claude/ context is discovered.
+	// Each chat conversation starts clean — no workspace context leaks in.
+	tmpDir, _ := os.MkdirTemp("", "phantom-chat-*")
+	cmd := exec.CommandContext(ctx, claudePath, args...)
+	if tmpDir != "" {
+		cmd.Dir = tmpDir
+		defer os.RemoveAll(tmpDir)
+	}
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return "", fmt.Errorf("marshal request: %w", err)
+		return "", fmt.Errorf("create stdout pipe: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, anthropicAPIURL, bytes.NewReader(bodyBytes))
+	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", apiKey)
-	req.Header.Set("anthropic-version", anthropicAPIVersion)
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("api call: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("api error %d: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("create stderr pipe: %w", err)
 	}
 
-	// Parse SSE stream.
-	var full strings.Builder
-	scanner := bufio.NewScanner(resp.Body)
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("start claude process: %w", err)
+	}
+
+	// Read stderr in background for error reporting.
+	var stderrContent strings.Builder
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			stderrContent.WriteString(scanner.Text())
+			stderrContent.WriteString("\n")
+		}
+	}()
+
+	// Parse NDJSON from stdout.
+	var fullContent strings.Builder
+	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	for scanner.Scan() {
-		line := scanner.Text()
-
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-		data := strings.TrimPrefix(line, "data: ")
-		if data == "[DONE]" {
-			break
-		}
-
-		var event sseEvent
-		if err := json.Unmarshal([]byte(data), &event); err != nil {
-			log.Debug("chat: skip malformed SSE event", "err", err)
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
 			continue
 		}
 
-		switch event.Type {
-		case "content_block_delta":
-			if event.Delta != nil && event.Delta.Text != "" {
-				full.WriteString(event.Delta.Text)
-				s.emitEvent("chat:chunk", StreamChunk{
-					ConversationID: conversationID,
-					MessageID:      messageID,
-					Delta:          event.Delta.Text,
-				})
-			}
-		case "message_stop":
-			// End of message — handled after loop.
-		case "error":
-			errMsg := "unknown streaming error"
-			if event.Error != nil {
-				errMsg = event.Error.Message
-			}
-			return full.String(), fmt.Errorf("stream error: %s", errMsg)
+		var event cliStreamEvent
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			log.Debug("chat: skip malformed NDJSON line", "err", err, "line", line)
+			continue
 		}
+
+		s.handleStreamEvent(&event, &fullContent, conversationID)
 	}
 
 	if err := scanner.Err(); err != nil {
-		return full.String(), fmt.Errorf("read SSE stream: %w", err)
+		return fullContent.String(), fmt.Errorf("read claude stdout: %w", err)
 	}
 
-	return full.String(), nil
+	// Wait for the process to finish.
+	if err := cmd.Wait(); err != nil {
+		// If we got content, the process may have exited non-zero but still
+		// produced valid output. Return the content with the error.
+		if fullContent.Len() > 0 {
+			log.Warn("chat: claude process exited with error but produced content", "err", err)
+			return fullContent.String(), nil
+		}
+		errMsg := stderrContent.String()
+		if errMsg == "" {
+			errMsg = err.Error()
+		}
+		return "", fmt.Errorf("claude process failed: %s", errMsg)
+	}
+
+	return fullContent.String(), nil
 }
 
-// sseEvent represents a parsed SSE event from the Anthropic streaming API.
-type sseEvent struct {
-	Type  string    `json:"type"`
-	Delta *sseDelta `json:"delta,omitempty"`
-	Error *sseError `json:"error,omitempty"`
+// handleStreamEvent maps a claude CLI stream-json event to frontend
+// StreamEvent emissions and accumulates full text content.
+//
+// The claude CLI --output-format stream-json --verbose outputs:
+//   - {"type":"assistant","message":{"content":[{"type":"thinking","thinking":"..."},{"type":"text","text":"..."}]}}
+//   - {"type":"result","result":"full text",...}
+//   - {"type":"system",...} — hooks, skip
+//   - {"type":"rate_limit_event",...} — skip
+//   - {"type":"error",...} — errors
+func (s *Service) handleStreamEvent(event *cliStreamEvent, fullContent *strings.Builder, conversationID string) {
+	switch event.Type {
+	case "assistant":
+		if event.Message == nil {
+			return
+		}
+		var msg cliAssistantMessage
+		if err := json.Unmarshal(event.Message, &msg); err != nil {
+			return
+		}
+		for _, block := range msg.Content {
+			switch block.Type {
+			case "text":
+				if block.Text != "" {
+					fullContent.WriteString(block.Text)
+					s.emitEvent("chat:stream", StreamEvent{
+						Type:    "delta",
+						Content: block.Text,
+					})
+				}
+			case "thinking":
+				if block.Thinking != "" {
+					s.emitEvent("chat:stream", StreamEvent{
+						Type:    "thinking",
+						Content: block.Thinking,
+					})
+				}
+			case "tool_use":
+				inputJSON, _ := json.Marshal(block.Input)
+				s.emitEvent("chat:stream", StreamEvent{
+					Type:      "tool_use",
+					ToolName:  block.Name,
+					ToolInput: string(inputJSON),
+				})
+			}
+		}
+
+	case "result":
+		// Final result — use result text if we haven't received content from assistant events.
+		if event.ResultText != "" && fullContent.Len() == 0 {
+			fullContent.WriteString(event.ResultText)
+			s.emitEvent("chat:stream", StreamEvent{
+				Type:    "delta",
+				Content: event.ResultText,
+			})
+		}
+
+	case "error":
+		errMsg := "unknown streaming error"
+		if event.Error != nil {
+			errMsg = event.Error.Message
+		}
+		s.emitEvent("chat:stream", StreamEvent{
+			Type:    "error",
+			Content: errMsg,
+		})
+	}
 }
 
-type sseDelta struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+// ---------------------------------------------------------------------------
+// Claude CLI NDJSON types
+// ---------------------------------------------------------------------------
+
+// cliStreamEvent represents a parsed NDJSON line from `claude --output-format stream-json --verbose`.
+type cliStreamEvent struct {
+	Type       string          `json:"type"`
+	Message    json.RawMessage `json:"message,omitempty"`
+	ResultText string          `json:"result,omitempty"`
+	Error      *cliError       `json:"error,omitempty"`
 }
 
-type sseError struct {
+type cliAssistantMessage struct {
+	Content []cliContentBlock `json:"content"`
+	Model   string            `json:"model,omitempty"`
+}
+
+type cliContentBlock struct {
+	Type     string      `json:"type"`
+	Text     string      `json:"text,omitempty"`
+	Thinking string      `json:"thinking,omitempty"`
+	Name     string      `json:"name,omitempty"`
+	Input    interface{} `json:"input,omitempty"`
+}
+
+type cliError struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
 }

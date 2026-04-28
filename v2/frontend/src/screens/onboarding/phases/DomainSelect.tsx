@@ -119,7 +119,7 @@ export function DomainSelect(props: DomainSelectProps) {
       </div>
 
       <AutoTimer
-        timeout={2000}
+        timeout={10000}
         onResolve={handleConfirm}
         message="No preference detected. Default domain attuned."
         paused={paused()}

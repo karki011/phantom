@@ -8,12 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/charmbracelet/log"
 
 	graphctx "github.com/subashkarki/phantom-os-v2/internal/ai/graph"
+	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/strategies"
 	"github.com/subashkarki/phantom-os-v2/internal/chat"
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
@@ -81,6 +83,10 @@ type App struct {
 	// AI context injection — initialized during Startup from DB connections.
 	ctxProvider *graphctx.ContextProvider
 	ctxInjector *strategies.ContextInjector
+
+	// File graph indexers — one per project, started in background during Startup.
+	fileIndexers   map[string]*filegraph.Indexer // project ID → indexer
+	fileIndexersMu sync.RWMutex
 
 	// Chat safety middleware — initialized during Startup from Safety service.
 	chatMiddleware *safety.ChatMiddleware
@@ -187,6 +193,11 @@ func (a *App) Startup(ctx context.Context) {
 		a.ctxProvider = graphctx.NewContextProvider(queries, a.DB.Reader)
 		a.ctxInjector = strategies.NewContextInjector(a.ctxProvider)
 		log.Info("app: AI context injector initialized")
+	}
+
+	// Initialize lazy file graph system (indexers start on demand, not at boot).
+	if a.DB != nil {
+		a.initFileGraph()
 	}
 
 	// Initialize chat safety middleware.
@@ -308,8 +319,184 @@ func (a *App) handleGitWatcherEvents() {
 	}
 }
 
+// initFileGraph sets up the lazy file graph system. Indexers are NOT started
+// for all projects at boot — only when a project is activated or explicitly
+// requested. This keeps resource usage low for users with many projects.
+func (a *App) initFileGraph() {
+	a.fileIndexersMu.Lock()
+	a.fileIndexers = make(map[string]*filegraph.Indexer)
+	a.fileIndexersMu.Unlock()
+
+	// Wire the graph lookup into the context provider.
+	if a.ctxProvider != nil {
+		a.ctxProvider.SetGraphLookup(func(projectCwd string) graphctx.FileGraphReader {
+			a.fileIndexersMu.RLock()
+			defer a.fileIndexersMu.RUnlock()
+			for _, ix := range a.fileIndexers {
+				if strings.HasPrefix(projectCwd, ix.RootDir()) {
+					return &fileGraphAdapter{graph: ix.Graph()}
+				}
+			}
+			return nil
+		})
+		log.Info("app: file graph lookup wired (lazy mode)")
+	}
+}
+
+// StartFileGraph starts (or restarts) the file graph indexer for a project.
+// Called lazily when the user selects a project, or explicitly to refresh.
+func (a *App) StartFileGraph(projectID string) map[string]interface{} {
+	if a.DB == nil {
+		return map[string]interface{}{"error": "database not available"}
+	}
+
+	q := db.New(a.DB.Reader)
+	project, err := q.GetProject(a.ctx, projectID)
+	if err != nil {
+		return map[string]interface{}{"error": "project not found"}
+	}
+
+	a.fileIndexersMu.Lock()
+	// Stop existing indexer for this project if running.
+	if existing, ok := a.fileIndexers[projectID]; ok {
+		a.fileIndexersMu.Unlock()
+		existing.Stop()
+		a.fileIndexersMu.Lock()
+	}
+
+	ix := filegraph.NewIndexer(project.RepoPath)
+	if err := ix.Start(a.ctx); err != nil {
+		a.fileIndexersMu.Unlock()
+		log.Warn("app: file graph start failed", "project", project.Name, "err", err)
+		return map[string]interface{}{"error": err.Error()}
+	}
+	a.fileIndexers[projectID] = ix
+	a.fileIndexersMu.Unlock()
+
+	log.Info("app: file graph started", "project", project.Name, "path", project.RepoPath)
+	return map[string]interface{}{"started": true, "project": project.Name}
+}
+
+// StopFileGraph stops the file graph indexer for a project and frees resources.
+func (a *App) StopFileGraph(projectID string) {
+	a.fileIndexersMu.Lock()
+	ix, ok := a.fileIndexers[projectID]
+	if ok {
+		delete(a.fileIndexers, projectID)
+	}
+	a.fileIndexersMu.Unlock()
+
+	if ok {
+		ix.Stop()
+		log.Info("app: file graph stopped", "project", projectID)
+	}
+}
+
+// RefreshFileGraph stops and restarts the indexer for a full re-index.
+func (a *App) RefreshFileGraph(projectID string) map[string]interface{} {
+	a.StopFileGraph(projectID)
+	return a.StartFileGraph(projectID)
+}
+
+// fileGraphAdapter bridges filegraph.Graph to graphctx.FileGraphReader.
+type fileGraphAdapter struct {
+	graph *filegraph.Graph
+}
+
+func (a *fileGraphAdapter) Neighbors(path string, depth int) []graphctx.FileGraphNode {
+	neighbors := a.graph.Neighbors(path, depth)
+	result := make([]graphctx.FileGraphNode, 0, len(neighbors))
+	for _, n := range neighbors {
+		syms := make([]string, 0, len(n.Symbols))
+		for _, s := range n.Symbols {
+			syms = append(syms, s.Name)
+		}
+		result = append(result, graphctx.FileGraphNode{
+			Path:     n.Path,
+			Language: n.Language,
+			Symbols:  syms,
+		})
+	}
+	return result
+}
+
+func (a *fileGraphAdapter) SymbolLookup(name string) []graphctx.FileGraphNode {
+	nodes := a.graph.SymbolLookup(name)
+	result := make([]graphctx.FileGraphNode, 0, len(nodes))
+	for _, n := range nodes {
+		syms := make([]string, 0, len(n.Symbols))
+		for _, s := range n.Symbols {
+			syms = append(syms, s.Name)
+		}
+		result = append(result, graphctx.FileGraphNode{
+			Path:     n.Path,
+			Language: n.Language,
+			Symbols:  syms,
+		})
+	}
+	return result
+}
+
+// GetFileGraphStats returns indexing stats for a project (exposed to frontend).
+func (a *App) GetFileGraphStats(projectID string) map[string]interface{} {
+	a.fileIndexersMu.RLock()
+	ix, ok := a.fileIndexers[projectID]
+	a.fileIndexersMu.RUnlock()
+
+	if !ok {
+		return map[string]interface{}{"indexed": false}
+	}
+
+	files, symbols, edges := ix.Graph().Stats()
+	return map[string]interface{}{
+		"indexed":  true,
+		"indexing": ix.IsIndexing(),
+		"files":    files,
+		"symbols":  symbols,
+		"edges":    edges,
+	}
+}
+
+// FileGraphNeighbors returns dependency neighbors for a file path.
+func (a *App) FileGraphNeighbors(projectID, filePath string, depth int) []map[string]interface{} {
+	a.fileIndexersMu.RLock()
+	ix, ok := a.fileIndexers[projectID]
+	a.fileIndexersMu.RUnlock()
+
+	if !ok {
+		return nil
+	}
+
+	neighbors := ix.Graph().Neighbors(filePath, depth)
+	result := make([]map[string]interface{}, 0, len(neighbors))
+	for _, n := range neighbors {
+		syms := make([]string, 0, len(n.Symbols))
+		for _, s := range n.Symbols {
+			syms = append(syms, s.Name)
+		}
+		result = append(result, map[string]interface{}{
+			"path":     n.Path,
+			"language": n.Language,
+			"symbols":  syms,
+		})
+	}
+	return result
+}
+
 func (a *App) Shutdown(ctx context.Context) {
-	// Shutdown order: snapshots → collectors → terminals → DB (reverse of startup).
+	// Shutdown order: file indexers → snapshots → collectors → terminals → DB.
+
+	// Stop file graph indexers — snapshot the list first to avoid holding
+	// the lock while blocking on Stop().
+	a.fileIndexersMu.RLock()
+	indexers := make([]*filegraph.Indexer, 0, len(a.fileIndexers))
+	for _, ix := range a.fileIndexers {
+		indexers = append(indexers, ix)
+	}
+	a.fileIndexersMu.RUnlock()
+	for _, ix := range indexers {
+		ix.Stop()
+	}
 
 	// Save terminal scrollback to BOTH file snapshots and DB before destroying.
 	if a.Terminal != nil {

@@ -17,18 +17,37 @@ import (
 )
 
 // MaxContextChars is the hard cap on injected context to prevent prompt bloat.
-// Mirrors v1's ~2000 char limit.
-const MaxContextChars = 2000
+const MaxContextChars = 8000
 
 // ContextProvider builds codebase context strings for AI chat prompts.
 type ContextProvider struct {
-	queries *db.Queries
-	rawDB   db.DBTX
+	queries    *db.Queries
+	rawDB      db.DBTX
+	graphLookup func(projectCwd string) FileGraphReader
+}
+
+// FileGraphReader is the interface the context provider needs from the file graph.
+type FileGraphReader interface {
+	Neighbors(path string, depth int) []FileGraphNode
+	SymbolLookup(name string) []FileGraphNode
+}
+
+// FileGraphNode is a simplified view of a file graph node for context building.
+type FileGraphNode struct {
+	Path     string
+	Language string
+	Symbols  []string
 }
 
 // NewContextProvider creates a ContextProvider backed by the given DB connections.
 func NewContextProvider(queries *db.Queries, rawDB db.DBTX) *ContextProvider {
 	return &ContextProvider{queries: queries, rawDB: rawDB}
+}
+
+// SetGraphLookup injects the file graph so the context provider can use
+// dependency-aware context selection. Called after indexers are started.
+func (cp *ContextProvider) SetGraphLookup(fn func(projectCwd string) FileGraphReader) {
+	cp.graphLookup = fn
 }
 
 // ContextResult holds the assembled context and metadata about what was included.
@@ -103,9 +122,9 @@ func (cp *ContextProvider) ForProject(ctx context.Context, projectCwd, sessionID
 	}
 }
 
-// ForMessage builds context for a user message by extracting keywords and
-// matching them against recent session activity. This is a lightweight
-// relevance filter — it does not do full semantic search.
+// ForMessage builds context for a user message by extracting keywords,
+// matching them against recent session activity, and using the file graph
+// to include dependency neighbors for referenced files.
 func (cp *ContextProvider) ForMessage(ctx context.Context, sessionID, userMessage string) ContextResult {
 	// Start with the full session context.
 	result := cp.ForSession(ctx, sessionID)
@@ -113,7 +132,7 @@ func (cp *ContextProvider) ForMessage(ctx context.Context, sessionID, userMessag
 		return result
 	}
 
-	// If the message references specific files or tools, prepend that info.
+	// If the message references specific files, prepend that info.
 	fileHints := cp.fileHintsFromMessage(ctx, sessionID, userMessage)
 	if fileHints != "" {
 		combined := fileHints + "\n\n" + result.Context
@@ -125,7 +144,88 @@ func (cp *ContextProvider) ForMessage(ctx context.Context, sessionID, userMessag
 		result.CharCount = len(combined)
 	}
 
+	// Use file graph to add dependency context for referenced files.
+	graphContext := cp.graphContextFromMessage(ctx, sessionID, userMessage)
+	if graphContext != "" {
+		combined := result.Context + "\n\n" + graphContext
+		if len(combined) > MaxContextChars {
+			combined = combined[:MaxContextChars-3] + "..."
+			result.Truncated = true
+		}
+		result.Context = combined
+		result.CharCount = len(combined)
+	}
+
 	return result
+}
+
+// graphContextFromMessage uses the file graph to find dependency neighbors
+// for any files mentioned in the user message.
+func (cp *ContextProvider) graphContextFromMessage(ctx context.Context, sessionID, message string) string {
+	if cp.graphLookup == nil {
+		return ""
+	}
+
+	sess, err := cp.queries.GetSession(ctx, sessionID)
+	if err != nil || !sess.Cwd.Valid {
+		return ""
+	}
+
+	graph := cp.graphLookup(sess.Cwd.String)
+	if graph == nil {
+		return ""
+	}
+
+	// Find files mentioned in the message from recent activity.
+	recentFiles := cp.recentFiles(ctx, sessionID)
+	msgLower := strings.ToLower(message)
+
+	var mentionedPaths []string
+	for _, f := range recentFiles {
+		base := strings.ToLower(lastPathComponent(f))
+		if strings.Contains(msgLower, base) {
+			mentionedPaths = append(mentionedPaths, f)
+		}
+	}
+
+	if len(mentionedPaths) == 0 {
+		return ""
+	}
+
+	// Collect neighbor files (depth 1) for all mentioned files.
+	seen := make(map[string]struct{})
+	var neighborLines []string
+
+	for _, path := range mentionedPaths {
+		if len(neighborLines) >= 15 {
+			break
+		}
+		neighbors := graph.Neighbors(path, 1)
+		for _, n := range neighbors {
+			if _, ok := seen[n.Path]; ok {
+				continue
+			}
+			seen[n.Path] = struct{}{}
+			symStr := ""
+			if len(n.Symbols) > 0 {
+				max := 5
+				if len(n.Symbols) < max {
+					max = len(n.Symbols)
+				}
+				symStr = " → " + strings.Join(n.Symbols[:max], ", ")
+			}
+			neighborLines = append(neighborLines, fmt.Sprintf("  %s (%s)%s", lastPathComponent(n.Path), n.Language, symStr))
+			if len(neighborLines) >= 15 {
+				break
+			}
+		}
+	}
+
+	if len(neighborLines) == 0 {
+		return ""
+	}
+
+	return fmt.Sprintf("[Related Files (dependency graph)]\n%s", strings.Join(neighborLines, "\n"))
 }
 
 // recentFiles returns the last N unique file paths touched in a session.

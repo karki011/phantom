@@ -89,7 +89,7 @@ export function IdentityBind(props: IdentityBindProps) {
       </div>
 
       <AutoTimer
-        timeout={5000}
+        timeout={10000}
         onResolve={handleAutoResolve}
         message="No override detected. Identity locked."
         paused={paused()}

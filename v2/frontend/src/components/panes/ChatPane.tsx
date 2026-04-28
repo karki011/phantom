@@ -17,11 +17,13 @@ import {
   Bot,
   ChevronDown,
   ChevronRight,
-  Copy,
-  Check,
+  FileText,
+  Image,
   MessageSquare,
   PanelLeftClose,
   PanelLeft,
+  Pencil,
+  Paperclip,
   Plus,
   Send,
   Trash2,
@@ -29,17 +31,75 @@ import {
   Brain,
   Wrench,
   Loader,
+  X,
 } from 'lucide-solid';
+import { marked } from 'marked';
+import { markedHighlight } from 'marked-highlight';
+import hljs from 'highlight.js/lib/core';
+import DOMPurify from 'dompurify';
 import { onWailsEvent } from '@/core/events';
 import {
   getConversations,
   createConversation,
   deleteConversation,
+  updateConversationTitle,
   sendChatMessage,
   getChatHistory,
 } from '@/core/bindings/chat';
+import { readFileContents } from '@/core/bindings/editor';
 import type { Conversation, ChatMessage, StreamEvent } from '@/core/types';
+import { Select } from '@kobalte/core/select';
 import * as styles from '@/styles/chat.css';
+
+// ── Highlight.js language registrations (selective to keep bundle lean) ────
+import typescript from 'highlight.js/lib/languages/typescript';
+import javascript from 'highlight.js/lib/languages/javascript';
+import python from 'highlight.js/lib/languages/python';
+import go from 'highlight.js/lib/languages/go';
+import rust from 'highlight.js/lib/languages/rust';
+import json from 'highlight.js/lib/languages/json';
+import bash from 'highlight.js/lib/languages/bash';
+import css from 'highlight.js/lib/languages/css';
+import xml from 'highlight.js/lib/languages/xml';
+import yaml from 'highlight.js/lib/languages/yaml';
+import sql from 'highlight.js/lib/languages/sql';
+import mdLang from 'highlight.js/lib/languages/markdown';
+
+hljs.registerLanguage('typescript', typescript);
+hljs.registerLanguage('ts', typescript);
+hljs.registerLanguage('tsx', typescript);
+hljs.registerLanguage('javascript', javascript);
+hljs.registerLanguage('js', javascript);
+hljs.registerLanguage('jsx', javascript);
+hljs.registerLanguage('python', python);
+hljs.registerLanguage('go', go);
+hljs.registerLanguage('rust', rust);
+hljs.registerLanguage('json', json);
+hljs.registerLanguage('bash', bash);
+hljs.registerLanguage('sh', bash);
+hljs.registerLanguage('shell', bash);
+hljs.registerLanguage('zsh', bash);
+hljs.registerLanguage('css', css);
+hljs.registerLanguage('html', xml);
+hljs.registerLanguage('xml', xml);
+hljs.registerLanguage('yaml', yaml);
+hljs.registerLanguage('yml', yaml);
+hljs.registerLanguage('sql', sql);
+hljs.registerLanguage('markdown', mdLang);
+hljs.registerLanguage('md', mdLang);
+
+// ── Configure marked with GFM + syntax highlighting ──────────────────────
+marked.use(markedHighlight({
+  langPrefix: 'hljs language-',
+  highlight(code: string, lang: string) {
+    if (lang && hljs.getLanguage(lang)) {
+      return hljs.highlight(code, { language: lang }).value;
+    }
+    return hljs.highlightAuto(code).value;
+  },
+}));
+
+marked.use({ gfm: true, breaks: true });
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -51,106 +111,96 @@ const MODELS = [
 
 const uid = () => `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-// ── Markdown rendering (lightweight — no external lib needed) ───────────────
+// ── Attachment types & helpers ──────────────────────────────────────────────
 
-/** Parse a message string into JSX with code blocks, inline code, bold, links */
-const renderMarkdown = (text: string): JSX.Element => {
-  const blocks: JSX.Element[] = [];
-  const lines = text.split('\n');
-  let i = 0;
+interface Attachment {
+  name: string;
+  path: string;
+  type: 'image' | 'code' | 'file';
+  content?: string;
+  preview?: string;
+}
 
-  while (i < lines.length) {
-    const line = lines[i];
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']);
+const CODE_EXTENSIONS = new Set([
+  'ts', 'tsx', 'js', 'jsx', 'json', 'md', 'py', 'go', 'rs', 'yaml', 'yml',
+  'toml', 'txt', 'css', 'html', 'sh', 'bash', 'zsh', 'rb', 'java', 'kt',
+  'swift', 'c', 'cpp', 'h', 'hpp', 'sql', 'graphql', 'proto', 'xml',
+]);
 
-    // Fenced code block
-    if (line.trimStart().startsWith('```')) {
-      const lang = line.trimStart().slice(3).trim();
-      const codeLines: string[] = [];
-      i++;
-      while (i < lines.length && !lines[i].trimStart().startsWith('```')) {
-        codeLines.push(lines[i]);
-        i++;
-      }
-      i++; // skip closing ```
-      blocks.push(<CodeBlock language={lang} code={codeLines.join('\n')} />);
-      continue;
-    }
+const getFileExtension = (name: string): string =>
+  name.split('.').pop()?.toLowerCase() ?? '';
 
-    // Regular paragraph line
-    blocks.push(<p style={{ margin: '0 0 4px 0' }}>{renderInline(line)}</p>);
-    i++;
-  }
-
-  return <div class={styles.markdownProse}>{blocks}</div>;
+const classifyFile = (name: string): 'image' | 'code' | 'file' => {
+  const ext = getFileExtension(name);
+  if (IMAGE_EXTENSIONS.has(ext)) return 'image';
+  if (CODE_EXTENSIONS.has(ext)) return 'code';
+  return 'file';
 };
 
-/** Render inline markdown: **bold**, `code`, [links](url) */
-const renderInline = (text: string): JSX.Element => {
-  const parts: JSX.Element[] = [];
-  // Match bold, inline code, and links
-  const regex = /(\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(<>{text.slice(lastIndex, match.index)}</>);
-    }
-
-    if (match[2]) {
-      // Bold
-      parts.push(<strong>{match[2]}</strong>);
-    } else if (match[3]) {
-      // Inline code
-      parts.push(<code class={styles.inlineCode}>{match[3]}</code>);
-    } else if (match[4] && match[5]) {
-      // Link
-      parts.push(
-        <a
-          href={match[5]}
-          onClick={(e) => { e.preventDefault(); window.open(match![5], '_blank'); }}
-          style={{ color: 'var(--accent, #56CCFF)', 'text-decoration': 'none' }}
-        >
-          {match[4]}
-        </a>,
-      );
-    }
-
-    lastIndex = regex.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    parts.push(<>{text.slice(lastIndex)}</>);
-  }
-
-  return <>{parts}</>;
+const langFromExtension = (name: string): string => {
+  const ext = getFileExtension(name);
+  const map: Record<string, string> = {
+    ts: 'typescript', tsx: 'tsx', js: 'javascript', jsx: 'jsx',
+    json: 'json', md: 'markdown', py: 'python', go: 'go', rs: 'rust',
+    yaml: 'yaml', yml: 'yaml', toml: 'toml', txt: 'text', css: 'css',
+    html: 'html', sh: 'bash', bash: 'bash', zsh: 'zsh', rb: 'ruby',
+    java: 'java', kt: 'kotlin', swift: 'swift', c: 'c', cpp: 'cpp',
+    h: 'c', hpp: 'cpp', sql: 'sql', graphql: 'graphql', proto: 'protobuf',
+    xml: 'xml',
+  };
+  return map[ext] ?? ext;
 };
 
-// ── Code Block Component ────────────────────────────────────────────────────
+const formatAttachmentsForMessage = (attachments: Attachment[]): string => {
+  const parts: string[] = [];
+  for (const att of attachments) {
+    if (att.type === 'image') {
+      parts.push(`[Image: ${att.name} — ${att.path}]`);
+    } else if (att.type === 'code' && att.content) {
+      parts.push(`File: ${att.name} (${att.path})\n\`\`\`${langFromExtension(att.name)}\n${att.content}\n\`\`\``);
+    } else {
+      parts.push(`[File: ${att.name} — ${att.path}]`);
+    }
+  }
+  return parts.join('\n\n');
+};
 
-function CodeBlock(props: { language: string; code: string }) {
-  const [copied, setCopied] = createSignal(false);
+// ── Markdown Content Component (marked + DOMPurify + highlight.js) ──────────
 
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(props.code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+const MarkdownContent = (props: { text: string }) => {
+  let ref: HTMLDivElement | undefined;
+
+  const html = () => DOMPurify.sanitize(marked.parse(props.text) as string);
+
+  // Add copy buttons to code blocks after render
+  const addCopyButtons = () => {
+    if (!ref) return;
+    ref.querySelectorAll('pre').forEach((pre) => {
+      if (pre.querySelector('.copy-btn')) return;
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.textContent = 'Copy';
+      pre.style.position = 'relative';
+      pre.addEventListener('mouseenter', () => { btn.style.opacity = '1'; });
+      pre.addEventListener('mouseleave', () => { btn.style.opacity = '0'; });
+      btn.addEventListener('click', () => {
+        const code = pre.querySelector('code')?.textContent ?? pre.textContent ?? '';
+        navigator.clipboard.writeText(code);
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+      });
+      pre.appendChild(btn);
+    });
   };
 
-  return (
-    <div class={styles.codeBlock}>
-      <div class={styles.codeBlockHeader}>
-        <span>{props.language || 'text'}</span>
-        <button type="button" class={styles.copyButton} onClick={handleCopy}>
-          <Show when={copied()} fallback={<><Copy size={10} /> Copy</>}>
-            <Check size={10} /> Copied
-          </Show>
-        </button>
-      </div>
-      <pre class={styles.codeBlockContent}><code>{props.code}</code></pre>
-    </div>
-  );
-}
+  createEffect(() => {
+    html(); // track reactivity
+    requestAnimationFrame(addCopyButtons);
+  });
+
+  return <div class={styles.markdownProse} ref={ref} innerHTML={html()} />;
+};
 
 // ── Thinking Block Component ────────────────────────────────────────────────
 
@@ -227,7 +277,7 @@ function MessageBubble(props: { message: DisplayMessage }) {
 
         {/* Message content */}
         <Show when={props.message.content}>
-          {renderMarkdown(props.message.content)}
+          <MarkdownContent text={props.message.content} />
         </Show>
 
         {/* Streaming cursor */}
@@ -256,9 +306,14 @@ export default function ChatPane(props: ChatPaneProps) {
   const [sending, setSending] = createSignal(false);
   const [sidebarOpen, setSidebarOpen] = createSignal(true);
   const [loading, setLoading] = createSignal(false);
+  const [attachments, setAttachments] = createSignal<Attachment[]>([]);
+  const [dragOver, setDragOver] = createSignal(false);
+  const [editingTitle, setEditingTitle] = createSignal(false);
+  const [titleDraft, setTitleDraft] = createSignal('');
 
   let messagesEndRef: HTMLDivElement | undefined;
   let textareaRef: HTMLTextAreaElement | undefined;
+  let titleInputRef: HTMLInputElement | undefined;
 
   const workspaceId = () => props.workspaceId ?? '';
 
@@ -398,17 +453,43 @@ export default function ChatPane(props: ChatPaneProps) {
 
   // ── Actions ─────────────────────────────────────────────────────────────
 
+  /** Auto-generate a conversation title from the first user message. */
+  const maybeAutoTitle = async (convId: string, messageText: string) => {
+    const conv = conversations().find((c) => c.id === convId);
+    if (!conv || conv.title !== 'New Chat') return;
+
+    const newTitle = messageText.length > 40
+      ? `${messageText.slice(0, 40)}...`
+      : messageText;
+
+    const ok = await updateConversationTitle(convId, newTitle);
+    if (ok) {
+      setConversations((prev) =>
+        prev.map((c) => (c.id === convId ? { ...c, title: newTitle } : c)),
+      );
+    }
+  };
+
   const handleSend = async () => {
     const text = input().trim();
     const convId = activeConvId();
-    if (!text || !convId || sending()) return;
+    const hasAttachments = attachments().length > 0;
+    if ((!text && !hasAttachments) || !convId || sending()) return;
+
+    // Build full message content with attachments prepended
+    const currentAttachments = attachments();
+    let fullContent = text;
+    if (currentAttachments.length > 0) {
+      const attachmentText = formatAttachmentsForMessage(currentAttachments);
+      fullContent = text ? `${attachmentText}\n\n${text}` : attachmentText;
+    }
 
     // Add user message immediately
     const userMsg: DisplayMessage = {
       id: uid(),
       conversation_id: convId,
       role: 'user',
-      content: text,
+      content: fullContent,
       model: model(),
       created_at: Date.now(),
       streaming: false,
@@ -417,6 +498,7 @@ export default function ChatPane(props: ChatPaneProps) {
     batch(() => {
       setMessages((prev) => [...prev, userMsg]);
       setInput('');
+      setAttachments([]);
       setSending(true);
     });
 
@@ -425,8 +507,12 @@ export default function ChatPane(props: ChatPaneProps) {
     // Auto-resize textarea back
     if (textareaRef) textareaRef.style.height = 'auto';
 
+    // Auto-title from first user message or attachment names
+    const titleSource = text || currentAttachments.map((a) => a.name).join(', ');
+    void maybeAutoTitle(convId, titleSource);
+
     // Send via binding — backend will emit stream events
-    const ok = await sendChatMessage(convId, text, model());
+    const ok = await sendChatMessage(convId, fullContent, model());
     if (!ok) {
       setSending(false);
       setMessages((prev) => [
@@ -470,6 +556,119 @@ export default function ChatPane(props: ChatPaneProps) {
 
   const handleSelectConversation = (id: string) => {
     setActiveConvId(id);
+  };
+
+  // ── Drag & Drop ────────────────────────────────────────────────────────
+
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  };
+
+  const handleDragLeave = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  };
+
+  const handleDrop = async (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+
+    // Internal phantom sidebar drag
+    const phantomPath = e.dataTransfer?.getData('text/phantom-path');
+    if (phantomPath) {
+      const name = phantomPath.split('/').pop() ?? phantomPath;
+      const fileType = classifyFile(name);
+      const att: Attachment = { name, path: phantomPath, type: fileType };
+
+      if (fileType === 'code') {
+        const content = await readFileContents(workspaceId(), phantomPath);
+        if (content) att.content = content;
+      }
+
+      setAttachments((prev) => [...prev, att]);
+      return;
+    }
+
+    // External file drop from Finder
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      const newAttachments: Attachment[] = [];
+
+      for (const file of Array.from(files)) {
+        const filePath = (file as any).path ?? file.name;
+        const fileType = classifyFile(file.name);
+        const att: Attachment = { name: file.name, path: filePath, type: fileType };
+
+        if (fileType === 'image') {
+          // Generate base64 preview for images
+          const reader = new FileReader();
+          const preview = await new Promise<string>((resolve) => {
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(file);
+          });
+          att.preview = preview;
+        } else if (fileType === 'code') {
+          // Read text content via FileReader
+          const content = await file.text();
+          if (content) att.content = content;
+        }
+
+        newAttachments.push(att);
+      }
+
+      setAttachments((prev) => [...prev, ...newAttachments]);
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // ── Inline Title Editing ───────────────────────────────────────────────
+
+  const startEditingTitle = () => {
+    const convId = activeConvId();
+    if (!convId) return;
+    setTitleDraft(activeTitle());
+    setEditingTitle(true);
+    // Focus the input after render
+    requestAnimationFrame(() => {
+      titleInputRef?.focus();
+      titleInputRef?.select();
+    });
+  };
+
+  const commitTitleEdit = async () => {
+    const convId = activeConvId();
+    const newTitle = titleDraft().trim();
+    setEditingTitle(false);
+
+    if (!convId || !newTitle || newTitle === activeTitle()) return;
+
+    const ok = await updateConversationTitle(convId, newTitle);
+    if (ok) {
+      setConversations((prev) =>
+        prev.map((c) => (c.id === convId ? { ...c, title: newTitle } : c)),
+      );
+    }
+  };
+
+  const cancelTitleEdit = () => {
+    setEditingTitle(false);
+  };
+
+  const handleTitleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void commitTitleEdit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelTitleEdit();
+    }
   };
 
   // ── Keyboard ────────────────────────────────────────────────────────────
@@ -579,17 +778,57 @@ export default function ChatPane(props: ChatPaneProps) {
             </Show>
           </button>
 
-          <span class={styles.mainHeaderTitle}>{activeTitle()}</span>
-
-          <select
-            class={styles.modelSelector}
-            value={model()}
-            onChange={(e) => setModel(e.currentTarget.value)}
+          <Show
+            when={editingTitle()}
+            fallback={
+              <div
+                class={`${styles.mainHeaderTitle} ${styles.editableTitleWrapper}`}
+                onClick={startEditingTitle}
+                title="Click to rename"
+              >
+                <span style={{ overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap' }}>
+                  {activeTitle()}
+                </span>
+                <Pencil size={12} class={styles.editableTitleIcon} />
+              </div>
+            }
           >
-            <For each={MODELS}>
-              {(m) => <option value={m.value}>{m.label}</option>}
-            </For>
-          </select>
+            <input
+              ref={titleInputRef}
+              class={styles.editableTitleInput}
+              value={titleDraft()}
+              onInput={(e) => setTitleDraft(e.currentTarget.value)}
+              onBlur={() => void commitTitleEdit()}
+              onKeyDown={handleTitleKeyDown}
+            />
+          </Show>
+
+          <Select<string>
+            value={model()}
+            onChange={(val) => { if (val !== null) setModel(val); }}
+            options={MODELS.map((m) => m.value)}
+            itemComponent={(itemProps) => (
+              <Select.Item item={itemProps.item} class={styles.modelSelectItem}>
+                <Select.ItemLabel class={styles.modelSelectItemLabel}>
+                  {MODELS.find((m) => m.value === itemProps.item.rawValue)?.label ?? itemProps.item.rawValue}
+                </Select.ItemLabel>
+              </Select.Item>
+            )}
+          >
+            <Select.Trigger class={styles.modelSelectTrigger}>
+              <Select.Value<string> class={styles.modelSelectValue}>
+                {(state) => MODELS.find((m) => m.value === state.selectedOption())?.label ?? state.selectedOption()}
+              </Select.Value>
+              <Select.Icon class={styles.modelSelectIcon}>
+                <ChevronDown size={12} />
+              </Select.Icon>
+            </Select.Trigger>
+            <Select.Portal>
+              <Select.Content class={styles.modelSelectContent}>
+                <Select.Listbox class={styles.modelSelectListbox} />
+              </Select.Content>
+            </Select.Portal>
+          </Select>
         </div>
 
         {/* Messages */}
@@ -636,24 +875,69 @@ export default function ChatPane(props: ChatPaneProps) {
                 {(msg) => <MessageBubble message={msg} />}
               </For>
 
+              <Show when={sending() && !messages().some((m) => m.role === 'assistant' && m.streaming)}>
+                <div class={styles.messageRow} data-role="assistant">
+                  <div class={styles.messageAvatar} data-role="assistant">
+                    <Bot size={14} />
+                  </div>
+                  <div class={styles.messageBubble} data-role="assistant">
+                    <div class={styles.typingIndicator}>
+                      <span class={styles.typingDot} />
+                      <span class={styles.typingDot} />
+                      <span class={styles.typingDot} />
+                    </div>
+                  </div>
+                </div>
+              </Show>
+
               <div ref={messagesEndRef} />
             </div>
           </Show>
 
+          {/* Attachments */}
+          <Show when={attachments().length > 0}>
+            <div class={styles.attachmentBar}>
+              <For each={attachments()}>
+                {(att, index) => (
+                  <div class={styles.attachmentChip}>
+                    <Show when={att.type === 'image' && att.preview}>
+                      <img src={att.preview} alt={att.name} class={styles.attachmentChipImage} />
+                    </Show>
+                    <Show when={att.type === 'image' && !att.preview}>
+                      <Image size={12} />
+                    </Show>
+                    <Show when={att.type === 'code'}>
+                      <FileText size={12} />
+                    </Show>
+                    <Show when={att.type === 'file'}>
+                      <Paperclip size={12} />
+                    </Show>
+                    <span style={{ overflow: 'hidden', 'text-overflow': 'ellipsis' }}>{att.name}</span>
+                    <button
+                      type="button"
+                      class={styles.attachmentRemoveButton}
+                      onClick={() => removeAttachment(index())}
+                      title="Remove attachment"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                )}
+              </For>
+            </div>
+          </Show>
+
           {/* Input */}
-          <div class={styles.inputHint}>
-            <Show when={sending()}>
-              <span style={{ color: 'var(--accent, inherit)' }}>Claude is responding...</span>
-            </Show>
-            <Show when={!sending()}>
-              Ctrl+Enter to send
-            </Show>
-          </div>
-          <div class={styles.inputArea}>
+          <div
+            class={`${styles.inputArea} ${dragOver() ? styles.inputAreaDragOver : ''}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <textarea
               ref={textareaRef}
               class={styles.inputTextarea}
-              placeholder="Ask Claude anything..."
+              placeholder={dragOver() ? 'Drop files here...' : 'Ask Claude anything...'}
               value={input()}
               onInput={handleInput}
               onKeyDown={handleKeyDown}
@@ -664,7 +948,7 @@ export default function ChatPane(props: ChatPaneProps) {
               type="button"
               class={styles.sendButton}
               onClick={handleSend}
-              disabled={!input().trim() || sending()}
+              disabled={(!input().trim() && attachments().length === 0) || sending()}
               title="Send (Ctrl+Enter)"
             >
               <Send size={16} />

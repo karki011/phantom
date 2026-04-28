@@ -25,6 +25,22 @@ export const content = style({
   zIndex: 200,
   animation: `${fadeIn} 150ms ease`,
   maxWidth: '300px',
+  lineHeight: 1.4,
+  whiteSpace: 'nowrap',
+});
+
+export const contentMultiline = style({
+  backgroundColor: vars.color.bgTertiary,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.sm,
+  padding: `${vars.space.xs} ${vars.space.sm}`,
+  fontSize: vars.fontSize.xs,
+  fontFamily: vars.font.mono,
+  color: vars.color.textPrimary,
+  boxShadow: vars.shadow.md,
+  zIndex: 200,
+  animation: `${fadeIn} 150ms ease`,
+  maxWidth: '300px',
   maxHeight: '280px',
   overflowY: 'auto',
   lineHeight: 1.4,

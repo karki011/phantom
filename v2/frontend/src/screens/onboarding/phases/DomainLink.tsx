@@ -147,7 +147,7 @@ export function DomainLink(props: DomainLinkProps) {
       </div>
 
       <AutoTimer
-        timeout={8000}
+        timeout={10000}
         onResolve={handleSkip}
         message="No domain linked. Proceeding without binding."
         paused={paused()}

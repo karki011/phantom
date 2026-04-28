@@ -6,10 +6,19 @@ import { getSessions } from '../../../core/bindings';
 import { playSound } from '../../../core/audio/engine';
 import { speakSystem } from '../config/voice';
 import { buildBootScript } from '../config/phases';
-import type { BootLine, LineStyle } from '../config/types';
+import type { BootLine, LineStyle, BootScanData } from '../config/types';
+import { BootRings } from './BootRings';
+
+const App = () => (window as any).go?.['app']?.App;
 
 interface BootTerminalProps {
   onBootComplete: () => void;
+}
+
+interface DisplayLine {
+  text: string;
+  style: LineStyle;
+  prompt?: string;
 }
 
 const styleMap: Record<LineStyle, string> = {
@@ -24,33 +33,49 @@ const styleMap: Record<LineStyle, string> = {
 };
 
 export function BootTerminal(props: BootTerminalProps) {
-  const [lines, setLines] = createSignal<{ text: string; style: LineStyle }[]>([]);
+  const [lines, setLines] = createSignal<DisplayLine[]>([]);
   const [typing, setTyping] = createSignal(false);
+  const [bootProgress, setBootProgress] = createSignal(0);
   let cancelled = false;
+  let totalLines = 0;
 
   function sleep(ms: number): Promise<void> {
     return new Promise((r) => setTimeout(r, ms));
   }
 
   async function typewriterLine(text: string, charDelay = 25): Promise<void> {
+    if (!text.length) return;
     setTyping(true);
-    let current = '';
-    let charCount = 0;
-    for (const char of text) {
-      if (cancelled) return;
-      current += char;
-      charCount++;
-      setLines((prev) => {
-        const copy = [...prev];
-        copy[copy.length - 1] = { ...copy[copy.length - 1], text: current };
-        return copy;
-      });
-      if (charCount % 4 === 0) {
-        try { playSound('typing'); } catch {}
-      }
-      await sleep(charDelay + Math.random() * 20);
-    }
-    setTyping(false);
+    const avgDelay = charDelay + 10;
+
+    return new Promise<void>((resolve) => {
+      const start = Date.now();
+      let rendered = 0;
+
+      const tick = () => {
+        if (cancelled) { setTyping(false); resolve(); return; }
+
+        const target = Math.min(text.length, Math.floor((Date.now() - start) / avgDelay) + 1);
+        if (target > rendered) {
+          rendered = target;
+          setLines((prev) => {
+            const copy = [...prev];
+            copy[copy.length - 1] = { ...copy[copy.length - 1], text: text.slice(0, rendered) };
+            return copy;
+          });
+          try { playSound('typing'); } catch {}
+        }
+
+        if (rendered >= text.length) {
+          setTyping(false);
+          resolve();
+        } else {
+          setTimeout(tick, avgDelay);
+        }
+      };
+
+      tick();
+    });
   }
 
   async function addLine(line: BootLine): Promise<void> {
@@ -62,7 +87,8 @@ export function BootTerminal(props: BootTerminalProps) {
       return;
     }
 
-    setLines((prev) => [...prev, { text: '', style: line.style ?? 'normal' }]);
+    setLines((prev) => [...prev, { text: '', style: line.style ?? 'normal', prompt: line.prompt }]);
+    setBootProgress((p) => p + 1);
 
     if (line.sound) {
       try { playSound(line.sound); } catch {}
@@ -83,12 +109,27 @@ export function BootTerminal(props: BootTerminalProps) {
     try { playSound('hum_start'); } catch {}
 
     let sessionCount = 0;
+    let scan: BootScanData | undefined;
     try {
       const sessions = await getSessions();
       sessionCount = sessions.length;
     } catch {}
+    try {
+      const app = App();
+      if (app?.BootScan) {
+        const raw = await app.BootScan();
+        if (raw) {
+          scan = {
+            gitInstalled: raw.gitInstalled ?? false,
+            gitVersion: raw.gitVersion,
+            agents: raw.agents ?? [],
+          };
+        }
+      }
+    } catch {}
 
-    const bootScript = buildBootScript(sessionCount);
+    const bootScript = buildBootScript(sessionCount, scan);
+    totalLines = bootScript.filter((l) => l.style !== 'separator').length;
 
     for (const line of bootScript) {
       if (cancelled) return;
@@ -105,6 +146,7 @@ export function BootTerminal(props: BootTerminalProps) {
 
   return (
     <div class={styles.terminal}>
+      <BootRings progress={bootProgress()} total={totalLines} />
       <div class={styles.linesContainer}>
         <For each={lines()}>
           {(line, i) => (
@@ -113,9 +155,12 @@ export function BootTerminal(props: BootTerminalProps) {
               fallback={<div class={styles.separator} />}
             >
               <div class={styles.line}>
+                <Show when={line.prompt}>
+                  <span class={styles.promptSymbol}>{line.prompt}</span>
+                </Show>
                 <span class={styleMap[line.style]}>{line.text}</span>
                 <Show when={i() === lines().length - 1 && typing()}>
-                  <span class={styles.cursor}>_</span>
+                  <span class={styles.cursor} />
                 </Show>
               </div>
             </Show>

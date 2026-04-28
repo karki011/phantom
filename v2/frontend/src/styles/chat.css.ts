@@ -1,7 +1,7 @@
 // PhantomOS v2 — Chat pane styles
 // Author: Subash Karki
 
-import { style, keyframes } from '@vanilla-extract/css';
+import { style, keyframes, globalStyle } from '@vanilla-extract/css';
 import { vars } from './theme.css';
 
 // ── Animations ──────────────────────────────────────────────────────────────
@@ -9,6 +9,11 @@ import { vars } from './theme.css';
 const pulse = keyframes({
   '0%, 100%': { opacity: 0.4 },
   '50%': { opacity: 1 },
+});
+
+const typingBounce = keyframes({
+  '0%, 80%, 100%': { transform: 'translateY(0)' },
+  '40%': { transform: 'translateY(-4px)' },
 });
 
 const slideIn = keyframes({
@@ -174,7 +179,7 @@ export const mainHeaderTitle = style({
   whiteSpace: 'nowrap',
 });
 
-export const modelSelector = style({
+export const modelSelectTrigger = style({
   display: 'inline-flex',
   alignItems: 'center',
   gap: vars.space.xs,
@@ -189,7 +194,68 @@ export const modelSelector = style({
   transition: `border-color ${vars.animation.fast} ease`,
   outline: 'none',
   ':hover': { borderColor: vars.color.borderHover },
-  ':focus': { borderColor: vars.color.accent },
+  selectors: {
+    '&:focus': { borderColor: vars.color.accent },
+    '&[data-expanded]': { borderColor: vars.color.accent },
+  },
+});
+
+export const modelSelectValue = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textPrimary,
+});
+
+export const modelSelectIcon = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  color: vars.color.textDisabled,
+  transition: `transform ${vars.animation.fast} ease`,
+  selectors: {
+    [`${modelSelectTrigger}[data-expanded] &`]: {
+      transform: 'rotate(180deg)',
+    },
+  },
+});
+
+export const modelSelectContent = style({
+  backgroundColor: vars.color.bgSecondary,
+  border: `1px solid ${vars.color.borderFocus}`,
+  borderRadius: vars.radius.md,
+  padding: `${vars.space.xs} 0`,
+  boxShadow: vars.shadow.md,
+  zIndex: 500,
+  maxHeight: '200px',
+  overflowY: 'auto',
+});
+
+export const modelSelectListbox = style({
+  outline: 'none',
+});
+
+export const modelSelectItem = style({
+  display: 'flex',
+  alignItems: 'center',
+  padding: `${vars.space.xs} ${vars.space.md}`,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textPrimary,
+  cursor: 'pointer',
+  outline: 'none',
+  selectors: {
+    '&[data-highlighted]': {
+      backgroundColor: vars.color.bgHover,
+      color: vars.color.accent,
+    },
+    '&[data-selected]': {
+      color: vars.color.accent,
+    },
+  },
+});
+
+export const modelSelectItemLabel = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
 });
 
 export const toggleSidebarButton = style({
@@ -274,6 +340,25 @@ export const messageBubble = style({
       border: `1px solid ${vars.color.border}`,
       borderBottomLeftRadius: vars.radius.sm,
     },
+  },
+});
+
+export const typingIndicator = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '4px 0',
+});
+
+export const typingDot = style({
+  width: '6px',
+  height: '6px',
+  borderRadius: '50%',
+  background: vars.color.accent,
+  animation: `${typingBounce} 1.2s ease-in-out infinite`,
+  selectors: {
+    '&:nth-child(2)': { animationDelay: '0.15s' },
+    '&:nth-child(3)': { animationDelay: '0.3s' },
   },
 });
 
@@ -425,6 +510,145 @@ export const markdownProse = style({
   color: vars.color.textPrimary,
 });
 
+// ── Markdown Prose — globalStyle rules for marked HTML output ──────────────
+
+// Paragraphs
+globalStyle(`${markdownProse} p`, {
+  margin: '0 0 4px 0',
+  lineHeight: 1.5,
+});
+
+// Strong/bold
+globalStyle(`${markdownProse} strong`, {
+  fontWeight: 600,
+  color: vars.color.textPrimary,
+});
+
+// Links
+globalStyle(`${markdownProse} a`, {
+  color: vars.color.accent,
+  textDecoration: 'none',
+});
+
+globalStyle(`${markdownProse} a:hover`, {
+  textDecoration: 'underline',
+});
+
+// Headers
+globalStyle(`${markdownProse} h1, ${markdownProse} h2, ${markdownProse} h3`, {
+  color: vars.color.textPrimary,
+  fontWeight: 600,
+  margin: '12px 0 6px',
+  lineHeight: 1.3,
+});
+
+globalStyle(`${markdownProse} h1`, { fontSize: vars.fontSize.lg });
+globalStyle(`${markdownProse} h2`, { fontSize: vars.fontSize.md });
+globalStyle(`${markdownProse} h3`, { fontSize: vars.fontSize.sm });
+
+// Lists
+globalStyle(`${markdownProse} ul, ${markdownProse} ol`, {
+  paddingLeft: '20px',
+  margin: '4px 0',
+});
+
+globalStyle(`${markdownProse} li`, {
+  margin: '2px 0',
+  lineHeight: 1.5,
+});
+
+// Blockquotes
+globalStyle(`${markdownProse} blockquote`, {
+  borderLeft: `3px solid ${vars.color.accent}`,
+  paddingLeft: '12px',
+  margin: '8px 0',
+  color: vars.color.textSecondary,
+  fontStyle: 'italic',
+});
+
+// Horizontal rules
+globalStyle(`${markdownProse} hr`, {
+  border: 'none',
+  borderTop: `1px solid ${vars.color.border}`,
+  margin: '12px 0',
+});
+
+// Tables
+globalStyle(`${markdownProse} table`, {
+  borderCollapse: 'collapse',
+  width: '100%',
+  margin: '8px 0',
+  fontSize: vars.fontSize.sm,
+});
+
+globalStyle(`${markdownProse} th, ${markdownProse} td`, {
+  border: `1px solid ${vars.color.border}`,
+  padding: '6px 12px',
+  textAlign: 'left',
+});
+
+globalStyle(`${markdownProse} th`, {
+  background: vars.color.bgTertiary,
+  fontWeight: 600,
+  color: vars.color.textPrimary,
+});
+
+globalStyle(`${markdownProse} tr:nth-child(even)`, {
+  background: `color-mix(in srgb, ${vars.color.bgTertiary} 50%, transparent)`,
+});
+
+// Code blocks (from marked + highlight.js)
+globalStyle(`${markdownProse} pre`, {
+  background: vars.color.bgSecondary,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+  padding: '12px',
+  margin: '8px 0',
+  overflowX: 'auto',
+  fontSize: vars.fontSize.xs,
+  fontFamily: vars.font.mono,
+  lineHeight: 1.5,
+});
+
+globalStyle(`${markdownProse} pre code`, {
+  background: 'transparent',
+  padding: '0',
+  border: 'none',
+  fontSize: 'inherit',
+});
+
+// Inline code
+globalStyle(`${markdownProse} code`, {
+  background: vars.color.bgTertiary,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.sm,
+  padding: '1px 5px',
+  fontSize: '0.85em',
+  fontFamily: vars.font.mono,
+});
+
+// Copy button injected via MarkdownContent
+globalStyle(`${markdownProse} .copy-btn`, {
+  position: 'absolute',
+  top: '6px',
+  right: '6px',
+  padding: '2px 8px',
+  borderRadius: '4px',
+  border: `1px solid ${vars.color.border}`,
+  background: vars.color.bgTertiary,
+  color: vars.color.textSecondary,
+  fontSize: '10px',
+  fontFamily: vars.font.mono,
+  cursor: 'pointer',
+  opacity: 0,
+  transition: 'opacity 150ms',
+});
+
+globalStyle(`${markdownProse} .copy-btn:hover`, {
+  color: vars.color.accent,
+  borderColor: vars.color.accent,
+});
+
 // ── Input Area ──────────────────────────────────────────────────────────────
 
 export const inputArea = style({
@@ -521,4 +745,106 @@ export const emptySubtitle = style({
   textAlign: 'center',
   maxWidth: '320px',
   lineHeight: '1.5',
+});
+
+// ── Drag & Drop ────────────────────────────────────────────────────────────
+
+export const inputAreaDragOver = style({
+  borderColor: vars.color.accent,
+  background: `color-mix(in srgb, ${vars.color.accent} 8%, ${vars.color.bgSecondary})`,
+  boxShadow: `inset 0 0 0 1px ${vars.color.accent}`,
+});
+
+export const attachmentBar = style({
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: vars.space.sm,
+  padding: `${vars.space.sm} ${vars.space.xl}`,
+  background: vars.color.bgSecondary,
+  borderTop: `1px solid ${vars.color.border}`,
+});
+
+export const attachmentChip = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `2px ${vars.space.sm} 2px ${vars.space.md}`,
+  borderRadius: vars.radius.sm,
+  background: vars.color.bgTertiary,
+  border: `1px solid ${vars.color.border}`,
+  fontSize: vars.fontSize.xs,
+  fontFamily: vars.font.mono,
+  color: vars.color.textSecondary,
+  maxWidth: '200px',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+});
+
+export const attachmentChipImage = style({
+  width: '20px',
+  height: '20px',
+  borderRadius: '2px',
+  objectFit: 'cover',
+  flexShrink: 0,
+});
+
+export const attachmentRemoveButton = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '16px',
+  height: '16px',
+  borderRadius: '50%',
+  border: 'none',
+  background: 'transparent',
+  color: vars.color.textDisabled,
+  cursor: 'pointer',
+  flexShrink: 0,
+  transition: `color ${vars.animation.fast} ease`,
+  ':hover': {
+    color: vars.color.danger,
+  },
+});
+
+// ── Editable Title ─────────────────────────────────────────────────────────
+
+export const editableTitleWrapper = style({
+  flex: 1,
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  overflow: 'hidden',
+  cursor: 'pointer',
+  borderRadius: vars.radius.sm,
+  padding: `2px ${vars.space.xs}`,
+  transition: `background ${vars.animation.fast} ease`,
+  ':hover': {
+    background: vars.color.bgHover,
+  },
+});
+
+export const editableTitleIcon = style({
+  flexShrink: 0,
+  color: vars.color.textDisabled,
+  opacity: 0,
+  transition: `opacity ${vars.animation.fast} ease`,
+  selectors: {
+    [`${editableTitleWrapper}:hover &`]: {
+      opacity: 1,
+    },
+  },
+});
+
+export const editableTitleInput = style({
+  flex: 1,
+  fontSize: vars.fontSize.md,
+  fontWeight: 600,
+  color: vars.color.textPrimary,
+  background: vars.color.bgPrimary,
+  border: `1px solid ${vars.color.accent}`,
+  borderRadius: vars.radius.sm,
+  padding: `2px ${vars.space.sm}`,
+  outline: 'none',
+  fontFamily: 'inherit',
 });

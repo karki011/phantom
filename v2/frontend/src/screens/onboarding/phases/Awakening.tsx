@@ -63,7 +63,7 @@ export function Awakening(props: AwakeningProps) {
       schedule(() => {
         setAuthorityPhase('granted');
         playSound('bass');
-        speakSystem('Authority level. Granted.');
+        speakSystem('Neural link. Synchronized.');
 
         schedule(() => {
           setShowHunterCard(true);
@@ -109,8 +109,8 @@ export function Awakening(props: AwakeningProps) {
           classList={{ [styles.authorityGranted]: authorityPhase() === 'granted' }}
         >
           {authorityPhase() === 'initializing'
-            ? 'Authority level: initializing...'
-            : 'Authority level: GRANTED'}
+            ? 'Neural link: synchronizing...'
+            : 'NEURAL LINK: SYNCHRONIZED'}
         </div>
       </Show>
 

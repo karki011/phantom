@@ -1,6 +1,6 @@
 // Author: Subash Karki
 
-type SoundCue = 'typing' | 'scan' | 'ok' | 'reveal' | 'whoosh' | 'bass' | 'hum_start' | 'hum_stop';
+type SoundCue = 'typing' | 'scan' | 'ok' | 'reveal' | 'whoosh' | 'bass' | 'ceremony' | 'hum_start' | 'hum_stop';
 
 let ctx: AudioContext | null = null;
 let humOsc: OscillatorNode | null = null;
@@ -80,6 +80,18 @@ const cues: Record<SoundCue, () => void> = {
       { freq: 40, endFreq: 40, type: 'triangle' },
     ], 0.4, 0.08);
   },
+  ceremony: () => {
+    // Grand ascending fanfare for rank-up celebrations
+    playTone(330, 330, 0.2, 'sine', 0.12);
+    playTone(392, 392, 0.2, 'sine', 0.12, 0.15);
+    playTone(494, 494, 0.2, 'sine', 0.12, 0.3);
+    playTone(659, 659, 0.4, 'sine', 0.15, 0.45);
+    playChord([
+      { freq: 330, endFreq: 330, type: 'sine' },
+      { freq: 494, endFreq: 494, type: 'sine' },
+      { freq: 659, endFreq: 659, type: 'sine' },
+    ], 0.6, 0.1);
+  },
   hum_start: () => {
     if (humOsc) return;
     const c = getCtx();
@@ -156,8 +168,16 @@ export function speak(text: string, rate?: number, pitch?: number): Promise<void
       utterance.rate = rate ?? speechRate;
       utterance.pitch = pitch ?? 0.9;
       utterance.volume = volume;
-      utterance.onend = () => resolve();
-      utterance.onerror = () => resolve();
+
+      let resolved = false;
+      const done = () => { if (!resolved) { resolved = true; resolve(); } };
+
+      utterance.onend = done;
+      utterance.onerror = done;
+
+      const maxWait = (text.length / 12) * 1000 / (rate ?? speechRate) + 3000;
+      setTimeout(done, maxWait);
+
       window.speechSynthesis.speak(utterance);
     } catch {
       resolve();

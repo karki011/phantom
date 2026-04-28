@@ -18,6 +18,8 @@ interface BootScanData {
   operator: string;
   nodeVersion: string;
   bunVersion: string;
+  gitInstalled: boolean;
+  gitVersion?: string;
   /** @deprecated Use agents[] instead — kept for backward compat with older backends */
   claudeSessions: number;
   /** @deprecated Use agents[] instead — kept for backward compat with older backends */
@@ -84,11 +86,20 @@ function formatScans(d: BootScanData): ScanResult[] {
         status: (sessionCount > 0 ? 'success' : 'offline') as ScanStatus,
       }];
 
+  const gitDetail = d.gitInstalled
+    ? `${d.gitVersion ?? 'installed'} ─── operational`
+    : '─── NOT FOUND (required)';
+
   return [
     {
       label: 'Operator',
       detail: d.operator ? `${d.operator} ─── confirmed` : '─── offline',
       status: d.operator ? 'success' : 'offline',
+    },
+    {
+      label: 'Git',
+      detail: gitDetail,
+      status: d.gitInstalled ? 'success' : 'warning',
     },
     {
       label: 'Runtimes',
@@ -123,6 +134,7 @@ function formatScans(d: BootScanData): ScanResult[] {
 function defaultScans(): ScanResult[] {
   return [
     { label: 'Operator', detail: '─── standing by', status: 'warning' },
+    { label: 'Git', detail: '─── scanning', status: 'warning' },
     { label: 'Runtimes', detail: '─── standing by', status: 'warning' },
     { label: 'AI Agents', detail: '─── scanning', status: 'warning' },
     { label: 'MCP channels', detail: '─── standing by', status: 'warning' },

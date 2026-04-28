@@ -579,8 +579,12 @@ export default function WorktreeHome() {
             <span class={styles.quickLaunchDesc}>AI-powered workspace</span>
           </button>
 
-          <button class={`${styles.quickLaunchCard} ${styles.quickLaunchCardDisabled}`} type="button">
-            <span class={styles.quickLaunchBadge}>Soon</span>
+          <button
+            class={styles.quickLaunchCard}
+            type="button"
+            onClick={() => addTabWithData('chat', 'Chat', { workspaceId: activeWorktreeId() })}
+          >
+            <div class={styles.quickLaunchShimmer} />
             <svg class={styles.quickLaunchIcon} viewBox="0 0 32 32" fill="none" aria-hidden="true">
               <path d="M5 8A3 3 0 018 5h16a3 3 0 013 3v12a3 3 0 01-3 3h-6l-5 4v-4H8a3 3 0 01-3-3V8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
               <path d="M11 11h10M11 16h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />

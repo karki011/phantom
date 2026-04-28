@@ -1,6 +1,6 @@
 // Author: Subash Karki
 
-import type { PhaseConfig, PhaseId, BootLine, Ability } from './types';
+import type { PhaseConfig, PhaseId, BootLine, Ability, BootScanData } from './types';
 
 export const phaseOrder: PhaseId[] = [
   'awakening',
@@ -11,7 +11,44 @@ export const phaseOrder: PhaseId[] = [
   'complete',
 ];
 
-export function buildBootScript(sessionCount: number): BootLine[] {
+function buildAgentLines(scan?: BootScanData): BootLine[] {
+  const installed = scan?.agents.filter((a) => a.installed) ?? [];
+  if (installed.length === 0) {
+    return [{
+      text: 'Scanning for AI agents ............... none detected',
+      delay: 400,
+      prompt: '$',
+      sound: 'scan',
+      charDelay: 18,
+    }];
+  }
+
+  const lines: BootLine[] = [{
+    text: `Scanning for AI agents ............... ${installed.length} detected`,
+    delay: 400,
+    prompt: '$',
+    sound: 'scan',
+    speech: `${installed.length} AI agent${installed.length === 1 ? '' : 's'} detected.`,
+    waitForSpeech: true,
+    charDelay: 18,
+  }];
+
+  for (const agent of installed) {
+    const ver = agent.version ? ` ${agent.version}` : '';
+    const pad = '.'.repeat(Math.max(1, 40 - agent.name.length - ver.length));
+    lines.push({
+      text: `  ${agent.name}${ver} ${pad} online`,
+      delay: 200,
+      style: 'dim',
+      sound: 'scan',
+      charDelay: 12,
+    });
+  }
+
+  return lines;
+}
+
+export function buildBootScript(sessionCount: number, scan?: BootScanData): BootLine[] {
   const isReturning = sessionCount > 0;
   return [
     {
@@ -47,6 +84,7 @@ export function buildBootScript(sessionCount: number): BootLine[] {
         : `Tracing neural pathways .............. ${sessionCount} session echoes recovered`,
       delay: 800,
       sound: 'scan',
+      prompt: '$',
       speech: sessionCount === 0
         ? 'No prior sessions detected. A fresh bind will be established.'
         : `Recovering ${sessionCount} session echoes. Nothing has been lost.`,
@@ -57,12 +95,14 @@ export function buildBootScript(sessionCount: number): BootLine[] {
       text: 'Anchoring memory persistence ......... WAL mode active',
       delay: 600,
       sound: 'scan',
+      prompt: '$',
       speech: 'Memory is stable.',
       waitForSpeech: true,
     },
     {
       text: 'Binding terminal interface ........... ready',
       delay: 500,
+      prompt: '$',
       speech: 'Terminal interface bound.',
       waitForSpeech: true,
     },
@@ -70,15 +110,27 @@ export function buildBootScript(sessionCount: number): BootLine[] {
       text: 'Attuning defense wards ............... 3 wards armed',
       delay: 600,
       sound: 'scan',
+      prompt: '$',
       speech: 'Defense protocols active.',
       waitForSpeech: true,
     },
     {
       text: 'Synchronizing event stream ........... tailing active',
       delay: 500,
+      prompt: '$',
       speech: 'Observing all active processes.',
       waitForSpeech: true,
     },
+    {
+      text: scan?.gitInstalled
+        ? `Verifying git ........................ ${scan.gitVersion ?? 'ready'}`
+        : 'Verifying git ........................ NOT FOUND',
+      delay: 400,
+      prompt: '$',
+      sound: 'scan',
+      charDelay: 18,
+    },
+    ...buildAgentLines(scan),
     { text: '', delay: 600, style: 'separator' },
     {
       text: 'SYSTEM SYNCHRONIZATION COMPLETE',
@@ -120,7 +172,7 @@ export const phaseConfigs: Record<PhaseId, PhaseConfig> = {
       sound: 'whoosh',
     },
     autoResolve: {
-      timeout: 5000,
+      timeout: 10000,
       defaultKey: 'operator_name',
       defaultValue: '',
       message: 'No override detected. Identity locked.',
@@ -137,7 +189,7 @@ export const phaseConfigs: Record<PhaseId, PhaseConfig> = {
       sound: 'reveal',
     },
     autoResolve: {
-      timeout: 2000,
+      timeout: 10000,
       defaultKey: 'theme',
       defaultValue: 'shadow-monarch-dark',
       message: 'No preference detected. Default domain attuned.',
@@ -154,7 +206,7 @@ export const phaseConfigs: Record<PhaseId, PhaseConfig> = {
       sound: 'scan',
     },
     autoResolve: {
-      timeout: 8000,
+      timeout: 10000,
       defaultKey: 'first_project_path',
       defaultValue: '',
       message: 'No domain linked. Proceeding without binding.',
@@ -202,24 +254,6 @@ export const abilities: Ability[] = [
     icon: '#',
     sound: 'scan',
     speech: 'Session Tracking.',
-    revealDelay: 800,
-  },
-  {
-    id: 'wards',
-    name: 'Defense Wards',
-    desc: 'Automated safety rules protecting your system.',
-    icon: '!',
-    sound: 'reveal',
-    speech: 'Defense Wards.',
-    revealDelay: 800,
-  },
-  {
-    id: 'hunter-stats',
-    name: 'Hunter Stats',
-    desc: 'XP, achievements, daily quests. Your journey tracked.',
-    icon: '*',
-    sound: 'reveal',
-    speech: 'Hunter Stats.',
     revealDelay: 800,
   },
   {
