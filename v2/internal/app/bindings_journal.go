@@ -231,10 +231,11 @@ func (a *App) getJournalService() *journal.Service {
 	return journal.NewService("")
 }
 
-// getJournalGenerator returns a generator backed by the reader DB.
+// getJournalGenerator returns a generator backed by the reader DB,
+// with AI digest capabilities for enriched journal entries.
 func (a *App) getJournalGenerator() *journal.Generator {
 	q := db.New(a.DB.Reader)
-	return journal.NewGenerator(q)
+	return journal.NewGeneratorWithDB(q, a.DB.Reader)
 }
 
 // getProjectInfos returns ProjectInfo for all registered projects.

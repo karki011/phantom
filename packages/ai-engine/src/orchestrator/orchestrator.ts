@@ -9,7 +9,7 @@ import type { GraphQuery } from '../graph/query.js';
 import type { StrategyRegistry } from '../strategies/registry.js';
 import type { BlastRadiusResult, ContextResult } from '../types/graph.js';
 import type { StrategyInput, StrategyOutput } from '../types/strategy.js';
-import type { GoalInput, OrchestratorResult } from './types.js';
+import type { GoalInput, OrchestratorResult, IDecisionQuery } from './types.js';
 import type { KnowledgeWriter } from './knowledge-writer.js';
 import type { Compactor } from './compactor.js';
 import type { DecisionQuery, PriorDecision } from '../graph/decision-query.js';
@@ -29,7 +29,7 @@ export const ADVISOR_STRATEGY_ID = 'advisor';
  *
  * Cache key: `${goal}|${minSimilarity}|${limit}`
  */
-class RequestScopedDecisionQuery {
+class RequestScopedDecisionQuery implements IDecisionQuery {
   private cache = new Map<string, PriorDecision[]>();
 
   constructor(private inner: DecisionQuery) {}
@@ -113,8 +113,8 @@ export class Orchestrator {
       this.requestDecisionQuery = new RequestScopedDecisionQuery(options.decisionQuery);
       // Wire assessor and evaluator to the cached query proxy so all similarity
       // lookups within a single process() call share one DB read.
-      this.assessor.setDecisionQuery(this.requestDecisionQuery as unknown as DecisionQuery);
-      this.evaluator = new MultiPerspectiveEvaluator(this.requestDecisionQuery as unknown as DecisionQuery);
+      this.assessor.setDecisionQuery(this.requestDecisionQuery);
+      this.evaluator = new MultiPerspectiveEvaluator(this.requestDecisionQuery);
     } else {
       this.evaluator = new Evaluator();
     }
@@ -144,11 +144,8 @@ export class Orchestrator {
     // Step 1: Graph Context — merge context from all active files
     const graphContext = this.gatherContext(input);
 
-    // Step 2: Blast Radius — use primary active file (first one)
-    const primaryFile = input.activeFiles?.[0];
-    const blastRadius = primaryFile
-      ? this.graphQuery.getBlastRadius(primaryFile)
-      : emptyBlastRadius();
+    // Step 2: Blast Radius — merge across ALL active files
+    const blastRadius = this.mergeBlastRadius(input.activeFiles);
 
     // Step 3: Related Files
     const relatedFileNodes = input.activeFiles?.length
@@ -279,6 +276,31 @@ export class Orchestrator {
   // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
+
+  /**
+   * Merge blast radius results from all active files into a single result.
+   * Deduplicates affected files by ID and takes the max impact score.
+   */
+  private mergeBlastRadius(activeFiles?: string[]): BlastRadiusResult {
+    if (!activeFiles || activeFiles.length === 0) return emptyBlastRadius();
+
+    const allDirect = new Map<string, BlastRadiusResult['direct'][number]>();
+    const allTransitive = new Map<string, BlastRadiusResult['transitive'][number]>();
+    let maxImpactScore = 0;
+
+    for (const file of activeFiles) {
+      const br = this.graphQuery.getBlastRadius(file);
+      for (const f of br.direct) allDirect.set(f.id, f);
+      for (const f of br.transitive) allTransitive.set(f.id, f);
+      maxImpactScore = Math.max(maxImpactScore, br.impactScore);
+    }
+
+    return {
+      direct: [...allDirect.values()],
+      transitive: [...allTransitive.values()],
+      impactScore: maxImpactScore,
+    };
+  }
 
   /**
    * Gather and merge graph context from all active files.

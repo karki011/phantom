@@ -23,9 +23,10 @@ export const homeContainer = style({
   flexDirection: 'column',
   alignItems: 'stretch',
   padding: vars.space.xxl,
-  gap: vars.space.xl,
+  gap: vars.space.xxl,
+  flex: 1,
+  minHeight: 0,
   overflowY: 'auto',
-  height: '100%',
   boxSizing: 'border-box',
   background: vars.color.bgPrimary,
 });
@@ -85,7 +86,7 @@ export const quickActionsCard = style({
   flexDirection: 'column',
   background: vars.color.bgTertiary,
   borderRadius: vars.radius.lg,
-  border: `1px solid color-mix(in srgb, ${vars.color.accent} 20%, ${vars.color.border})`,
+  border: `1px solid color-mix(in srgb, ${vars.color.border} 60%, transparent)`,
   overflow: 'hidden',
 });
 
@@ -115,7 +116,7 @@ export const quickActionButton = style({
   padding: `${vars.space.xl} ${vars.space.xl}`,
   borderRadius: vars.radius.lg,
   background: vars.color.bgTertiary,
-  border: `1px solid color-mix(in srgb, ${vars.color.accent} 20%, ${vars.color.border})`,
+  border: `1px solid color-mix(in srgb, ${vars.color.border} 60%, transparent)`,
   cursor: 'pointer',
   flex: 1,
   minWidth: '120px',
@@ -161,11 +162,11 @@ export const quickActionHint = style({
 export const statusCard = style({
   display: 'flex',
   flexDirection: 'column',
-  gap: vars.space.sm,
-  padding: vars.space.lg,
+  gap: vars.space.md,
+  padding: vars.space.xl,
   background: vars.color.bgTertiary,
   borderRadius: vars.radius.lg,
-  border: `1px solid color-mix(in srgb, ${vars.color.accent} 20%, ${vars.color.border})`,
+  border: `1px solid color-mix(in srgb, ${vars.color.border} 60%, transparent)`,
   fontFamily: vars.font.mono,
 });
 
@@ -347,10 +348,10 @@ export const activityCard = style({
   display: 'flex',
   flexDirection: 'column',
   gap: vars.space.md,
-  padding: vars.space.lg,
+  padding: vars.space.xl,
   background: vars.color.bgTertiary,
   borderRadius: vars.radius.lg,
-  border: `1px solid color-mix(in srgb, ${vars.color.accent} 20%, ${vars.color.border})`,
+  border: `1px solid color-mix(in srgb, ${vars.color.border} 60%, transparent)`,
   fontFamily: vars.font.mono,
   alignSelf: 'flex-start',
   maxWidth: '480px',
@@ -1077,7 +1078,7 @@ export const activeSessionsCard = style({
   flexDirection: 'column',
   background: vars.color.bgTertiary,
   borderRadius: vars.radius.lg,
-  border: `1px solid color-mix(in srgb, ${vars.color.accent} 20%, ${vars.color.border})`,
+  border: `1px solid color-mix(in srgb, ${vars.color.border} 60%, transparent)`,
   overflow: 'hidden',
 });
 
@@ -1201,7 +1202,7 @@ export const quickLaunchCard = style({
   padding: `${vars.space.xl} ${vars.space.md}`,
   borderRadius: vars.radius.lg,
   background: vars.color.bgTertiary,
-  border: `1px solid color-mix(in srgb, ${vars.color.accent} 12%, ${vars.color.border})`,
+  border: `1px solid color-mix(in srgb, ${vars.color.border} 50%, transparent)`,
   cursor: 'pointer',
   transition: `all 200ms ease`,
   overflow: 'hidden',
@@ -1226,7 +1227,7 @@ export const quickLaunchCardDisabled = style({
   opacity: 0.5,
   ':hover': {
     background: vars.color.bgTertiary,
-    borderColor: `color-mix(in srgb, ${vars.color.accent} 12%, ${vars.color.border})`,
+    borderColor: `color-mix(in srgb, ${vars.color.border} 50%, transparent)`,
     transform: 'none',
     boxShadow: 'none',
   },
@@ -1291,7 +1292,7 @@ export const pinnedRecipesCard = style({
   padding: vars.space.lg,
   borderRadius: vars.radius.lg,
   background: vars.color.bgTertiary,
-  border: `1px solid color-mix(in srgb, ${vars.color.accent} 12%, ${vars.color.border})`,
+  border: `1px solid color-mix(in srgb, ${vars.color.border} 50%, transparent)`,
 });
 
 export const pinnedRecipesHeader = style({
@@ -1353,7 +1354,7 @@ export const pinnedRecipesEmpty = style({
 export const homeDashboardGrid = style({
   display: 'grid',
   gridTemplateColumns: '1fr 1fr',
-  gap: vars.space.xl,
+  gap: vars.space.xxl,
   alignItems: 'start',
 });
 
@@ -1362,10 +1363,10 @@ export const homeDashboardGrid = style({
 export const recipesCard = style({
   display: 'flex',
   flexDirection: 'column',
-  padding: vars.space.lg,
+  padding: vars.space.xl,
   borderRadius: vars.radius.lg,
   background: vars.color.bgTertiary,
-  border: `1px solid color-mix(in srgb, ${vars.color.accent} 20%, ${vars.color.border})`,
+  border: `1px solid color-mix(in srgb, ${vars.color.border} 60%, transparent)`,
   maxHeight: '420px',
   overflow: 'hidden',
 });

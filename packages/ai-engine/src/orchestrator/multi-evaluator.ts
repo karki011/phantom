@@ -6,12 +6,11 @@
  * @author Subash Karki
  */
 import type { StrategyOutput, TaskContext } from '../types/strategy.js';
-import type { EvaluationResult } from './types.js';
-import type { DecisionQuery } from '../graph/decision-query.js';
+import type { EvaluationResult, IDecisionQuery } from './types.js';
 import { Evaluator } from './evaluator.js';
 
 export class MultiPerspectiveEvaluator extends Evaluator {
-  constructor(private decisionQuery: DecisionQuery | null = null) {
+  constructor(private decisionQuery: IDecisionQuery | null = null) {
     super();
   }
 

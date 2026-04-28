@@ -6,7 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 )
 
@@ -81,7 +81,7 @@ func (svc *Service) StartTailing(ctx context.Context, sessionID, jsonlPath strin
 					return
 				}
 				if err := svc.store.SaveEvent(tailCtx, &ev); err != nil {
-					log.Printf("stream/service: save event for %s: %v", sessionID, err)
+					slog.Warn("stream/service: save event failed", "sessionID", sessionID, "err", err)
 				}
 				if svc.eventHook != nil {
 					svc.eventHook(tailCtx, &ev)
@@ -95,7 +95,7 @@ func (svc *Service) StartTailing(ctx context.Context, sessionID, jsonlPath strin
 	go func() {
 		defer close(ch)
 		if err := sc.Tail(tailCtx, ch); err != nil && tailCtx.Err() == nil {
-			log.Printf("stream/service: tail %s: %v", jsonlPath, err)
+			slog.Warn("stream/service: tail failed", "path", jsonlPath, "err", err)
 		}
 	}()
 

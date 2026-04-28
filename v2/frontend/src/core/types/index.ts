@@ -335,3 +335,87 @@ export interface StreamEvent {
   tool_name?: string;
   tool_input?: string;
 }
+
+// ── Gamification ──────────────────────────────────────────────────────────
+
+export type HunterRank = 'F' | 'E' | 'D' | 'C' | 'B' | 'A' | 'S' | 'SS' | 'SSS';
+
+export type AchievementCategory =
+  | 'Combat'
+  | 'Mastery'
+  | 'Exploration'
+  | 'Dedication'
+  | 'Streak'
+  | 'Milestone'
+  | 'Speed';
+
+export interface HunterProfile {
+  name: string;
+  title: string;
+  rank: HunterRank;
+  level: number;
+  xp: number;
+  xp_to_next: number;
+  total_sessions: number;
+  total_tasks: number;
+  total_repos: number;
+  streak_current: number;
+  streak_best: number;
+}
+
+export interface HunterStats {
+  strength: number;
+  intelligence: number;
+  agility: number;
+  vitality: number;
+  perception: number;
+  sense: number;
+}
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: AchievementCategory | null;
+  xp_reward: number;
+  unlocked_at: number | null;
+}
+
+export interface DailyQuest {
+  id: string;
+  label: string;
+  quest_type: string;
+  target: number;
+  progress: number;
+  completed: number;
+  xp_reward: number;
+}
+
+export interface LifetimeStats {
+  total_sessions: number;
+  total_tokens: number;
+  total_cost: number;
+  favorite_model: string;
+  longest_session: number;
+  current_streak: number;
+  best_streak: number;
+  active_days: number;
+  peak_hour: number;
+  total_messages: number;
+  total_tool_calls: number;
+}
+
+export interface HeatmapDay {
+  date: string;
+  message_count: number;
+  session_count: number;
+  tool_call_count: number;
+}
+
+export interface HunterDashboard {
+  profile: HunterProfile;
+  stats: HunterStats;
+  lifetime: LifetimeStats;
+  heatmap: HeatmapDay[];
+}

@@ -184,9 +184,28 @@ func Pull(ctx context.Context, repoPath string) error {
 
 // Discard discards working-tree changes for the specified paths.
 func Discard(ctx context.Context, repoPath string, paths ...string) error {
-	args := append([]string{"checkout", "--"}, paths...)
-	_, err := runGit(ctx, repoPath, args...)
-	return err
+	var tracked, untracked []string
+	for _, p := range paths {
+		_, err := runGit(ctx, repoPath, "ls-files", "--error-unmatch", p)
+		if err != nil {
+			untracked = append(untracked, p)
+		} else {
+			tracked = append(tracked, p)
+		}
+	}
+	if len(tracked) > 0 {
+		args := append([]string{"checkout", "--"}, tracked...)
+		if _, err := runGit(ctx, repoPath, args...); err != nil {
+			return err
+		}
+	}
+	if len(untracked) > 0 {
+		args := append([]string{"clean", "-f", "--"}, untracked...)
+		if _, err := runGit(ctx, repoPath, args...); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // DiscardAll discards all working-tree changes in the repo.

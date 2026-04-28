@@ -147,6 +147,19 @@ export async function removeWorktreeById(
 ): Promise<boolean> {
   const isActive = activeWorktreeId() === worktreeId;
 
+  // Switch away BEFORE removing so no stale callbacks fire against the deleted worktree
+  if (isActive) {
+    const projectWorktrees = worktreeMap()[projectId] ?? [];
+    const fallback = projectWorktrees.find((w) => w.type === 'branch' && w.id !== worktreeId)
+      ?? projectWorktrees.find((w) => w.id !== worktreeId);
+    if (fallback) {
+      selectWorktree(fallback.id);
+    } else {
+      setActiveWorktreeId(null);
+      setPref('active_worktree_id', '');
+    }
+  }
+
   const ok = await removeWorktree(worktreeId);
   if (!ok) {
     console.error('[worktrees] removeWorktree failed for', worktreeId);
@@ -154,19 +167,6 @@ export async function removeWorktreeById(
   }
   clearWorktreeCache(worktreeId);
   await loadProjectWorktrees(projectId);
-
-  if (isActive) {
-    const projectWorktrees = worktreeMap()[projectId] ?? [];
-    const localBranch = projectWorktrees.find((w) => w.type === 'branch');
-    if (localBranch) {
-      selectWorktree(localBranch.id);
-    } else if (projectWorktrees.length > 0) {
-      selectWorktree(projectWorktrees[0].id);
-    } else {
-      setActiveWorktreeId(null);
-      setPref('active_worktree_id', '');
-    }
-  }
   return true;
 }
 

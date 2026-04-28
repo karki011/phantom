@@ -4,7 +4,7 @@ package app
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
 )
@@ -19,7 +19,7 @@ func (a *App) GetSessionEvents(sessionID string, offset, limit int) []stream.Eve
 	}
 	events, err := a.Stream.GetEvents(a.ctx, sessionID, offset, limit)
 	if err != nil {
-		log.Printf("app/bindings_stream: GetSessionEvents(%s): %v", sessionID, err)
+		slog.Error("GetSessionEvents failed", "sessionID", sessionID, "err", err)
 		return []stream.Event{}
 	}
 	return events
@@ -32,7 +32,7 @@ func (a *App) GetSessionTimeline(sessionID string) *stream.Timeline {
 	}
 	tl, err := a.Stream.GetTimeline(a.ctx, sessionID)
 	if err != nil {
-		log.Printf("app/bindings_stream: GetSessionTimeline(%s): %v", sessionID, err)
+		slog.Error("GetSessionTimeline failed", "sessionID", sessionID, "err", err)
 		return nil
 	}
 	return tl

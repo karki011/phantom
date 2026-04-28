@@ -1,5 +1,6 @@
 // PhantomOS v2 — Documentation content
 // Author: Subash Karki
+// Updated: 2026-04-27
 
 export interface DocSection {
   title: string;
@@ -59,7 +60,7 @@ export const DOC_SECTIONS: DocSection[] = [
                 ['SolidJS', '1.9', 'Reactive frontend framework'],
                 ['Kobalte', '0.13', 'Accessible UI primitives'],
                 ['xterm.js', '6.0', 'Terminal emulation with WebGL rendering'],
-                ['SQLite', '3.x', 'Local persistence (17 tables)'],
+                ['SQLite', '3.x', 'Local persistence (23 tables)'],
                 ['Vanilla Extract', 'latest', 'Type-safe CSS-in-TS styling'],
                 ['Wails', 'v2', 'Desktop app framework (Go + Web)'],
               ],
@@ -126,6 +127,7 @@ export const DOC_SECTIONS: DocSection[] = [
                 { keys: ['Cmd', 'P'], action: 'Quick open' },
                 { keys: ['Cmd', 'I'], action: 'Prompt composer' },
                 { keys: ['Cmd', 'K'], action: 'Command palette' },
+                { keys: ['Cmd', 'Shift', 'R'], action: 'Open recipe picker' },
                 { keys: ['Cmd', 'F'], action: 'Search in terminal' },
                 { keys: ['Cmd', ','], action: 'Settings' },
                 { keys: ['Cmd', '='], action: 'Zoom in' },
@@ -154,7 +156,7 @@ export const DOC_SECTIONS: DocSection[] = [
             },
             {
               type: 'paragraph',
-              text: 'The backend manages PTY processes, git operations, file system watching, and AI session tracking. All persistent state is stored in a local SQLite database with 17 tables.',
+              text: 'The backend manages PTY processes, git operations, file system watching, and AI session tracking. All persistent state is stored in a local SQLite database with 23 tables.',
             },
             {
               type: 'h3',
@@ -204,6 +206,98 @@ export const DOC_SECTIONS: DocSection[] = [
                 'Kobalte primitives for accessibility (ARIA, keyboard navigation)',
                 'Vanilla Extract + CSS custom properties for theming',
                 'xterm.js with WebGL addon for GPU-accelerated terminal rendering',
+              ],
+            },
+          ],
+        },
+      },
+      {
+        id: 'command-palette',
+        label: 'Command Palette',
+        content: {
+          title: 'Command Palette',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'The command palette is the fastest way to access any action in PhantomOS. Open it with Cmd+K to search across 40+ actions organized into 8 categories.',
+            },
+            {
+              type: 'heading',
+              text: 'Categories',
+            },
+            {
+              type: 'table',
+              headers: ['Category', 'Examples'],
+              rows: [
+                ['Terminal', 'New tab, split pane, close tab, clear terminal'],
+                ['Navigation', 'Toggle sidebars, open settings, switch screen'],
+                ['Git', 'Fetch, pull, push, commit, switch branch, create worktree'],
+                ['Session', 'Pause session, resume session, kill session'],
+                ['Worktree', 'Create worktree, delete worktree, switch worktree'],
+                ['Theme', 'Switch app theme, change terminal theme'],
+                ['Zoom', 'Zoom in, zoom out, reset zoom'],
+                ['System', 'Toggle git blame, open docs, reload window'],
+              ],
+            },
+            {
+              type: 'heading',
+              text: 'Fuzzy Search',
+            },
+            {
+              type: 'paragraph',
+              text: 'Type any part of an action name to filter results. The palette uses fuzzy matching — you can type "split" to find "Split Pane Right" or "tb" to find "Toggle Git Blame". Results are ranked by relevance with the best match highlighted.',
+            },
+            {
+              type: 'heading',
+              text: 'Usage',
+            },
+            {
+              type: 'shortcuts',
+              shortcuts: [
+                { keys: ['Cmd', 'K'], action: 'Open command palette' },
+                { keys: ['↑', '↓'], action: 'Navigate results' },
+                { keys: ['Enter'], action: 'Execute selected action' },
+                { keys: ['Escape'], action: 'Close palette' },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        id: 'quick-open',
+        label: 'Quick Open',
+        content: {
+          title: 'Quick Open',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'Quick Open provides fast file navigation across the active worktree. Press Cmd+P to open the file finder, then type any part of a filename to jump to it instantly.',
+            },
+            {
+              type: 'heading',
+              text: 'How It Works',
+            },
+            {
+              type: 'list',
+              items: [
+                'Indexes all files in the active worktree (respects .gitignore)',
+                'Fuzzy search by filename — type "app.ts" or just "apts" to match',
+                'Results appear as you type with instant filtering',
+                'Select a file to open it in the code editor',
+                'Recent files are prioritized in the results',
+              ],
+            },
+            {
+              type: 'heading',
+              text: 'Shortcuts',
+            },
+            {
+              type: 'shortcuts',
+              shortcuts: [
+                { keys: ['Cmd', 'P'], action: 'Open Quick Open' },
+                { keys: ['↑', '↓'], action: 'Navigate results' },
+                { keys: ['Enter'], action: 'Open selected file' },
+                { keys: ['Escape'], action: 'Close Quick Open' },
               ],
             },
           ],
@@ -371,6 +465,193 @@ export const DOC_SECTIONS: DocSection[] = [
                 'Use the command palette (Cmd+K) and search for "theme"',
                 'Themes apply instantly with no terminal restart required',
               ],
+            },
+          ],
+        },
+      },
+    ],
+  },
+
+  // ─────────────────────────────────────────────
+  // EDITOR
+  // ─────────────────────────────────────────────
+  {
+    title: 'Editor',
+    items: [
+      {
+        id: 'code-editor',
+        label: 'Code Editor',
+        content: {
+          title: 'Code Editor',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'PhantomOS includes a built-in code editor powered by Monaco (the same engine behind VS Code). It supports multi-file editing with tabs, dirty state tracking, and language-aware syntax highlighting.',
+            },
+            {
+              type: 'heading',
+              text: 'Multi-File Tabs',
+            },
+            {
+              type: 'paragraph',
+              text: 'Open multiple files simultaneously in tabs. Each tab shows the filename and a dot indicator when the file has unsaved changes (dirty state). Tabs can be reordered by dragging and closed individually or in bulk via the context menu.',
+            },
+            {
+              type: 'heading',
+              text: 'Language Detection',
+            },
+            {
+              type: 'paragraph',
+              text: 'The editor auto-detects the programming language from the file extension and applies the appropriate syntax highlighting, bracket matching, and indentation rules. Supported languages include TypeScript, JavaScript, Go, Python, Rust, JSON, YAML, Markdown, and more.',
+            },
+            {
+              type: 'heading',
+              text: 'Editor Customization',
+            },
+            {
+              type: 'paragraph',
+              text: 'Customize the editor appearance in Settings > Editor:',
+            },
+            {
+              type: 'list',
+              items: [
+                'Font size — adjust the code font size',
+                'Line height — control spacing between lines',
+                'Cursor position — displayed in the status bar (line:column)',
+              ],
+            },
+            {
+              type: 'heading',
+              text: 'Key Bindings',
+            },
+            {
+              type: 'shortcuts',
+              shortcuts: [
+                { keys: ['Cmd', 'S'], action: 'Save current file' },
+                { keys: ['Cmd', 'P'], action: 'Quick open file' },
+                { keys: ['Cmd', 'W'], action: 'Close current tab' },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        id: 'git-blame',
+        label: 'Git Blame',
+        content: {
+          title: 'Git Blame',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'Toggle inline git blame annotations to see who last modified each line and when. This is useful for understanding code history and authorship without leaving the editor.',
+            },
+            {
+              type: 'heading',
+              text: 'Activation',
+            },
+            {
+              type: 'paragraph',
+              text: 'Open the command palette (Cmd+K) and search for "Toggle Git Blame". The blame annotations appear inline at the end of each line, showing the author name and relative date.',
+            },
+            {
+              type: 'heading',
+              text: 'Visual Design',
+            },
+            {
+              type: 'list',
+              items: [
+                'Per-line author and date annotations in a muted color',
+                'Alternating group backgrounds — consecutive lines by the same author share a background tint, making commit boundaries visible at a glance',
+                'Annotations fade out when you start typing, reappearing when you stop',
+              ],
+            },
+            {
+              type: 'heading',
+              text: 'Toggle',
+            },
+            {
+              type: 'shortcuts',
+              shortcuts: [
+                { keys: ['Cmd', 'K'], action: 'Open command palette, then search "Toggle Git Blame"' },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        id: 'diff-review',
+        label: 'Diff Review',
+        content: {
+          title: 'Diff Review',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'Review dirty (unsaved or uncommitted) files inline before committing. The diff viewer highlights additions, deletions, and modifications with familiar green/red coloring.',
+            },
+            {
+              type: 'heading',
+              text: 'Entering Diff Review',
+            },
+            {
+              type: 'paragraph',
+              text: 'Click the "Review Changes" button in the editor status bar when dirty files are detected. This opens the diff viewer for each modified file.',
+            },
+            {
+              type: 'heading',
+              text: 'Layout Modes',
+            },
+            {
+              type: 'table',
+              headers: ['Mode', 'Description'],
+              rows: [
+                ['Side-by-side', 'Original on the left, modified on the right. Best for wide screens.'],
+                ['Inline', 'Changes shown in a single column with additions/deletions interleaved. Best for narrow views.'],
+              ],
+            },
+            {
+              type: 'heading',
+              text: 'Actions',
+            },
+            {
+              type: 'list',
+              items: [
+                'Accept — apply the change and move to the next diff hunk',
+                'Reject — discard the change and revert to the original',
+                'Toggle layout — switch between side-by-side and inline modes',
+                'Navigate between hunks with keyboard arrows',
+              ],
+            },
+          ],
+        },
+      },
+      {
+        id: 'file-tab-context-menu',
+        label: 'File Tab Context Menu',
+        content: {
+          title: 'File Tab Context Menu',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'Right-click any editor tab to access a context menu with file management shortcuts. This provides quick access to common operations without using the terminal.',
+            },
+            {
+              type: 'heading',
+              text: 'Available Actions',
+            },
+            {
+              type: 'table',
+              headers: ['Action', 'Description'],
+              rows: [
+                ['Copy File Name', 'Copy just the filename (e.g., `app.tsx`) to the clipboard'],
+                ['Copy Relative Path', 'Copy the path relative to the project root (e.g., `src/app.tsx`)'],
+                ['Copy Absolute Path', 'Copy the full filesystem path (e.g., `/Users/.../src/app.tsx`)'],
+                ['Close', 'Close this tab'],
+                ['Close Others', 'Close all tabs except this one'],
+              ],
+            },
+            {
+              type: 'paragraph',
+              text: 'Copied paths are useful for pasting into terminal commands, AI prompts, or the prompt composer. The relative path format matches what git commands expect.',
             },
           ],
         },
@@ -689,6 +970,61 @@ export const DOC_SECTIONS: DocSection[] = [
           ],
         },
       },
+      {
+        id: 'multi-provider',
+        label: 'Multi-Provider System',
+        content: {
+          title: 'Multi-Provider System',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'PhantomOS supports multiple AI session providers, allowing you to choose the best tool for each task. Out of the box, it supports Claude Code, Codex, and Gemini as session backends.',
+            },
+            {
+              type: 'heading',
+              text: 'Supported Providers',
+            },
+            {
+              type: 'table',
+              headers: ['Provider', 'CLI', 'Description'],
+              rows: [
+                ['Claude Code', 'claude', 'Anthropic\'s Claude with full tool use and session management'],
+                ['Codex', 'codex', 'OpenAI\'s Codex CLI for code generation and editing'],
+                ['Gemini', 'gemini', 'Google\'s Gemini CLI for multi-modal AI coding'],
+              ],
+            },
+            {
+              type: 'heading',
+              text: 'Configuration',
+            },
+            {
+              type: 'list',
+              items: [
+                'Navigate to Settings > Providers to configure your default session provider',
+                'PhantomOS auto-detects installed providers by checking for their CLI binaries on your PATH',
+                'Each provider includes a health check that verifies the CLI is functional and authenticated',
+                'Version detection ensures compatibility with the expected provider API',
+              ],
+            },
+            {
+              type: 'heading',
+              text: 'Custom Providers',
+            },
+            {
+              type: 'paragraph',
+              text: 'Add custom AI providers via YAML definition files. A provider definition includes the CLI binary path, session discovery patterns, health check command, and version detection regex. Place YAML files in `~/.phantom-os/providers/` to register them.',
+            },
+            {
+              type: 'heading',
+              text: 'Session Discovery',
+            },
+            {
+              type: 'paragraph',
+              text: 'Each provider defines how its sessions are discovered (process name matching, JSONL output path, PID file location). PhantomOS uses these patterns to automatically detect and track sessions regardless of which provider started them.',
+            },
+          ],
+        },
+      },
     ],
   },
 
@@ -792,6 +1128,297 @@ export const DOC_SECTIONS: DocSection[] = [
               'A separate journal file is created (YYYY-MM-DD--project.md)',
               'Select "All Projects" to return to the combined view',
             ] },
+          ],
+        },
+      },
+    ],
+  },
+
+  // ─────────────────────────────────────────────
+  // CHAT
+  // ─────────────────────────────────────────────
+  {
+    title: 'Chat',
+    items: [
+      {
+        id: 'chat-overview',
+        label: 'Chat Overview',
+        content: {
+          title: 'Chat Overview',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'PhantomOS includes a built-in AI chat interface powered by the Claude CLI. Chat lives alongside your terminal and editor, providing a persistent conversational workspace for questions, code generation, and brainstorming.',
+            },
+            {
+              type: 'heading',
+              text: 'Conversations',
+            },
+            {
+              type: 'paragraph',
+              text: 'The conversations sidebar lists all your chat threads. Create new conversations, rename them for organization, or delete ones you no longer need. Each conversation maintains its full message history.',
+            },
+            {
+              type: 'heading',
+              text: 'Streaming Responses',
+            },
+            {
+              type: 'list',
+              items: [
+                'Responses stream in real time as the AI generates them',
+                'Thinking blocks are displayed in a collapsible section, showing the AI\'s reasoning process',
+                'Tool use is displayed inline — you can see which tools the AI invokes and their results',
+                'Long responses render progressively without blocking the UI',
+              ],
+            },
+            {
+              type: 'heading',
+              text: 'Keyboard',
+            },
+            {
+              type: 'shortcuts',
+              shortcuts: [
+                { keys: ['Enter'], action: 'Send message' },
+                { keys: ['Shift', 'Enter'], action: 'New line in message' },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        id: 'chat-model-selection',
+        label: 'Model Selection',
+        content: {
+          title: 'Model Selection',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'Switch between AI models using the dropdown in the chat header. Different models offer tradeoffs between speed, cost, and capability.',
+            },
+            {
+              type: 'heading',
+              text: 'Available Models',
+            },
+            {
+              type: 'table',
+              headers: ['Model', 'Best For'],
+              rows: [
+                ['Sonnet', 'General-purpose coding tasks. Fast responses with strong reasoning.'],
+                ['Opus', 'Complex multi-step tasks requiring deep analysis and planning.'],
+                ['Haiku', 'Quick questions, simple edits, and low-latency interactions.'],
+              ],
+            },
+            {
+              type: 'paragraph',
+              text: 'The selected model applies to the current conversation. You can switch models mid-conversation — the AI retains the full message history regardless of which model generated each response.',
+            },
+          ],
+        },
+      },
+      {
+        id: 'chat-markdown',
+        label: 'Markdown & Code',
+        content: {
+          title: 'Markdown & Code Rendering',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'Chat messages render full GitHub-Flavored Markdown (GFM) with syntax-highlighted code blocks. This makes AI responses easy to read and code easy to copy.',
+            },
+            {
+              type: 'heading',
+              text: 'Supported Formatting',
+            },
+            {
+              type: 'list',
+              items: [
+                'Headers (h1-h6) with proper sizing and spacing',
+                'Tables with aligned columns and header rows',
+                'Ordered and unordered lists with nesting',
+                'Blockquotes with left-border styling',
+                'Inline code with monospace background',
+                'Bold, italic, and strikethrough text',
+                'Links with hover previews',
+              ],
+            },
+            {
+              type: 'heading',
+              text: 'Code Blocks',
+            },
+            {
+              type: 'paragraph',
+              text: 'Fenced code blocks include syntax highlighting for 12 languages: TypeScript, JavaScript, Go, Python, Rust, JSON, YAML, HTML, CSS, Bash, SQL, and Markdown. Each code block has a copy button in the top-right corner for one-click clipboard copying.',
+            },
+          ],
+        },
+      },
+      {
+        id: 'chat-file-attachments',
+        label: 'File Attachments',
+        content: {
+          title: 'File Attachments',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'Attach files and images to chat messages by dragging and dropping them into the message input area. Attachments provide additional context for the AI to reference.',
+            },
+            {
+              type: 'heading',
+              text: 'Image Attachments',
+            },
+            {
+              type: 'paragraph',
+              text: 'Drop images (PNG, JPG, GIF, WebP) into the chat input to attach them. A thumbnail preview appears below the input area. Images are sent to the AI for visual analysis — useful for UI screenshots, error messages, or diagrams.',
+            },
+            {
+              type: 'heading',
+              text: 'Code File Attachments',
+            },
+            {
+              type: 'paragraph',
+              text: 'Drop code files into the chat to include their contents. The file is read and inserted as a fenced code block with the appropriate language tag. This is faster than copy-pasting large files.',
+            },
+            {
+              type: 'heading',
+              text: 'Sidebar Drag-and-Drop',
+            },
+            {
+              type: 'paragraph',
+              text: 'Files from the left sidebar file tree can be dragged directly into the chat input. This works for both the worktree file browser and the Quick Open results — no need to find the file in Finder first.',
+            },
+          ],
+        },
+      },
+    ],
+  },
+
+  // ─────────────────────────────────────────────
+  // RECIPES
+  // ─────────────────────────────────────────────
+  {
+    title: 'Recipes',
+    items: [
+      {
+        id: 'recipe-overview',
+        label: 'Recipe Overview',
+        content: {
+          title: 'Recipe Overview',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'Recipes are auto-detected commands extracted from your project\'s build files. PhantomOS scans common configuration files and presents all available commands in a searchable picker.',
+            },
+            {
+              type: 'heading',
+              text: 'Auto-Detection Sources',
+            },
+            {
+              type: 'table',
+              headers: ['Source', 'Commands Detected'],
+              rows: [
+                ['package.json', 'All `scripts` entries (npm/pnpm/yarn)'],
+                ['Makefile', 'All named targets'],
+                ['Go (go.mod)', 'Common go commands (build, test, run, vet, fmt)'],
+                ['Rust (Cargo.toml)', 'Cargo commands (build, test, run, clippy, fmt)'],
+                ['Python (pyproject.toml)', 'Poetry/pip commands, pytest, ruff, mypy'],
+                ['Nx monorepo (nx.json)', 'Nx targets across all projects'],
+              ],
+            },
+            {
+              type: 'heading',
+              text: 'Access',
+            },
+            {
+              type: 'paragraph',
+              text: 'Open the recipe picker with Cmd+Shift+R or from the Recipes card on the home page. Recipes are grouped by source file and searchable by name.',
+            },
+            {
+              type: 'heading',
+              text: 'Shortcut',
+            },
+            {
+              type: 'shortcuts',
+              shortcuts: [
+                { keys: ['Cmd', 'Shift', 'R'], action: 'Open recipe picker' },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        id: 'recipe-favorites',
+        label: 'Favorites & Custom',
+        content: {
+          title: 'Favorites & Custom Recipes',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'Star your most-used recipes for instant access from the home page. You can also create custom recipes for commands that aren\'t auto-detected.',
+            },
+            {
+              type: 'heading',
+              text: 'Favorites',
+            },
+            {
+              type: 'list',
+              items: [
+                'Click the star icon on any recipe to favorite it',
+                'Up to 3 favorites are displayed on the home page as quick-launch cards',
+                'Favorites persist across sessions in the SQLite database',
+                'Un-star a recipe to remove it from the home page',
+              ],
+            },
+            {
+              type: 'heading',
+              text: 'Custom Recipes',
+            },
+            {
+              type: 'paragraph',
+              text: 'Create custom recipes when your workflow includes commands that aren\'t in a standard config file. Each custom recipe has a label (display name) and a command (the shell command to execute). Custom recipes appear alongside auto-detected ones in the picker.',
+            },
+            {
+              type: 'list',
+              items: [
+                'Create: open the recipe picker and click "Add Custom Recipe"',
+                'Edit: custom recipes can be renamed or have their command updated',
+                'Delete: remove custom recipes you no longer need (auto-detected recipes cannot be deleted)',
+              ],
+            },
+          ],
+        },
+      },
+      {
+        id: 'running-recipes',
+        label: 'Running Recipes',
+        content: {
+          title: 'Running Recipes',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'Click any recipe in the picker to execute it immediately. The recipe runs in a new terminal tab, keeping your existing terminals undisturbed.',
+            },
+            {
+              type: 'heading',
+              text: 'Execution Flow',
+            },
+            {
+              type: 'list',
+              items: [
+                'A new terminal tab is created with the recipe label as the tab name',
+                'PhantomOS waits for the shell to signal readiness before sending the command',
+                'The recipe command is typed into the terminal and executed',
+                'Output streams in real time — you can interact with the terminal normally',
+                'The tab persists after the command completes so you can review output',
+              ],
+            },
+            {
+              type: 'heading',
+              text: 'Shell Readiness',
+            },
+            {
+              type: 'paragraph',
+              text: 'PhantomOS detects shell readiness by monitoring the PTY output for the shell prompt pattern. This prevents the recipe command from being sent before the shell has finished initializing (loading .zshrc, .bashrc, etc.), which avoids command-not-found errors in shells with slow startup.',
+            },
           ],
         },
       },
@@ -977,7 +1604,7 @@ export const DOC_SECTIONS: DocSection[] = [
           sections: [
             {
               type: 'paragraph',
-              text: 'PhantomOS uses a local SQLite database with 17 tables for persisting application state, session data, user preferences, and gamification progress.',
+              text: 'PhantomOS uses a local SQLite database with 23 tables for persisting application state, session data, user preferences, and gamification progress.',
             },
             {
               type: 'heading',
@@ -1004,6 +1631,12 @@ export const DOC_SECTIONS: DocSection[] = [
                 ['session_events', 'Fine-grained events emitted during AI sessions'],
                 ['session_policies', 'Ward rules and safety policies applied to sessions'],
                 ['graph_nodes', 'Knowledge graph nodes for codebase understanding'],
+                ['graph_edges', 'Relationships between knowledge graph nodes'],
+                ['graph_meta', 'Metadata and statistics for the knowledge graph'],
+                ['daily_stats', 'Aggregated daily productivity statistics (commits, tokens, cost)'],
+                ['custom_recipes', 'User-defined recipe commands with label and shell command'],
+                ['recipe_favorites', 'Starred recipes for home page quick-launch display'],
+                ['workspace_sections', 'Collapsible sidebar section state (expanded/collapsed)'],
               ],
             },
             {
@@ -1065,7 +1698,19 @@ export const DOC_SECTIONS: DocSection[] = [
                 { keys: ['Cmd', 'Shift', 'B'], action: 'Toggle right sidebar' },
                 { keys: ['Cmd', 'P'], action: 'Quick open (file finder)' },
                 { keys: ['Cmd', 'K'], action: 'Command palette' },
+                { keys: ['Cmd', 'Shift', 'R'], action: 'Open recipe picker' },
                 { keys: ['Cmd', ','], action: 'Open settings' },
+              ],
+            },
+            {
+              type: 'heading',
+              text: 'Editor',
+            },
+            {
+              type: 'shortcuts',
+              shortcuts: [
+                { keys: ['Cmd', 'S'], action: 'Save current file' },
+                { keys: ['Cmd', 'W'], action: 'Close current tab' },
               ],
             },
             {
@@ -1091,6 +1736,71 @@ export const DOC_SECTIONS: DocSection[] = [
                 { keys: ['Cmd', '='], action: 'Zoom in' },
                 { keys: ['Cmd', '-'], action: 'Zoom out' },
               ],
+            },
+          ],
+        },
+      },
+    ],
+  },
+
+  // ─────────────────────────────────────────────
+  // SAFETY
+  // ─────────────────────────────────────────────
+  {
+    title: 'Safety',
+    items: [
+      {
+        id: 'ward-system',
+        label: 'Ward System',
+        content: {
+          title: 'Ward System',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'Wards are safety rules that protect your AI sessions from unintended or dangerous actions. Create rules that block, warn about, or require confirmation for specific operations.',
+            },
+            {
+              type: 'heading',
+              text: 'Ward Levels',
+            },
+            {
+              type: 'table',
+              headers: ['Level', 'Behavior', 'Use Case'],
+              rows: [
+                ['Block', 'Prevents the action entirely. The AI session receives a rejection message.', 'Protect production files, prevent force pushes, block destructive commands.'],
+                ['Warn', 'Shows a warning toast in the UI but allows the action to proceed.', 'Flag risky operations like deleting branches or modifying config files.'],
+                ['Confirm', 'Shows a confirmation modal that requires explicit user approval before the action runs.', 'Approve deployments, database migrations, or large file deletions.'],
+              ],
+            },
+            {
+              type: 'heading',
+              text: 'Managing Wards',
+            },
+            {
+              type: 'list',
+              items: [
+                'Open the WardManager from the home page card or via Settings > Features',
+                'Create rules by specifying a pattern (file path, command, or operation) and a level (block/warn/confirm)',
+                'Rules can be scoped to a specific project or applied globally',
+                'Enable or disable individual rules without deleting them',
+                'Ward rules are stored in the `session_policies` SQLite table',
+              ],
+            },
+            {
+              type: 'heading',
+              text: 'Ward Alerts',
+            },
+            {
+              type: 'paragraph',
+              text: 'When a ward rule triggers, an alert appears in the right sidebar Alerts tab. Alerts show the rule name, the action that was attempted, and the ward level. Block alerts include the rejection message sent to the AI. Confirm alerts show whether the user approved or denied the action.',
+            },
+            {
+              type: 'heading',
+              text: 'Example Rules',
+            },
+            {
+              type: 'code',
+              text: '# Block any attempt to modify .env files\nPattern: **/.env*\nLevel: Block\n\n# Warn when deleting git branches\nPattern: git branch -D *\nLevel: Warn\n\n# Require confirmation for database migrations\nPattern: *migrate*\nLevel: Confirm',
             },
           ],
         },

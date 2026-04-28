@@ -14,6 +14,16 @@ import {
   draculaTheme,
   nordDarkTheme,
   nordLightTheme,
+  oneDarkProTheme,
+  githubDarkTheme,
+  catppuccinTheme,
+  rosePineTheme,
+  tokyoNightTheme,
+  gruvboxTheme,
+  solarizedDarkTheme,
+  ayuDarkTheme,
+  kanagawaTheme,
+  vscodeDarkTheme,
 } from '../../styles/theme.css';
 import { getPref, setPref } from './preferences';
 import { vars } from '../../styles/theme.css';
@@ -30,7 +40,17 @@ export type ThemeId =
   | 'cyberpunk'
   | 'dracula'
   | 'nord-dark'
-  | 'nord-light';
+  | 'nord-light'
+  | 'one-dark-pro'
+  | 'github-dark'
+  | 'catppuccin'
+  | 'rose-pine'
+  | 'tokyo-night'
+  | 'gruvbox'
+  | 'solarized-dark'
+  | 'ayu-dark'
+  | 'kanagawa'
+  | 'vscode-dark';
 
 const [activeTheme, setActiveTheme] = createSignal<ThemeId>('shadow-monarch-dark');
 
@@ -47,6 +67,16 @@ const themeClassMap: Record<ThemeId, string> = {
   'dracula': draculaTheme,
   'nord-dark': nordDarkTheme,
   'nord-light': nordLightTheme,
+  'one-dark-pro': oneDarkProTheme,
+  'github-dark': githubDarkTheme,
+  'catppuccin': catppuccinTheme,
+  'rose-pine': rosePineTheme,
+  'tokyo-night': tokyoNightTheme,
+  'gruvbox': gruvboxTheme,
+  'solarized-dark': solarizedDarkTheme,
+  'ayu-dark': ayuDarkTheme,
+  'kanagawa': kanagawaTheme,
+  'vscode-dark': vscodeDarkTheme,
 };
 
 export function applyTheme(theme: ThemeId): void {
@@ -97,6 +127,16 @@ export function initTheme(savedTheme: string): void {
     'dracula',
     'nord-dark',
     'nord-light',
+    'one-dark-pro',
+    'github-dark',
+    'catppuccin',
+    'rose-pine',
+    'tokyo-night',
+    'gruvbox',
+    'solarized-dark',
+    'ayu-dark',
+    'kanagawa',
+    'vscode-dark',
   ];
   const theme: ThemeId = (validIds.includes(savedTheme as ThemeId) ? savedTheme : 'shadow-monarch-dark') as ThemeId;
   applyTheme(theme);

@@ -1,4 +1,4 @@
-// session_enricher.go — Enriches sessions with journal data on completion.
+// session_enricher.go — Enriches sessions with rich context from all data sources.
 // Author: Subash Karki
 package collector
 
@@ -9,11 +9,24 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 )
+
+// EnrichResult holds the computed enrichment data for a session.
+type EnrichResult struct {
+	SessionID string
+	Goal      string
+	Type      string
+	Files     []string
+	Commits   int64
+	Tools     map[string]int
+	Keywords  []string
+	Duration  time.Duration
+}
 
 // SessionEnricher aggregates activity data into journal fields when a session ends.
 type SessionEnricher struct {
@@ -76,40 +89,363 @@ func (se *SessionEnricher) EnrichSession(ctx context.Context, sessionID string) 
 	// 3. Count git commits and line stats from activity_log.
 	gitCommits, linesAdded, linesRemoved := se.aggregateGitStats(ctx, sessionID)
 
-	// 4. Generate heuristic summary.
+	// 4. Compute tool breakdown from activity_log.
+	toolBreakdown := se.aggregateToolBreakdown(ctx, sessionID)
+
+	// 5. Extract session goal from firstPrompt.
+	goal := se.extractGoal(session)
+
+	// 6. Classify session type from tool breakdown + firstPrompt.
+	sessionType := se.classifySession(session, toolBreakdown)
+
+	// 7. Extract keywords from firstPrompt and activity.
+	keywords := se.extractKeywords(session, filesTouched)
+
+	// 8. Compute duration.
+	duration := se.computeDuration(session)
+
+	// 9. Generate heuristic summary (uses goal now).
 	summary := se.generateSummary(session, filesTouched, gitCommits)
 
-	// 5. Determine outcome.
+	// 10. Determine outcome.
 	outcome := se.determineOutcome(session)
 
-	// 6. Detect branch from activity events.
+	// 11. Detect branch from activity events.
 	branch := se.detectBranch(ctx, sessionID)
 
-	// 7. Look up PR from activity events.
+	// 12. Look up PR from activity events.
 	prURL, prStatus := se.lookupPR(ctx, sessionID)
 
-	// 8. Persist journal data via raw SQL (journal columns from migration 003).
+	// 13. Persist journal data via raw SQL (journal columns from migration 003 + 006).
 	filesTouchedJSON, _ := json.Marshal(filesTouched)
+	toolSummaryJSON, _ := json.Marshal(toolBreakdown)
+	keywordsStr := strings.Join(keywords, ",")
+
 	_, err = se.rawDB.ExecContext(ctx,
-		`UPDATE sessions SET date=?, summary=?, outcome=?, files_touched=?, git_commits=?, git_lines_added=?, git_lines_removed=?, branch=?, pr_url=?, pr_status=? WHERE id=?`,
-		date, summary, outcome, string(filesTouchedJSON), gitCommits, linesAdded, linesRemoved, branch, prURL, prStatus, sessionID)
+		`UPDATE sessions SET date=?, summary=?, outcome=?, files_touched=?, git_commits=?, git_lines_added=?, git_lines_removed=?, branch=?, pr_url=?, pr_status=?, session_goal=?, session_type=?, tool_summary=?, keywords=? WHERE id=?`,
+		date, summary, outcome, string(filesTouchedJSON), gitCommits, linesAdded, linesRemoved, branch, prURL, prStatus,
+		goal, sessionType, string(toolSummaryJSON), keywordsStr, sessionID)
 	if err != nil {
 		slog.Error("session_enricher: update journal", "session_id", sessionID, "err", err)
 		return
 	}
 
-	// 9. Upsert daily stats.
+	// 14. Upsert daily stats.
 	se.upsertDailyStats(ctx, date, session)
 
-	// 10. Emit event for frontend.
+	// 15. Emit event for frontend.
 	if se.emitEvent != nil {
 		se.emitEvent(EventJournalEnriched, map[string]interface{}{
-			"sessionId": sessionID,
-			"date":      date,
+			"sessionId":   sessionID,
+			"date":        date,
+			"sessionType": sessionType,
+			"goal":        goal,
+			"keywords":    keywords,
 		})
 	}
 
-	slog.Info("session_enricher: enriched", "session_id", sessionID, "files", len(filesTouched), "commits", gitCommits)
+	// 16. Rich log output with full context.
+	slog.Info("session_enricher: enriched",
+		"session_id", sessionID,
+		"goal", goal,
+		"type", sessionType,
+		"files", len(filesTouched),
+		"commits", gitCommits,
+		"tools", formatToolBreakdown(toolBreakdown),
+		"keywords", keywords,
+		"duration", duration.Round(time.Minute).String(),
+	)
+}
+
+// --- Rich enrichment helpers ---
+
+// extractGoal derives a session goal from the firstPrompt, truncated to ~100 chars.
+func (se *SessionEnricher) extractGoal(session db.Session) string {
+	if !session.FirstPrompt.Valid || session.FirstPrompt.String == "" {
+		return ""
+	}
+	goal := session.FirstPrompt.String
+	// Strip leading whitespace and newlines.
+	goal = strings.TrimSpace(goal)
+	// Take only the first line if multi-line.
+	if idx := strings.IndexAny(goal, "\n\r"); idx > 0 {
+		goal = goal[:idx]
+	}
+	if len(goal) > 100 {
+		goal = goal[:97] + "..."
+	}
+	return goal
+}
+
+// aggregateToolBreakdown counts tool usage by category from activity_log.
+// Returns a map like {"edit": 12, "read": 8, "bash": 3, "agent": 2}.
+func (se *SessionEnricher) aggregateToolBreakdown(ctx context.Context, sessionID string) map[string]int {
+	// First try to use the existing toolBreakdown from the session (set by JSONL scanner).
+	// If available, parse and use it directly.
+	session, err := se.queries.GetSession(ctx, sessionID)
+	if err == nil && session.ToolBreakdown.Valid && session.ToolBreakdown.String != "" {
+		var existing map[string]int
+		if err := json.Unmarshal([]byte(session.ToolBreakdown.String), &existing); err == nil && len(existing) > 0 {
+			return normalizeToolNames(existing)
+		}
+	}
+
+	// Fall back to counting from activity_log.
+	activities, err := se.queries.ListRecentActivity(ctx, db.ListRecentActivityParams{
+		SessionID: sql.NullString{String: sessionID, Valid: true},
+		Column2:   sessionID,
+		Limit:     5000,
+	})
+	if err != nil {
+		slog.Error("session_enricher: list activity for tool breakdown", "session_id", sessionID, "err", err)
+		return nil
+	}
+
+	counts := make(map[string]int)
+	for _, a := range activities {
+		if strings.HasPrefix(a.Type, "tool:") {
+			toolName := strings.TrimPrefix(a.Type, "tool:")
+			counts[toolName]++
+		} else if strings.HasPrefix(a.Type, "git:") {
+			counts["git"]++
+		}
+	}
+	return counts
+}
+
+// normalizeToolNames maps verbose tool names to short display names.
+func normalizeToolNames(m map[string]int) map[string]int {
+	result := make(map[string]int, len(m))
+	for k, v := range m {
+		key := strings.ToLower(k)
+		// Normalize common names.
+		switch key {
+		case "read", "edit", "write", "bash", "grep", "glob", "agent", "skill":
+			result[key] = v
+		default:
+			// Group MCP tools under their short name.
+			if strings.HasPrefix(key, "mcp__") || strings.Contains(key, "__") {
+				result["mcp"] += v
+			} else {
+				result[key] = v
+			}
+		}
+	}
+	return result
+}
+
+// classifySession determines the session type from tool usage and firstPrompt.
+func (se *SessionEnricher) classifySession(session db.Session, tools map[string]int) string {
+	prompt := ""
+	if session.FirstPrompt.Valid {
+		prompt = strings.ToLower(session.FirstPrompt.String)
+	}
+
+	// Prompt-based classification takes priority for clear signals.
+	if containsAny(prompt, "fix", "bug", "error", "broken", "crash", "failing", "issue") {
+		return "debugging"
+	}
+	if containsAny(prompt, "refactor", "cleanup", "clean up", "simplify", "reorganize") {
+		return "refactoring"
+	}
+	if containsAny(prompt, "test", "spec", "coverage") {
+		return "testing"
+	}
+	if containsAny(prompt, "review", "pr review", "code review") {
+		return "review"
+	}
+
+	// Tool-based classification from activity patterns.
+	if len(tools) == 0 {
+		return "unknown"
+	}
+
+	totalTools := 0
+	for _, v := range tools {
+		totalTools += v
+	}
+	if totalTools == 0 {
+		return "unknown"
+	}
+
+	editCount := tools["edit"] + tools["write"]
+	readCount := tools["read"]
+	bashCount := tools["bash"]
+	grepCount := tools["grep"] + tools["glob"]
+	agentCount := tools["agent"]
+	gitCount := tools["git"]
+
+	// High agent spawn ratio => delegation.
+	if agentCount > 0 && float64(agentCount)/float64(totalTools) > 0.15 {
+		return "delegation"
+	}
+
+	// High grep/glob ratio => exploration.
+	if grepCount > 0 && float64(grepCount)/float64(totalTools) > 0.4 {
+		return "exploration"
+	}
+
+	// Git commands dominant => git operations.
+	if gitCount > 0 && float64(gitCount)/float64(totalTools) > 0.4 {
+		return "git"
+	}
+
+	// Test commands in bash.
+	if bashCount > 0 && containsAny(prompt, "vitest", "jest", "pytest", "go test") {
+		return "testing"
+	}
+
+	// High edit/read ratio => coding (default productive pattern).
+	if editCount > 0 && float64(editCount)/float64(readCount+1) > 0.3 {
+		return "coding"
+	}
+
+	// Mostly reading => exploration.
+	if readCount > editCount*2 {
+		return "exploration"
+	}
+
+	return "coding"
+}
+
+// containsAny checks if s contains any of the given substrings.
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+// ticketRegex matches common ticket number patterns.
+var ticketRegex = regexp.MustCompile(`(?i)(CP-\d+|JIRA-\d+|[A-Z]{2,10}-\d{2,6})`)
+
+// extractKeywords pulls ticket numbers, file extensions, and key technical terms
+// from the firstPrompt and file list.
+func (se *SessionEnricher) extractKeywords(session db.Session, files []string) []string {
+	seen := make(map[string]struct{})
+	var keywords []string
+
+	addKeyword := func(kw string) {
+		kw = strings.TrimSpace(kw)
+		if kw == "" {
+			return
+		}
+		lower := strings.ToLower(kw)
+		if _, ok := seen[lower]; ok {
+			return
+		}
+		seen[lower] = struct{}{}
+		keywords = append(keywords, kw)
+	}
+
+	// Extract from firstPrompt.
+	if session.FirstPrompt.Valid && session.FirstPrompt.String != "" {
+		prompt := session.FirstPrompt.String
+
+		// Ticket numbers (CP-40701, JIRA-123, etc.)
+		for _, match := range ticketRegex.FindAllString(prompt, 5) {
+			addKeyword(match)
+		}
+	}
+
+	// Extract common file extensions from touched files.
+	extCounts := make(map[string]int)
+	for _, f := range files {
+		ext := fileExtension(f)
+		if ext != "" {
+			extCounts[ext]++
+		}
+	}
+	// Add top 3 extensions as keywords.
+	type extCount struct {
+		ext   string
+		count int
+	}
+	var exts []extCount
+	for e, c := range extCounts {
+		exts = append(exts, extCount{e, c})
+	}
+	sort.Slice(exts, func(i, j int) bool { return exts[i].count > exts[j].count })
+	for i, ec := range exts {
+		if i >= 3 {
+			break
+		}
+		addKeyword(ec.ext)
+	}
+
+	// Extract repo name as keyword.
+	if session.Repo.Valid && session.Repo.String != "" {
+		addKeyword(session.Repo.String)
+	}
+
+	// Cap at 10 keywords.
+	if len(keywords) > 10 {
+		keywords = keywords[:10]
+	}
+
+	return keywords
+}
+
+// fileExtension returns the file extension (e.g., ".go", ".tsx") or empty string.
+func fileExtension(path string) string {
+	for i := len(path) - 1; i >= 0 && i > len(path)-10; i-- {
+		if path[i] == '.' {
+			ext := path[i:]
+			// Filter noise.
+			switch ext {
+			case ".go", ".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".rb",
+				".java", ".swift", ".sql", ".yaml", ".yml", ".json", ".md",
+				".css", ".scss", ".html", ".vue", ".svelte", ".sh":
+				return ext
+			}
+			return ""
+		}
+		if path[i] == '/' || path[i] == '\\' {
+			break
+		}
+	}
+	return ""
+}
+
+// computeDuration calculates session duration from startedAt to now or endedAt.
+func (se *SessionEnricher) computeDuration(session db.Session) time.Duration {
+	if !session.StartedAt.Valid || session.StartedAt.Int64 == 0 {
+		return 0
+	}
+	start := time.Unix(session.StartedAt.Int64, 0)
+	if session.EndedAt.Valid && session.EndedAt.Int64 > 0 {
+		return time.Unix(session.EndedAt.Int64, 0).Sub(start)
+	}
+	return time.Since(start)
+}
+
+// formatToolBreakdown converts a tool count map to a compact string for logging.
+// Output: "{edit:12, read:8, bash:3, agent:2}"
+func formatToolBreakdown(tools map[string]int) string {
+	if len(tools) == 0 {
+		return "{}"
+	}
+
+	// Sort by count descending for readability.
+	type kv struct {
+		key   string
+		count int
+	}
+	var pairs []kv
+	for k, v := range tools {
+		if v > 0 {
+			pairs = append(pairs, kv{k, v})
+		}
+	}
+	sort.Slice(pairs, func(i, j int) bool { return pairs[i].count > pairs[j].count })
+
+	var parts []string
+	for _, p := range pairs {
+		parts = append(parts, fmt.Sprintf("%s:%d", p.key, p.count))
+	}
+	return "{" + strings.Join(parts, ", ") + "}"
 }
 
 // aggregateFiles extracts unique file paths from tool activity events.

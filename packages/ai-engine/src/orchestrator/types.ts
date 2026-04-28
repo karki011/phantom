@@ -4,6 +4,18 @@
  */
 import type { TaskContext } from '../types/strategy.js';
 import type { StrategyOutput } from '../types/strategy.js';
+import type { PriorDecision, PriorOutcome, PriorFailure, PriorSuccess } from '../graph/decision-query.js';
+
+// ---------------------------------------------------------------------------
+// Decision Query Interface — shared contract for DecisionQuery & proxies
+// ---------------------------------------------------------------------------
+
+export interface IDecisionQuery {
+  findSimilarDecisions(goal: string, minSimilarity?: number, limit?: number): PriorDecision[];
+  getOutcomes(decisionIds: string[]): Map<string, PriorOutcome>;
+  getFailedApproaches(goal: string): PriorFailure[];
+  getSuccessfulApproaches(goal: string): PriorSuccess[];
+}
 
 // ---------------------------------------------------------------------------
 // Pipeline Input

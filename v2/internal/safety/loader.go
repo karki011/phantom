@@ -5,7 +5,7 @@ package safety
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -69,20 +69,20 @@ func (l *Loader) Load() error {
 		path := filepath.Join(l.dir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
-			log.Printf("safety/loader: read %s: %v", path, err)
+			slog.Warn("safety/loader: read file failed", "path", path, "err", err)
 			continue
 		}
 
 		var wf wardFile
 		if err := yaml.Unmarshal(data, &wf); err != nil {
-			log.Printf("safety/loader: parse %s: %v", path, err)
+			slog.Warn("safety/loader: parse file failed", "path", path, "err", err)
 			continue
 		}
 
 		for i := range wf.Rules {
 			r := &wf.Rules[i]
 			if err := r.Compile(); err != nil {
-				log.Printf("safety/loader: compile rule %s: %v", r.ID, err)
+				slog.Warn("safety/loader: compile rule failed", "ruleID", r.ID, "err", err)
 				continue
 			}
 			loaded = append(loaded, *r)
@@ -288,7 +288,7 @@ func (l *Loader) watchLoop() {
 			}
 			timer = time.AfterFunc(debounce, func() {
 				if err := l.Load(); err != nil {
-					log.Printf("safety/loader: reload: %v", err)
+					slog.Warn("safety/loader: reload failed", "err", err)
 					return
 				}
 				if l.onChange != nil {
@@ -300,7 +300,7 @@ func (l *Loader) watchLoop() {
 			if !ok {
 				return
 			}
-			log.Printf("safety/loader: watcher error: %v", err)
+			slog.Warn("safety/loader: watcher error", "err", err)
 		}
 	}
 }

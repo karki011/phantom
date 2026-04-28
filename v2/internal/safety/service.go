@@ -6,7 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
@@ -39,7 +39,7 @@ func NewService(wardsDir string, writer *sql.DB, emitEvent func(string, interfac
 	svc.audit = NewAuditStore(writer)
 
 	svc.loader = NewLoader(wardsDir, func() {
-		log.Printf("safety: rules reloaded from %s", wardsDir)
+		slog.Info("safety: rules reloaded", "dir", wardsDir)
 		if emitEvent != nil {
 			emitEvent("ward:rules_reloaded", map[string]interface{}{"dir": wardsDir})
 		}
@@ -62,7 +62,7 @@ func (s *Service) Start(ctx context.Context) error {
 		return err
 	}
 	if err := s.loader.Load(); err != nil {
-		log.Printf("safety: initial load: %v", err)
+		slog.Warn("safety: initial load failed", "err", err)
 	}
 	return s.loader.Start(ctx)
 }
@@ -101,7 +101,7 @@ func (s *Service) Evaluate(ctx context.Context, ev *stream.Event) []Evaluation {
 		rule := s.loader.RuleByID(eval.RuleID)
 		if rule != nil && rule.Audit {
 			if err := s.audit.Record(ctx, eval); err != nil {
-				log.Printf("safety: audit record %s: %v", eval.RuleID, err)
+				slog.Warn("safety: audit record failed", "ruleID", eval.RuleID, "err", err)
 			}
 		}
 	}

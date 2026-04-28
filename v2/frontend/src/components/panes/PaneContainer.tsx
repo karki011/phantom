@@ -24,6 +24,7 @@ const PANE_TYPE_LABELS: Record<string, string> = {
   diff: 'Diff',
   home: 'Home',
   journal: 'Journal',
+  'markdown-preview': 'Preview',
 };
 
 export function PaneContainer(props: PaneContainerProps) {

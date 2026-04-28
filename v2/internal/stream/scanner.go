@@ -7,7 +7,7 @@ import (
 	"bufio"
 	"context"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -84,7 +84,7 @@ func (s *Scanner) ScanFrom(offset int64) ([]Event, int64, error) {
 func (s *Scanner) Tail(ctx context.Context, ch chan<- Event) error {
 	info, err := os.Stat(s.filePath)
 	if err != nil {
-		log.Printf("stream/scanner: tail stat %s: %v, starting from 0", s.filePath, err)
+		slog.Warn("stream/scanner: tail stat failed, starting from 0", "path", s.filePath, "err", err)
 	}
 
 	var offset int64
@@ -94,7 +94,7 @@ func (s *Scanner) Tail(ctx context.Context, ch chan<- Event) error {
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Printf("stream/scanner: fsnotify unavailable, polling: %v", err)
+		slog.Warn("stream/scanner: fsnotify unavailable, polling", "err", err)
 		return s.tailPoll(ctx, ch, offset)
 	}
 	defer watcher.Close()
@@ -103,7 +103,7 @@ func (s *Scanner) Tail(ctx context.Context, ch chan<- Event) error {
 	dir := filepath.Dir(s.filePath)
 	base := filepath.Base(s.filePath)
 	if err := watcher.Add(dir); err != nil {
-		log.Printf("stream/scanner: watch %s failed, polling: %v", dir, err)
+		slog.Warn("stream/scanner: watch dir failed, polling", "dir", dir, "err", err)
 		return s.tailPoll(ctx, ch, offset)
 	}
 
@@ -147,7 +147,7 @@ func (s *Scanner) Tail(ctx context.Context, ch chan<- Event) error {
 			if !ok {
 				return nil
 			}
-			log.Printf("stream/scanner: watcher error: %v", err)
+			slog.Warn("stream/scanner: watcher error", "err", err)
 
 		case <-fallback.C:
 			offset = s.readAndEmit(ctx, ch, offset)
@@ -159,7 +159,7 @@ func (s *Scanner) Tail(ctx context.Context, ch chan<- Event) error {
 func (s *Scanner) readAndEmit(ctx context.Context, ch chan<- Event, offset int64) int64 {
 	events, newOffset, err := s.ScanFrom(offset)
 	if err != nil {
-		log.Printf("stream/scanner: tail read %s: %v", s.filePath, err)
+		slog.Warn("stream/scanner: tail read failed", "path", s.filePath, "err", err)
 		return offset
 	}
 	for _, ev := range events {

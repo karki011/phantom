@@ -2,7 +2,7 @@
 // Author: Subash Karki
 
 import { For, Switch, Match, lazy } from 'solid-js';
-import { Palette, Code2, Terminal, Sparkles, Cpu, Settings } from 'lucide-solid';
+import { Palette, Code2, Terminal, Sparkles, Brain, Cpu, Settings } from 'lucide-solid';
 import { PhantomModal } from '@/shared/PhantomModal/PhantomModal';
 import {
   settingsOpen,
@@ -17,6 +17,7 @@ const AppearanceSection = lazy(() => import('./sections/AppearanceSection'));
 const EditorSection = lazy(() => import('./sections/EditorSection'));
 const TerminalSection = lazy(() => import('./sections/TerminalSection'));
 const FeaturesSection = lazy(() => import('./sections/FeaturesSection'));
+const AIEngineSection = lazy(() => import('./sections/AIEngineSection'));
 const ProvidersSection = lazy(() => import('./sections/ProvidersSection'));
 const SystemSection = lazy(() => import('./sections/SystemSection'));
 
@@ -25,6 +26,7 @@ const sidebarItems: { id: SettingsSection; label: string; icon: typeof Palette }
   { id: 'editor', label: 'Editor', icon: Code2 },
   { id: 'terminal', label: 'Terminal', icon: Terminal },
   { id: 'features', label: 'Features', icon: Sparkles },
+  { id: 'ai-engine', label: 'AI Engine', icon: Brain },
   { id: 'providers', label: 'Providers', icon: Cpu },
   { id: 'system', label: 'System', icon: Settings },
 ];
@@ -70,6 +72,9 @@ export function SettingsDialog() {
             </Match>
             <Match when={settingsSection() === 'features'}>
               <FeaturesSection />
+            </Match>
+            <Match when={settingsSection() === 'ai-engine'}>
+              <AIEngineSection />
             </Match>
             <Match when={settingsSection() === 'providers'}>
               <ProvidersSection />

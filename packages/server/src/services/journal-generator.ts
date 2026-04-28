@@ -1,11 +1,12 @@
 /**
  * JournalGenerator — Generates morning brief and end-of-day recap
- * Pulls data from git, sessions DB, hunter profile, quests, and gh CLI
+ * Pulls data from git, sessions DB, hunter profile, quests, gh CLI, and AI engine
  * @author Subash Karki
  */
 import { execSync } from 'node:child_process';
 import { db, sessions, hunterProfile, hunterStats, dailyQuests, achievements, activityLog, tasks, worktrees, userPreferences } from '@phantom-os/db';
 import { gte, eq, and, desc } from 'drizzle-orm';
+import { gatherAIDigestData, formatAIDigestSection, formatHunterDigestSection } from './ai-digest.js';
 
 interface ProjectInfo {
   id: string;
@@ -262,6 +263,16 @@ export async function generateMorningBrief(
     } catch { /* skip */ }
   }
 
+  // --- AI Engine Insights (yesterday's data) ---
+  try {
+    const aiData = await gatherAIDigestData(yesterdayStr());
+    const aiSection = formatAIDigestSection(aiData);
+    if (aiSection) {
+      lines.push('');
+      lines.push(aiSection);
+    }
+  } catch { /* skip — AI engine data is optional */ }
+
   // Fallback
   if (lines.filter(l => l.startsWith('- ')).length === 0) {
     lines.push('- No activity detected since yesterday');
@@ -508,6 +519,25 @@ export async function generateEndOfDay(
       }
     } catch { /* skip */ }
   }
+
+  // --- AI Engine Insights (today's data) ---
+  try {
+    const aiData = await gatherAIDigestData(todayStr());
+
+    const aiSection = formatAIDigestSection(aiData);
+    if (aiSection) {
+      lines.push('');
+      lines.push(aiSection);
+    }
+
+    // Hunter progress section (separate from gamification quests/achievements)
+    const hunterSection = formatHunterDigestSection(aiData);
+    if (hunterSection && !gamification) {
+      // Only show AI-gathered hunter progress if gamification section didn't already cover it
+      lines.push('');
+      lines.push(hunterSection);
+    }
+  } catch { /* skip — AI engine data is optional */ }
 
   // Fallback
   if (totalCommits === 0 && totalSessionCount === 0) {

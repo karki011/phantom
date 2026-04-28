@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -56,7 +56,7 @@ func (a *App) RunBubbleteaProgram(programType string, args map[string]string) (s
 			}
 			encoded, err := json.Marshal(result)
 			if err != nil {
-				log.Printf("app/bindings_terminal: RunBubbleteaProgram: marshal wizard result: %v", err)
+				slog.Error("RunBubbleteaProgram: marshal wizard result", "err", err)
 				return
 			}
 			wailsRuntime.EventsEmit(a.ctx, fmt.Sprintf("tui:%s:result", sessionID), string(encoded))
@@ -159,7 +159,7 @@ func (a *App) RunBubbleteaProgram(programType string, args map[string]string) (s
 			}
 			if err != nil {
 				if err != io.EOF {
-					log.Printf("app/bindings_terminal: RunBubbleteaProgram(%s): read error: %v", sessionID, err)
+					slog.Error("RunBubbleteaProgram: PTY read error", "sessionID", sessionID, "err", err)
 				}
 				return
 			}

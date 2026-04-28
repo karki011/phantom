@@ -40,6 +40,7 @@ class OrchestratorEngineService {
   private lru: string[] = [];
   private instances = new Map<string, ProjectOrchestratorContext>();
   private broadcast: BroadcastFn = () => {};
+  private globalListeners = new Set<(event: import('@phantom-os/ai-engine').GraphEvent) => void>();
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -50,6 +51,15 @@ class OrchestratorEngineService {
     logger.info('OrchestratorEngine', `Initialized (LRU mode, max ${MAX_IN_MEMORY} in memory)`);
   }
 
+  /**
+   * Subscribe to all orchestrator knowledge events across all projects.
+   * Returns an unsubscribe function.
+   */
+  onEvent(listener: (event: import('@phantom-os/ai-engine').GraphEvent) => void): () => void {
+    this.globalListeners.add(listener);
+    return () => this.globalListeners.delete(listener);
+  }
+
   destroy(): void {
     for (const [, ctx] of this.instances) {
       ctx.knowledgeDb.close();
@@ -57,6 +67,7 @@ class OrchestratorEngineService {
     }
     this.instances.clear();
     this.lru = [];
+    this.globalListeners.clear();
     logger.info('OrchestratorEngine', 'Destroyed');
   }
 
@@ -184,11 +195,14 @@ class OrchestratorEngineService {
       decisionQuery,
     });
 
-    // Forward knowledge events to SSE
+    // Forward knowledge events to SSE and global listeners
     eventBus.onAll((event) => {
       const type = (event as { type?: string }).type ?? '';
       if (type.startsWith('knowledge:')) {
         this.broadcast('orchestrator', event);
+        for (const listener of this.globalListeners) {
+          try { listener(event); } catch { /* non-fatal */ }
+        }
       }
     });
 

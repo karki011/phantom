@@ -8,7 +8,7 @@ package app
 import (
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,7 +57,7 @@ func (a *App) GetPlansForWorktree(worktreePath, repoPath, branchName string) []P
 
 	home, err := os.UserHomeDir()
 	if err != nil {
-		log.Printf("bindings_plans: cannot determine home dir: %v", err)
+		slog.Error("bindings_plans: cannot determine home dir", "err", err)
 		return nil
 	}
 
@@ -121,7 +121,7 @@ func (a *App) GetPlansForWorktree(worktreePath, repoPath, branchName string) []P
 
 			content, err := readFirstBytes(fullPath, planReadLimit)
 			if err != nil {
-				log.Printf("bindings_plans: read %s: %v", fullPath, err)
+				slog.Error("bindings_plans: read plan file", "path", fullPath, "err", err)
 				continue
 			}
 

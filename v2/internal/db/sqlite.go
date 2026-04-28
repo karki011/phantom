@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -160,7 +160,7 @@ func (d *DB) migrate() error {
 		}
 		ver, err := strconv.Atoi(parts[0])
 		if err != nil {
-			log.Printf("db: skip migration %s: cannot parse version: %v", e.Name(), err)
+			slog.Warn("db: skip migration: cannot parse version", "file", e.Name(), "err", err)
 			continue
 		}
 		migrations = append(migrations, migration{version: ver, name: e.Name()})
@@ -182,7 +182,7 @@ func (d *DB) migrate() error {
 			return fmt.Errorf("read migration %s: %w", m.name, err)
 		}
 
-		log.Printf("db: applying migration %s (version %d)", m.name, m.version)
+		slog.Info("db: applying migration", "file", m.name, "version", m.version)
 
 		tx, err := d.Writer.Begin()
 		if err != nil {
@@ -204,7 +204,7 @@ func (d *DB) migrate() error {
 			return fmt.Errorf("commit migration %s: %w", m.name, err)
 		}
 
-		log.Printf("db: migration %s applied successfully", m.name)
+		slog.Info("db: migration applied successfully", "file", m.name)
 	}
 
 	return nil

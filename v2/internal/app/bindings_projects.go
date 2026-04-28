@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,7 +24,7 @@ func (a *App) GetProjects() []db.Project {
 	q := db.New(a.DB.Reader)
 	projects, err := q.ListProjects(a.ctx)
 	if err != nil {
-		log.Printf("app/bindings_projects: ListProjects error: %v", err)
+		slog.Error("GetProjects: ListProjects failed", "err", err)
 		return []db.Project{}
 	}
 	return projects
@@ -87,7 +87,7 @@ func (a *App) AddProject(repoPath string) (*db.Project, error) {
 		CreatedAt:    now,
 	}
 	if err := q.CreateWorkspace(a.ctx, wsParams); err != nil {
-		log.Printf("AddProject: auto-create workspace warning: %v", err)
+		slog.Warn("AddProject: auto-create workspace failed", "err", err)
 	}
 
 	return &proj, nil
@@ -98,26 +98,26 @@ func (a *App) RemoveProject(id string) error {
 	rq := db.New(a.DB.Reader)
 	workspaces, err := rq.ListWorkspacesByProject(a.ctx, id)
 	if err != nil {
-		log.Printf("RemoveProject: list workspaces warning: %v", err)
+		slog.Warn("RemoveProject: list workspaces failed", "err", err)
 	}
 	wq := db.New(a.DB.Writer)
 	for _, ws := range workspaces {
 		if err := wq.DeleteWorkspace(a.ctx, ws.ID); err != nil {
-			log.Printf("RemoveProject: delete workspace %s warning: %v", ws.ID, err)
+			slog.Warn("RemoveProject: delete workspace failed", "workspaceID", ws.ID, "err", err)
 		}
 	}
 	// Clean up graph data (code-review-graph FK references)
 	for _, table := range []string{"graph_edges", "graph_nodes", "graph_meta", "workspace_sections"} {
 		if _, err := a.DB.Writer.ExecContext(a.ctx, "DELETE FROM "+table+" WHERE project_id = ?", id); err != nil {
-			log.Printf("RemoveProject: clean %s warning: %v", table, err)
+			slog.Warn("RemoveProject: clean table failed", "table", table, "err", err)
 		}
 	}
 	// Clean up custom recipes and recipe favorites for this project.
 	if err := wq.DeleteCustomRecipesByProject(a.ctx, id); err != nil {
-		log.Printf("RemoveProject: clean custom_recipes warning: %v", err)
+		slog.Warn("RemoveProject: clean custom_recipes failed", "err", err)
 	}
 	if err := wq.DeleteRecipeFavoritesByProject(a.ctx, id); err != nil {
-		log.Printf("RemoveProject: clean recipe_favorites warning: %v", err)
+		slog.Warn("RemoveProject: clean recipe_favorites failed", "err", err)
 	}
 	return wq.DeleteProject(a.ctx, id)
 }
@@ -134,7 +134,7 @@ func (a *App) GetProjectRecipes(projectId string) []project.Recipe {
 	q := db.New(a.DB.Reader)
 	proj, err := q.GetProject(a.ctx, projectId)
 	if err != nil {
-		log.Printf("app/bindings_projects: GetProject(%s) error: %v", projectId, err)
+		slog.Error("GetProjectRecipes: GetProject failed", "projectId", projectId, "err", err)
 		return []project.Recipe{}
 	}
 
@@ -144,7 +144,7 @@ func (a *App) GetProjectRecipes(projectId string) []project.Recipe {
 
 	var profile project.Profile
 	if err := json.Unmarshal([]byte(proj.Profile.String), &profile); err != nil {
-		log.Printf("app/bindings_projects: unmarshal profile for project %s: %v", projectId, err)
+		slog.Error("GetProjectRecipes: unmarshal profile failed", "projectId", projectId, "err", err)
 		return []project.Recipe{}
 	}
 

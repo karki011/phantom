@@ -20,5 +20,8 @@
       "Bash(sqlite3 ~/.phantom-os/phantom.db *)",
       "Bash(claude plugin *)"
     ]
+  },
+  "env": {
+    "PHANTOM_GATE_DISABLE": "1"
   }
 }

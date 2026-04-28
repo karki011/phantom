@@ -19,12 +19,13 @@ import (
 
 // Indexer manages background file indexing for a project.
 type Indexer struct {
-	graph     *Graph
-	rootDir   string
-	watcher   *fsnotify.Watcher
-	indexing  atomic.Bool
-	cancel    context.CancelFunc
-	done      chan struct{}
+	graph            *Graph
+	rootDir          string
+	watcher          *fsnotify.Watcher
+	indexing         atomic.Bool
+	cancel           context.CancelFunc
+	done             chan struct{}
+	totalSourceFiles atomic.Int64
 }
 
 // NewIndexer creates an indexer for the given project root directory.
@@ -39,6 +40,11 @@ func NewIndexer(rootDir string) *Indexer {
 // Graph returns the underlying file graph.
 func (ix *Indexer) Graph() *Graph {
 	return ix.graph
+}
+
+// TotalSourceFiles returns the number of parseable source files found in the project.
+func (ix *Indexer) TotalSourceFiles() int {
+	return int(ix.totalSourceFiles.Load())
 }
 
 // RootDir returns the project root directory this indexer covers.
@@ -125,6 +131,9 @@ func (ix *Indexer) fullIndex(ctx context.Context) {
 		if LanguageForExt(ext) == "" {
 			return nil
 		}
+
+		// Count all parseable source files (even if skipped for size).
+		ix.totalSourceFiles.Add(1)
 
 		// Skip large files (>200KB).
 		if info.Size() > 200*1024 {

@@ -345,13 +345,22 @@ export function ChangesView() {
     }
   }
 
-  async function handleFileClick(file: FileStatus) {
+  async function handleFileClick(file: FileStatus, staged = false) {
     const wtId = activeWorktreeId();
     if (!wtId) return;
 
-    // Untracked files have no git history — just open in editor
+    // Untracked files — show empty vs new file content
     if (file.status === '?') {
-      openFileInEditor({ workspaceId: wtId, filePath: file.path });
+      const modifiedContent = await readFileContents(wtId, file.path);
+      showFileDiff({
+        workspaceId: wtId,
+        filePath: file.path,
+        originalContent: '',
+        modifiedContent,
+        originalLabel: '(new file)',
+        modifiedLabel: `${file.path} (untracked)`,
+        readOnly: false,
+      });
       return;
     }
 
@@ -370,22 +379,37 @@ export function ChangesView() {
       return;
     }
 
-    // Modified / Added / Renamed — show HEAD vs working copy
-    // getFileAtRevision returns '' on error (new file not in HEAD) — that's fine
-    const [originalContent, modifiedContent] = await Promise.all([
-      getFileAtRevision(wtId, file.path, 'HEAD'),
-      readFileContents(wtId, file.path),
-    ]);
-    console.log('[ChangesView] diff data:', file.path, 'original:', originalContent.length, 'bytes, modified:', modifiedContent.length, 'bytes');
-    showFileDiff({
-      workspaceId: wtId,
-      filePath: file.path,
-      originalContent,
-      modifiedContent,
-      originalLabel: originalContent ? `${file.path} (HEAD)` : '(new file)',
-      modifiedLabel: `${file.path} (working copy)`,
-      readOnly: true,
-    });
+    if (staged) {
+      // Staged: show HEAD vs index (staged version)
+      const [originalContent, modifiedContent] = await Promise.all([
+        getFileAtRevision(wtId, file.path, 'HEAD'),
+        getFileAtRevision(wtId, file.path, ''),
+      ]);
+      showFileDiff({
+        workspaceId: wtId,
+        filePath: file.path,
+        originalContent,
+        modifiedContent,
+        originalLabel: originalContent ? `${file.path} (HEAD)` : '(new file)',
+        modifiedLabel: `${file.path} (staged)`,
+        readOnly: true,
+      });
+    } else {
+      // Unstaged: show HEAD vs working copy (editable)
+      const [originalContent, modifiedContent] = await Promise.all([
+        getFileAtRevision(wtId, file.path, 'HEAD'),
+        readFileContents(wtId, file.path),
+      ]);
+      showFileDiff({
+        workspaceId: wtId,
+        filePath: file.path,
+        originalContent,
+        modifiedContent,
+        originalLabel: originalContent ? `${file.path} (HEAD)` : '(new file)',
+        modifiedLabel: `${file.path} (working copy)`,
+        readOnly: false,
+      });
+    }
   }
 
   const hasFiles = () => stagedFiles().length > 0 || unstagedFiles().length > 0;
@@ -482,7 +506,7 @@ export function ChangesView() {
               <Collapsible.Content>
                 <For each={stagedFiles()}>
                   {(file) => (
-                    <StagedFileRow file={file} onUnstage={handleUnstage} onFileClick={handleFileClick} />
+                    <StagedFileRow file={file} onUnstage={handleUnstage} onFileClick={(f) => handleFileClick(f, true)} />
                   )}
                 </For>
               </Collapsible.Content>

@@ -14,8 +14,9 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/app"
 	"github.com/subashkarki/phantom-os-v2/internal/chat"
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
-	"github.com/subashkarki/phantom-os-v2/internal/journal"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
+	"github.com/subashkarki/phantom-os-v2/internal/gamification"
+	"github.com/subashkarki/phantom-os-v2/internal/journal"
 	"github.com/subashkarki/phantom-os-v2/internal/linker"
 	"github.com/subashkarki/phantom-os-v2/internal/provider"
 	"github.com/subashkarki/phantom-os-v2/internal/provider/claude"
@@ -111,6 +112,16 @@ func main() {
 	a.SetProvider(activeProv)
 	a.SetProviderRegistry(provRegistry)
 
+	// 6b. Create gamification service (XP engine, achievements, quests).
+	gamEmitFn := func(name string, data interface{}) {
+		app.EmitEvent(a.Ctx(), name, data)
+	}
+	gamSvc := gamification.NewService(database.Writer, database.Reader, gamEmitFn)
+	if err := gamSvc.Init(context.Background()); err != nil {
+		log.Printf("phantomos: gamification init warning: %v", err)
+	}
+	a.SetGamification(gamSvc)
+
 	// 7. Build collector registry with all 5 collectors.
 	//    emitEvent is a closure; it captures `a` but only calls EmitEvent after
 	//    Wails has called Startup (which sets a.Ctx()). Collectors are started
@@ -118,8 +129,8 @@ func main() {
 	registry := collector.NewRegistry()
 
 	onTaskComplete := func(sessionID, taskID string) {
-		// Phase 1: log only. XP engine comes in a later phase.
 		log.Printf("phantomos: task completed session=%s task=%s", sessionID, taskID)
+		gamSvc.OnTaskComplete(context.Background(), sessionID, taskID)
 	}
 
 	sessionWatcher := collector.NewSessionWatcher(queries, activeProv, func(name string, data interface{}) {

@@ -14,12 +14,18 @@ import (
 
 	"github.com/charmbracelet/log"
 
+	"net/http"
+
 	graphctx "github.com/subashkarki/phantom-os-v2/internal/ai/graph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
+	"github.com/subashkarki/phantom-os-v2/internal/ai/knowledge"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/strategies"
+	"github.com/subashkarki/phantom-os-v2/internal/api"
+	"github.com/subashkarki/phantom-os-v2/internal/branding"
 	"github.com/subashkarki/phantom-os-v2/internal/chat"
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
+	"github.com/subashkarki/phantom-os-v2/internal/gamification"
 	"github.com/subashkarki/phantom-os-v2/internal/git"
 	"github.com/subashkarki/phantom-os-v2/internal/linker"
 	"github.com/subashkarki/phantom-os-v2/internal/provider"
@@ -78,6 +84,7 @@ type App struct {
 	SessionCtrl       *session.Controller
 	Safety            *safety.Service
 	Chat              *chat.Service
+	Gamification      *gamification.Service
 	collectorRegistry *collector.Registry
 
 	// AI context injection — initialized during Startup from DB connections.
@@ -87,6 +94,9 @@ type App struct {
 	// File graph indexers — one per project, started in background during Startup.
 	fileIndexers   map[string]*filegraph.Indexer // project ID → indexer
 	fileIndexersMu sync.RWMutex
+
+	// apiServer is the lightweight HTTP API for Claude Code hook communication.
+	apiServer *api.Server
 
 	// Chat safety middleware — initialized during Startup from Safety service.
 	chatMiddleware *safety.ChatMiddleware
@@ -121,6 +131,9 @@ func (a *App) SetSessionCtrl(c *session.Controller) { a.SessionCtrl = c }
 
 // SetChat injects the chat service before Wails calls Startup.
 func (a *App) SetChat(c *chat.Service) { a.Chat = c }
+
+// SetGamification injects the gamification service before Wails calls Startup.
+func (a *App) SetGamification(g *gamification.Service) { a.Gamification = g }
 
 // SetProvider injects the active AI provider before Wails calls Startup.
 func (a *App) SetProvider(p provider.Provider) { a.prov = p }
@@ -199,6 +212,9 @@ func (a *App) Startup(ctx context.Context) {
 	if a.DB != nil {
 		a.initFileGraph()
 	}
+
+	// Start lightweight HTTP API server for Claude Code hook communication.
+	a.startAPIServer()
 
 	// Initialize chat safety middleware.
 	if a.Safety != nil {
@@ -341,6 +357,50 @@ func (a *App) initFileGraph() {
 		})
 		log.Info("app: file graph lookup wired (lazy mode)")
 	}
+}
+
+// startAPIServer creates and starts the HTTP API server that Claude Code hooks
+// communicate with. It runs in a background goroutine and is tied to the app
+// context for graceful shutdown.
+func (a *App) startAPIServer() {
+	// Build a decision store from the DB if available.
+	var decisionStore *knowledge.DecisionStore
+	if a.DB != nil {
+		ds, err := knowledge.NewDecisionStore(a.DB.Writer)
+		if err != nil {
+			log.Warn("app: decision store init failed (api server will start without it)", "err", err)
+		} else {
+			decisionStore = ds
+		}
+	}
+
+	// The indexer snapshot function captures a read-locked copy of the map.
+	indexersFn := func() map[string]*filegraph.Indexer {
+		a.fileIndexersMu.RLock()
+		defer a.fileIndexersMu.RUnlock()
+		cp := make(map[string]*filegraph.Indexer, len(a.fileIndexers))
+		for k, v := range a.fileIndexers {
+			cp[k] = v
+		}
+		return cp
+	}
+
+	var dbWriter *sql.DB
+	if a.DB != nil {
+		dbWriter = a.DB.Writer
+	}
+
+	a.apiServer = api.NewServer(api.DefaultPort, api.ServerDeps{
+		FileIndexers:  indexersFn,
+		DecisionStore: decisionStore,
+		DB:            dbWriter,
+	})
+
+	go func() {
+		if err := a.apiServer.Start(a.ctx); err != nil && err != http.ErrServerClosed {
+			log.Error("app: api server failed", "err", err)
+		}
+	}()
 }
 
 // StartFileGraph starts (or restarts) the file graph indexer for a project.
@@ -605,7 +665,7 @@ func (a *App) GetShutdownStats() map[string]interface{} {
 
 func snapshotPath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".phantom-os", "terminal-snapshots.json")
+	return filepath.Join(home, branding.ConfigDirName, "terminal-snapshots.json")
 }
 
 func (a *App) saveTerminalSnapshots() {

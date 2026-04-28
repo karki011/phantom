@@ -28,6 +28,15 @@ export const appShell = style({
   overflow: 'hidden',
 });
 
+// ── Traffic Light Inset ──────────────────────────────────────────────────────
+// macOS TitleBarHiddenInset places the traffic light buttons inside the WebView.
+// When NOT in fullscreen we add ~78px left padding so content clears the buttons.
+// The `trafficLightInset` class is toggled dynamically via the fullscreen signal.
+
+export const TRAFFIC_LIGHT_WIDTH = '78px';
+
+export const trafficLightInset = style({});
+
 // ── Header ────────────────────────────────────────────────────────────────────
 
 export const header = style({
@@ -41,7 +50,15 @@ export const header = style({
   borderBottom: `1px solid ${vars.color.border}`,
   background: vars.color.bgSecondary,
   gap: vars.space.sm,
-});
+  transition: `padding-left 200ms ease`,
+  selectors: {
+    [`${trafficLightInset} &`]: {
+      paddingLeft: TRAFFIC_LIGHT_WIDTH,
+    },
+  },
+  // Allow the header to be dragged to move the window (Wails title bar area)
+  WebkitAppRegion: 'drag',
+} as any);
 
 // ── Top Tab Bar ───────────────────────────────────────────────────────────────
 
@@ -55,7 +72,15 @@ export const topTabBar = style({
   background: vars.color.bgSecondary,
   paddingLeft: vars.space.sm,
   gap: '2px',
-});
+  transition: `padding-left 200ms ease`,
+  // Allow the tab bar to be dragged to move the window (Wails title bar area)
+  WebkitAppRegion: 'drag',
+  selectors: {
+    [`${trafficLightInset} &`]: {
+      paddingLeft: TRAFFIC_LIGHT_WIDTH,
+    },
+  },
+} as any);
 
 export const topTabList = style({
   display: 'flex',
@@ -79,6 +104,7 @@ export const topTab = style({
   userSelect: 'none',
   transition: `color ${vars.animation.fast} ease, border-color ${vars.animation.fast} ease`,
   outline: 'none',
+  WebkitAppRegion: 'no-drag',
 
   selectors: {
     '&:hover': {
@@ -94,7 +120,7 @@ export const topTab = style({
       borderBottomColor: vars.color.accent,
     },
   },
-});
+} as any);
 
 // ── Main Content ──────────────────────────────────────────────────────────────
 
@@ -116,6 +142,8 @@ export const threeColumnLayout = style({
 
 export const centerWorkspace = style({
   flex: 1,
+  minHeight: 0,
+  minWidth: 0,
   overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column',
@@ -179,10 +207,11 @@ export const headerLogo = style({
   outline: 'none',
   flexShrink: 0,
   textTransform: 'uppercase',
+  WebkitAppRegion: 'no-drag',
   ':hover': {
     color: vars.color.accentHover,
   },
-});
+} as any);
 
 export const headerCenter = style({
   flex: 1,
@@ -199,6 +228,7 @@ export const sessionIndicator = style({
   fontFamily: vars.font.mono,
   color: vars.color.textSecondary,
   letterSpacing: '0.04em',
+  whiteSpace: 'nowrap',
 });
 
 export const sessionDot = style({
@@ -215,12 +245,14 @@ export const statDivider = style({
   margin: `0 ${vars.space.sm}`,
   fontSize: vars.fontSize.xs,
   userSelect: 'none',
+  flexShrink: 0,
 });
 
 export const statItem = style({
   fontFamily: vars.font.mono,
   fontSize: vars.fontSize.xs,
   color: vars.color.textSecondary,
+  whiteSpace: 'nowrap',
 });
 
 export const headerActions = style({
@@ -228,7 +260,8 @@ export const headerActions = style({
   alignItems: 'center',
   gap: vars.space.xs,
   flexShrink: 0,
-});
+  WebkitAppRegion: 'no-drag',
+} as any);
 
 export const headerIconButton = style({
   display: 'flex',
@@ -246,6 +279,14 @@ export const headerIconButton = style({
   ':hover': {
     color: vars.color.textPrimary,
     background: vars.color.bgHover,
+  },
+});
+
+export const headerIconButtonDanger = style({
+  color: vars.color.danger,
+  ':hover': {
+    color: vars.color.danger,
+    background: vars.color.dangerMuted,
   },
 });
 
@@ -278,6 +319,7 @@ export const statusText = style({
   fontSize: vars.fontSize.xs,
   fontFamily: vars.font.mono,
   color: vars.color.textSecondary,
+  whiteSpace: 'nowrap',
 });
 
 export const statusMuted = style({
@@ -290,6 +332,17 @@ export const statusDivider = style({
   fontSize: vars.fontSize.xs,
   color: vars.color.divider,
   userSelect: 'none',
+});
+
+export const statusBranding = style({
+  fontFamily: vars.font.display,
+  fontSize: vars.fontSize.xs,
+  fontWeight: 700,
+  color: vars.color.accent,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  userSelect: 'none',
+  flexShrink: 0,
 });
 
 export const statusDotConnected = style({

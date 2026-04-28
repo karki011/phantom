@@ -229,8 +229,7 @@ export const paneContainer = style({
   flex: 1,
   overflow: 'hidden',
   minWidth: '100px',
-  minHeight: '80px',
-  height: '100%',
+  minHeight: 0,
   position: 'relative',
   outline: '1px solid transparent',
   transition: `outline-color ${vars.animation.fast}`,
@@ -293,6 +292,7 @@ export const paneHeaderButton = style({
 
 export const paneContent = style({
   flex: 1,
+  minHeight: 0,
   overflow: 'hidden',
   position: 'relative',
   display: 'flex',

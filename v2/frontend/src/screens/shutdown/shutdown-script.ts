@@ -1,5 +1,6 @@
 // Author: Subash Karki
 
+import { APP_NAME_SPACED } from '@/core/branding';
 import type { SoundCue, LineStyle } from '../boot/boot-script';
 
 export interface ShutdownLine {
@@ -19,14 +20,13 @@ export interface ShutdownStats {
 
 export function buildShutdownScript(stats?: ShutdownStats): ShutdownLine[] {
   const lines: ShutdownLine[] = [
-    { text: 'P H A N T O M   O S', style: 'title', charDelay: 40, sound: 'bass' },
-    { text: 'shutdown sequence initiated', style: 'subtitle', delay: 200, charDelay: 30 },
-    { text: '', style: 'separator', delay: 300 },
-    { text: 'Severing neural bridge ............. done', style: 'normal', delay: 100, sound: 'scan', charDelay: 15 },
-    { text: 'Closing event stream ............... done', style: 'normal', delay: 80, sound: 'scan', charDelay: 15 },
-    { text: 'Standing down defense wards ........ done', style: 'normal', delay: 80, sound: 'scan', charDelay: 15 },
-    { text: 'Persisting session memory .......... done', style: 'normal', delay: 80, sound: 'scan', charDelay: 15 },
-    { text: 'Releasing core services ............ done', style: 'normal', delay: 80, sound: 'scan', charDelay: 15 },
+    { text: APP_NAME_SPACED, style: 'title', charDelay: 30 },
+    { text: 'shutdown sequence initiated', style: 'subtitle', delay: 100, charDelay: 20 },
+    { text: '', style: 'separator', delay: 150 },
+    { text: 'Severing neural bridge ............. done', style: 'normal', delay: 60, charDelay: 10 },
+    { text: 'Closing event stream ............... done', style: 'normal', delay: 40, charDelay: 10 },
+    { text: 'Persisting session memory .......... done', style: 'normal', delay: 40, charDelay: 10 },
+    { text: 'Releasing core services ............ done', style: 'normal', delay: 40, charDelay: 10 },
   ];
 
   if (stats && (stats.sessionCount > 0 || stats.totalTokens > 0)) {
@@ -45,11 +45,11 @@ export function buildShutdownScript(stats?: ShutdownStats): ShutdownLine[] {
     }
     if (stats.totalCost > 0) statParts.push(`$${stats.totalCost.toFixed(2)}`);
 
-    lines.push({ text: statParts.join(' · '), style: 'dim', delay: 100, charDelay: 12 });
+    lines.push({ text: statParts.join(' · '), style: 'dim', delay: 60, charDelay: 8 });
   }
 
-  lines.push({ text: '', style: 'separator', delay: 200 });
-  lines.push({ text: 'S Y S T E M   O F F L I N E', style: 'accent', delay: 300, sound: 'ok', charDelay: 35 });
+  lines.push({ text: '', style: 'separator', delay: 100 });
+  lines.push({ text: `${APP_NAME_SPACED}   O F F L I N E`, style: 'accent', delay: 150, charDelay: 25 });
 
   return lines;
 }

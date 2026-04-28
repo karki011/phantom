@@ -40,6 +40,8 @@ interface DiffReviewState {
   active: boolean;
   /** Side-by-side (true) or inline (false) */
   sideBySide: boolean;
+  /** True when viewing git changes (read-only, no accept/reject) */
+  gitDiff: boolean;
 }
 
 interface EditorPaneProps {
@@ -71,6 +73,7 @@ export default function EditorPane(props: EditorPaneProps) {
   const [diffReview, setDiffReview] = createSignal<DiffReviewState>({
     active: false,
     sideBySide: true,
+    gitDiff: false,
   });
 
   // The workspace context — prefer explicit prop, fall back to active worktree
@@ -563,7 +566,7 @@ export default function EditorPane(props: EditorPaneProps) {
       });
     }
 
-    setDiffReview({ active: true, sideBySide: diffReview().sideBySide });
+    setDiffReview({ active: true, sideBySide: diffReview().sideBySide, gitDiff });
     requestAnimationFrame(() => diffEditorInstance?.layout());
   };
 
@@ -581,7 +584,7 @@ export default function EditorPane(props: EditorPaneProps) {
     // Show the normal editor again
     editorInstance.getDomNode()?.style.setProperty('display', '');
 
-    setDiffReview({ active: false, sideBySide: diffReview().sideBySide });
+    setDiffReview({ active: false, sideBySide: diffReview().sideBySide, gitDiff: false });
     requestAnimationFrame(() => editorInstance?.layout());
     editorInstance.focus();
   };
@@ -764,20 +767,22 @@ export default function EditorPane(props: EditorPaneProps) {
       <Show when={diffReview().active}>
         <div class={styles.diffToolbar}>
           <div class={styles.diffToolbarLeft}>
-            <button
-              class={styles.diffAcceptButton}
-              onClick={acceptDiffChanges}
-              type="button"
-            >
-              Accept
-            </button>
-            <button
-              class={styles.diffRejectButton}
-              onClick={rejectDiffChanges}
-              type="button"
-            >
-              Reject
-            </button>
+            <Show when={!diffReview().gitDiff}>
+              <button
+                class={styles.diffAcceptButton}
+                onClick={acceptDiffChanges}
+                type="button"
+              >
+                Accept
+              </button>
+              <button
+                class={styles.diffRejectButton}
+                onClick={rejectDiffChanges}
+                type="button"
+              >
+                Reject
+              </button>
+            </Show>
           </div>
 
           <div class={styles.diffToolbarCenter}>

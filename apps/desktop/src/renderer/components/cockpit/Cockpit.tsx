@@ -10,6 +10,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   BarChart3,
+  Brain,
+  Dna,
   FolderGit2,
   GitBranch,
   GitGraph,
@@ -17,6 +19,7 @@ import {
   Radio,
   Search,
   Shield,
+  Target,
 } from 'lucide-react';
 
 import { projectsAtom, worktreesByProjectAtom, activeWorktreeIdAtom } from '../../atoms/worktrees';
@@ -110,6 +113,30 @@ export const Cockpit = () => {
             style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}
           >
             Live Feed
+          </Tabs.Tab>
+          <Tabs.Tab
+            value="knowledge"
+            leftSection={<Brain size={14} />}
+            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}
+            onClick={() => navigate('knowledge')}
+          >
+            Knowledge
+          </Tabs.Tab>
+          <Tabs.Tab
+            value="strategies"
+            leftSection={<Target size={14} />}
+            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}
+            onClick={() => navigate('strategies')}
+          >
+            Strategies
+          </Tabs.Tab>
+          <Tabs.Tab
+            value="evolution"
+            leftSection={<Dna size={14} />}
+            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}
+            onClick={() => navigate('evolution')}
+          >
+            Evolution
           </Tabs.Tab>
         </Tabs.List>
 

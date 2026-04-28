@@ -21,7 +21,7 @@ import {
   useMantineColorScheme,
 } from '@mantine/core';
 import { useAtom } from 'jotai';
-import { Palette, Volume2, Puzzle, Play, RotateCcw } from 'lucide-react';
+import { Palette, Volume2, Puzzle, Play, RotateCcw, Zap } from 'lucide-react';
 
 import {
   type FontScale,
@@ -36,6 +36,7 @@ import {
 import { usePreferences } from '../hooks/usePreferences';
 import { useCeremonySounds, SOUND_EVENTS, SOUND_STYLES, type SoundStyle, type SoundEvent } from '../hooks/useCeremonySounds';
 import { themeRegistry } from '@phantom-os/theme';
+import { AIEngineSettings } from './settings/AIEngineSettings';
 
 // ---------------------------------------------------------------------------
 // Section registry — add new sections here to scale
@@ -51,6 +52,7 @@ const SECTIONS: SectionDef[] = [
   { id: 'appearance', label: 'Appearance', icon: <Palette size={16} /> },
   { id: 'sounds', label: 'Sounds', icon: <Volume2 size={16} /> },
   { id: 'features', label: 'Features', icon: <Puzzle size={16} /> },
+  { id: 'ai-engine', label: 'AI Engine', icon: <Zap size={16} /> },
   { id: 'system', label: 'System', icon: <RotateCcw size={16} /> },
 ];
 
@@ -574,10 +576,13 @@ export const SettingsPage = () => {
     </Stack>
   );
 
+  const renderAIEngine = () => <AIEngineSettings />;
+
   const SECTION_RENDERERS: Record<string, () => React.ReactNode> = {
     appearance: renderAppearance,
     sounds: renderSounds,
     features: renderFeatures,
+    'ai-engine': renderAIEngine,
     system: renderSystem,
   };
 

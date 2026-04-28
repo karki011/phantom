@@ -1,6 +1,6 @@
 // Author: Subash Karki
 
-type SoundCue = 'typing' | 'scan' | 'ok' | 'reveal' | 'whoosh' | 'bass' | 'ceremony' | 'hum_start' | 'hum_stop';
+type SoundCue = 'typing' | 'scan' | 'ok' | 'reveal' | 'whoosh' | 'bass' | 'ceremony' | 'droplet' | 'hum_start' | 'hum_stop';
 
 let ctx: AudioContext | null = null;
 let humOsc: OscillatorNode | null = null;
@@ -79,6 +79,9 @@ const cues: Record<SoundCue, () => void> = {
       { freq: 160, endFreq: 160, type: 'sine' },
       { freq: 40, endFreq: 40, type: 'triangle' },
     ], 0.4, 0.08);
+  },
+  droplet: () => {
+    playTone(500, 350, 0.15, 'sine', 0.1);
   },
   ceremony: () => {
     // Grand ascending fanfare for rank-up celebrations

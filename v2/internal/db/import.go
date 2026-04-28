@@ -4,7 +4,7 @@ package db
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -39,18 +39,18 @@ func (d *DB) ImportV1() error {
 	var imported string
 	err := d.Writer.QueryRow("SELECT value FROM user_preferences WHERE key = 'v1_imported'").Scan(&imported)
 	if err == nil && imported == "true" {
-		log.Println("db: v1 import already completed, skipping")
+		slog.Info("db: v1 import already completed, skipping")
 		return nil
 	}
 
 	// Find v1 database
 	v1Path, err := findV1DB()
 	if err != nil {
-		log.Printf("db: no v1 database found: %v", err)
+		slog.Info("db: no v1 database found", "err", err)
 		return nil // Not an error — v1 DB is optional
 	}
 
-	log.Printf("db: found v1 database at %s, starting import", v1Path)
+	slog.Info("db: found v1 database, starting import", "path", v1Path)
 
 	// Attach v1 database
 	if _, err := d.Writer.Exec(fmt.Sprintf("ATTACH DATABASE '%s' AS v1", v1Path)); err != nil {
@@ -69,7 +69,7 @@ func (d *DB) ImportV1() error {
 		var count int
 		row := tx.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM v1.sqlite_master WHERE type='table' AND name='%s'", table))
 		if err := row.Scan(&count); err != nil || count == 0 {
-			log.Printf("db: v1 table %s not found, skipping", table)
+			slog.Info("db: v1 table not found, skipping", "table", table)
 			continue
 		}
 
@@ -84,7 +84,7 @@ func (d *DB) ImportV1() error {
 		rows, _ := result.RowsAffected()
 		totalRows += rows
 		if rows > 0 {
-			log.Printf("db: imported %d rows from v1.%s", rows, table)
+			slog.Info("db: imported rows from v1 table", "rows", rows, "table", table)
 		}
 	}
 
@@ -103,7 +103,7 @@ func (d *DB) ImportV1() error {
 		return fmt.Errorf("commit import tx: %w", err)
 	}
 
-	log.Printf("db: v1 import complete — %d total rows imported from %d tables", totalRows, len(v1Tables))
+	slog.Info("db: v1 import complete", "totalRows", totalRows, "tables", len(v1Tables))
 	return nil
 }
 

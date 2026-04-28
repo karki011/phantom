@@ -7,6 +7,7 @@ export const phaseOrder: PhaseId[] = [
   'identity-bind',
   'domain-select',
   'domain-link',
+  'ai-engine',
   'ability-awaken',
   'complete',
 ];
@@ -212,6 +213,23 @@ export const phaseConfigs: Record<PhaseId, PhaseConfig> = {
       message: 'No domain linked. Proceeding without binding.',
     },
     persistKeys: ['first_project_path'],
+  },
+  'ai-engine': {
+    id: 'ai-engine',
+    title: 'AI Engine',
+    subtitle: 'Select which capabilities the AI engine should activate.',
+    announcement: {
+      text: 'Calibrating AI engine...',
+      speech: 'Configure your AI engine capabilities.',
+      sound: 'reveal',
+    },
+    autoResolve: {
+      timeout: 10000,
+      defaultKey: 'ai.autoContext',
+      defaultValue: 'true',
+      message: 'Using default configuration.',
+    },
+    persistKeys: ['ai.autoContext', 'ai.editGate', 'ai.outcomeCapture', 'ai.fileSync', 'ai.mcpTools'],
   },
   'ability-awaken': {
     id: 'ability-awaken',

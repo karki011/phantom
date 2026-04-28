@@ -4,16 +4,15 @@
  */
 import type { ContextResult, BlastRadiusResult } from '../types/graph.js';
 import type { TaskComplexity, TaskContext, TaskRisk, PriorFailureSignal, PriorSuccessSignal } from '../types/strategy.js';
-import type { DecisionQuery } from '../graph/decision-query.js';
-import type { GoalInput } from './types.js';
+import type { GoalInput, IDecisionQuery } from './types.js';
 
 const AMBIGUITY_WORDS = ['should', 'maybe', 'not sure', 'consider', 'perhaps', 'might'];
 
 export class TaskAssessor {
-  private decisionQuery: DecisionQuery | null = null;
+  private decisionQuery: IDecisionQuery | null = null;
 
   /** Attach a DecisionQuery for anti-repetition detection. */
-  setDecisionQuery(query: DecisionQuery): void {
+  setDecisionQuery(query: IDecisionQuery): void {
     this.decisionQuery = query;
   }
 

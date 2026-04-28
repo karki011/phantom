@@ -1,0 +1,4 @@
+-- 006_session_enrichment.down.sql — Revert rich session enrichment columns
+-- Author: Subash Karki
+-- SQLite does not support DROP COLUMN before 3.35.0; these are best-effort.
+-- For older SQLite, recreate the table without these columns.

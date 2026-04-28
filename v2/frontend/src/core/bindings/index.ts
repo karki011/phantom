@@ -46,3 +46,8 @@ export { getSessionsByDate, getSessionsByProject, getRecentSessions, getDailySta
 export { getProviders, getProviderDetail, setProviderEnabled, setActiveProvider, testProvider, autoDetectProviders, addCustomProvider, removeCustomProvider, resetProviderOverride, getActiveProvider } from './providers';
 export { getConversations, createConversation, deleteConversation, sendChatMessage, getChatHistory } from './chat';
 export { getAllRecipes, createCustomRecipe, updateCustomRecipe, deleteCustomRecipe, toggleRecipeFavorite, getFavoriteRecipes } from './recipes';
+export { getHunterProfile, getHunterStats, updateHunterName, getAchievements, getDailyQuests, getHunterDashboard, getActivityHeatmap } from './gamification';
+export { getAIInsight } from './ai-insight';
+export type { AIInsightData, StrategyInfo, AssessmentInfo, ContextCoverage, KnowledgeStats, DecisionEntry } from './ai-insight';
+export { getEvolution } from './evolution';
+export type { EvolutionData, GapAlert, StrategyTrend } from './evolution';

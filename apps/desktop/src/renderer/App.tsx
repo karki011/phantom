@@ -43,6 +43,9 @@ const DailyQuestsView = lazy(() => import('./components/views/DailyQuestsView').
 const HunterStatsView = lazy(() => import('./components/hunter-stats/HunterStatsView').then(m => ({ default: m.HunterStatsView })));
 const SessionViewer = lazy(() => import('./components/views/SessionViewer').then(m => ({ default: m.SessionViewer })));
 const SystemPlayground = lazy(() => import('./components/system/SystemPlayground').then(m => ({ default: m.SystemPlayground })));
+const KnowledgeTimeline = lazy(() => import('./components/views/KnowledgeTimeline').then(m => ({ default: m.KnowledgeTimeline })));
+const StrategyDashboard = lazy(() => import('./components/views/StrategyDashboard').then(m => ({ default: m.StrategyDashboard })));
+const EvolutionDashboard = lazy(() => import('./components/views/EvolutionDashboard').then(m => ({ default: m.EvolutionDashboard })));
 const SettingsPage = lazy(() => import('./components/SettingsPage').then(m => ({ default: m.SettingsPage })));
 import { useHunter } from './hooks/useHunter';
 import { type Route, useRouter } from './hooks/useRouter';
@@ -151,6 +154,12 @@ const ViewContent = ({ route }: { route: Route }) => (
           return <SessionViewer />;
         case 'system':
           return <SystemPlayground />;
+        case 'knowledge':
+          return <KnowledgeTimeline />;
+        case 'strategies':
+          return <StrategyDashboard />;
+        case 'evolution':
+          return <EvolutionDashboard />;
         default:
           return null;
       }

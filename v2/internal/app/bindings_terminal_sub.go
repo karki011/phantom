@@ -7,7 +7,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/terminal"
@@ -21,7 +21,7 @@ import (
 func (a *App) SubscribeTerminal(sessionID string) {
 	sess, ok := a.Terminal.Get(sessionID)
 	if !ok {
-		log.Printf("app/bindings_terminal: SubscribeTerminal: session %q not found", sessionID)
+		slog.Warn("SubscribeTerminal: session not found", "sessionID", sessionID)
 		return
 	}
 

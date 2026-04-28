@@ -4,7 +4,7 @@ package app
 
 import (
 	"database/sql"
-	"log"
+	"log/slog"
 
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 )
@@ -14,7 +14,7 @@ func (a *App) GetSessions() []db.Session {
 	q := db.New(a.DB.Reader)
 	sessions, err := q.ListSessions(a.ctx)
 	if err != nil {
-		log.Printf("app/bindings_sessions: ListSessions error: %v", err)
+		slog.Error("GetSessions: ListSessions failed", "err", err)
 		return []db.Session{}
 	}
 	return sessions
@@ -25,7 +25,7 @@ func (a *App) GetActiveSessions() []db.Session {
 	q := db.New(a.DB.Reader)
 	sessions, err := q.ListActiveSessions(a.ctx)
 	if err != nil {
-		log.Printf("app/bindings_sessions: ListActiveSessions error: %v", err)
+		slog.Error("GetActiveSessions: ListActiveSessions failed", "err", err)
 		return []db.Session{}
 	}
 	return sessions
@@ -37,7 +37,7 @@ func (a *App) GetSession(id string) *db.Session {
 	session, err := q.GetSession(a.ctx, id)
 	if err != nil {
 		if err != sql.ErrNoRows {
-			log.Printf("app/bindings_sessions: GetSession(%s) error: %v", id, err)
+			slog.Error("GetSession failed", "id", id, "err", err)
 		}
 		return nil
 	}
@@ -49,7 +49,7 @@ func (a *App) GetSessionTasks(sessionId string) []db.Task {
 	q := db.New(a.DB.Reader)
 	tasks, err := q.ListTasksBySession(a.ctx, sql.NullString{String: sessionId, Valid: true})
 	if err != nil {
-		log.Printf("app/bindings_sessions: ListTasksBySession(%s) error: %v", sessionId, err)
+		slog.Error("GetSessionTasks: ListTasksBySession failed", "sessionId", sessionId, "err", err)
 		return []db.Task{}
 	}
 	return tasks
@@ -60,7 +60,7 @@ func (a *App) GetSessionsByProvider(provider string) []db.Session {
 	q := db.New(a.DB.Reader)
 	sessions, err := q.ListSessionsByProvider(a.ctx, provider)
 	if err != nil {
-		log.Printf("app/bindings_sessions: ListSessionsByProvider(%s) error: %v", provider, err)
+		slog.Error("GetSessionsByProvider: ListSessionsByProvider failed", "provider", provider, "err", err)
 		return []db.Session{}
 	}
 	return sessions
@@ -85,7 +85,7 @@ func (a *App) GetActivityLog(sessionId string, limit int) []db.ActivityLog {
 
 	activities, err := q.ListRecentActivity(a.ctx, params)
 	if err != nil {
-		log.Printf("app/bindings_sessions: ListRecentActivity(%s, %d) error: %v", sessionId, limit, err)
+		slog.Error("GetActivityLog: ListRecentActivity failed", "sessionId", sessionId, "limit", limit, "err", err)
 		return []db.ActivityLog{}
 	}
 	return activities

@@ -472,3 +472,57 @@ export const providerSelectorVersion = style({
   fontSize: vars.fontSize.xs,
   opacity: 0.7,
 });
+
+// === Slider ===
+
+export const sliderContainer = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.md,
+  flex: 1,
+  maxWidth: '260px',
+});
+
+export const sliderInput = style({
+  width: '100%',
+  maxWidth: '300px',
+  height: '4px',
+  appearance: 'none',
+  background: vars.color.bgTertiary,
+  borderRadius: vars.radius.full,
+  outline: 'none',
+  cursor: 'pointer',
+  transition: `background ${vars.animation.fast} ease`,
+});
+
+globalStyle(`${sliderInput}::-webkit-slider-thumb`, {
+  appearance: 'none',
+  width: '14px',
+  height: '14px',
+  borderRadius: '50%',
+  background: vars.color.accent,
+  border: 'none',
+  cursor: 'pointer',
+  transition: `box-shadow ${vars.animation.fast} ease`,
+});
+
+globalStyle(`${sliderInput}::-webkit-slider-thumb:hover`, {
+  boxShadow: `0 0 6px ${vars.color.accentGlow}`,
+});
+
+globalStyle(`${sliderInput}::-moz-range-thumb`, {
+  width: '14px',
+  height: '14px',
+  borderRadius: '50%',
+  background: vars.color.accent,
+  border: 'none',
+  cursor: 'pointer',
+});
+
+export const sliderValue = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textPrimary,
+  minWidth: '40px',
+  textAlign: 'right',
+});

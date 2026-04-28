@@ -1,5 +1,6 @@
 import { onCleanup } from 'solid-js';
-import type { BootPhase } from './particle-math';
+
+export type BootPhase = 'BURST' | 'CONVERGE' | 'CONFIRM' | 'DISMISS';
 
 export function useBootAudio() {
   let ctx: AudioContext | null = null;

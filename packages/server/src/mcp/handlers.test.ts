@@ -12,8 +12,9 @@ import {
   handleBuild,
   handleListProjects,
   handleTaskStatus,
+  handleBeforeEdit,
 } from './handlers.js';
-import type { GraphEngineAdapter, TaskStatusResult } from './handlers.js';
+import type { GraphEngineAdapter, OrchestratorEngineAdapter, TaskStatusResult } from './handlers.js';
 import type { GraphQuery } from '@phantom-os/ai-engine';
 
 // ---------------------------------------------------------------------------
@@ -401,6 +402,148 @@ describe('MCP Tool Handlers', () => {
 
       expect(data.status).toBe('error');
       expect(data.error).toContain('EACCES');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // phantom_before_edit (composite handler)
+  // -------------------------------------------------------------------------
+
+  describe('handleBeforeEdit', () => {
+    function createMockOrchestrator(shouldFail = false): OrchestratorEngineAdapter {
+      return {
+        process: shouldFail
+          ? vi.fn().mockRejectedValue(new Error('No orchestrator context'))
+          : vi.fn().mockResolvedValue({
+              strategy: 'direct',
+              alternatives: ['advisor'],
+              context: { files: [], blastRadius: {}, relatedFiles: [] },
+              taskContext: { complexity: 'simple', risk: 'low', isAmbiguous: false },
+              output: { confidence: 0.9 },
+              totalDurationMs: 50,
+            }),
+        getStrategies: vi.fn().mockReturnValue([]),
+        getHistory: vi.fn().mockReturnValue([]),
+      };
+    }
+
+    it('should return combined context, blast radius, and related files', async () => {
+      const query = createMockQuery();
+      const engine = createMockEngine(query);
+
+      const result = await handleBeforeEdit(engine, undefined, {
+        projectId: 'p1',
+        files: ['src/index.ts'],
+      });
+      const data = parseContent(result) as {
+        context: { files: Array<{ path: string; relevance: number }>; edges: unknown[]; modules: string[] };
+        blastRadius: { directlyAffected: string[]; transitivelyAffected: string[]; maxImpactScore: number };
+        relatedFiles: string[];
+      };
+
+      expect(data.context.files).toHaveLength(2);
+      expect(data.context.files[0].path).toBe('src/index.ts');
+      expect(data.context.edges).toHaveLength(1);
+      expect(data.context.modules).toEqual(['lodash']);
+      expect(data.blastRadius.directlyAffected).toEqual(['src/utils.ts']);
+      expect(data.blastRadius.transitivelyAffected).toEqual(['src/app.ts']);
+      expect(data.blastRadius.maxImpactScore).toBe(0.25);
+      expect(data.relatedFiles).toEqual(['src/app.ts']);
+    });
+
+    it('should merge scores across multiple files keeping highest relevance', async () => {
+      const query = createMockQuery();
+      // Second call returns different scores for the same file
+      (query.getContext as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+        files: [{ id: 'f1', type: 'file', path: 'src/index.ts', projectId: 'p1' }],
+        edges: [],
+        modules: [],
+        scores: new Map([['f1', 0.3]]),
+      }).mockReturnValueOnce({
+        files: [{ id: 'f1', type: 'file', path: 'src/index.ts', projectId: 'p1' }],
+        edges: [],
+        modules: [],
+        scores: new Map([['f1', 0.8]]),
+      });
+      const engine = createMockEngine(query);
+
+      const result = await handleBeforeEdit(engine, undefined, {
+        projectId: 'p1',
+        files: ['src/a.ts', 'src/b.ts'],
+      });
+      const data = parseContent(result) as {
+        context: { files: Array<{ path: string; relevance: number }> };
+      };
+
+      // Should keep the higher score (0.8)
+      expect(data.context.files).toHaveLength(1);
+      expect(data.context.files[0].relevance).toBe(0.8);
+    });
+
+    it('should include strategy when goal and orchestrator are provided', async () => {
+      const query = createMockQuery();
+      const engine = createMockEngine(query);
+      const orchestrator = createMockOrchestrator();
+
+      const result = await handleBeforeEdit(engine, orchestrator, {
+        projectId: 'p1',
+        files: ['src/index.ts'],
+        goal: 'refactor auth module',
+      });
+      const data = parseContent(result) as { strategy?: { name: string; confidence: number } };
+
+      expect(data.strategy).toBeDefined();
+      expect(data.strategy!.name).toBe('direct');
+      expect(data.strategy!.confidence).toBe(0.9);
+      expect(orchestrator.process).toHaveBeenCalledWith({
+        projectId: 'p1',
+        goal: 'refactor auth module',
+        activeFiles: ['src/index.ts'],
+      });
+    });
+
+    it('should omit strategy when no goal is provided', async () => {
+      const query = createMockQuery();
+      const engine = createMockEngine(query);
+      const orchestrator = createMockOrchestrator();
+
+      const result = await handleBeforeEdit(engine, orchestrator, {
+        projectId: 'p1',
+        files: ['src/index.ts'],
+      });
+      const data = parseContent(result) as { strategy?: unknown };
+
+      expect(data.strategy).toBeUndefined();
+      expect(orchestrator.process).not.toHaveBeenCalled();
+    });
+
+    it('should gracefully skip orchestrator when it fails', async () => {
+      const query = createMockQuery();
+      const engine = createMockEngine(query);
+      const orchestrator = createMockOrchestrator(true);
+
+      const result = await handleBeforeEdit(engine, orchestrator, {
+        projectId: 'p1',
+        files: ['src/index.ts'],
+        goal: 'something complex',
+      });
+      const data = parseContent(result) as { strategy?: unknown; context: unknown };
+
+      // Should not be an error — orchestrator failure is swallowed
+      expect(result.isError).toBeFalsy();
+      expect(data.strategy).toBeUndefined();
+      expect(data.context).toBeDefined();
+    });
+
+    it('should return error for unknown project', async () => {
+      const engine = createMockEngine(null);
+
+      const result = await handleBeforeEdit(engine, undefined, {
+        projectId: 'unknown',
+        files: ['foo.ts'],
+      });
+
+      expect(result.isError).toBe(true);
     });
   });
 

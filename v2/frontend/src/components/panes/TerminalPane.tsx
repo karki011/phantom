@@ -6,6 +6,7 @@
 
 import { onMount, onCleanup, createSignal, createEffect, createMemo, Show } from 'solid-js';
 import { TextField } from '@kobalte/core/text-field';
+import type { ILink } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import * as termStyles from '@/styles/terminal.css';
 import { TaskOverlay } from '@/shared/TaskOverlay/TaskOverlay';
@@ -31,6 +32,7 @@ import {
   runTerminalCommand,
 } from '@/core/bindings';
 import { vars } from '@/styles/theme.css';
+import { openFileInEditor } from '@/core/editor/open-file';
 
 interface TerminalPaneProps {
   paneId: string;
@@ -133,6 +135,8 @@ export default function TerminalPane(props: TerminalPaneProps) {
       },
     });
 
+    // Store the working directory on the session for file path resolution
+    if (props.cwd) session.cwd = props.cwd;
     // Attach wrapper into visible container
     attachSession(sessionId, containerRef);
 
@@ -161,6 +165,114 @@ export default function TerminalPane(props: TerminalPaneProps) {
         },
       },
     ));
+
+    // --- File path link provider: makes file paths in terminal output clickable ---
+    const FILE_PATH_REGEX = /(?<![a-zA-Z0-9_\-/])(?:\.{1,2}\/[\w.\-/]+|~\/[\w.\-/]+|\/(?:Users|home|tmp|var|opt|etc)\/[\w.\-/]+|(?:src|lib|libs|app|apps|packages|tests?|spec|docs?|scripts?|config|\.ai|\.claude|\.github|\.vscode)\/[\w.\-/]+)(?:\.\w+)(?::\d+(?::\d+)?)?/g;
+    const FILE_EXTENSIONS = new Set([
+      'ts', 'tsx', 'js', 'jsx', 'md', 'json', 'yaml', 'yml', 'sh', 'css',
+      'go', 'py', 'toml', 'html', 'sql', 'env', 'lock', 'mjs', 'cjs',
+      'rs', 'rb', 'java', 'c', 'cpp', 'h', 'hpp', 'vue', 'svelte', 'scss',
+      'less', 'graphql', 'gql', 'prisma', 'proto', 'xml', 'csv', 'txt',
+    ]);
+
+    // Create a reusable tooltip for file path hover (similar to WebLinksAddon tooltip)
+    const fileTooltip = document.createElement('div');
+    Object.assign(fileTooltip.style, {
+      position: 'fixed', background: 'rgba(0,0,0,0.85)', color: '#e0def4',
+      padding: '3px 8px', borderRadius: '4px', fontSize: '12px',
+      pointerEvents: 'none', zIndex: '9999', display: 'none',
+      maxWidth: '400px', wordBreak: 'break-all',
+    });
+    document.body.appendChild(fileTooltip);
+    onCleanup(() => fileTooltip.remove());
+
+    session.terminal.registerLinkProvider({
+      provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void) {
+        const line = session.terminal.buffer.active.getLine(bufferLineNumber);
+        if (!line) { callback(undefined); return; }
+        const text = line.translateToString();
+
+        // Skip lines that are purely URLs (already handled by WebLinksAddon)
+        if (/^\s*https?:\/\//.test(text.trim())) { callback(undefined); return; }
+
+        const links: ILink[] = [];
+        FILE_PATH_REGEX.lastIndex = 0;
+        let match: RegExpExecArray | null;
+        while ((match = FILE_PATH_REGEX.exec(text)) !== null) {
+          const fullMatch = match[0];
+
+          // Skip if this looks like a URL fragment
+          const before = text.slice(Math.max(0, match.index - 8), match.index);
+          if (/https?:\/\//.test(before)) continue;
+
+          // Extract line:column suffix if present
+          const lineColMatch = fullMatch.match(/^(.+?)(?::(\d+)(?::(\d+))?)?$/);
+          if (!lineColMatch) continue;
+          const pathPart = lineColMatch[1];
+          const lineNum = lineColMatch[2] ? parseInt(lineColMatch[2], 10) : undefined;
+          const colNum = lineColMatch[3] ? parseInt(lineColMatch[3], 10) : undefined;
+
+          // Validate extension
+          const extMatch = pathPart.match(/\.(\w+)$/);
+          if (!extMatch || !FILE_EXTENSIONS.has(extMatch[1])) continue;
+
+          const startX = match.index + 1; // xterm uses 1-based columns
+          links.push({
+            range: {
+              start: { x: startX, y: bufferLineNumber },
+              end: { x: startX + fullMatch.length, y: bufferLineNumber },
+            },
+            text: fullMatch,
+            decorations: {
+              pointerCursor: true,
+              underline: true,
+            },
+            activate: (_event: MouseEvent, _text: string) => {
+              // Resolve path relative to terminal's cwd
+              let filePath = pathPart;
+              const cwd = session.cwd || props.cwd || '';
+
+              if (filePath.startsWith('./')) {
+                filePath = filePath.slice(2);
+              }
+              // Relative paths get resolved against cwd
+              if (!filePath.startsWith('/') && !filePath.startsWith('~')) {
+                filePath = cwd ? `${cwd.replace(/\/$/, '')}/${filePath}` : filePath;
+              }
+              // Expand ~ to the user's home directory (derive from cwd or fall back)
+              if (filePath.startsWith('~/')) {
+                // cwd is typically /Users/<name>/... — extract home from it
+                const homeMatch = cwd.match(/^(\/(?:Users|home)\/[^/]+)/);
+                if (homeMatch) {
+                  filePath = filePath.replace(/^~/, homeMatch[1]);
+                }
+              }
+
+              openFileInEditor({
+                workspaceId: props.worktreeId ?? '',
+                filePath,
+                line: lineNum,
+                column: colNum,
+              });
+            },
+            hover: (event: MouseEvent, _text: string) => {
+              const cwd = session.cwd || props.cwd || '';
+              const displayPath = pathPart.startsWith('/') || pathPart.startsWith('~')
+                ? pathPart
+                : cwd ? `${cwd.replace(/\/$/, '')}/${pathPart.replace(/^\.\//, '')}` : pathPart;
+              fileTooltip.textContent = `Open ${displayPath}${lineNum ? `:${lineNum}` : ''}`;
+              fileTooltip.style.display = 'block';
+              fileTooltip.style.left = `${event.clientX + 12}px`;
+              fileTooltip.style.top = `${event.clientY - 28}px`;
+            },
+            leave: (_event: MouseEvent, _text: string) => {
+              fileTooltip.style.display = 'none';
+            },
+          });
+        }
+        callback(links.length > 0 ? links : undefined);
+      },
+    });
 
     const { SearchAddon } = await import('@xterm/addon-search');
     const searchAddon = new SearchAddon();

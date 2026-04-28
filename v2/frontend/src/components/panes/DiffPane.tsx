@@ -13,6 +13,7 @@
 // interferes with Monaco's own DOM management.
 
 import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
+import { registerOpenFile, unregisterOpenFile } from '@/core/editor/open-file-registry';
 import type * as MonacoNS from 'monaco-editor';
 import { getMonaco, DEFAULT_EDITOR_OPTIONS } from '@/core/editor/loader';
 import { registerPhantomTheme } from '@/core/editor/theme-bridge';
@@ -100,6 +101,10 @@ const DiffPane = (props: DiffPaneProps) => {
   // Step 1: Load Monaco (async)
   // ---------------------------------------------------------------------------
   onMount(async () => {
+    if (filePath()) {
+      registerOpenFile(filePath(), { paneId: props.paneId, tabIndex: 0, workspaceId: workspaceId() });
+    }
+    onCleanup(() => { if (filePath()) unregisterOpenFile(filePath()); });
     console.log('[DiffPane] Loading Monaco...');
     const m = await getMonaco();
     registerPhantomTheme(m);
@@ -313,21 +318,7 @@ const DiffPane = (props: DiffPaneProps) => {
     <div class={styles.editorWrapper}>
       {/* Toolbar */}
       <div class={styles.diffToolbar}>
-        <div class={styles.diffToolbarLeft}>
-          <Show when={!isReadOnly()}>
-            <button
-              class={styles.diffAcceptButton}
-              onClick={handleAccept}
-              disabled={saving()}
-              type="button"
-            >
-              {saving() ? 'Saving...' : 'Accept'}
-            </button>
-            <button class={styles.diffRejectButton} onClick={closeDiffTab} type="button">
-              Reject
-            </button>
-          </Show>
-        </div>
+        <div class={styles.diffToolbarLeft} />
         <div class={styles.diffToolbarCenter}>
           <span
             class={styles.diffFileLink}

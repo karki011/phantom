@@ -5,7 +5,7 @@
  */
 import { eq, sql } from 'drizzle-orm';
 import { db, achievements, activityLog, hunterProfile, hunterStats, sessions, tasks, dailyQuests } from '@phantom-os/db';
-import { XP, levelXpRequired, rankForLevel } from '@phantom-os/shared';
+import { XP, AI_ENGINE_XP, levelXpRequired, rankForLevel } from '@phantom-os/shared';
 
 interface AwardResult {
   leveledUp: boolean;
@@ -354,6 +354,91 @@ export const onSessionEnd = (sessionId: string): void => {
   updateDailyQuestProgress();
 };
 
+// ---------------------------------------------------------------------------
+// AI Engine Event Helpers
+// ---------------------------------------------------------------------------
+
+/** Count activity log entries of a given type */
+const countActivities = (type: string): number => {
+  const row = db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(activityLog)
+    .where(eq(activityLog.type, type))
+    .get();
+  return row?.count ?? 0;
+};
+
+/** Track a unique strategy usage by storing strategyId in activity metadata */
+const trackUniqueStrategy = (strategyId: string): void => {
+  logActivity('STRATEGY_USED', 0, undefined, { strategyId });
+};
+
+/** Count distinct strategies ever used */
+const countUniqueStrategies = (): number => {
+  const rows = db
+    .select({ metadata: activityLog.metadata })
+    .from(activityLog)
+    .where(eq(activityLog.type, 'STRATEGY_USED'))
+    .all();
+  const strategies = new Set<string>();
+  for (const row of rows) {
+    if (row.metadata) {
+      try {
+        const parsed = JSON.parse(row.metadata) as { strategyId?: string };
+        if (parsed.strategyId) strategies.add(parsed.strategyId);
+      } catch { /* skip malformed */ }
+    }
+  }
+  return strategies.size;
+};
+
+// ---------------------------------------------------------------------------
+// AI Engine Event Handlers
+// ---------------------------------------------------------------------------
+
+export const onGraphBuildComplete = (): void => {
+  awardXP(AI_ENGINE_XP.GRAPH_BUILD_COMPLETE, 'GRAPH_BUILD');
+  // INT grows from building knowledge graphs
+  db.update(hunterStats)
+    .set({ intelligence: sql`${hunterStats.intelligence} + 1` })
+    .where(eq(hunterStats.id, 1))
+    .run();
+};
+
+export const onOrchestratorRun = (strategyId: string): void => {
+  awardXP(AI_ENGINE_XP.ORCHESTRATOR_RUN, 'ORCHESTRATOR_RUN');
+  // INT grows from orchestrated reasoning
+  db.update(hunterStats)
+    .set({ intelligence: sql`${hunterStats.intelligence} + 1` })
+    .where(eq(hunterStats.id, 1))
+    .run();
+  // Track unique strategies for diversity achievement
+  trackUniqueStrategy(strategyId);
+  // Check strategy diversity bonus
+  const uniqueCount = countUniqueStrategies();
+  if (uniqueCount >= 5 && uniqueCount % 5 === 0) {
+    awardXP(AI_ENGINE_XP.STRATEGY_DIVERSITY, 'STRATEGY_DIVERSITY');
+  }
+};
+
+export const onKnowledgeGrowth = (): void => {
+  awardXP(AI_ENGINE_XP.KNOWLEDGE_GROWTH, 'KNOWLEDGE_GROWTH');
+  // INT grows faster from knowledge discoveries
+  db.update(hunterStats)
+    .set({ intelligence: sql`${hunterStats.intelligence} + 2` })
+    .where(eq(hunterStats.id, 1))
+    .run();
+};
+
+export const onAntiRepetitionTrigger = (): void => {
+  awardXP(AI_ENGINE_XP.ANTI_REPETITION_TRIGGER, 'ANTI_REPETITION');
+  // PER grows from learning from mistakes
+  db.update(hunterStats)
+    .set({ perception: sql`${hunterStats.perception} + 1` })
+    .where(eq(hunterStats.id, 1))
+    .run();
+};
+
 /** Achievement definitions — checked against current hunter state */
 const ACHIEVEMENT_DEFS = [
   {
@@ -511,6 +596,52 @@ const ACHIEVEMENT_DEFS = [
       const p = db.select().from(hunterProfile).where(eq(hunterProfile.id, 1)).get();
       return (p?.level ?? 1) >= 100;
     },
+  },
+  // AI Engine Achievements
+  {
+    id: 'graph_architect',
+    name: 'Graph Architect',
+    description: 'Index 5 project graphs',
+    icon: '🧠',
+    category: 'Intelligence',
+    xpReward: 100,
+    check: () => countActivities('GRAPH_BUILD') >= 5,
+  },
+  {
+    id: 'strategist',
+    name: 'Master Strategist',
+    description: 'Use 5 different strategies',
+    icon: '♟️',
+    category: 'Intelligence',
+    xpReward: 150,
+    check: () => countUniqueStrategies() >= 5,
+  },
+  {
+    id: 'oracle',
+    name: 'The Oracle',
+    description: 'Record 50 decisions in knowledge base',
+    icon: '🔮',
+    category: 'Intelligence',
+    xpReward: 250,
+    check: () => countActivities('ORCHESTRATOR_RUN') >= 50,
+  },
+  {
+    id: 'fast_learner',
+    name: 'Fast Learner',
+    description: 'Avoid 10 past failures via anti-repetition',
+    icon: '📚',
+    category: 'Intelligence',
+    xpReward: 150,
+    check: () => countActivities('ANTI_REPETITION') >= 10,
+  },
+  {
+    id: 'knowledge_seeker',
+    name: 'Knowledge Seeker',
+    description: 'Discover 25 patterns in knowledge base',
+    icon: '🧬',
+    category: 'Intelligence',
+    xpReward: 200,
+    check: () => countActivities('KNOWLEDGE_GROWTH') >= 25,
   },
 ];
 

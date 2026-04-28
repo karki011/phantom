@@ -3,6 +3,7 @@
 import { createSignal, createEffect, onMount, onCleanup, Show, For } from 'solid-js';
 import { playSound } from '@/core/audio/engine';
 import { bootScript, type BootCeremonyLine } from './boot-script';
+import { BootRings } from './BootRings';
 import * as styles from './boot-ceremony.css';
 
 interface BootCeremonyProps {
@@ -12,12 +13,21 @@ interface BootCeremonyProps {
 
 type LineStyle = 'normal' | 'title' | 'subtitle' | 'accent' | 'success' | 'dim' | 'separator';
 
+interface DisplayLine {
+  text: string;
+  style: LineStyle;
+  prompt?: string;
+}
+
 export function BootCeremony(props: BootCeremonyProps) {
-  const [lines, setLines] = createSignal<{ text: string; style: LineStyle }[]>([]);
+  const [lines, setLines] = createSignal<DisplayLine[]>([]);
   const [typing, setTyping] = createSignal(false);
   const [scriptDone, setScriptDone] = createSignal(false);
   const [dismissing, setDismissing] = createSignal(false);
+  const [bootProgress, setBootProgress] = createSignal(0);
   let cancelled = false;
+
+  const totalLines = bootScript.filter((l) => l.style !== 'separator').length;
 
   const styleMap: Record<LineStyle, string> = {
     normal: styles.lineNormal,
@@ -33,25 +43,40 @@ export function BootCeremony(props: BootCeremonyProps) {
     return new Promise<void>((r) => setTimeout(r, ms));
   }
 
-  async function typewriterLine(text: string, charDelay = 20) {
+  /** Wall-clock-based typewriter -- immune to background tab throttling */
+  async function typewriterLine(text: string, charDelay = 20): Promise<void> {
+    if (!text.length) return;
     setTyping(true);
-    let current = '';
-    let charCount = 0;
-    for (const char of text) {
-      if (cancelled) return;
-      current += char;
-      charCount++;
-      setLines((prev) => {
-        const copy = [...prev];
-        copy[copy.length - 1] = { ...copy[copy.length - 1], text: current };
-        return copy;
-      });
-      if (charCount % 4 === 0) {
-        try { playSound('typing'); } catch {}
-      }
-      await sleep(charDelay + Math.random() * 15);
-    }
-    setTyping(false);
+    const avgDelay = charDelay + 10;
+
+    return new Promise<void>((resolve) => {
+      const start = Date.now();
+      let rendered = 0;
+
+      const tick = () => {
+        if (cancelled) { setTyping(false); resolve(); return; }
+
+        const target = Math.min(text.length, Math.floor((Date.now() - start) / avgDelay) + 1);
+        if (target > rendered) {
+          rendered = target;
+          setLines((prev) => {
+            const copy = [...prev];
+            copy[copy.length - 1] = { ...copy[copy.length - 1], text: text.slice(0, rendered) };
+            return copy;
+          });
+          try { playSound('typing'); } catch {}
+        }
+
+        if (rendered >= text.length) {
+          setTyping(false);
+          resolve();
+        } else {
+          setTimeout(tick, avgDelay);
+        }
+      };
+
+      tick();
+    });
   }
 
   async function addLine(line: BootCeremonyLine) {
@@ -63,7 +88,9 @@ export function BootCeremony(props: BootCeremonyProps) {
       return;
     }
 
-    setLines((prev) => [...prev, { text: '', style: line.style ?? 'normal' }]);
+    setLines((prev) => [...prev, { text: '', style: line.style ?? 'normal', prompt: line.prompt }]);
+    setBootProgress((p) => p + 1);
+
     if (line.sound) {
       try { playSound(line.sound); } catch {}
     }
@@ -109,6 +136,7 @@ export function BootCeremony(props: BootCeremonyProps) {
   return (
     <div class={`${styles.bootScreen} ${dismissing() ? styles.bootScreenDismiss : ''}`}>
       <div class={styles.flickerOverlay} />
+      <BootRings progress={bootProgress()} total={totalLines} />
       <div class={styles.terminalContainer}>
         <For each={lines()}>
           {(line, i) => (
@@ -117,9 +145,12 @@ export function BootCeremony(props: BootCeremonyProps) {
               fallback={<div class={styles.separator} />}
             >
               <div class={styles.line}>
+                <Show when={line.prompt}>
+                  <span class={styles.promptSymbol}>{line.prompt}</span>
+                </Show>
                 <span class={styleMap[line.style]}>{line.text}</span>
                 <Show when={i() === lines().length - 1 && typing()}>
-                  <span class={styles.cursor}>_</span>
+                  <span class={styles.cursor} />
                 </Show>
               </div>
             </Show>

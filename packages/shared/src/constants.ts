@@ -19,6 +19,14 @@ export const XP = {
   NEW_REPO: 20,
 } as const;
 
+export const AI_ENGINE_XP = {
+  GRAPH_BUILD_COMPLETE: 10,
+  ORCHESTRATOR_RUN: 5,
+  STRATEGY_DIVERSITY: 15,
+  KNOWLEDGE_GROWTH: 10,
+  ANTI_REPETITION_TRIGGER: 5,
+} as const;
+
 export const RANK_THRESHOLDS = [
   { rank: 'E', minLevel: 1, title: 'Awakened' },
   { rank: 'D', minLevel: 10, title: 'Apprentice Hunter' },

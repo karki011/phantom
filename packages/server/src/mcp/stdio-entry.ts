@@ -24,7 +24,7 @@ import { sqlite, runMigrations, db, worktrees, projects } from '@phantom-os/db';
 import { eq } from 'drizzle-orm';
 import { graphEngine } from '../services/graph-engine.js';
 import { orchestratorEngine } from '../services/orchestrator-engine.js';
-import { createMcpServer } from './server.js';
+import { createMcpServer, wireGraphEventsToPush } from './server.js';
 
 // Bootstrap database (migrations only — no full server boot)
 runMigrations(sqlite);
@@ -102,10 +102,17 @@ const transport = new StdioServerTransport();
 
 await server.connect(transport);
 
+// Wire graph engine events to push context updates to Claude (Task 12)
+const unsubscribePush = wireGraphEventsToPush(
+  server,
+  (listener) => graphEngine.onEvent(listener),
+);
+
 // Keep process alive until stdin closes
 process.stdin.resume();
 
 async function shutdown(): Promise<void> {
+  unsubscribePush();
   await server.close();
   process.exit(0);
 }

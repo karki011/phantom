@@ -10,7 +10,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -72,7 +72,7 @@ func (js *JSONLScanner) Start(ctx context.Context) error {
 	// Active context poller (every 10s)
 	go js.activeContextPoller()
 
-	log.Printf("jsonl_scanner: started")
+	slog.Info("jsonl_scanner: started")
 	return nil
 }
 
@@ -93,7 +93,7 @@ func (js *JSONLScanner) projectsDir() string {
 func (js *JSONLScanner) fullScan() {
 	root := js.projectsDir()
 	if _, err := os.Stat(root); os.IsNotExist(err) {
-		log.Printf("jsonl_scanner: projects dir %s does not exist, skipping initial scan", root)
+		slog.Warn("jsonl_scanner: projects dir does not exist, skipping initial scan", "dir", root)
 		return
 	}
 
@@ -108,7 +108,7 @@ func (js *JSONLScanner) fullScan() {
 		return nil
 	})
 	if err != nil {
-		log.Printf("jsonl_scanner: walk error: %v", err)
+		slog.Warn("jsonl_scanner: walk error", "err", err)
 	}
 }
 
@@ -179,7 +179,7 @@ func (js *JSONLScanner) processJSONLFile(path string) {
 
 	result, err := js.scanFile(path)
 	if err != nil {
-		log.Printf("jsonl_scanner: scan %s: %v", path, err)
+		slog.Warn("jsonl_scanner: scan failed", "path", path, "err", err)
 		return
 	}
 
@@ -219,7 +219,7 @@ func (js *JSONLScanner) processJSONLFile(path string) {
 		ToolBreakdown:       nullStringOr(toolBreakdownJSON, existing.ToolBreakdown),
 		LastInputTokens:     sql.NullInt64{Int64: result.InputTokens, Valid: true},
 	}); err != nil {
-		log.Printf("jsonl_scanner: update session %s: %v", sessionID, err)
+		slog.Warn("jsonl_scanner: update session failed", "sessionID", sessionID, "err", err)
 	}
 }
 
@@ -380,7 +380,7 @@ func (js *JSONLScanner) periodicRescan() {
 func (js *JSONLScanner) rescan() {
 	sessions, err := js.queries.ListSessions(js.ctx)
 	if err != nil {
-		log.Printf("jsonl_scanner: list sessions for rescan: %v", err)
+		slog.Warn("jsonl_scanner: list sessions for rescan failed", "err", err)
 		return
 	}
 
@@ -451,7 +451,7 @@ func (js *JSONLScanner) findJSONLFile(sessionID string) string {
 func (js *JSONLScanner) activeContextPoller() {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Printf("jsonl_scanner: fsnotify unavailable for active context, polling: %v", err)
+		slog.Warn("jsonl_scanner: fsnotify unavailable for active context, polling", "err", err)
 		js.activeContextPoll()
 		return
 	}
@@ -502,7 +502,7 @@ func (js *JSONLScanner) activeContextPoller() {
 			if !ok {
 				return
 			}
-			log.Printf("jsonl_scanner: active context watcher error: %v", err)
+			slog.Warn("jsonl_scanner: active context watcher error", "err", err)
 
 		case <-fallback.C:
 			js.pollActiveContext()
@@ -545,7 +545,7 @@ func (js *JSONLScanner) watchProjectDirs(watcher *fsnotify.Watcher) {
 func (js *JSONLScanner) pollActiveContext() {
 	sessions, err := js.queries.ListActiveSessions(js.ctx)
 	if err != nil {
-		log.Printf("jsonl_scanner: list active for polling: %v", err)
+		slog.Warn("jsonl_scanner: list active for polling failed", "err", err)
 		return
 	}
 
@@ -578,7 +578,7 @@ func (js *JSONLScanner) pollActiveContext() {
 			LastInputTokens:     sql.NullInt64{Int64: result.InputTokens, Valid: true},
 			ContextUsedPct:      s.ContextUsedPct, // preserve existing
 		}); err != nil {
-			log.Printf("jsonl_scanner: update active context %s: %v", s.ID, err)
+			slog.Warn("jsonl_scanner: update active context failed", "sessionID", s.ID, "err", err)
 			continue
 		}
 
@@ -600,7 +600,7 @@ func (js *JSONLScanner) pollActiveContext() {
 				ToolBreakdown:       s.ToolBreakdown,
 				LastInputTokens:     sql.NullInt64{Int64: result.InputTokens, Valid: true},
 			}); err != nil {
-				log.Printf("jsonl_scanner: backfill model for %s: %v", s.ID, err)
+				slog.Warn("jsonl_scanner: backfill model failed", "sessionID", s.ID, "err", err)
 			}
 		}
 

@@ -4,17 +4,14 @@
 // Helpers for opening file diffs in dedicated pane tabs.
 // All diff-related entry points should route through showFileDiff().
 
-import { addTabWithData } from '@/core/panes/signals';
+import { addTabWithData, setActivePaneInTab } from '@/core/panes/signals';
+import { getOpenFileEntry, registerOpenFile } from './open-file-registry';
 import { detectLanguage } from './language';
 import type { DiffPaneData } from './types';
 
 /**
  * Open a dedicated diff pane tab comparing two versions of a file.
- *
- * Entry points that call this:
- * - EditorPane "Review Changes" mode (when exiting inline to standalone)
- * - Git changes view (comparing working tree to HEAD)
- * - Claude file events (showing before/after of AI edits)
+ * If the file is already open (in any pane), focus that tab instead.
  */
 export const showFileDiff = (options: {
   workspaceId: string;
@@ -37,6 +34,12 @@ export const showFileDiff = (options: {
     readOnly,
   } = options;
 
+  const existing = getOpenFileEntry(filePath);
+  if (existing) {
+    setActivePaneInTab(existing.paneId);
+    return;
+  }
+
   const label = `Diff: ${filePath.split('/').pop() ?? filePath}`;
   const lang = language ?? detectLanguage(filePath);
 
@@ -51,5 +54,8 @@ export const showFileDiff = (options: {
     readOnly: readOnly ?? false,
   };
 
-  addTabWithData('diff', label, data);
+  const paneId = addTabWithData('diff', label, data);
+  if (paneId) {
+    registerOpenFile(filePath, { paneId, tabIndex: 0, workspaceId });
+  }
 };

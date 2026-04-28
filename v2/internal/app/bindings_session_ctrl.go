@@ -5,7 +5,7 @@ package app
 import (
 	"context"
 	"database/sql"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/subashkarki/phantom-os-v2/internal/db"
@@ -15,7 +15,7 @@ import (
 // PauseSession pauses the named session, buffering its output.
 func (a *App) PauseSession(sessionID string) error {
 	if err := a.SessionCtrl.Pause(context.Background(), sessionID); err != nil {
-		log.Printf("app: PauseSession %s: %v", sessionID, err)
+		slog.Error("PauseSession failed", "sessionID", sessionID, "err", err)
 		return err
 	}
 	return nil
@@ -27,7 +27,7 @@ func (a *App) PauseSession(sessionID string) error {
 func (a *App) ResumeSession(sessionID string) error {
 	// noop flush — frontend drives output via WebSocket subscription.
 	if err := a.SessionCtrl.Resume(context.Background(), sessionID, func([]byte) {}); err != nil {
-		log.Printf("app: ResumeSession %s: %v", sessionID, err)
+		slog.Error("ResumeSession failed", "sessionID", sessionID, "err", err)
 		return err
 	}
 	return nil
@@ -36,7 +36,7 @@ func (a *App) ResumeSession(sessionID string) error {
 // SetSessionPolicy changes the approval policy for a session.
 func (a *App) SetSessionPolicy(sessionID, policy string) error {
 	if err := a.SessionCtrl.SetPolicy(context.Background(), sessionID, session.Policy(policy)); err != nil {
-		log.Printf("app: SetSessionPolicy %s -> %s: %v", sessionID, policy, err)
+		slog.Error("SetSessionPolicy failed", "sessionID", sessionID, "policy", policy, "err", err)
 		return err
 	}
 	return nil
@@ -52,7 +52,7 @@ func (a *App) GetSessionState(sessionID string) *session.SessionState {
 func (a *App) BranchSession(sessionID string, atEventSeq int) (*session.BranchInfo, error) {
 	info, err := a.SessionCtrl.Branch(context.Background(), sessionID, atEventSeq)
 	if err != nil {
-		log.Printf("app: BranchSession %s at %d: %v", sessionID, atEventSeq, err)
+		slog.Error("BranchSession failed", "sessionID", sessionID, "atEventSeq", atEventSeq, "err", err)
 		return nil, err
 	}
 	return info, nil
@@ -61,7 +61,7 @@ func (a *App) BranchSession(sessionID string, atEventSeq int) (*session.BranchIn
 // RewindSession soft-marks a session as rewound to toEventSeq.
 func (a *App) RewindSession(sessionID string, toEventSeq int) error {
 	if err := a.SessionCtrl.Rewind(context.Background(), sessionID, toEventSeq); err != nil {
-		log.Printf("app: RewindSession %s to %d: %v", sessionID, toEventSeq, err)
+		slog.Error("RewindSession failed", "sessionID", sessionID, "toEventSeq", toEventSeq, "err", err)
 		return err
 	}
 	return nil
@@ -71,7 +71,7 @@ func (a *App) RewindSession(sessionID string, toEventSeq int) error {
 func (a *App) GetSessionBranches(sessionID string) []session.BranchInfo {
 	branches, err := a.SessionCtrl.GetBranches(context.Background(), sessionID)
 	if err != nil {
-		log.Printf("app: GetSessionBranches %s: %v", sessionID, err)
+		slog.Error("GetSessionBranches failed", "sessionID", sessionID, "err", err)
 		return nil
 	}
 	return branches
@@ -81,7 +81,7 @@ func (a *App) GetSessionBranches(sessionID string) []session.BranchInfo {
 // and marks it completed in the sessions table so the session watcher won't resurrect it.
 func (a *App) KillSession(sessionID string) error {
 	if err := a.SessionCtrl.Kill(context.Background(), sessionID); err != nil {
-		log.Printf("app: KillSession %s: %v", sessionID, err)
+		slog.Error("KillSession failed", "sessionID", sessionID, "err", err)
 		return err
 	}
 
@@ -93,7 +93,7 @@ func (a *App) KillSession(sessionID string) error {
 			Status:  sql.NullString{String: "completed", Valid: true},
 			EndedAt: sql.NullInt64{Int64: now, Valid: true},
 		}); err != nil {
-			log.Printf("app: KillSession %s: mark completed: %v", sessionID, err)
+			slog.Warn("KillSession: mark completed failed", "sessionID", sessionID, "err", err)
 		}
 	}
 

@@ -5,7 +5,7 @@ package app
 import (
 	"context"
 	"database/sql"
-	"log"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"time"
@@ -18,7 +18,7 @@ func (a *App) GetPreference(key string) string {
 	value, err := q.GetPreference(a.ctx, key)
 	if err != nil {
 		if err != sql.ErrNoRows {
-			log.Printf("app/bindings_prefs: GetPreference(%s) error: %v", key, err)
+			slog.Error("GetPreference failed", "key", key, "err", err)
 		}
 		return ""
 	}

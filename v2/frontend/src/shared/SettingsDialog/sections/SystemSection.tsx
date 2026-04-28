@@ -3,6 +3,7 @@
 
 import { For } from 'solid-js';
 import { RotateCcw, Keyboard, Info } from 'lucide-solid';
+import { APP_NAME, APP_AUTHOR } from '../../../core/branding';
 import { buttonRecipe } from '../../../styles/recipes.css';
 import { setPreference } from '../../../core/bindings';
 import { showWarningToast } from '../../Toast/Toast';
@@ -82,10 +83,10 @@ export default function SystemSection() {
         </span>
         <div class={styles.aboutBlock}>
           <span class={styles.aboutTitle}>
-            PhantomOS v2
+            {APP_NAME} v2
           </span>
           <span class={styles.aboutAuthor}>
-            Author: Subash Karki
+            Author: {APP_AUTHOR}
           </span>
         </div>
       </div>

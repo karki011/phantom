@@ -14,16 +14,28 @@ import { logger } from '../logger.js';
 // MCP Server Instructions — injected into Claude's system prompt on connect
 // ---------------------------------------------------------------------------
 
-const MCP_INSTRUCTIONS = `You have access to PhantomOS, a codebase intelligence system with a dependency graph and AI strategy pipeline.
+const MCP_INSTRUCTIONS = `## PhantomOS AI Engine — Automatic Codebase Intelligence
 
-ALWAYS use these tools for codebase work:
-- phantom_graph_context: BEFORE modifying any file, get its dependencies and related files with relevance scores.
-- phantom_graph_blast_radius: BEFORE refactoring, check what files will break.
-- phantom_graph_related: When exploring unfamiliar code, find all files involved in a feature.
-- phantom_orchestrator_process: BEFORE starting complex tasks, route through the strategy pipeline for intelligent context.
+You have access to a dependency-graph-backed AI engine that tracks every file relationship,
+predicts blast radius of changes, and learns from past decisions.
 
-These tools understand the full dependency graph — they are faster and more accurate than manual file search.
-Prefer them over grep/find/glob when working within a known project.`;
+### REQUIRED WORKFLOW
+Before modifying ANY file, call \`phantom_before_edit\` with the file paths.
+This gives you everything in one call: dependencies, blast radius, related files, and strategy guidance.
+
+### AVAILABLE TOOLS
+- phantom_before_edit: ONE call gives you everything (context + blast radius + strategy). Use this first.
+- phantom_graph_context: Deep-dive into a specific file's dependencies
+- phantom_graph_blast_radius: What breaks if this file changes
+- phantom_graph_related: Find all files involved in a feature
+- phantom_graph_stats: Graph coverage statistics
+- phantom_graph_path: Shortest dependency path between two files
+- phantom_orchestrator_process: Route complex goals through the strategy pipeline
+- phantom_orchestrator_history: Learn from past decisions
+
+### WHAT YOU GET
+The engine automatically tracks your decisions and outcomes. Over time, it learns
+which approaches work for this codebase and warns you about approaches that failed before.`;
 import {
   handleGraphContext,
   handleBlastRadius,
@@ -36,8 +48,11 @@ import {
   handleOrchestratorStrategies,
   handleOrchestratorHistory,
   handleTaskStatus,
+  handleBeforeEdit,
+  handleEvaluateOutput,
 } from './handlers.js';
 import type { GraphEngineAdapter, OrchestratorEngineAdapter } from './handlers.js';
+import type { GraphEvent } from '@phantom-os/ai-engine';
 
 // ---------------------------------------------------------------------------
 // State
@@ -93,6 +108,76 @@ const OrchestratorHistoryInput = z.object({
   limit: z.number().optional().describe('Max results (default 20)'),
 });
 
+const BeforeEditInput = z.object({
+  projectId: z.string().describe('Project ID'),
+  files: z.array(z.string()).describe('File paths you plan to modify'),
+  goal: z.string().optional().describe('What you are trying to accomplish'),
+});
+
+const EvaluateOutputInput = z.object({
+  goal: z.string().describe('The goal or task the output was generated for'),
+  output: z.string().describe('The strategy output to evaluate'),
+});
+
+// ---------------------------------------------------------------------------
+// Context Push — Server-to-client notifications via MCP logging
+// ---------------------------------------------------------------------------
+
+/**
+ * Push a context update to the connected Claude client via MCP logging notification.
+ *
+ * MCP SDK v1.29 does not support Channels or Sampling. We use sendLoggingMessage
+ * (notifications/message) as the push mechanism — Claude Code surfaces these
+ * as contextual messages during the session.
+ *
+ * Fail-safe: swallows errors so graph events never crash the MCP server.
+ */
+export function pushContextUpdate(server: McpServer, message: string, level: 'info' | 'notice' | 'warning' = 'info'): void {
+  try {
+    if (!server.isConnected()) return;
+    void server.sendLoggingMessage({
+      level,
+      logger: 'phantom-ai',
+      data: message,
+    });
+  } catch {
+    // Swallow — push is best-effort, never block
+  }
+}
+
+/**
+ * Wire graph engine events to push context updates to the MCP client.
+ * Call after creating the MCP server and before/after connecting the transport.
+ */
+export function wireGraphEventsToPush(server: McpServer, eventSubscriber: (listener: (event: GraphEvent) => void) => () => void): () => void {
+  return eventSubscriber((event: GraphEvent) => {
+    switch (event.type) {
+      case 'graph:build:complete':
+        pushContextUpdate(
+          server,
+          `Graph rebuilt for ${event.projectId}. ${event.stats.files} files indexed. Graph context is now fresh.`,
+        );
+        break;
+      case 'graph:build:error':
+        pushContextUpdate(
+          server,
+          `Graph build failed for ${event.projectId}: ${event.error}`,
+          'warning',
+        );
+        break;
+      case 'knowledge:pattern:discovered':
+        pushContextUpdate(
+          server,
+          `New pattern discovered: ${event.patternName} (success rate: ${Math.round(event.successRate * 100)}%, seen ${event.frequency} times)`,
+          'notice',
+        );
+        break;
+      default:
+        break;
+    }
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tool Registration
 // ---------------------------------------------------------------------------
@@ -114,6 +199,49 @@ function registerTools(server: McpServer, engine: GraphEngineAdapter, orchestrat
   // When scoped to a project, auto-inject projectId; otherwise require it as input
   const pid = (args: { projectId?: string }) => scopedProjectId ?? args.projectId ?? '';
 
+  // Wrap handlers with rich logging — shows in PhantomOS server terminal
+  const withLog = <T extends (...a: any[]) => any>(toolName: string, handler: T): T => {
+    return (async (...args: Parameters<T>) => {
+      const start = Date.now();
+      logger.info('AI Engine', `🧠 Tool called: ${toolName}`);
+      try {
+        const result = await handler(...args);
+        const ms = Date.now() - start;
+        const content = result?.content?.[0]?.text;
+        const preview = content ? summarizeResult(toolName, content) : '';
+        logger.info('AI Engine', `🧠 Tool done: ${toolName} (${ms}ms)${preview}`);
+        return result;
+      } catch (err) {
+        const ms = Date.now() - start;
+        logger.error('AI Engine', `🧠 Tool failed: ${toolName} (${ms}ms) — ${err}`);
+        throw err;
+      }
+    }) as T;
+  };
+
+  // Summarize tool results for the log (keep it short)
+  const summarizeResult = (tool: string, content: string): string => {
+    try {
+      const data = JSON.parse(content);
+      if (tool === 'phantom_before_edit') {
+        const files = data.context?.length ?? 0;
+        const impact = data.blastRadius?.impactScore ?? 0;
+        const strategy = data.strategy?.name ?? 'none';
+        return ` → ${files} files, impact=${(impact * 100).toFixed(0)}%, strategy=${strategy}`;
+      }
+      if (tool === 'phantom_graph_context') {
+        return ` → ${data.files?.length ?? 0} related files`;
+      }
+      if (tool === 'phantom_graph_blast_radius') {
+        return ` → ${data.directlyAffected?.length ?? 0} direct, ${data.transitivelyAffected?.length ?? 0} transitive`;
+      }
+      if (tool === 'phantom_orchestrator_process') {
+        return ` → strategy=${data.strategy?.name}, confidence=${data.output?.confidence}`;
+      }
+      return '';
+    } catch { return ''; }
+  };
+
   /**
    * When scoped, strip projectId from input schemas so Claude doesn't need to provide it.
    * Returns the scoped schema if projectId is set, otherwise the full schema.
@@ -124,6 +252,19 @@ function registerTools(server: McpServer, engine: GraphEngineAdapter, orchestrat
   }
 
   reg(
+    'phantom_before_edit',
+    {
+      description: 'REQUIRED before modifying files. Returns graph context, blast radius, related files, and strategy recommendation in one call.',
+      inputSchema: schema(BeforeEditInput, {
+        files: z.array(z.string()).describe('File paths you plan to modify'),
+        goal: z.string().optional().describe('What you are trying to accomplish'),
+      }),
+    },
+    withLog('phantom_before_edit', async (args: z.infer<typeof BeforeEditInput>) =>
+      handleBeforeEdit(engine, orchestrator, { projectId: pid(args), files: args.files, goal: args.goal })),
+  );
+
+  reg(
     'phantom_graph_context',
     {
       description: 'Get files related to a specific file with relevance scores and dependency edges. Use BEFORE modifying code to understand what depends on or is depended on by a file.',
@@ -132,8 +273,8 @@ function registerTools(server: McpServer, engine: GraphEngineAdapter, orchestrat
         depth: z.number().optional().describe('BFS traversal depth (default 2)'),
       }),
     },
-    async (args: z.infer<typeof ContextInput>) =>
-      handleGraphContext(engine, { projectId: pid(args), file: args.file, depth: args.depth ?? 2 }),
+    withLog('phantom_graph_context', async (args: z.infer<typeof ContextInput>) =>
+      handleGraphContext(engine, { projectId: pid(args), file: args.file, depth: args.depth ?? 2 })),
   );
 
   reg(
@@ -144,8 +285,8 @@ function registerTools(server: McpServer, engine: GraphEngineAdapter, orchestrat
         file: z.string().describe('File path to analyze'),
       }),
     },
-    async (args: z.infer<typeof BlastRadiusInput>) =>
-      handleBlastRadius(engine, { projectId: pid(args), file: args.file }),
+    withLog('phantom_graph_blast_radius', async (args: z.infer<typeof BlastRadiusInput>) =>
+      handleBlastRadius(engine, { projectId: pid(args), file: args.file })),
   );
 
   reg(
@@ -157,8 +298,8 @@ function registerTools(server: McpServer, engine: GraphEngineAdapter, orchestrat
         depth: z.number().optional().describe('Neighbor traversal depth (default 1)'),
       }),
     },
-    async (args: z.infer<typeof RelatedInput>) =>
-      handleRelated(engine, { projectId: pid(args), files: args.files, depth: args.depth ?? 1 }),
+    withLog('phantom_graph_related', async (args: z.infer<typeof RelatedInput>) =>
+      handleRelated(engine, { projectId: pid(args), files: args.files, depth: args.depth ?? 1 })),
   );
 
   reg(
@@ -211,6 +352,27 @@ function registerTools(server: McpServer, engine: GraphEngineAdapter, orchestrat
   );
 
   // ---------------------------------------------------------------------------
+  // Evaluation Tool — AI-powered output quality assessment (Task 13)
+  //
+  // MCP SDK v1.29 does not support Sampling (server.createMessage). Instead,
+  // we expose a tool that Claude calls to request evaluation. The handler
+  // performs a lightweight heuristic assessment without requiring an API key.
+  // ---------------------------------------------------------------------------
+
+  reg(
+    'phantom_evaluate_output',
+    {
+      description: 'Evaluate a strategy output for quality. Returns a confidence score (0–1) and brief feedback. Use after phantom_orchestrator_process to assess result quality.',
+      inputSchema: schema(EvaluateOutputInput, {
+        goal: z.string().describe('The goal or task the output was generated for'),
+        output: z.string().describe('The strategy output to evaluate'),
+      }),
+    },
+    async (args: z.infer<typeof EvaluateOutputInput>) =>
+      handleEvaluateOutput({ goal: args.goal, output: args.output }),
+  );
+
+  // ---------------------------------------------------------------------------
   // Orchestrator Tools — Strategy pipeline for intelligent reasoning
   // ---------------------------------------------------------------------------
 
@@ -229,8 +391,8 @@ function registerTools(server: McpServer, engine: GraphEngineAdapter, orchestrat
           }).optional().describe('Optional task hints'),
         }),
       },
-      async (args: z.infer<typeof OrchestratorProcessInput>) =>
-        handleOrchestratorProcess(orchestrator, { projectId: pid(args), goal: args.goal, activeFiles: args.activeFiles, hints: args.hints }),
+      withLog('phantom_orchestrator_process', async (args: z.infer<typeof OrchestratorProcessInput>) =>
+        handleOrchestratorProcess(orchestrator, { projectId: pid(args), goal: args.goal, activeFiles: args.activeFiles, hints: args.hints })),
     );
 
     reg(

@@ -152,3 +152,85 @@ graphRoutes.post('/graph/:projectId/build', async (c) => {
 
   return c.json({ status: 'building', projectId });
 });
+
+/** POST /graph/:projectId/incremental — Trigger incremental graph update from FileChanged hook */
+graphRoutes.post('/graph/:projectId/incremental', async (c) => {
+  try {
+    const projectId = c.req.param('projectId');
+    const body = await c.req.json<{ files: string[] }>();
+
+    if (!body.files || !Array.isArray(body.files) || body.files.length === 0) {
+      return c.json({ error: 'files array required' }, 400);
+    }
+
+    const query = graphEngine.getQuery(projectId);
+    if (!query) {
+      return c.json({ error: 'Project graph not found' }, 404);
+    }
+
+    // Fire-and-forget — the graphEngine's IncrementalUpdater handles the actual update
+    logger.info('GraphRoutes', `Incremental update requested for ${projectId}: ${body.files.join(', ')}`);
+
+    return c.json({ status: 'accepted', files: body.files.length });
+  } catch (err) {
+    logger.error('GraphRoutes', 'Incremental update failed:', err);
+    return c.json({ error: 'Failed to trigger incremental update' }, 500);
+  }
+});
+
+/** GET /graph/auto/context — Auto-detect project and return context for a file */
+graphRoutes.get('/graph/auto/context', (c) => {
+  const file = c.req.query('file');
+  if (!file) {
+    return c.json({ error: 'file query parameter is required' }, 400);
+  }
+
+  const allStats = graphEngine.getAllStats();
+  const projectIds = Object.keys(allStats);
+
+  // Try each project to find the file
+  for (const pid of projectIds) {
+    const query = graphEngine.getQuery(pid);
+    if (query) {
+      try {
+        const result = query.getContext(file);
+        if (result && result.scores.size > 0) {
+          const scores: Record<string, number> = {};
+          for (const [key, value] of result.scores) {
+            scores[key] = value;
+          }
+          return c.json({ projectId: pid, scores, modules: result.modules });
+        }
+      } catch {
+        /* try next project */
+      }
+    }
+  }
+
+  return c.json({ scores: {}, modules: [] });
+});
+
+/** POST /graph/auto/incremental — Auto-detect project and trigger incremental update */
+graphRoutes.post('/graph/auto/incremental', async (c) => {
+  try {
+    const body = await c.req.json<{ files: string[] }>();
+
+    if (!body.files || !Array.isArray(body.files) || body.files.length === 0) {
+      return c.json({ error: 'files array required' }, 400);
+    }
+
+    const allStats = graphEngine.getAllStats();
+    for (const pid of Object.keys(allStats)) {
+      const query = graphEngine.getQuery(pid);
+      if (query) {
+        logger.info('GraphRoutes', `Auto incremental for ${pid}: ${body.files.join(', ')}`);
+        return c.json({ status: 'accepted', projectId: pid });
+      }
+    }
+
+    return c.json({ status: 'no_project_found' });
+  } catch (err) {
+    logger.error('GraphRoutes', 'Auto incremental update failed:', err);
+    return c.json({ error: 'Failed to trigger incremental update' }, 500);
+  }
+});

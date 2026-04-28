@@ -21,6 +21,7 @@ import type { OpenFileOptions } from './types';
  */
 export const openFileInEditor = (options: OpenFileOptions): void => {
   const { workspaceId, filePath, line, column } = options;
+  const fileName = filePath.split('/').pop() ?? 'Preview';
 
   // 1. Check if file is already open somewhere
   const existing = getOpenFileEntry(filePath);
@@ -44,6 +45,13 @@ export const openFileInEditor = (options: OpenFileOptions): void => {
         break;
       }
     }
+  }
+
+  const isMarkdown = filePath.endsWith('.md') || filePath.endsWith('.mdx');
+
+  if (isMarkdown) {
+    addTabWithData('markdown-preview', fileName, { workspaceId, filePath });
+    return;
   }
 
   if (targetPaneId) {

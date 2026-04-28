@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -38,14 +38,14 @@ func (a *App) GetAllRecipes(projectId string) []EnrichedRecipe {
 	// 2. Load custom recipes from DB.
 	customRows, err := rq.ListCustomRecipesByProject(a.ctx, projectId)
 	if err != nil {
-		log.Printf("app/bindings_recipe: ListCustomRecipesByProject(%s): %v", projectId, err)
+		slog.Error("GetAllRecipes: ListCustomRecipesByProject failed", "projectId", projectId, "err", err)
 		customRows = []db.CustomRecipe{}
 	}
 
 	// 3. Load favorite set for quick lookup.
 	favRows, err := rq.ListRecipeFavorites(a.ctx, projectId)
 	if err != nil {
-		log.Printf("app/bindings_recipe: ListRecipeFavorites(%s): %v", projectId, err)
+		slog.Error("GetAllRecipes: ListRecipeFavorites failed", "projectId", projectId, "err", err)
 		favRows = []db.RecipeFavorite{}
 	}
 	favSet := make(map[string]bool, len(favRows))
@@ -258,7 +258,7 @@ func (a *App) RunRecipe(projectId string, recipeId string) (string, error) {
 	// 5. Send the recipe command to the shell via PTY input.
 	cmd := fmt.Sprintf("sh -c %q\n", command)
 	if err := a.WriteTerminal(sessionID, cmd); err != nil {
-		log.Printf("app/bindings_recipe: RunRecipe: WriteTerminal(%s): %v", sessionID, err)
+		slog.Warn("RunRecipe: WriteTerminal failed", "sessionID", sessionID, "err", err)
 	}
 
 	return sessionID, nil
@@ -269,7 +269,7 @@ func (a *App) getAutoDetectedRecipes(projectId string) []project.Recipe {
 	q := db.New(a.DB.Reader)
 	proj, err := q.GetProject(a.ctx, projectId)
 	if err != nil {
-		log.Printf("app/bindings_recipe: GetProject(%s): %v", projectId, err)
+		slog.Error("getAutoDetectedRecipes: GetProject failed", "projectId", projectId, "err", err)
 		return []project.Recipe{}
 	}
 
@@ -279,7 +279,7 @@ func (a *App) getAutoDetectedRecipes(projectId string) []project.Recipe {
 
 	var profile project.Profile
 	if err := json.Unmarshal([]byte(proj.Profile.String), &profile); err != nil {
-		log.Printf("app/bindings_recipe: unmarshal profile for project %s: %v", projectId, err)
+		slog.Error("getAutoDetectedRecipes: unmarshal profile failed", "projectId", projectId, "err", err)
 		return []project.Recipe{}
 	}
 

@@ -6,7 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -72,7 +72,7 @@ func (c *Controller) Pause(ctx context.Context, sessionID string) error {
 	if c.pidLookup != nil {
 		if pid, err := c.pidLookup(sessionID); err == nil && pid > 0 {
 			if suspendErr := SuspendProcess(int(pid)); suspendErr != nil {
-				log.Printf("session/controller: suspend process %d for %s: %v", pid, sessionID, suspendErr)
+				slog.Warn("session/controller: suspend process failed", "pid", pid, "sessionID", sessionID, "err", suspendErr)
 			}
 		}
 	}
@@ -97,7 +97,7 @@ func (c *Controller) Resume(ctx context.Context, sessionID string, flushTo func(
 	if c.pidLookup != nil {
 		if pid, err := c.pidLookup(sessionID); err == nil && pid > 0 {
 			if resumeErr := ResumeProcess(int(pid)); resumeErr != nil {
-				log.Printf("session/controller: resume process %d for %s: %v", pid, sessionID, resumeErr)
+				slog.Warn("session/controller: resume process failed", "pid", pid, "sessionID", sessionID, "err", resumeErr)
 			}
 		}
 	}
@@ -233,7 +233,7 @@ func (c *Controller) Kill(ctx context.Context, sessionID string) error {
 	if c.pidLookup != nil {
 		if pid, err := c.pidLookup(sessionID); err == nil && pid > 0 {
 			if killErr := KillProcess(int(pid)); killErr != nil {
-				log.Printf("session/controller: kill process %d for %s: %v", pid, sessionID, killErr)
+				slog.Warn("session/controller: kill process failed", "pid", pid, "sessionID", sessionID, "err", killErr)
 			}
 		}
 	}

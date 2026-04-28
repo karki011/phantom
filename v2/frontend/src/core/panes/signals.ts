@@ -145,7 +145,7 @@ export function addTabWithData(
   paneType: PaneType,
   label: string,
   data: Record<string, unknown>,
-): void {
+): string {
   const tab = makeTab(paneType, label);
   const paneId = tab.activePaneId;
   if (paneId && tab.panes[paneId]) {
@@ -153,6 +153,7 @@ export function addTabWithData(
   }
   setWorkspace(produce((s) => { s.tabs.push(tab); }));
   queueMicrotask(() => setWorkspace('activeTabId', tab.id));
+  return paneId;
 }
 
 
@@ -200,8 +201,9 @@ export function setActiveTab(tabId: string): void {
 export function setActivePaneInTab(paneId: string): void {
   setWorkspace(
     produce((s) => {
-      const tab = s.tabs.find((t) => t.id === s.activeTabId);
-      if (tab && paneId in tab.panes) {
+      const tab = s.tabs.find((t) => paneId in t.panes);
+      if (tab) {
+        s.activeTabId = tab.id;
         tab.activePaneId = paneId;
       }
     }),

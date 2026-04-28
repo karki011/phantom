@@ -25,12 +25,22 @@ type ProjectInfo struct {
 // Generator creates morning brief and end-of-day content using
 // git/gh commands and DB queries (sessions, tasks, worktrees).
 type Generator struct {
-	queries *db.Queries
+	queries   *db.Queries
+	aiGatherer *AIDigestGatherer
 }
 
 // NewGenerator creates a Generator backed by a read-only Queries handle.
 func NewGenerator(q *db.Queries) *Generator {
 	return &Generator{queries: q}
+}
+
+// NewGeneratorWithDB creates a Generator with AI digest capabilities.
+// The rawDB is needed for AI digest queries against graph_meta and activity_log.
+func NewGeneratorWithDB(q *db.Queries, rawDB db.DBTX) *Generator {
+	return &Generator{
+		queries:    q,
+		aiGatherer: NewAIDigestGatherer(q, rawDB),
+	}
 }
 
 // run executes a shell command with a 10s timeout. Returns empty string on error.
@@ -110,6 +120,16 @@ func (g *Generator) GenerateMorningBrief(ctx context.Context, projects []Project
 
 	// --- Active worktrees ---
 	g.morningWorktrees(&lines, projects)
+
+	// --- AI Engine Insights (yesterday's data) ---
+	if g.aiGatherer != nil {
+		aiData := g.aiGatherer.GatherAIDigestData(ctx, yesterdayStr())
+		aiSection := FormatAIDigestSection(aiData)
+		if aiSection != "" {
+			lines = append(lines, "")
+			lines = append(lines, aiSection)
+		}
+	}
 
 	// Fallback
 	bulletCount := 0
@@ -375,6 +395,23 @@ func (g *Generator) GenerateEndOfDay(ctx context.Context, projects []ProjectInfo
 	}
 	if pendingCount > 0 {
 		lines = append(lines, fmt.Sprintf("- %d task%s still pending", pendingCount, pluralS(pendingCount)))
+	}
+
+	// --- AI Engine Insights (today's data) ---
+	if g.aiGatherer != nil {
+		aiData := g.aiGatherer.GatherAIDigestData(ctx, todayStr())
+
+		aiSection := FormatAIDigestSection(aiData)
+		if aiSection != "" {
+			lines = append(lines, "")
+			lines = append(lines, aiSection)
+		}
+
+		hunterSection := FormatHunterDigestSection(aiData)
+		if hunterSection != "" {
+			lines = append(lines, "")
+			lines = append(lines, hunterSection)
+		}
 	}
 
 	// Fallback

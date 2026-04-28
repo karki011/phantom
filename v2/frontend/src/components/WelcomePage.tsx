@@ -4,6 +4,7 @@
 import { createSignal } from 'solid-js';
 import * as styles from '@/styles/home.css';
 import { buttonRecipe } from '@/styles/recipes.css';
+import { APP_NAME } from '@/core/branding';
 import { addProject, browseDirectory, cloneRepository, scanDirectory } from '@/core/bindings';
 import { refreshProjects } from '@/core/signals/projects';
 import { bootstrapWorktrees } from '@/core/signals/worktrees';
@@ -41,7 +42,7 @@ export function WelcomePage() {
 
   return (
     <div class={styles.welcomeContainer}>
-      <div class={styles.welcomeTitle}>PhantomOS</div>
+      <div class={styles.welcomeTitle}>{APP_NAME}</div>
       <div class={styles.welcomeSubtitle}>
         Select a project from the sidebar to get started, or add a new one.
       </div>

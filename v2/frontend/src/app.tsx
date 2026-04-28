@@ -5,6 +5,7 @@ import { createSignal, createEffect, onMount, onCleanup, Show, untrack } from 's
 import { shadowMonarchDarkTheme } from './styles/theme.css';
 import * as styles from './styles/app.css';
 import * as shellStyles from './styles/app-shell.css';
+import { isFullscreen, initFullscreenDetection, stopFullscreenDetection } from './core/signals/fullscreen';
 import { bootstrapSessions } from './core/signals/sessions';
 import { bootstrapWards } from './core/signals/wards';
 import { bootstrapProjects } from './core/signals/projects';
@@ -15,11 +16,11 @@ import { initTheme, initFontStyle } from './core/signals/theme';
 import { initTerminalTheme } from './core/terminal/theme-manager';
 import { initTerminalPrefs } from './core/terminal/registry';
 import { initZoom } from './core/signals/zoom';
+import { initBrightness } from './core/signals/brightness';
 import { OnboardingFlow } from './screens/onboarding';
 import { BootScreen } from './screens/boot';
-import { ShutdownCeremony, type ShutdownStats } from './screens/shutdown';
+import { ShutdownCeremony, ShutdownConfirmModal, type ShutdownStats } from './screens/shutdown';
 import { playSound } from './core/audio/engine';
-import { SystemHeader } from './components/layout/SystemHeader';
 import { TopTabBar } from './components/layout/TopTabBar';
 import { StatusBar } from './components/layout/StatusBar';
 import { WorktreeSidebar, RightSidebar } from './components/sidebar';
@@ -36,10 +37,13 @@ import { RecipePicker } from './shared/RecipePicker';
 import { ApprovalModal } from './shared/ApprovalModal/ApprovalModal';
 import { PromptComposer } from './shared/PromptComposer';
 import { composerVisible, closeComposer } from './core/signals/composer';
-import { registerShutdownHandler } from './core/signals/shutdown';
-import { generateEndOfDay, generateMorningBrief } from './core/bindings/journal';
+import { registerShutdownHandler, shutdownConfirmVisible } from './core/signals/shutdown';
+import { generateMorningBrief } from './core/bindings/journal';
 import { DocsScreen } from './screens/docs';
 import { SystemCockpit } from './screens/system/SystemCockpit';
+import { XPGainFloat, LevelUpCelebration, RankUpCelebration, AchievementToastWatcher } from './shared/Gamification';
+import { bootstrapGamification } from './core/signals/gamification';
+import { AICommandCenter } from './components/ai-command-center/AICommandCenter';
 
 export function App() {
   const [ready, setReady] = createSignal(false);
@@ -52,6 +56,8 @@ export function App() {
   onMount(async () => {
     document.body.classList.add(shadowMonarchDarkTheme);
 
+    await waitForWails();
+
     const savedTheme = await loadPref('theme');
     if (savedTheme) initTheme(savedTheme);
 
@@ -61,17 +67,23 @@ export function App() {
     await initTerminalPrefs();
     await initTerminalTheme();
     await initZoom();
+    await initBrightness();
+
+    // Detect macOS fullscreen state for traffic light inset padding
+    initFullscreenDetection();
 
     const onboardingDone = await loadPref('onboarding_completed');
     if (!onboardingDone) setShowOnboarding(true);
 
-    await waitForWails();
     bootstrapApp();
     bootstrapSessions();
     bootstrapProjects();
 
     const wardsEnabled = await loadPref('wards_enabled');
     if (wardsEnabled === 'true') bootstrapWards();
+
+    const gamEnabled = await loadPref('gamification_enabled');
+    if (gamEnabled !== 'false') bootstrapGamification();
 
     // Load active provider config (for new session commands)
     const { loadActiveProvider } = await import('@/core/signals/active-provider');
@@ -87,6 +99,7 @@ export function App() {
   // Register keyboard shortcuts synchronously so onCleanup works on HMR re-mount
   const cleanupShortcuts = registerKeyboardShortcuts();
   onCleanup(cleanupShortcuts);
+  onCleanup(stopFullscreenDetection);
 
   createEffect(() => {
     const wtId = activeWorktreeId();
@@ -96,9 +109,7 @@ export function App() {
 
   async function handleShutdown() {
     if (shuttingDown()) return;
-    // Fire EOD generation in background while ceremony plays
-    const today = new Date().toISOString().slice(0, 10);
-    generateEndOfDay(today).catch(() => {});
+    setShuttingDown(true);
 
     try {
       const raw = await window.go?.app.App.GetShutdownStats();
@@ -111,14 +122,33 @@ export function App() {
         });
       }
     } catch {}
-    setShuttingDown(true);
   }
 
   function handleShutdownComplete() {
-    window.go?.app.App.QuitApp();
+    setTimeout(() => {
+      window.go?.app.App.QuitApp();
+    }, 800);
   }
 
   registerShutdownHandler(handleShutdown);
+
+  // Pre-fetch shutdown stats when confirm modal opens so session count is visible
+  createEffect(() => {
+    if (!shutdownConfirmVisible()) return;
+    (async () => {
+      try {
+        const raw = await window.go?.app.App.GetShutdownStats();
+        if (raw) {
+          setShutdownStats({
+            sessionCount: raw.session_count ?? 0,
+            totalTokens: raw.total_tokens ?? 0,
+            totalCost: raw.total_cost ?? 0,
+            uptime: raw.uptime ?? '',
+          });
+        }
+      } catch {}
+    })();
+  });
 
   function handleOnboardingComplete() {
     setShowOnboarding(false);
@@ -128,16 +158,28 @@ export function App() {
     setTimeout(() => setBootingUp(false), 1500);
   }
 
+  // When not fullscreen, apply the trafficLightInset class to push header/tabBar
+  // content right, clearing the macOS traffic light buttons.
+  const shellClass = () =>
+    isFullscreen() ? styles.appShell : `${styles.appShell} ${shellStyles.trafficLightInset}`;
+
   return (
-    <div class={styles.appShell}>
+    <div class={shellClass()}>
       <ToastRegion />
+      <AchievementToastWatcher />
+      <XPGainFloat />
+      <LevelUpCelebration />
+      <RankUpCelebration />
       <ApprovalModal />
       <SettingsDialog />
+      <AICommandCenter />
       <QuickOpen />
       <CommandPalette />
       <RecipePicker />
       <DocsScreen />
       <PromptComposer visible={composerVisible()} onClose={closeComposer} />
+      <ShutdownConfirmModal sessionCount={shutdownStats()?.sessionCount} />
+
       <Show when={shuttingDown()}>
         <ShutdownCeremony stats={shutdownStats()} onComplete={handleShutdownComplete} />
       </Show>
@@ -157,7 +199,6 @@ export function App() {
       </Show>
 
       <Show when={ready() && !showOnboarding() && bootCeremonyDone()}>
-        <SystemHeader />
         <TopTabBar />
 
         <div class={shellStyles.mainContent}>

@@ -17,6 +17,12 @@ import {
   ZOOM_LEVELS,
   type ZoomLevelId,
 } from '../../../core/signals/zoom';
+import {
+  activeBrightness,
+  applyBrightness,
+  MIN_BRIGHTNESS,
+  MAX_BRIGHTNESS,
+} from '../../../core/signals/brightness';
 import * as styles from '../SettingsDialog.css';
 
 const THEME_SWATCHES: { id: ThemeId; label: string; accent: string; bg: string }[] = [
@@ -32,6 +38,16 @@ const THEME_SWATCHES: { id: ThemeId; label: string; accent: string; bg: string }
   { id: 'hunter-rank-light',     label: 'Hunter Light',   accent: '#12B76A', bg: '#F5FAF8' },
   { id: 'cz-light',              label: 'CZ Light',       accent: '#2286a1', bg: '#f1f1f4' },
   { id: 'nord-light',            label: 'Nord Light',     accent: '#5e81ac', bg: '#eceff4' },
+  { id: 'one-dark-pro',           label: 'One Dark',       accent: '#61afef', bg: '#282c34' },
+  { id: 'github-dark',            label: 'GitHub Dark',    accent: '#58a6ff', bg: '#0d1117' },
+  { id: 'catppuccin',             label: 'Catppuccin',     accent: '#cba6f7', bg: '#1e1e2e' },
+  { id: 'rose-pine',              label: 'Rosé Pine',      accent: '#c4a7e7', bg: '#191724' },
+  { id: 'tokyo-night',            label: 'Tokyo Night',    accent: '#7aa2f7', bg: '#1a1b26' },
+  { id: 'gruvbox',                label: 'Gruvbox',        accent: '#fe8019', bg: '#282828' },
+  { id: 'solarized-dark',         label: 'Solarized',      accent: '#268bd2', bg: '#002b36' },
+  { id: 'ayu-dark',               label: 'Ayu Dark',       accent: '#e6b450', bg: '#0b0e14' },
+  { id: 'kanagawa',               label: 'Kanagawa',       accent: '#7e9cd8', bg: '#1f1f28' },
+  { id: 'vscode-dark',            label: 'VS Code',        accent: '#4fc1ff', bg: '#1f1f1f' },
 ];
 
 const FONT_STYLES: { id: FontStyleId; label: string }[] = [
@@ -114,6 +130,20 @@ export default function AppearanceSection() {
             )}
           </For>
         </div>
+      </div>
+
+      {/* Brightness */}
+      <div class={styles.settingGroup}>
+        <span class={styles.settingLabel}>Brightness · {activeBrightness()}%</span>
+        <input
+          type="range"
+          class={styles.sliderInput}
+          min={MIN_BRIGHTNESS}
+          max={MAX_BRIGHTNESS}
+          step={5}
+          value={activeBrightness()}
+          onInput={(e) => applyBrightness(Number(e.currentTarget.value))}
+        />
       </div>
     </div>
   );

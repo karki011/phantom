@@ -23,6 +23,14 @@ const DEFAULTS: Record<string, string> = {
   fullscreen_on_start: 'true',
 };
 
+/** Default AI engine preferences — each controls a specific hook */
+const AI_ENGINE_DEFAULTS: Record<string, boolean> = {
+  'ai.autoContext': true,     // UserPromptSubmit hook (prompt-enricher)
+  'ai.editGate': true,        // PreToolUse blocking gate
+  'ai.outcomeCapture': true,  // Stop hook (knowledge learning)
+  'ai.fileSync': true,        // FileChanged hook (graph sync)
+};
+
 /** Seed defaults for any missing keys */
 function ensureDefaults(): void {
   for (const [key, value] of Object.entries(DEFAULTS)) {
@@ -68,4 +76,45 @@ preferencesRoutes.put('/preferences/:key', async (c) => {
     prefs[row.key] = row.value;
   }
   return c.json(prefs);
+});
+
+// ---------------------------------------------------------------------------
+// AI Engine Preferences
+// ---------------------------------------------------------------------------
+
+/** Helper: read AI prefs from DB, merged with defaults */
+const getAiPreferences = (): Record<string, boolean> => {
+  const result = { ...AI_ENGINE_DEFAULTS };
+  for (const key of Object.keys(AI_ENGINE_DEFAULTS)) {
+    const row = db.select().from(userPreferences).where(eq(userPreferences.key, key)).get();
+    if (row) {
+      result[key] = row.value === 'true';
+    }
+  }
+  return result;
+};
+
+/** GET /preferences/ai — returns AI engine preferences merged with defaults */
+preferencesRoutes.get('/preferences/ai', (c) => {
+  return c.json(getAiPreferences());
+});
+
+/** PUT /preferences/ai — update individual AI engine preferences */
+preferencesRoutes.put('/preferences/ai', async (c) => {
+  const body = await c.req.json<Record<string, boolean>>();
+
+  for (const [key, value] of Object.entries(body)) {
+    // Only accept known AI preference keys
+    if (!(key in AI_ENGINE_DEFAULTS)) continue;
+
+    db.insert(userPreferences)
+      .values({ key, value: String(value), updatedAt: Date.now() })
+      .onConflictDoUpdate({
+        target: userPreferences.key,
+        set: { value: String(value), updatedAt: Date.now() },
+      })
+      .run();
+  }
+
+  return c.json(getAiPreferences());
 });

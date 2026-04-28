@@ -60,6 +60,14 @@ class GraphEngineService {
   // Lifecycle
   // ---------------------------------------------------------------------------
 
+  /**
+   * Subscribe to all graph engine events. Returns an unsubscribe function.
+   * Used by MCP server to push context updates to the client.
+   */
+  onEvent(listener: (event: import('@phantom-os/ai-engine').GraphEvent) => void): () => void {
+    return this.eventBus.onAll(listener);
+  }
+
   init(broadcast: BroadcastFn): void {
     this.broadcast = broadcast;
 

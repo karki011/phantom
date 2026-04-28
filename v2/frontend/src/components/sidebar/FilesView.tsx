@@ -315,7 +315,11 @@ function SearchResultItem(props: { entry: FileEntry }) {
   return (
     <div
       class={`${styles.fileItem} ${styles.fileItemPadded} ${isSelected() ? styles.fileItemSelected : ''}`}
-      onClick={() => setSelectedFile(props.entry.path)}
+      onClick={() => {
+        setSelectedFile(props.entry.path);
+        const wtId = activeWorktreeId();
+        if (wtId) openFileInEditor({ workspaceId: wtId, filePath: props.entry.path });
+      }}
       title={props.entry.path}
     >
       <FileText size={14} class={styles.fileIcon} />

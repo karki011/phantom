@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/subashkarki/phantom-os-v2/internal/branding"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,7 +39,7 @@ type Service struct {
 func NewService(dir string) *Service {
 	if dir == "" {
 		home, _ := os.UserHomeDir()
-		dir = filepath.Join(home, ".phantom-os", "journal")
+		dir = filepath.Join(home, branding.ConfigDirName, "journal")
 	}
 	return &Service{dir: dir}
 }

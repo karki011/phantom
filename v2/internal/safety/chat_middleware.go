@@ -7,7 +7,7 @@ package safety
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
@@ -140,7 +140,7 @@ func (cm *ChatMiddleware) EvaluateAssistantResponse(_ context.Context, sessionID
 			eval.PIIDetected = true
 			eval.PIIMatches = matches
 			// Don't mask the response — just flag it for the frontend.
-			log.Printf("safety/chat: PII detected in assistant response for session %s: %d matches", sessionID, len(matches))
+			slog.Warn("safety/chat: PII detected in assistant response", "sessionID", sessionID, "matches", len(matches))
 		}
 	}
 
@@ -162,7 +162,7 @@ func (cm *ChatMiddleware) StreamEventHook() func(ctx context.Context, ev *stream
 			}
 			result := cm.EvaluateUserMessage(ctx, ev.SessionID, ev.Content)
 			if result.Blocked {
-				log.Printf("safety/chat: blocked user message in session %s", ev.SessionID)
+				slog.Warn("safety/chat: blocked user message", "sessionID", ev.SessionID)
 				if cm.emitEvent != nil {
 					cm.emitEvent("chat:message_blocked", map[string]interface{}{
 						"session_id": ev.SessionID,

@@ -48,6 +48,8 @@ export interface TerminalSession {
   wrapper: HTMLDivElement;
   sessionId: string;
   attached: boolean;
+  /** Working directory for this terminal session — used to resolve relative file paths in link detection */
+  cwd?: string;
   unsubscribe?: () => void;
   /** SearchAddon instance — available only when @xterm/addon-search is installed */
   searchAddon?: { findNext(term: string, opts?: object): void; findPrevious(term: string, opts?: object): void };

@@ -41,16 +41,15 @@ export class Evaluator {
         : `Token usage ${output.tokensUsed} exceeds limit (${tokenLimit}) for ${taskContext.complexity} task`,
     });
 
-    // 3. Context coverage — did the strategy use graph context?
-    // Inferred from artifacts or result: check if the result is non-trivial
-    const resultLength = output.result.length;
-    const contextPass = resultLength > 10;
+    // 3. Context coverage — did the strategy produce meaningful output?
+    // Structural check: verify output contains meaningful content, not just length
+    const contextPass = hasStructuralContent(output.result);
     checks.push({
       name: 'contextCoverage',
       passed: contextPass,
       detail: contextPass
-        ? `Result length (${resultLength} chars) indicates graph context was used`
-        : `Result is too short (${resultLength} chars) — graph context may not have been used`,
+        ? 'Result contains meaningful structured or textual content'
+        : 'Result lacks meaningful content — graph context may not have been used',
     });
 
     // 4. Completeness — does the output have a non-empty result?
@@ -83,3 +82,25 @@ export class Evaluator {
     };
   }
 }
+
+/**
+ * Structural content check — verifies output contains meaningful content
+ * rather than relying on a raw character-length threshold.
+ *
+ * For JSON: checks for known structural keys (files, context, recommendation, steps).
+ * For plain text: requires at least 5 words.
+ */
+const hasStructuralContent = (result: string): boolean => {
+  try {
+    const parsed = JSON.parse(result);
+    return (
+      (Array.isArray(parsed.files) && parsed.files.length > 0) ||
+      (parsed.context != null && typeof parsed.context === 'object' && Object.keys(parsed.context).length > 0) ||
+      (typeof parsed.recommendation === 'string' && parsed.recommendation.length > 0) ||
+      (Array.isArray(parsed.steps) && parsed.steps.length > 0)
+    );
+  } catch {
+    // Not JSON — check for meaningful text content (at least 5 words)
+    return result.trim().split(/\s+/).length >= 5;
+  }
+};

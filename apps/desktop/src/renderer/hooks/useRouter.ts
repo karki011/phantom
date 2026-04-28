@@ -24,7 +24,10 @@ export type Route =
   | 'achievements'
   | 'quests'
   | 'hunter-stats'
-  | 'system';
+  | 'system'
+  | 'knowledge'
+  | 'strategies'
+  | 'evolution';
 
 const VALID_ROUTES = new Set<Route>([
   'cockpit',
@@ -39,6 +42,9 @@ const VALID_ROUTES = new Set<Route>([
   'quests',
   'hunter-stats',
   'system',
+  'knowledge',
+  'strategies',
+  'evolution',
 ]);
 
 const DEFAULT_ROUTE: Route = 'cockpit';
@@ -70,6 +76,9 @@ export const COCKPIT_SUB_ROUTES = new Set<Route>([
   'quests',
   'hunter-stats',
   'system',
+  'knowledge',
+  'strategies',
+  'evolution',
 ]);
 
 interface UseRouterReturn {

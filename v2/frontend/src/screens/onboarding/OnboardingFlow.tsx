@@ -11,6 +11,7 @@ import { BootTerminal } from './phases/BootTerminal';
 import { IdentityBind } from './phases/IdentityBind';
 import { DomainSelect } from './phases/DomainSelect';
 import { DomainLink } from './phases/DomainLink';
+import { AIEngineConsent } from './phases/AIEngineConsent';
 import { AbilityAwaken } from './phases/AbilityAwaken';
 import { Awakening } from './phases/Awakening';
 import * as styles from './styles/flow.css';
@@ -72,6 +73,9 @@ export function OnboardingFlow(props: OnboardingFlowProps) {
             <Match when={phase() === 'domain-link'}>
               <DomainLink onComplete={handlePhaseComplete} />
             </Match>
+            <Match when={phase() === 'ai-engine'}>
+              <AIEngineConsent onComplete={handlePhaseComplete} />
+            </Match>
             <Match when={phase() === 'ability-awaken'}>
               <AbilityAwaken onComplete={handlePhaseComplete} />
             </Match>
@@ -85,7 +89,7 @@ export function OnboardingFlow(props: OnboardingFlowProps) {
 
       <Show when={isMiddlePhase()}>
         <div class={styles.progressBar}>
-          <HexProgress total={4} current={completedPhases()} />
+          <HexProgress total={5} current={completedPhases()} />
         </div>
       </Show>
     </div>

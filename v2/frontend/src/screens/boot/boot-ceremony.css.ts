@@ -30,6 +30,11 @@ const fadeOut = keyframes({
   '100%': { opacity: 0 },
 });
 
+const cursorBlink = keyframes({
+  '0%, 49%': { opacity: 1 },
+  '50%, 100%': { opacity: 0 },
+});
+
 const pulse = keyframes({
   '0%, 100%': { opacity: 0.4 },
   '50%': { opacity: 1 },
@@ -119,8 +124,20 @@ export const lineDim = style({
 });
 
 export const cursor = style({
-  color: vars.color.terminalCursor,
+  display: 'inline-block',
+  width: '8px',
+  height: '1.2em',
   marginLeft: '2px',
+  background: vars.color.terminalCursor,
+  animation: `${cursorBlink} 1s step-end infinite`,
+  verticalAlign: 'text-bottom',
+});
+
+export const promptSymbol = style({
+  color: vars.color.success,
+  fontWeight: 600,
+  marginRight: '8px',
+  userSelect: 'none',
 });
 
 export const separator = style({

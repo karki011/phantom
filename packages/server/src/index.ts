@@ -15,6 +15,10 @@ import { startTaskWatcher } from './collectors/task-watcher.js';
 import { startTodoWatcher } from './collectors/todo-watcher.js';
 import {
   checkAchievements,
+  onAntiRepetitionTrigger,
+  onGraphBuildComplete,
+  onKnowledgeGrowth,
+  onOrchestratorRun,
   onSessionEnd,
   onSessionStart,
   onTaskComplete,
@@ -47,6 +51,9 @@ import { graphRoutes } from './routes/graph.js';
 import { orchestratorRoutes } from './routes/orchestrator.js';
 import { journalRoutes } from './routes/journal.js';
 import { cleanupRoutes } from './routes/cleanup.js';
+import { hookHealthRoutes } from './routes/hook-health.js';
+import { errorRoutes } from './routes/errors.js';
+import { verifyRoutes } from './routes/verify.js';
 import cockpitRoutes from './routes/cockpit.js';
 import { graphEngine } from './services/graph-engine.js';
 import { enrichmentQueue } from './enrichment-queue.js';
@@ -106,6 +113,42 @@ if (!dbError) {
   graphEngine.init(broadcast);
   enrichmentQueue.init(broadcast, graphEngine);
   orchestratorEngine.init(broadcast);
+
+  // -------------------------------------------------------------------------
+  // AI Engine → Gamification wiring
+  // -------------------------------------------------------------------------
+
+  graphEngine.onEvent((event) => {
+    if (event.type === 'graph:build:complete') {
+      onGraphBuildComplete();
+      const newAchievements = checkAchievements();
+      if (newAchievements.length > 0) {
+        broadcast('achievement:unlock', newAchievements);
+      }
+      broadcast('gamification', { type: 'xp_awarded', source: 'graph_build' });
+    }
+  });
+
+  orchestratorEngine.onEvent((event) => {
+    if (event.type === 'knowledge:decision:recorded') {
+      const decisionEvent = event as import('@phantom-os/ai-engine').KnowledgeDecisionRecordedEvent;
+      onOrchestratorRun(decisionEvent.strategyId ?? 'unknown');
+      const newAchievements = checkAchievements();
+      if (newAchievements.length > 0) {
+        broadcast('achievement:unlock', newAchievements);
+      }
+      broadcast('gamification', { type: 'xp_awarded', source: 'orchestrator' });
+    }
+
+    if (event.type === 'knowledge:pattern:discovered') {
+      onKnowledgeGrowth();
+      const newAchievements = checkAchievements();
+      if (newAchievements.length > 0) {
+        broadcast('achievement:unlock', newAchievements);
+      }
+      broadcast('gamification', { type: 'xp_awarded', source: 'knowledge' });
+    }
+  });
 } else {
   logger.warn('DB', `Database unavailable — running in degraded mode: ${dbError}`);
 }
@@ -153,6 +196,9 @@ app.route('/api', graphRoutes);
 app.route('/api', orchestratorRoutes);
 app.route('/api', journalRoutes);
 app.route('/api', cleanupRoutes);
+app.route('/api', hookHealthRoutes);
+app.route('/api', errorRoutes);
+app.route('/api', verifyRoutes);
 app.route('/api/cockpit', cockpitRoutes);
 
 // Claude integration — consent-based MCP/instructions/hooks setup
