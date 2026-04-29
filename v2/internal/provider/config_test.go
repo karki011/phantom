@@ -586,7 +586,7 @@ func TestResumeCommand(t *testing.T) {
 
 	cmd := cp.ResumeCommand("abc-123")
 	assertContains(t, "resume command", cmd, "abc-123")
-	assertContains(t, "resume command", cmd, "--session-id")
+	assertContains(t, "resume command", cmd, "--resume")
 }
 
 func TestNewSessionCommand(t *testing.T) {

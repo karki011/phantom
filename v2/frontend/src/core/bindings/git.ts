@@ -27,9 +27,9 @@ export async function createWorktree(
   }
 }
 
-export async function removeWorktree(worktreeId: string): Promise<boolean> {
+export async function removeWorktree(worktreeId: string, worktreePath: string): Promise<boolean> {
   try {
-    await App()?.RemoveWorktree(worktreeId);
+    await App()?.RemoveWorktree(worktreeId, worktreePath);
     return true;
   } catch (err) {
     console.error('[bindings] removeWorktree error:', err);

@@ -124,7 +124,7 @@ export function SessionControls(props: Props) {
   function handleAttach() {
     const cwd = props.session.cwd ?? '';
     const resumeCmd = activeProvider()?.config?.commands?.resume?.replace('${SESSION_ID}', props.session.id)
-      ?? `claude --resume --session-id ${props.session.id}`;
+      ?? `claude --resume ${props.session.id}`;
     addTabWithData('terminal', `${activeProviderLabel()} (attached)`, {
       cwd,
       command: resumeCmd,

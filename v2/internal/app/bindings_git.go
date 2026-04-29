@@ -3,8 +3,11 @@
 package app
 
 import (
+	"crypto/sha1"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,6 +17,26 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/git"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+// canonPath normalizes a worktree path for cross-source matching (DB ⟷ git).
+func canonPath(p string) string {
+	if p == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return filepath.Clean(p)
+	}
+	return filepath.Clean(abs)
+}
+
+// stableExternalID returns a deterministic Workspace ID for an externally-created
+// worktree (one git knows about but the DB does not). Stable across launches so
+// FE references like active_worktree_id keep working.
+func stableExternalID(projectID, path string) string {
+	h := sha1.Sum([]byte(projectID + "|" + path))
+	return "ext-" + hex.EncodeToString(h[:10])
+}
 
 // journalWorktreeEvent logs a worktree lifecycle event to the daily work log.
 func (a *App) journalWorktreeEvent(action, branch string) {
@@ -104,48 +127,121 @@ func (a *App) CreateWorktree(projectId, branch, baseBranch, ticketUrl string) (*
 	return &ws, nil
 }
 
-// RemoveWorktree removes a worktree from disk and deletes the workspace record.
-func (a *App) RemoveWorktree(worktreeId string) error {
-	log.Info("app/RemoveWorktree: called", "worktreeId", worktreeId)
-	// Get the workspace to find worktree path.
+// RemoveWorktree removes a worktree from disk and (if present) deletes the
+// workspace record. Externally-created worktrees discovered via git.List have
+// synthetic IDs not present in the DB — for those, the FE passes the path
+// directly so we can still remove them from disk.
+func (a *App) RemoveWorktree(worktreeId, worktreePath string) error {
+	log.Info("app/RemoveWorktree: called", "worktreeId", worktreeId, "path", worktreePath)
+
 	q := db.New(a.DB.Reader)
-	ws, err := q.GetWorkspace(a.ctx, worktreeId)
-	if err != nil {
-		log.Error("app/RemoveWorktree: workspace not found", "worktreeId", worktreeId, "err", err)
-		return fmt.Errorf("RemoveWorktree: workspace %s not found: %w", worktreeId, err)
+	ws, dbErr := q.GetWorkspace(a.ctx, worktreeId)
+
+	// Effective path: DB wins (canonical), passed-in path is fallback.
+	path := strings.TrimSpace(worktreePath)
+	if dbErr == nil && ws.WorktreePath.Valid && ws.WorktreePath.String != "" {
+		path = ws.WorktreePath.String
 	}
 
-	// Remove the git worktree from disk if path exists.
-	if ws.WorktreePath.Valid && ws.WorktreePath.String != "" {
-		if err := git.Remove(a.ctx, ws.WorktreePath.String); err != nil {
-			log.Warn("app/RemoveWorktree: git.Remove warning (continuing)", "path", ws.WorktreePath.String, "err", err)
-			// Continue to delete the DB record even if git removal fails.
+	if path == "" {
+		log.Error("app/RemoveWorktree: no path resolved", "worktreeId", worktreeId)
+		return fmt.Errorf("RemoveWorktree: no path resolved for %s", worktreeId)
+	}
+
+	if err := git.Remove(a.ctx, path); err != nil {
+		log.Warn("app/RemoveWorktree: git.Remove warning (continuing)", "path", path, "err", err)
+		// Continue — for externals there's no DB row to delete, but we still
+		// want to emit the event so the watcher-driven refresh picks it up.
+	}
+
+	if dbErr == nil {
+		wq := db.New(a.DB.Writer)
+		if err := wq.DeleteWorkspace(a.ctx, worktreeId); err != nil {
+			log.Error("app/RemoveWorktree: DeleteWorkspace failed", "worktreeId", worktreeId, "err", err)
+			return err
 		}
+		a.journalWorktreeEvent("Removed", ws.Branch)
 	}
 
-	// Delete workspace record from database.
-	wq := db.New(a.DB.Writer)
-	if err := wq.DeleteWorkspace(a.ctx, worktreeId); err != nil {
-		log.Error("app/RemoveWorktree: DeleteWorkspace failed", "worktreeId", worktreeId, "err", err)
-		return err
-	}
 	wailsRuntime.EventsEmit(a.ctx, EventWorktreeRemoved)
-	a.journalWorktreeEvent("Removed", ws.Branch)
-	log.Info("app/RemoveWorktree: success", "worktreeId", worktreeId)
+	log.Info("app/RemoveWorktree: success", "worktreeId", worktreeId, "path", path)
 	return nil
 }
 
-// ListWorktrees returns all workspaces for a given project.
+// ListWorktrees returns all workspaces for a given project, with git as the
+// source of truth for which worktrees exist.
+//
+// Strategy: list git worktrees, then merge with DB rows by path:
+//   - git-known + DB-known   → return DB row (preserves metadata), refresh branch
+//   - git-known + DB-unknown → synthesize a Workspace with stable ID
+//   - DB-known + git-unknown → drop (orphan / removed externally)
+//   - DB rows without a path (e.g. type="branch" entries for unchecked-out
+//     local branches) → always included
+//
+// Falls back to plain DB read if git command fails (e.g. corrupt repo).
 func (a *App) ListWorktrees(projectId string) []db.Workspace {
 	log.Info("app/ListWorktrees: called", "projectId", projectId)
 	q := db.New(a.DB.Reader)
-	workspaces, err := q.ListWorkspacesByProject(a.ctx, projectId)
+
+	dbRows, err := q.ListWorkspacesByProject(a.ctx, projectId)
 	if err != nil {
 		log.Error("app/ListWorktrees: ListWorkspacesByProject failed", "projectId", projectId, "err", err)
 		return []db.Workspace{}
 	}
-	log.Info("app/ListWorktrees: success", "count", len(workspaces))
-	return workspaces
+
+	proj, err := q.GetProject(a.ctx, projectId)
+	if err != nil {
+		log.Error("app/ListWorktrees: GetProject failed, returning DB only", "projectId", projectId, "err", err)
+		return dbRows
+	}
+
+	gitWts, err := git.List(a.ctx, proj.RepoPath)
+	if err != nil {
+		log.Error("app/ListWorktrees: git.List failed, returning DB only", "repoPath", proj.RepoPath, "err", err)
+		return dbRows
+	}
+
+	// Index DB rows by canonical worktree path.
+	byPath := make(map[string]db.Workspace, len(dbRows))
+	for _, w := range dbRows {
+		if w.WorktreePath.Valid {
+			byPath[canonPath(w.WorktreePath.String)] = w
+		}
+	}
+
+	out := make([]db.Workspace, 0, len(gitWts)+len(dbRows))
+	seenPaths := make(map[string]bool, len(gitWts))
+
+	for _, gw := range gitWts {
+		path := canonPath(gw.Path)
+		seenPaths[path] = true
+		if existing, ok := byPath[path]; ok {
+			existing.Branch = gw.Branch
+			out = append(out, existing)
+			continue
+		}
+		// External worktree — synthesize with stable ID.
+		out = append(out, db.Workspace{
+			ID:           stableExternalID(projectId, path),
+			ProjectID:    projectId,
+			Type:         "worktree",
+			Name:         filepath.Base(path),
+			Branch:       gw.Branch,
+			WorktreePath: sql.NullString{String: path, Valid: true},
+			CreatedAt:    time.Now().Unix(),
+		})
+	}
+
+	// Include DB rows that don't have a worktree_path (e.g. type="branch"
+	// entries representing local branches that aren't checked out).
+	for _, w := range dbRows {
+		if !w.WorktreePath.Valid || w.WorktreePath.String == "" {
+			out = append(out, w)
+		}
+	}
+
+	log.Info("app/ListWorktrees: success", "git", len(gitWts), "db", len(dbRows), "merged", len(out))
+	return out
 }
 
 // GetDefaultBranch returns the default branch for the repository at repoPath.

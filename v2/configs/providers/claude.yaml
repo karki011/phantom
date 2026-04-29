@@ -85,7 +85,7 @@ conversations:
 
 # ── Commands ──────────────────────────────────────────────────────────
 commands:
-  resume: "claude --resume --session-id ${SESSION_ID}"
+  resume: "claude --resume ${SESSION_ID}"
   new_session: "claude --dangerously-skip-permissions"
   ai_generate: "claude --print -p '${PROMPT}'"
   prompt_transport: "argv"

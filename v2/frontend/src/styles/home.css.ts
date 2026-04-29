@@ -31,38 +31,239 @@ export const homeContainer = style({
   background: vars.color.bgPrimary,
 });
 
+// ─── Welcome / Standby ceremony ─────────────────────────────────────────────
+// Visual language matches BootScreen + ShutdownCeremony so empty-state feels
+// like the system is *idle, awaiting orders* rather than blank.
+
+const welcomeFadeIn = keyframes({
+  from: { opacity: 0, transform: 'translateY(8px)' },
+  to: { opacity: 1, transform: 'translateY(0)' },
+});
+
+const welcomeTextGlow = keyframes({
+  '0%, 100%': { textShadow: `0 0 10px ${vars.color.accentGlow}` },
+  '50%': { textShadow: `0 0 25px ${vars.color.accent}, 0 0 50px ${vars.color.accentGlow}` },
+});
+
+const welcomeCaret = keyframes({
+  '0%, 49%': { opacity: 1 },
+  '50%, 100%': { opacity: 0 },
+});
+
+const welcomeTileBreathe = keyframes({
+  '0%, 100%': {
+    boxShadow: `0 0 0 1px color-mix(in srgb, ${vars.color.accent} 18%, ${vars.color.border}), 0 0 18px color-mix(in srgb, ${vars.color.accent} 14%, transparent)`,
+  },
+  '50%': {
+    boxShadow: `0 0 0 1px color-mix(in srgb, ${vars.color.accent} 35%, ${vars.color.border}), 0 0 28px color-mix(in srgb, ${vars.color.accent} 22%, transparent)`,
+  },
+});
+
 export const welcomeContainer = style({
+  position: 'relative',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'center',
   height: '100%',
   gap: vars.space.lg,
+  background: vars.color.bgPrimary,
+  overflow: 'hidden',
+  padding: vars.space.xxl,
+  boxSizing: 'border-box',
+  animation: `${welcomeFadeIn} 600ms ease-out`,
+});
+
+export const welcomeStage = style({
+  position: 'relative',
+  zIndex: 1,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  marginBottom: vars.space.lg,
 });
 
 export const welcomeTitle = style({
   fontFamily: vars.font.display,
-  fontSize: vars.fontSize.xl,
-  color: vars.color.textPrimary,
-  fontWeight: 700,
+  fontSize: vars.fontSize.xxl,
+  fontWeight: 900,
+  color: vars.color.accent,
+  letterSpacing: '0.2em',
+  textTransform: 'uppercase',
+  animation: `${welcomeTextGlow} 4s ease-in-out infinite`,
   margin: 0,
 });
 
 export const welcomeSubtitle = style({
-  fontSize: vars.fontSize.sm,
-  color: vars.color.textSecondary,
-  maxWidth: '400px',
-  textAlign: 'center',
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textDisabled,
+  letterSpacing: '0.18em',
+  textTransform: 'uppercase',
   margin: 0,
-  lineHeight: 1.6,
 });
 
 export const welcomeActions = style({
+  position: 'relative',
+  zIndex: 1,
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, minmax(160px, 200px))',
+  gap: vars.space.md,
+  '@media': {
+    '(max-width: 640px)': {
+      gridTemplateColumns: '1fr',
+    },
+  },
+});
+
+export const welcomeTile = style({
+  position: 'relative',
   display: 'flex',
-  flexDirection: 'row',
+  flexDirection: 'column',
+  alignItems: 'flex-start',
+  gap: vars.space.xs,
+  padding: `${vars.space.lg} ${vars.space.lg}`,
+  borderRadius: vars.radius.md,
+  background: `color-mix(in srgb, ${vars.color.bgSecondary} 80%, transparent)`,
+  border: `1px solid color-mix(in srgb, ${vars.color.border} 60%, transparent)`,
+  cursor: 'pointer',
+  textAlign: 'left',
+  fontFamily: vars.font.mono,
+  color: vars.color.textPrimary,
+  transition: `transform ${vars.animation.fast} ease, border-color ${vars.animation.fast} ease, background ${vars.animation.fast} ease`,
+  ':hover': {
+    transform: 'translateY(-2px)',
+    background: `color-mix(in srgb, ${vars.color.accent} 6%, ${vars.color.bgSecondary})`,
+    borderColor: `color-mix(in srgb, ${vars.color.accent} 50%, ${vars.color.border})`,
+    boxShadow: `0 0 24px color-mix(in srgb, ${vars.color.accent} 22%, transparent)`,
+  },
+  ':focus-visible': {
+    outline: `1px solid ${vars.color.accent}`,
+    outlineOffset: '2px',
+  },
+});
+
+export const welcomeTilePrimary = style({
+  borderColor: `color-mix(in srgb, ${vars.color.accent} 35%, ${vars.color.border})`,
+  animation: `${welcomeTileBreathe} 4s ease-in-out infinite`,
+});
+
+export const welcomeTileIcon = style({
+  color: vars.color.accent,
+  filter: `drop-shadow(0 0 6px ${vars.color.accentGlow})`,
+});
+
+export const welcomeTileLabel = style({
+  fontFamily: vars.font.display,
+  fontSize: vars.fontSize.sm,
+  fontWeight: 700,
+  letterSpacing: '0.1em',
+  textTransform: 'uppercase',
+  color: vars.color.textPrimary,
+});
+
+export const welcomeTileHint = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textDisabled,
+  letterSpacing: '0.04em',
+  lineHeight: 1.5,
+});
+
+export const welcomeBriefing = style({
+  position: 'relative',
+  zIndex: 1,
+  display: 'flex',
+  flexDirection: 'column',
   gap: vars.space.sm,
-  flexWrap: 'wrap',
-  justifyContent: 'center',
+  marginTop: vars.space.lg,
+  width: '100%',
+  maxWidth: '640px',
+});
+
+export const welcomeBriefingHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textDisabled,
+  textTransform: 'uppercase',
+  letterSpacing: '0.18em',
+});
+
+export const welcomeBriefingRule = style({
+  flex: 1,
+  height: '1px',
+  background: `linear-gradient(90deg, color-mix(in srgb, ${vars.color.accent} 35%, transparent), transparent)`,
+});
+
+export const welcomeBriefingSteps = style({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, 1fr)',
+  gap: `${vars.space.xs} ${vars.space.lg}`,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  '@media': {
+    '(max-width: 640px)': {
+      gridTemplateColumns: '1fr',
+    },
+  },
+});
+
+export const welcomeBriefingStep = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  color: vars.color.textSecondary,
+  letterSpacing: '0.04em',
+  padding: `${vars.space.xs} 0`,
+});
+
+export const welcomeBriefingIndex = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.accent,
+  fontWeight: 700,
+  flexShrink: 0,
+  textShadow: `0 0 6px ${vars.color.accentGlow}`,
+});
+
+export const welcomeBriefingKbd = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '1px 6px',
+  marginLeft: vars.space.xs,
+  borderRadius: vars.radius.sm,
+  background: `color-mix(in srgb, ${vars.color.accent} 8%, transparent)`,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 22%, ${vars.color.border})`,
+  color: vars.color.accent,
+  fontFamily: vars.font.mono,
+  fontSize: '0.65rem',
+  letterSpacing: '0.05em',
+});
+
+export const welcomeStatus = style({
+  position: 'relative',
+  zIndex: 1,
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  marginTop: vars.space.md,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textDisabled,
+  letterSpacing: '0.08em',
+});
+
+export const welcomeStatusCaret = style({
+  display: 'inline-block',
+  width: '7px',
+  height: '12px',
+  background: vars.color.accent,
+  animation: `${welcomeCaret} 1s steps(1) infinite`,
+  boxShadow: `0 0 8px ${vars.color.accentGlow}`,
 });
 
 export const sectionTitle = style({

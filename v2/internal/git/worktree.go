@@ -20,10 +20,11 @@ const worktreeRoot = "~/.phantom-os/worktrees"
 
 // WorktreeInfo describes a single git worktree.
 type WorktreeInfo struct {
-	Path   string `json:"path"`
-	Branch string `json:"branch"`
-	Commit string `json:"commit"`
-	IsBare bool   `json:"is_bare"`
+	Path       string `json:"path"`
+	Branch     string `json:"branch"`
+	Commit     string `json:"commit"`
+	IsBare     bool   `json:"is_bare"`
+	IsPrunable bool   `json:"is_prunable"`
 }
 
 // sanitizeName replaces slashes with dashes and strips non-alphanumeric characters
@@ -165,6 +166,9 @@ func List(ctx context.Context, repoPath string) ([]WorktreeInfo, error) {
 
 		case line == "bare":
 			current.IsBare = true
+
+		case line == "prunable" || strings.HasPrefix(line, "prunable "):
+			current.IsPrunable = true
 		}
 	}
 
@@ -173,7 +177,15 @@ func List(ctx context.Context, repoPath string) ([]WorktreeInfo, error) {
 		worktrees = append(worktrees, current)
 	}
 
-	return worktrees, nil
+	// Filter prunable — these point to deleted dirs and clutter the sidebar.
+	live := worktrees[:0]
+	for _, w := range worktrees {
+		if w.IsPrunable {
+			continue
+		}
+		live = append(live, w)
+	}
+	return live, nil
 }
 
 // Move relocates a worktree from oldPath to newPath.

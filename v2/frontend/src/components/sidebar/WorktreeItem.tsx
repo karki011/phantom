@@ -72,7 +72,11 @@ export function WorktreeItem(props: WorktreeItemProps) {
     setShowDeleteConfirm(false);
     setDeleting(true);
     showToast('Closing worktree', `Removing ${props.worktree.name}...`);
-    const ok = await removeWorktreeById(props.projectId, props.worktree.id);
+    const ok = await removeWorktreeById(
+      props.projectId,
+      props.worktree.id,
+      props.worktree.worktree_path ?? '',
+    );
     setDeleting(false);
     if (!ok) {
       showWarningToast('Close failed', 'Could not remove worktree — it may be in use');

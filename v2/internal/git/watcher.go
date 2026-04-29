@@ -88,6 +88,26 @@ func (w *Watcher) WatchRepo(repoPath string) error {
 		}
 	}
 
+	refsTags := filepath.Join(commonDir, "refs", "tags")
+	if info, err := os.Stat(refsTags); err == nil && info.IsDir() {
+		w.watcher.Add(refsTags)
+	}
+
+	// Watch worktrees metadata so external `git worktree add/remove/prune`
+	// is reflected in the sidebar. Each worktree gets its own subdir under
+	// .git/worktrees/<name>/ — watch the parent so create/remove fires, and
+	// each existing subdir so internal changes (HEAD moves, locks) fire too.
+	worktreesDir := filepath.Join(commonDir, "worktrees")
+	if info, err := os.Stat(worktreesDir); err == nil && info.IsDir() {
+		w.watcher.Add(worktreesDir)
+		entries, _ := os.ReadDir(worktreesDir)
+		for _, e := range entries {
+			if e.IsDir() {
+				w.watcher.Add(filepath.Join(worktreesDir, e.Name()))
+			}
+		}
+	}
+
 	// Watch working tree root for file changes (like VS Code's ** watcher).
 	// fsnotify is non-recursive, so we watch top-level dirs only.
 	// This catches most edits (Claude writes to src/, etc.)
@@ -141,15 +161,32 @@ func (w *Watcher) UnwatchRepo(repoPath string) {
 		w.watcher.Remove(gitDir)
 	}
 	commonDir := resolveGitCommonDir(repoPath)
-	if commonDir != "" && commonDir != gitDir {
-		refsHeads := filepath.Join(commonDir, "refs", "heads")
-		w.watcher.Remove(refsHeads)
-		refsRemotes := filepath.Join(commonDir, "refs", "remotes")
-		w.watcher.Remove(refsRemotes)
-		entries, _ := os.ReadDir(refsRemotes)
+	if commonDir == "" {
+		commonDir = gitDir
+	}
+	if commonDir == "" {
+		return
+	}
+
+	w.watcher.Remove(filepath.Join(commonDir, "refs", "heads"))
+	w.watcher.Remove(filepath.Join(commonDir, "refs", "tags"))
+
+	refsRemotes := filepath.Join(commonDir, "refs", "remotes")
+	w.watcher.Remove(refsRemotes)
+	if entries, err := os.ReadDir(refsRemotes); err == nil {
 		for _, e := range entries {
 			if e.IsDir() {
 				w.watcher.Remove(filepath.Join(refsRemotes, e.Name()))
+			}
+		}
+	}
+
+	worktreesDir := filepath.Join(commonDir, "worktrees")
+	w.watcher.Remove(worktreesDir)
+	if entries, err := os.ReadDir(worktreesDir); err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				w.watcher.Remove(filepath.Join(worktreesDir, e.Name()))
 			}
 		}
 	}
@@ -188,6 +225,19 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 
 	// .git internal events
 	if strings.Contains(event.Name, ".git") {
+		// Self-extend: when a new directory appears under refs/remotes,
+		// refs/tags, or worktrees, watch it so its internal changes fire.
+		if event.Op&fsnotify.Create != 0 {
+			if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
+				switch {
+				case strings.Contains(event.Name, "refs/remotes"),
+					strings.Contains(event.Name, "/worktrees/"),
+					strings.HasSuffix(event.Name, "/worktrees"):
+					w.watcher.Add(event.Name)
+				}
+			}
+		}
+
 		switch {
 		case name == "HEAD":
 			w.emitDebounced("HEAD:"+dir, GitEventBranchChanged, 0)
@@ -197,10 +247,21 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 			w.emitDebounced("FETCH_HEAD:"+dir, GitEventStatusChanged, 500*time.Millisecond)
 		case name == "MERGE_HEAD" || name == "REBASE_HEAD" || name == "CHERRY_PICK_HEAD":
 			w.emitDebounced("merge:"+dir, GitEventStatusChanged, 0)
+		case name == "packed-refs":
+			w.emitDebounced("packed-refs:"+dir, GitEventStatusChanged, 500*time.Millisecond)
+		case name == "config":
+			w.emitDebounced("config:"+dir, GitEventStatusChanged, 500*time.Millisecond)
+		case name == "stash":
+			w.emitDebounced("stash:"+dir, GitEventStatusChanged, 0)
+		case strings.Contains(event.Name, "/worktrees"):
+			// External `git worktree add/remove/prune` — refresh sidebar.
+			w.emitDebounced("worktrees:"+dir, GitEventStatusChanged, 300*time.Millisecond)
 		case strings.Contains(event.Name, "refs/heads"):
 			w.emitDebounced("refs-heads:"+dir, GitEventStatusChanged, 500*time.Millisecond)
 		case strings.Contains(event.Name, "refs/remotes"):
 			w.emitDebounced("refs-remotes:"+dir, GitEventStatusChanged, 500*time.Millisecond)
+		case strings.Contains(event.Name, "refs/tags"):
+			w.emitDebounced("refs-tags:"+dir, GitEventStatusChanged, 500*time.Millisecond)
 		}
 		return
 	}

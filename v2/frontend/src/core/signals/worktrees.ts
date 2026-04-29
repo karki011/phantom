@@ -165,6 +165,7 @@ export async function createWorktreeForProject(
 export async function removeWorktreeById(
   projectId: string,
   worktreeId: string,
+  worktreePath: string,
 ): Promise<boolean> {
   const isActive = activeWorktreeId() === worktreeId;
 
@@ -181,7 +182,7 @@ export async function removeWorktreeById(
     }
   }
 
-  const ok = await removeWorktree(worktreeId);
+  const ok = await removeWorktree(worktreeId, worktreePath);
   if (!ok) {
     console.error('[worktrees] removeWorktree failed for', worktreeId);
     return false;
