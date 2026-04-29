@@ -62,6 +62,8 @@ export function ResourceMonitorPanel(): JSX.Element {
   const [terminals, setTerminals] = createSignal<TerminalInfo[]>([]);
   const [health, setHealth] = createSignal<HealthResponse | null>(null);
   const [now, setNow] = createSignal(Date.now());
+  const [confirmKillSessionId, setConfirmKillSessionId] = createSignal<string | null>(null);
+  const [confirmKillTerminalId, setConfirmKillTerminalId] = createSignal<string | null>(null);
 
   // ── Polling: terminals + health every 5s ──────────────────────────────────
 
@@ -222,15 +224,23 @@ export function ResourceMonitorPanel(): JSX.Element {
                       class={`${styles.actionButton} ${styles.actionButtonDanger}`}
                       title="Kill this session"
                       onClick={async () => {
-                        if (!confirm(`Kill ${provider} session in ${truncateCwd(session.cwd)}?`)) return;
+                        if (confirmKillSessionId() !== session.id) {
+                          setConfirmKillSessionId(session.id);
+                          setTimeout(() => {
+                            if (confirmKillSessionId() === session.id) setConfirmKillSessionId(null);
+                          }, 3000);
+                          return;
+                        }
                         try {
                           await killSession(session.id);
                         } catch (err) {
                           console.error('killSession failed', err);
+                        } finally {
+                          setConfirmKillSessionId(null);
                         }
                       }}
                     >
-                      Kill
+                      {confirmKillSessionId() === session.id ? 'Confirm?' : 'Kill'}
                     </button>
                   </span>
                 </div>
@@ -270,15 +280,23 @@ export function ResourceMonitorPanel(): JSX.Element {
                   style={{ 'margin-left': 'auto' }}
                   title="Kill this terminal"
                   onClick={async () => {
-                    if (!confirm(`Kill terminal ${term.id.slice(0, 12)}?`)) return;
+                    if (confirmKillTerminalId() !== term.id) {
+                      setConfirmKillTerminalId(term.id);
+                      setTimeout(() => {
+                        if (confirmKillTerminalId() === term.id) setConfirmKillTerminalId(null);
+                      }, 3000);
+                      return;
+                    }
                     try {
                       await destroyTerminal(term.id);
                     } catch (err) {
                       console.error('destroyTerminal failed', err);
+                    } finally {
+                      setConfirmKillTerminalId(null);
                     }
                   }}
                 >
-                  Kill
+                  {confirmKillTerminalId() === term.id ? 'Confirm?' : 'Kill'}
                 </button>
               </div>
             )}
