@@ -218,3 +218,57 @@ export const emptyState = style({
   textAlign: 'center',
   padding: vars.space.md,
 });
+
+// ── Action buttons ─────────────────────────────────────────────────────────
+
+export const actionButtonRow = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  marginLeft: 'auto',
+  flexShrink: 0,
+});
+
+export const actionButton = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  height: '22px',
+  padding: `0 ${vars.space.sm}`,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  fontWeight: 600,
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase',
+  color: vars.color.textSecondary,
+  background: 'transparent',
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.sm,
+  cursor: 'pointer',
+  outline: 'none',
+  flexShrink: 0,
+  whiteSpace: 'nowrap',
+  transition: `color ${vars.animation.fast} ease, background ${vars.animation.fast} ease, border-color ${vars.animation.fast} ease`,
+  ':hover': {
+    color: vars.color.textPrimary,
+    background: vars.color.bgHover,
+    borderColor: vars.color.accentMuted,
+  },
+  ':disabled': {
+    opacity: 0.4,
+    cursor: 'not-allowed',
+  },
+});
+
+export const actionButtonDanger = style({
+  color: vars.color.danger,
+  borderColor: vars.color.danger,
+  ':hover': {
+    color: vars.color.bgPrimary,
+    background: vars.color.danger,
+    borderColor: vars.color.danger,
+  },
+});
+
+// kept for backwards-compat (terminal row uses this too)
+export const killButton = actionButton;

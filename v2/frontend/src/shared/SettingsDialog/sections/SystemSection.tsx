@@ -2,10 +2,13 @@
 // Author: Subash Karki
 
 import { For } from 'solid-js';
-import { RotateCcw, Keyboard, Info } from 'lucide-solid';
+import { RotateCcw, Keyboard, Info, Compass } from 'lucide-solid';
 import { APP_NAME, APP_AUTHOR } from '../../../core/branding';
 import { buttonRecipe } from '../../../styles/recipes.css';
 import { setPreference } from '../../../core/bindings';
+import { setPref } from '../../../core/signals/preferences';
+import { startTour } from '../../../core/tour/tour';
+import { closeSettings } from '../../../core/signals/settings';
 import { showWarningToast } from '../../Toast/Toast';
 import * as styles from '../SettingsDialog.css';
 
@@ -28,8 +31,37 @@ export default function SystemSection() {
     }
   }
 
+  async function handleReplayTour() {
+    await setPref('tour_completed', '');
+    closeSettings();
+    setTimeout(() => startTour(), 200);
+  }
+
   return (
     <div class={styles.sectionRoot}>
+      {/* Replay Tour */}
+      <div class={styles.settingGroup}>
+        <span class={styles.settingLabel}>Guided Tour</span>
+        <div class={styles.settingRow}>
+          <div>
+            <div class={styles.settingLabel}>Replay Tour</div>
+            <div class={styles.settingDescription}>
+              Walk through the System interface again
+            </div>
+          </div>
+          <button
+            type="button"
+            class={buttonRecipe({ variant: 'ghost', size: 'sm' })}
+            onClick={handleReplayTour}
+          >
+            <span class={styles.inlineIconLabel}>
+              <Compass size={14} />
+              Start Tour
+            </span>
+          </button>
+        </div>
+      </div>
+
       {/* Re-initialize */}
       <div class={styles.settingGroup}>
         <span class={styles.settingLabel}>Danger Zone</span>

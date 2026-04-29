@@ -12,8 +12,11 @@ import {
 } from 'solid-js';
 import { Terminal as TerminalIcon } from 'lucide-solid';
 import { sessions } from '@/core/signals/sessions';
-import { listTerminals } from '@/core/bindings/terminal';
+import { killSession, pauseSession, resumeSession } from '@/core/bindings/sessions';
+import { listTerminals, destroyTerminal } from '@/core/bindings/terminal';
 import { healthCheck } from '@/core/bindings/health';
+import { addTabWithData } from '@/core/panes/signals';
+import { activeProvider, activeProviderLabel } from '@/core/signals/active-provider';
 import * as styles from './ResourceMonitorPanel.css';
 
 import type { JSX } from 'solid-js';
@@ -179,6 +182,57 @@ export function ResourceMonitorPanel(): JSX.Element {
                       {formatDuration(session.started_at!, now())}
                     </span>
                   </Show>
+                  <span class={styles.actionButtonRow}>
+                    <button
+                      type="button"
+                      class={styles.actionButton}
+                      title="Attach to this session in a new terminal pane"
+                      onClick={() => {
+                        const cwd = session.cwd ?? '';
+                        const resumeCmd = activeProvider()?.config?.commands?.resume?.replace('${SESSION_ID}', session.id)
+                          ?? `claude --resume ${session.id}`;
+                        addTabWithData('terminal', `${activeProviderLabel()} (attached)`, {
+                          cwd,
+                          command: resumeCmd,
+                        });
+                      }}
+                    >
+                      Attach
+                    </button>
+                    <button
+                      type="button"
+                      class={styles.actionButton}
+                      title={session.status === 'paused' ? 'Resume this session' : 'Pause this session (SIGTSTP)'}
+                      onClick={async () => {
+                        try {
+                          if (session.status === 'paused') {
+                            await resumeSession(session.id);
+                          } else {
+                            await pauseSession(session.id);
+                          }
+                        } catch (err) {
+                          console.error('pause/resume failed', err);
+                        }
+                      }}
+                    >
+                      {session.status === 'paused' ? 'Resume' : 'Pause'}
+                    </button>
+                    <button
+                      type="button"
+                      class={`${styles.actionButton} ${styles.actionButtonDanger}`}
+                      title="Kill this session"
+                      onClick={async () => {
+                        if (!confirm(`Kill ${provider} session in ${truncateCwd(session.cwd)}?`)) return;
+                        try {
+                          await killSession(session.id);
+                        } catch (err) {
+                          console.error('killSession failed', err);
+                        }
+                      }}
+                    >
+                      Kill
+                    </button>
+                  </span>
                 </div>
               );
             }}
@@ -210,6 +264,22 @@ export function ResourceMonitorPanel(): JSX.Element {
                 <span class={styles.terminalSize}>
                   {term.cols}x{term.rows}
                 </span>
+                <button
+                  type="button"
+                  class={`${styles.actionButton} ${styles.actionButtonDanger}`}
+                  style={{ 'margin-left': 'auto' }}
+                  title="Kill this terminal"
+                  onClick={async () => {
+                    if (!confirm(`Kill terminal ${term.id.slice(0, 12)}?`)) return;
+                    try {
+                      await destroyTerminal(term.id);
+                    } catch (err) {
+                      console.error('destroyTerminal failed', err);
+                    }
+                  }}
+                >
+                  Kill
+                </button>
               </div>
             )}
           </For>

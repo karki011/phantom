@@ -146,6 +146,7 @@ export function WindowDragStrip() {
             <button
               type="button"
               role="tab"
+              data-tour={`tab-${tab}`}
               aria-selected={activeTopTab() === tab}
               class={`${shellStyles.topTabSegment} ${activeTopTab() === tab ? shellStyles.topTabSegmentActive : ''}`}
               onClick={() => {
@@ -162,7 +163,7 @@ export function WindowDragStrip() {
         </div>
       </div>
 
-      <div class={shellStyles.windowDragStripCenter}>
+      <div class={shellStyles.windowDragStripCenter} data-tour="stats-center">
         <span class={shellStyles.sessionIndicator}>
           <span class={shellStyles.sessionDot} />
           {sessionLabel()}
@@ -192,27 +193,28 @@ export function WindowDragStrip() {
       <div class={shellStyles.windowDragStripRight}>
         <div class={shellStyles.headerActions}>
           <Tip label="Terminal" placement="bottom">
-            <button class={shellStyles.headerIconButton} type="button" aria-label="Open terminal" onClick={() => addTab('terminal')}>
+            <button data-tour="action-terminal" class={shellStyles.headerIconButton} type="button" aria-label="Open terminal" onClick={() => addTab('terminal')}>
               <TerminalIcon />
             </button>
           </Tip>
           <Tip label="Command Palette" placement="bottom">
-            <button class={shellStyles.headerIconButton} type="button" aria-label="Open command palette" onClick={() => toggleCommandPalette()}>
+            <button data-tour="action-cmdpalette" class={shellStyles.headerIconButton} type="button" aria-label="Open command palette" onClick={() => toggleCommandPalette()}>
               <CommandIcon />
             </button>
           </Tip>
           <Tip label="Docs" placement="bottom">
-            <button class={shellStyles.headerIconButton} type="button" aria-label="Open documentation" onClick={() => toggleDocs()}>
+            <button data-tour="action-docs" class={shellStyles.headerIconButton} type="button" aria-label="Open documentation" onClick={() => toggleDocs()}>
               <BookIcon />
             </button>
           </Tip>
           <Tip label="Daily Digest" placement="bottom">
-            <button class={shellStyles.headerIconButton} type="button" aria-label="Open daily digest" onClick={() => focusOrCreateTab('journal', 'Daily Digest')}>
+            <button data-tour="action-digest" class={shellStyles.headerIconButton} type="button" aria-label="Open daily digest" onClick={() => focusOrCreateTab('journal', 'Daily Digest')}>
               <JournalIcon />
             </button>
           </Tip>
           <Tip label="AI Command Center" placement="bottom">
             <button
+              data-tour="action-ai"
               class={`${shellStyles.headerIconButton} ${aiCommandCenterSeen() ? '' : headerIconPulse}`}
               type="button"
               aria-label="Open AI Command Center"
@@ -222,12 +224,12 @@ export function WindowDragStrip() {
             </button>
           </Tip>
           <Tip label="Settings" placement="bottom">
-            <button class={shellStyles.headerIconButton} type="button" aria-label="Open settings" onClick={() => openSettings()}>
+            <button data-tour="action-settings" class={shellStyles.headerIconButton} type="button" aria-label="Open settings" onClick={() => openSettings()}>
               <GearIcon />
             </button>
           </Tip>
           <Tip label="Shutdown" placement="bottom">
-            <button class={`${shellStyles.headerIconButton} ${shellStyles.headerIconButtonDanger}`} type="button" aria-label={`Shutdown ${APP_NAME}`} onClick={() => requestShutdown()}>
+            <button data-tour="action-shutdown" class={`${shellStyles.headerIconButton} ${shellStyles.headerIconButtonDanger}`} type="button" aria-label={`Shutdown ${APP_NAME}`} onClick={() => requestShutdown()}>
               <PowerIcon />
             </button>
           </Tip>
@@ -240,6 +242,7 @@ export function WindowDragStrip() {
           {(profile) => (
             <button
               type="button"
+              data-tour="hunter-button"
               class={gamStyles.statusHunterSection}
               title="Open Hunter Profile"
               aria-label="Open Hunter Profile"

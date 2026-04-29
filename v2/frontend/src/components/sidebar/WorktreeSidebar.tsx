@@ -96,6 +96,7 @@ export function WorktreeSidebar() {
   return (
     <div
       class={containerStyles.animatedContainer}
+      data-tour="sidebar-worktree"
       style={{ width: `${containerWidth()}px` }}
       data-mounted={mounted() ? 'true' : 'false'}
       data-resizing={isLeftResizing() ? 'true' : 'false'}
@@ -140,7 +141,7 @@ export function WorktreeSidebar() {
         </div>
 
         {/* Bottom actions */}
-        <div class={styles.actions}>
+        <div class={styles.actions} data-tour="sidebar-actions">
           <Tip label="Add project">
             <button
               class={`${styles.actionButton} ${styles.actionButtonCompact}`}

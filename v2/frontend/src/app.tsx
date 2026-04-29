@@ -11,7 +11,8 @@ import { bootstrapWards } from './core/signals/wards';
 import { bootstrapProjects } from './core/signals/projects';
 import { bootstrapApp, activeTopTab, activeWorktreeId } from './core/signals/app';
 import { worktreeMap } from './core/signals/worktrees';
-import { loadPref } from './core/signals/preferences';
+import { loadPref, getPref } from './core/signals/preferences';
+import { startTour } from './core/tour/tour';
 import { initTheme, initFontStyle } from './core/signals/theme';
 import { initTerminalTheme } from './core/terminal/theme-manager';
 import { initTerminalPrefs } from './core/terminal/registry';
@@ -74,6 +75,7 @@ export function App() {
 
     const onboardingDone = await loadPref('onboarding_completed');
     if (!onboardingDone) setShowOnboarding(true);
+    await loadPref('tour_completed');
 
     bootstrapApp();
     bootstrapSessions();
@@ -104,6 +106,12 @@ export function App() {
   createEffect(() => {
     const wtId = activeWorktreeId();
     if (wtId) untrack(() => switchWorkspace(wtId));
+  });
+
+  createEffect(() => {
+    if (ready() && !showOnboarding() && bootCeremonyDone() && !getPref('tour_completed')) {
+      setTimeout(() => startTour(), 800);
+    }
   });
 
 
