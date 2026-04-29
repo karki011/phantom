@@ -223,6 +223,13 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 	name := filepath.Base(event.Name)
 	dir := filepath.Dir(event.Name)
 
+	// Skip lockfiles and editor temp files anywhere in the tree. Git takes
+	// .lock briefly even for read-only ops (esp. inside linked worktrees),
+	// and reacting to it loops: refresh -> git lock -> fsnotify -> refresh.
+	if strings.HasSuffix(name, ".lock") || strings.HasSuffix(name, "~") || strings.HasPrefix(name, ".#") {
+		return
+	}
+
 	// .git internal events
 	if strings.Contains(event.Name, ".git") {
 		// Self-extend: when a new directory appears under refs/remotes,
@@ -263,11 +270,6 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 		case strings.Contains(event.Name, "refs/tags"):
 			w.emitDebounced("refs-tags:"+dir, GitEventStatusChanged, 500*time.Millisecond)
 		}
-		return
-	}
-
-	// Skip lock files and temp files
-	if strings.HasSuffix(name, ".lock") || strings.HasSuffix(name, "~") || strings.HasPrefix(name, ".#") {
 		return
 	}
 

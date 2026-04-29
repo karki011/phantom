@@ -153,8 +153,12 @@ const DiffPane = (props: DiffPaneProps) => {
         ignoreTrimWhitespace: false,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
-        // Start WITHOUT hideUnchangedRegions to rule it out as a cause
-        // Can be re-enabled once basic rendering is confirmed
+        hideUnchangedRegions: {
+          enabled: true,
+          contextLineCount: 3,
+          minimumLineCount: 3,
+          revealLineCount: 20,
+        },
       });
 
       console.log('[DiffPane] Diff editor widget created');
@@ -288,6 +292,11 @@ const DiffPane = (props: DiffPaneProps) => {
     const fp = filePath();
     const ws = workspaceId();
     if (fp && ws) {
+      // Unregister BEFORE openFileInEditor — otherwise it sees this DiffPane's
+      // stale entry in the registry and dispatches the open event to a pane
+      // that's about to be unmounted, so nothing renders. onCleanup runs too
+      // late to prevent the race.
+      unregisterOpenFile(fp);
       closeDiffTab();
       openFileInEditor({ workspaceId: ws, filePath: fp });
     }

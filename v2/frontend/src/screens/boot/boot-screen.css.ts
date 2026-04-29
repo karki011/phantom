@@ -28,12 +28,26 @@ export const overlay = style({
   inset: 0,
   zIndex: 9999,
   background: vars.color.bgPrimary,
+  display: 'grid',
+  placeItems: 'center',
+  overflow: 'hidden',
+  animation: `${fadeIn} 400ms ease-out`,
+});
+
+export const inner = style({
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  justifyContent: 'center',
-  overflow: 'hidden',
-  animation: `${fadeIn} 400ms ease-out`,
+  gap: vars.space.md,
+});
+
+export const viz = style({
+  position: 'relative',
+  width: '320px',
+  height: '320px',
+  display: 'grid',
+  placeItems: 'center',
+  flexShrink: 0,
 });
 
 export const overlayDismiss = style([
@@ -43,6 +57,15 @@ export const overlayDismiss = style([
     pointerEvents: 'none',
   },
 ]);
+
+export const markSlot = style({
+  position: 'absolute',
+  inset: 0,
+  display: 'grid',
+  placeItems: 'center',
+  pointerEvents: 'none',
+  zIndex: 1,
+});
 
 export const title = style({
   position: 'relative',

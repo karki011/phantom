@@ -1,7 +1,7 @@
 // PhantomOS v2 — Terminal display settings floating popover
 // Author: Subash Karki
 import { createSignal } from 'solid-js';
-import { getSession, getAllSessions } from '@/core/terminal/registry';
+import { getSession, getAllSessions, getTerminalUserPrefs } from '@/core/terminal/registry';
 import { setPref } from '@/core/signals/preferences';
 import { TERMINAL_THEMES, APP_THEME_DEFAULT_ID } from '@/core/terminal/themes';
 import { activeTerminalThemeId, applyTerminalTheme } from '@/core/terminal/theme-manager';
@@ -12,7 +12,8 @@ interface TerminalSettingsProps {
   onClose: () => void;
 }
 
-const DEFAULTS = { fontSize: 12, fontWeight: 300, fontWeightBold: 400, lineHeight: 1.18, letterSpacing: 0.2 };
+const DEFAULT_FONT = 'Hack';
+const DEFAULTS = { fontSize: 12, fontWeight: 300, fontWeightBold: 400, lineHeight: 1.18, letterSpacing: 0.2, brightness: 100 };
 
 export default function TerminalSettings(props: TerminalSettingsProps) {
   const session = () => getSession(props.paneId);
@@ -44,7 +45,7 @@ export default function TerminalSettings(props: TerminalSettingsProps) {
   const [fontWeightBold, setFontWeightBold] = createSignal(Number(opts()?.fontWeightBold ?? DEFAULTS.fontWeightBold));
   const [lineHeight, setLineHeight] = createSignal(opts()?.lineHeight ?? DEFAULTS.lineHeight);
   const [letterSpacing, setLetterSpacing] = createSignal(opts()?.letterSpacing ?? DEFAULTS.letterSpacing);
-  const [brightness, setBrightness] = createSignal(90);
+  const [brightness, setBrightness] = createSignal(getTerminalUserPrefs().brightness ?? DEFAULTS.brightness);
 
   const cycleFont = (dir: number) => {
     const next = (fontIdx() + dir + FONTS.length) % FONTS.length;
@@ -70,21 +71,25 @@ export default function TerminalSettings(props: TerminalSettingsProps) {
 
   const applyBrightness = (pct: number) => {
     setBrightness(pct);
-    const ratio = pct / 100;
-    const fg = `rgb(${Math.round(255 * ratio)}, ${Math.round(255 * ratio)}, ${Math.round(255 * ratio)})`;
     for (const s of getAllSessions()) {
-      s.terminal.options.theme = { ...s.terminal.options.theme, foreground: fg };
+      s.wrapper.style.filter = pct === 100 ? '' : `brightness(${pct}%)`;
     }
     void setPref('terminal_brightness', String(pct));
   };
 
   const reset = () => {
+    const fontTarget = Math.max(0, FONTS.indexOf(DEFAULT_FONT as (typeof FONTS)[number]));
+    if (fontIdx() !== fontTarget) cycleFont(fontTarget - fontIdx());
+    if (themeIdx() !== 0) {
+      setThemeIdx(0);
+      applyTerminalTheme(APP_THEME_DEFAULT_ID);
+    }
     set(setFontSize, 'fontSize')(DEFAULTS.fontSize);
     set(setFontWeight, 'fontWeight')(DEFAULTS.fontWeight);
     set(setFontWeightBold, 'fontWeightBold')(DEFAULTS.fontWeightBold);
     set(setLineHeight, 'lineHeight')(DEFAULTS.lineHeight);
     set(setLetterSpacing, 'letterSpacing')(DEFAULTS.letterSpacing);
-    applyBrightness(90);
+    applyBrightness(DEFAULTS.brightness);
   };
 
   type Row = { label: string; value: () => number; fmt: (v: number) => string; dec: () => void; inc: () => void };

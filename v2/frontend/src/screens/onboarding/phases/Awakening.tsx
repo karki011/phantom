@@ -5,6 +5,7 @@ import { playSound } from '../../../core/audio/engine';
 import { speakSystem, VOICE_TIMING } from '../config/voice';
 import { setPref } from '../../../core/signals/preferences';
 import { GlassPanel } from '../../../shared/GlassPanel/GlassPanel';
+import { PhantomMark } from '../../../shared/PhantomMark/PhantomMark';
 import { buttonRecipe } from '../../../styles/recipes.css';
 import * as styles from '../styles/awakening.css';
 
@@ -87,6 +88,9 @@ export function Awakening(props: AwakeningProps) {
 
   return (
     <div class={styles.awakeningContainer}>
+      <div class={styles.markBlock}>
+        <PhantomMark size={72} pulse active={authorityPhase() === 'granted'} />
+      </div>
       <div class={styles.summaryList}>
         <For each={SUMMARY_LINES}>
           {(line, index) => (

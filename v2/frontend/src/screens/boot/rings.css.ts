@@ -11,9 +11,8 @@ const breathe = keyframes({
 export const ringsContainer = style({
   position: 'absolute',
   inset: 0,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
+  display: 'grid',
+  placeItems: 'center',
   pointerEvents: 'none',
   zIndex: 0,
 });

@@ -23,6 +23,8 @@ let userPrefs: {
   brightness?: number;
 } = {};
 
+export const getTerminalUserPrefs = (): Readonly<typeof userPrefs> => userPrefs;
+
 export async function initTerminalPrefs(): Promise<void> {
   const [family, size, weight, bold, lh, ls, br] = await Promise.all([
     loadPref('terminal_fontFamily'),
@@ -87,15 +89,7 @@ export function createSession(
     cursorBlink: true,
     cursorStyle: 'bar',
     allowTransparency: true,
-    theme: (() => {
-      const base = opts?.theme ?? {};
-      if (userPrefs.brightness && userPrefs.brightness !== 100) {
-        const r = userPrefs.brightness / 100;
-        const fg = `rgb(${Math.round(255 * r)}, ${Math.round(255 * r)}, ${Math.round(255 * r)})`;
-        return { ...base, foreground: fg };
-      }
-      return base;
-    })(),
+    theme: opts?.theme ?? {},
     scrollback: 500,
   });
 
@@ -113,6 +107,9 @@ export function createSession(
 
   const wrapper = document.createElement('div');
   wrapper.style.cssText = 'width:100%;height:100%;';
+  if (userPrefs.brightness && userPrefs.brightness !== 100) {
+    wrapper.style.filter = `brightness(${userPrefs.brightness}%)`;
+  }
 
   // Open into offscreen first so xterm initialises without needing visible dimensions
   getOffscreen().appendChild(wrapper);

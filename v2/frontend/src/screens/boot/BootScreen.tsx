@@ -2,12 +2,18 @@
 
 import { createSignal, onMount, onCleanup } from 'solid-js';
 import { APP_NAME_SPACED } from '@/core/branding';
-import { speak } from '@/core/audio/engine';
 import { getGitUserName, getPreference } from '@/core/bindings';
 import { useBootAudio } from './use-boot-audio';
 import { BootRings } from './BootRings';
 import { getGreeting } from './boot-greetings';
+import { PhantomMark } from '@/shared/PhantomMark/PhantomMark';
 import * as styles from './boot-screen.css';
+
+const PHASE_SUBTITLE: Record<'greeting' | 'waiting' | 'done', string> = {
+  greeting: 'Awakening Phantom Engine…',
+  waiting: 'Initializing core services…',
+  done: '',
+};
 
 interface BootScreenProps {
   ready: () => boolean;
@@ -36,7 +42,8 @@ export function BootScreen(props: BootScreenProps) {
     setGreeting(getGreeting(name));
 
     await sleep(400);
-    await speak(greeting(), 0.88, 0.8);
+    audio.ghostCall();
+    await sleep(900);
     setRingProgress(1);
 
     setPhase('waiting');
@@ -68,15 +75,22 @@ export function BootScreen(props: BootScreenProps) {
 
   return (
     <div class={dismissing() ? styles.overlayDismiss : styles.overlay}>
-      <BootRings progress={ringProgress()} total={3} />
+      <div class={styles.inner}>
+        <div class={styles.title}>{APP_NAME_SPACED}</div>
 
-      <div class={styles.title}>{APP_NAME_SPACED}</div>
+        <div class={styles.viz}>
+          <BootRings progress={ringProgress()} total={3} />
+          <div class={styles.markSlot}>
+            <PhantomMark size={96} pulse active={phase() === 'done'} />
+          </div>
+        </div>
 
-      <div
-        class={styles.subtitle}
-        classList={{ [styles.subtitleSuccess]: phase() === 'done' }}
-      >
-        {phase() === 'done' ? greeting() : 'Initializing...'}
+        <div
+          class={styles.subtitle}
+          classList={{ [styles.subtitleSuccess]: phase() === 'done' }}
+        >
+          {phase() === 'done' ? greeting() : PHASE_SUBTITLE[phase()]}
+        </div>
       </div>
     </div>
   );

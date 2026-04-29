@@ -249,8 +249,15 @@ export function ChangesView() {
   // Auto-load when active worktree changes
   createEffect(on(activeWorktreeId, () => { refreshStatus(); }));
 
-  // Backend-driven refresh
-  onWailsEvent('git:status', refreshStatus);
+  // Backend-driven refresh — coalesce burst events into a single status call.
+  let gitStatusTimer: ReturnType<typeof setTimeout> | null = null;
+  onWailsEvent('git:status', () => {
+    if (gitStatusTimer) clearTimeout(gitStatusTimer);
+    gitStatusTimer = setTimeout(() => {
+      gitStatusTimer = null;
+      refreshStatus();
+    }, 250);
+  });
 
   // ── Actions ────────────────────────────────────────────────────────────────
 

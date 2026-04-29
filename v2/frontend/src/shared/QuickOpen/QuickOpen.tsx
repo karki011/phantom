@@ -199,9 +199,6 @@ export function QuickOpen() {
                       </svg>
                       <div class={styles.resultText}>
                         <span class={styles.fileName}>{entry.name}</span>
-                        <Show when={dirPath(entry)}>
-                          <span class={styles.filePath}>{dirPath(entry)}</span>
-                        </Show>
                       </div>
                     </div>
                   )}

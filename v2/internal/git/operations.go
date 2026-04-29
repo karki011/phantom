@@ -20,7 +20,12 @@ const defaultTimeout = 30 * time.Second
 // runGit executes a git command in the given repo path with context-based timeout.
 // It returns trimmed stdout on success, or an error containing stderr context.
 func runGit(ctx context.Context, repoPath string, args ...string) (string, error) {
-	cmdArgs := append([]string{"-C", repoPath}, args...)
+	// -c core.optionalLocks=false prevents read-only commands like `git status`
+	// from rewriting .git/index to refresh stat cache. Without this, every
+	// status call triggers fsnotify on .git/index, which re-emits git:status,
+	// which re-runs status — an infinite refresh loop. Same flag VS Code and
+	// JetBrains use for their git integrations.
+	cmdArgs := append([]string{"-c", "core.optionalLocks=false", "-C", repoPath}, args...)
 
 	// Apply default timeout if the context has no deadline
 	if _, ok := ctx.Deadline(); !ok {

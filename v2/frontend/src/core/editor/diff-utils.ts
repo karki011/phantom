@@ -4,7 +4,7 @@
 // Helpers for opening file diffs in dedicated pane tabs.
 // All diff-related entry points should route through showFileDiff().
 
-import { addTabWithData, setActivePaneInTab } from '@/core/panes/signals';
+import { addTabWithData, setActivePaneInTab, tabs } from '@/core/panes/signals';
 import { getOpenFileEntry, registerOpenFile } from './open-file-registry';
 import { detectLanguage } from './language';
 import type { DiffPaneData } from './types';
@@ -34,10 +34,16 @@ export const showFileDiff = (options: {
     readOnly,
   } = options;
 
+  // Only reuse an existing entry if it's already a diff pane. If the file is
+  // open in a regular EditorPane (Files tab / Cmd+P), we still want to open a
+  // new diff tab — clicking from the Changes list should always show the diff.
   const existing = getOpenFileEntry(filePath);
   if (existing) {
-    setActivePaneInTab(existing.paneId);
-    return;
+    const owningTab = tabs().find((t) => existing.paneId in t.panes);
+    if (owningTab?.panes[existing.paneId]?.kind === 'diff') {
+      setActivePaneInTab(existing.paneId);
+      return;
+    }
   }
 
   const label = `Diff: ${filePath.split('/').pop() ?? filePath}`;

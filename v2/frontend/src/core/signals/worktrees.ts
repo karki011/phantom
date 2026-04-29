@@ -106,7 +106,16 @@ export async function bootstrapWorktrees(): Promise<void> {
   onWailsEvent('worktree:created', () => refreshAllWorktrees());
   onWailsEvent('worktree:removed', () => refreshAllWorktrees());
   onWailsEvent('worktree:updated', () => refreshAllWorktrees());
-  onWailsEvent('git:status', () => refreshAllWorktrees());
+  // git:status fires per .git/index fsnotify event — coalesce bursts into a
+  // single refresh so one user edit doesn't trigger N ListWorktrees calls.
+  let gitStatusTimer: ReturnType<typeof setTimeout> | null = null;
+  onWailsEvent('git:status', () => {
+    if (gitStatusTimer) clearTimeout(gitStatusTimer);
+    gitStatusTimer = setTimeout(() => {
+      gitStatusTimer = null;
+      refreshAllWorktrees();
+    }, 250);
+  });
   onWailsEvent('git:branch-changed', () => refreshAllWorktrees());
 }
 

@@ -22,6 +22,13 @@ export const awakeningContainer = style({
   minHeight: '100vh',
 });
 
+export const markBlock = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginBottom: vars.space.sm,
+});
+
 export const summaryList = style({
   display: 'flex',
   flexDirection: 'column',
