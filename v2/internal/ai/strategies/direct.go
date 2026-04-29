@@ -17,6 +17,11 @@ func (d *DirectStrategy) ID() string { return "direct" }
 // Name returns a human-readable name.
 func (d *DirectStrategy) Name() string { return "Direct Execution" }
 
+// Description returns a brief explanation of what this strategy does.
+func (d *DirectStrategy) Description() string {
+	return "Fast-path strategy for simple, low-risk tasks. Passes graph context straight to the executor."
+}
+
 // ShouldActivate returns a score indicating how well this strategy fits.
 func (d *DirectStrategy) ShouldActivate(a TaskAssessment) (float64, string) {
 	switch a.Complexity {

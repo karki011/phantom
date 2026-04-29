@@ -54,7 +54,10 @@ const activityCount = createMemo(() => recentCommits().length);
 // Right sidebar UI state
 const [rightSidebarWidth, setRightSidebarWidth] = createSignal(300);
 const [rightSidebarCollapsed, setRightSidebarCollapsed] = createSignal(false);
-const [rightSidebarTab, setRightSidebarTab] = createSignal<'files' | 'changes' | 'activity'>('files');
+// True while the user is dragging the resize handle — used to pause the
+// collapse/expand width animation so per-pixel drag doesn't ease.
+const [isRightResizing, setIsRightResizing] = createSignal(false);
+const [rightSidebarTab, setRightSidebarTab] = createSignal<'files' | 'changes' | 'alerts' | 'activity'>('files');
 
 export {
   fileTree,
@@ -75,6 +78,8 @@ export {
   setRightSidebarWidth,
   rightSidebarCollapsed,
   setRightSidebarCollapsed,
+  isRightResizing,
+  setIsRightResizing,
   rightSidebarTab,
   setRightSidebarTab,
   filesCount,

@@ -367,6 +367,26 @@ func (s *Service) AppendWorkLog(date, line string) {
 	_ = os.WriteFile(s.journalPath(date), []byte(serializeJournal(entry)), 0o644)
 }
 
+// ReplaceWorkLog replaces the entire Work Log section for a date with the
+// supplied lines, preserving all other sections. If no journal file exists
+// for the date, one is created with the given lines and empty other sections.
+func (s *Service) ReplaceWorkLog(date string, lines []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ensureDir()
+
+	entry := s.GetEntry(date)
+	if entry.Date == "" {
+		entry.Date = date
+	}
+	if lines == nil {
+		entry.WorkLog = []string{}
+	} else {
+		entry.WorkLog = lines
+	}
+	return os.WriteFile(s.journalPath(date), []byte(serializeJournal(entry)), 0o644)
+}
+
 // stripTimePrefix removes a leading "HH:MM " timestamp from a work log line
 // so we can compare the semantic content for deduplication.
 func stripTimePrefix(s string) string {

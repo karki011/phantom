@@ -26,15 +26,10 @@ process.stdin.on('end', async () => {
     const sessionId = data?.session_id || '';
     if (!sessionId) process.exit(0);
 
-    // Fire-and-forget outcome recording
-    await fetch(`${API}/api/orchestrator/record-outcome`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId,
-        timestamp: new Date().toISOString(),
-      }),
-    }).catch(() => {});
+    // Stop events have no decision context (goal/strategy/complexity/risk),
+    // so we don't POST to /api/orchestrator/record-outcome here. Decisions are
+    // recorded by the orchestrator at the point a strategy is selected; this
+    // hook only reports liveness for the Stop event.
 
     fetch(`${API}/api/hook-health/report`, {
       method: 'POST',

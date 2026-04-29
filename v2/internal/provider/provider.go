@@ -212,4 +212,8 @@ type Provider interface {
 	// HealthCheck performs a full liveness probe: binary exists, CLI responds,
 	// credentials are available.
 	HealthCheck(ctx context.Context) HealthStatus
+
+	// ExecutablePath resolves the absolute path to the provider's CLI binary
+	// on the current PATH. Returns an error if the binary is not installed.
+	ExecutablePath() (string, error)
 }

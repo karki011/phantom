@@ -7,45 +7,63 @@ package integration
 import (
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 )
 
-const serverName = "phantom-ai"
+const (
+	serverName    = "phantom-ai"
+	mcpBinaryName = "phantom-mcp"
+)
 
-// findStdioEntryPath locates the MCP stdio-entry.ts file.
-// Walks up from the running binary to find the phantom-os root,
-// then falls back to well-known locations.
-func findStdioEntryPath() string {
-	const relPath = "packages/server/src/mcp/stdio-entry.ts"
-
-	// Strategy 1: Walk up from the running binary.
+// findMCPBinaryPath locates the compiled phantom-mcp Go binary.
+// Walks up from the running binary toward known build/bin locations.
+func findMCPBinaryPath() string {
+	// Strategy 1: Walk up from the running binary, checking common output dirs.
 	if exe, err := os.Executable(); err == nil {
 		dir := filepath.Dir(exe)
-		for i := 0; i < 6; i++ {
-			candidate := filepath.Join(dir, relPath)
+		for i := 0; i < 8; i++ {
+			candidates := []string{
+				filepath.Join(dir, mcpBinaryName),
+				filepath.Join(dir, "bin", mcpBinaryName),
+				filepath.Join(dir, "build", "bin", mcpBinaryName),
+			}
+			for _, c := range candidates {
+				if _, err := os.Stat(c); err == nil {
+					return c
+				}
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+
+	// Strategy 2: Well-known v2 source roots relative to home.
+	home, _ := os.UserHomeDir()
+	roots := []string{
+		filepath.Join(home, "phantom-os", "v2"),
+		filepath.Join(home, "Phantom-OS", "v2"),
+		filepath.Join(home, "CZ", "phantom-os", "v2"),
+	}
+	for _, root := range roots {
+		for _, sub := range []string{"build/bin", "bin"} {
+			candidate := filepath.Join(root, sub, mcpBinaryName)
 			if _, err := os.Stat(candidate); err == nil {
 				return candidate
 			}
-			dir = filepath.Dir(dir)
 		}
 	}
 
-	// Strategy 2: Well-known locations relative to home.
-	home, _ := os.UserHomeDir()
-	candidates := []string{
-		filepath.Join(home, "phantom-os"),
-		filepath.Join(home, "Phantom-OS"),
-		filepath.Join(home, "CZ", "phantom-os"),
-	}
-	for _, root := range candidates {
-		entry := filepath.Join(root, relPath)
-		if _, err := os.Stat(entry); err == nil {
-			return entry
-		}
+	// Strategy 3: PATH lookup.
+	if p, err := exec.LookPath(mcpBinaryName); err == nil {
+		return p
 	}
 
-	// Fallback: best-guess path.
-	return filepath.Join(home, "phantom-os", relPath)
+	// Fallback: best-guess path under v2 build dir.
+	return filepath.Join(home, "phantom-os", "v2", "build", "bin", mcpBinaryName)
 }
 
 // RegisterPhantomMCP registers the phantom-ai MCP server globally.
@@ -58,11 +76,11 @@ func RegisterPhantomMCP() error {
 		return err
 	}
 
-	entryPath := findStdioEntryPath()
+	binaryPath := findMCPBinaryPath()
 
 	serverDef := map[string]any{
-		"command": "npx",
-		"args":    []any{"tsx", entryPath},
+		"command": binaryPath,
+		"args":    []any{},
 		"env": map[string]any{
 			"PHANTOM_API_PORT": "3849",
 		},
@@ -77,13 +95,11 @@ func RegisterPhantomMCP() error {
 		servers = make(map[string]any)
 	}
 
-	// Check if already registered with the same entry path (skip write).
+	// Check if already registered with the same binary path (skip write).
 	if existing, ok := servers[serverName].(map[string]any); ok {
-		if args, ok := existing["args"].([]any); ok && len(args) >= 2 {
-			if args[1] == entryPath {
-				slog.Info("🧠 MCP already registered with correct path", "path", mcpPath)
-				return ensureEnabledInClaudeSettings(home)
-			}
+		if cmd, ok := existing["command"].(string); ok && cmd == binaryPath {
+			slog.Info("🧠 MCP already registered with correct path", "path", mcpPath)
+			return ensureEnabledInClaudeSettings(home)
 		}
 	}
 
@@ -92,7 +108,7 @@ func RegisterPhantomMCP() error {
 	if err := writeJSONFile(mcpPath, config); err != nil {
 		return err
 	}
-	slog.Info("🧠 MCP registered", "path", mcpPath, "entry", entryPath)
+	slog.Info("🧠 MCP registered", "path", mcpPath, "binary", binaryPath)
 
 	return ensureEnabledInClaudeSettings(home)
 }

@@ -15,8 +15,19 @@ import (
 type Strategy interface {
 	ID() string
 	Name() string
+	Description() string
 	ShouldActivate(assessment TaskAssessment) (score float64, reason string)
 	Enrich(message string, assessment TaskAssessment, graphCtx string) string
+}
+
+// StrategyInfo is a read-only snapshot of a registered strategy used by
+// metadata-introspection callers (e.g. phantom_orchestrator_strategies).
+type StrategyInfo struct {
+	ID          string
+	Name        string
+	Description string
+	Enabled     bool
+	Priority    int
 }
 
 // registryEntry pairs a strategy with its enabled flag and static priority.
@@ -48,6 +59,25 @@ func (r *Registry) SetPerformanceStore(ps *PerformanceStore) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.perfStore = ps
+}
+
+// GetAll returns metadata for every registered strategy in registration order.
+// Used by introspection callers that need to enumerate available strategies
+// without invoking selection.
+func (r *Registry) GetAll() []StrategyInfo {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]StrategyInfo, 0, len(r.strategies))
+	for _, e := range r.strategies {
+		out = append(out, StrategyInfo{
+			ID:          e.strategy.ID(),
+			Name:        e.strategy.Name(),
+			Description: e.strategy.Description(),
+			Enabled:     e.enabled,
+			Priority:    e.priority,
+		})
+	}
+	return out
 }
 
 // scored is an internal type for sorting candidates during selection.

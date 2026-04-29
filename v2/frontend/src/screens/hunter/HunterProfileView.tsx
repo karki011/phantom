@@ -85,7 +85,7 @@ const LIFETIME_CARDS: StatCardDef[] = [
 
 // ── Tabs ────────────────────────────────────────────────────────────────────
 
-type TabKey = 'profile' | 'achievements' | 'quests' | 'stats';
+type TabKey = 'profile' | 'achievements' | 'stats';
 
 // ── Component ───────────────────────────────────────────────────────────────
 
@@ -142,7 +142,7 @@ export function HunterProfileView(): JSX.Element {
 
       {/* Tab navigation */}
       <div class={gStyles.tabList} role="tablist">
-        {(['profile', 'achievements', 'quests', 'stats'] as TabKey[]).map((tab) => (
+        {(['profile', 'achievements', 'stats'] as TabKey[]).map((tab) => (
           <button
             type="button"
             class={`${gStyles.tabTrigger} ${activeTab() === tab ? gStyles.tabTriggerActive : ''}`}
@@ -274,16 +274,12 @@ export function HunterProfileView(): JSX.Element {
               </>
             )}
           </Show>
+          <DailyQuestsPanel />
         </Show>
 
         {/* ── Achievements Tab ─────────────────────────────────────────── */}
         <Show when={activeTab() === 'achievements'}>
           <AchievementsGrid />
-        </Show>
-
-        {/* ── Quests Tab ───────────────────────────────────────────────── */}
-        <Show when={activeTab() === 'quests'}>
-          <DailyQuestsPanel />
         </Show>
 
         {/* ── Stats Tab (same as profile lifetime + heatmap) ───────────── */}

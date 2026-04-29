@@ -1,4 +1,4 @@
-.PHONY: dev build clean test lint sqlc frontend-install frontend-build frontend-typecheck go-build go-test go-lint ci
+.PHONY: dev build clean test lint sqlc frontend-install frontend-build frontend-typecheck go-build go-test go-lint ci mcp-build
 
 # Development
 dev:
@@ -21,6 +21,10 @@ frontend-typecheck:
 # Go
 go-build:
 	go build -o build/bin/phantomos .
+
+# Standalone MCP stdio binary spawned by Claude Code.
+mcp-build:
+	go build -o build/bin/phantom-mcp ./cmd/phantom-mcp
 
 go-test:
 	go test ./... -v -race

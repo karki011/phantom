@@ -28,3 +28,19 @@ export async function getPlansForWorktree(
     return [];
   }
 }
+
+/**
+ * Read a plan markdown file by absolute path. Errors propagate so callers
+ * can surface them — unlike readFileContents which silently returns ''.
+ */
+export const readPlanFile = async (absPath: string): Promise<string> => {
+  const result = await App()?.ReadPlanFile(absPath);
+  return result ?? '';
+};
+
+/**
+ * Write a plan markdown file by absolute path. Errors propagate.
+ */
+export const writePlanFile = async (absPath: string, content: string): Promise<void> => {
+  await App()?.WritePlanFile(absPath, content);
+};

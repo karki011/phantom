@@ -26,9 +26,10 @@ func (a *App) journalWorktreeEvent(action, branch string) {
 }
 
 // CreateWorktree creates a git worktree for the given project and branch,
-// then persists the workspace record in the database.
-func (a *App) CreateWorktree(projectId, branch, baseBranch string) (*db.Workspace, error) {
-	log.Info("app/CreateWorktree: called", "projectId", projectId, "branch", branch, "baseBranch", baseBranch)
+// then persists the workspace record in the database. ticketUrl is optional
+// (empty string stores SQL NULL); only stored if it parses as http(s)://.
+func (a *App) CreateWorktree(projectId, branch, baseBranch, ticketUrl string) (*db.Workspace, error) {
+	log.Info("app/CreateWorktree: called", "projectId", projectId, "branch", branch, "baseBranch", baseBranch, "ticketUrl", ticketUrl)
 	// Look up the project to get repoPath and name.
 	q := db.New(a.DB.Reader)
 	proj, err := q.GetProject(a.ctx, projectId)
@@ -63,6 +64,14 @@ func (a *App) CreateWorktree(projectId, branch, baseBranch string) (*db.Workspac
 	id := uuid.New().String()
 	now := time.Now().Unix()
 
+	// Only persist a ticket URL when it looks like an http(s) link — keeps
+	// junk values (or accidental whitespace) out of the column.
+	trimmedTicket := strings.TrimSpace(ticketUrl)
+	ticket := sql.NullString{}
+	if strings.HasPrefix(trimmedTicket, "http://") || strings.HasPrefix(trimmedTicket, "https://") {
+		ticket = sql.NullString{String: trimmedTicket, Valid: true}
+	}
+
 	params := db.CreateWorkspaceParams{
 		ID:           id,
 		ProjectID:    projectId,
@@ -72,6 +81,7 @@ func (a *App) CreateWorktree(projectId, branch, baseBranch string) (*db.Workspac
 		WorktreePath: sql.NullString{String: targetDir, Valid: true},
 		BaseBranch:   sql.NullString{String: baseBranch, Valid: true},
 		IsActive:     sql.NullInt64{Int64: 1, Valid: true},
+		TicketUrl:    ticket,
 		CreatedAt:    now,
 	}
 

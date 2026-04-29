@@ -1,31 +1,38 @@
 // PhantomOS v2 — Right sidebar with Files, Changes, and Activity tabs
 // Author: Subash Karki
 
-import { Show, createEffect, on } from 'solid-js';
+import { Show, createEffect, on, onMount, createSignal } from 'solid-js';
 import { Tabs } from '@kobalte/core/tabs';
+import { ChevronsRight } from 'lucide-solid';
+import { Tip } from '@/shared/Tip/Tip';
 import { activeWorktreeId } from '@/core/signals/app';
 import {
   rightSidebarWidth,
   rightSidebarCollapsed,
+  setRightSidebarCollapsed,
+  isRightResizing,
   rightSidebarTab,
   setRightSidebarTab,
   filesCount,
   changesCount,
   activityCount,
 } from '@/core/signals/files';
+import * as railStyles from '@/styles/sidebar-rail.css';
+import * as containerStyles from '@/styles/sidebar-animated-container.css';
 import {
   prStatus, setPrStatus,
   ciRuns, setCiRuns,
   isCreatingPr,
   ghAvailable, setGhAvailable,
 } from '@/core/signals/activity';
-import { isGhCliAvailable, watchWorktree } from '@/core/bindings';
+import { getCiRuns, getPrStatus, isGhCliAvailable, watchWorktree } from '@/core/bindings';
 import { onWailsEvent } from '@/core/events';
 import type { PrStatus, CiRun } from '@/core/types';
 import { FilesView } from './FilesView';
 import { ChangesView } from './ChangesView';
 import { GitActivityPanel } from './GitActivityPanel';
 import { RightResizeHandle } from './RightResizeHandle';
+import { RightRail } from './RightRail';
 import { WardAlerts } from '@/shared/WardAlerts/WardAlerts';
 import { wardAlertCount } from '@/core/signals/wards';
 import * as styles from '@/styles/right-sidebar.css';
@@ -37,9 +44,29 @@ function setIfChanged<T>(current: () => T, setter: (v: T) => void, next: T) {
 let ghChecked = false;
 
 export function RightSidebar() {
+  // Gate the width transition until after the first frame so the initial
+  // render doesn't animate from 0.
+  const [mounted, setMounted] = createSignal(false);
+  onMount(() => {
+    requestAnimationFrame(() => setMounted(true));
+  });
+
   // Tell the Go poller which worktree to watch whenever it changes.
+  // Clear stale PR/CI data from the previous worktree so the panel doesn't
+  // display the outgoing project's checks while waiting for the next push,
+  // and kick off an immediate fetch so the Activity tab populates without
+  // waiting for the next poll tick.
   createEffect(on(activeWorktreeId, (wtId) => {
-    if (wtId) watchWorktree(wtId);
+    setPrStatus(null);
+    setCiRuns(null);
+    if (!wtId) return;
+    watchWorktree(wtId);
+    const requestedId = wtId;
+    void Promise.all([getPrStatus(wtId), getCiRuns(wtId)]).then(([pr, runs]) => {
+      if (activeWorktreeId() !== requestedId) return;
+      setPrStatus(pr);
+      setCiRuns(runs ?? []);
+    }).catch(() => { /* poller will retry */ });
   }));
 
   // One-shot gh CLI availability check.
@@ -56,11 +83,27 @@ export function RightSidebar() {
     setIfChanged(ciRuns, setCiRuns, runs);
   });
 
+  const collapsed = () => rightSidebarCollapsed();
+  const containerWidth = () => (collapsed() ? 44 : rightSidebarWidth());
+
   return (
-    <Show when={activeWorktreeId() && !rightSidebarCollapsed()}>
+    <Show when={activeWorktreeId()}>
+    <div
+      class={containerStyles.animatedContainer}
+      style={{ width: `${containerWidth()}px` }}
+      data-mounted={mounted() ? 'true' : 'false'}
+      data-resizing={isRightResizing() ? 'true' : 'false'}
+    >
+      {/* Rail layer (collapsed) — always mounted, fades in/out */}
+      <div class={containerStyles.fadeLayer} data-active={collapsed() ? 'true' : 'false'} aria-hidden={!collapsed()}>
+        <RightRail />
+      </div>
+
+      {/* Expanded layer — always mounted, fades in/out */}
+      <div class={containerStyles.fadeLayer} data-active={!collapsed() ? 'true' : 'false'} aria-hidden={collapsed()}>
       <div
         class={styles.rightSidebar}
-        style={{ width: `${rightSidebarWidth()}px` }}
+        style={{ width: '100%' }}
       >
         <RightResizeHandle />
 
@@ -112,6 +155,17 @@ export function RightSidebar() {
                 />
               </Show>
             </Tabs.Trigger>
+            <Tip label="Collapse sidebar (Cmd+Shift+B)" placement="left">
+              <button
+                type="button"
+                class={railStyles.railChevron}
+                style={{ 'margin-left': 'auto', 'align-self': 'center' }}
+                onClick={() => setRightSidebarCollapsed(true)}
+                aria-label="Collapse sidebar"
+              >
+                <ChevronsRight size={14} />
+              </button>
+            </Tip>
           </Tabs.List>
 
           <Tabs.Content value="files" class={styles.tabPanel}>
@@ -131,6 +185,8 @@ export function RightSidebar() {
           </Tabs.Content>
         </Tabs>
       </div>
+      </div>
+    </div>
     </Show>
   );
 }

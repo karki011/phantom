@@ -14,6 +14,7 @@ import { getMonaco, DEFAULT_EDITOR_OPTIONS } from '@/core/editor/loader';
 import { registerPhantomTheme, buildMonacoTheme } from '@/core/editor/theme-bridge';
 import { detectLanguage } from '@/core/editor/language';
 import { readFileContents, writeFileContents } from '@/core/bindings/editor';
+import { readPlanFile, writePlanFile } from '@/core/bindings/plans';
 import { getPreference } from '@/core/bindings';
 import { BlameManager } from '@/core/editor/blame';
 import {
@@ -50,6 +51,13 @@ interface EditorPaneProps {
   filePath?: string;
   /** Initial workspace from addTabWithData */
   workspaceId?: string;
+  /**
+   * True when filePath is an absolute path to a plan markdown file
+   * (~/.claude/plans or worktree/.claude/plans or worktree/docs/superpowers/plans).
+   * Routes I/O through readPlanFile/writePlanFile instead of the workspace-scoped
+   * readFileContents, since global plans live outside any workspace root.
+   */
+  isPlanFile?: boolean;
   /** Optional line to jump to */
   line?: number;
   /** Optional column to jump to */
@@ -169,7 +177,12 @@ export default function EditorPane(props: EditorPaneProps) {
     const initialPath = props.filePath as string;
     console.log('[EditorPane] onMount, filePath:', JSON.stringify(initialPath));
     if (initialPath) {
-      await openFileTab(initialPath, props.line as number, props.column as number);
+      await openFileTab(
+        initialPath,
+        props.line as number,
+        props.column as number,
+        !!props.isPlanFile,
+      );
       requestAnimationFrame(() => editorInstance?.layout());
     }
   });
@@ -184,7 +197,12 @@ export default function EditorPane(props: EditorPaneProps) {
       if (!filePath || loading()) return;
       if (files().length > 0) return;
       console.log('[EditorPane] reactive filePath arrived:', filePath);
-      void openFileTab(filePath, props.line as number, props.column as number).then(() => {
+      void openFileTab(
+        filePath,
+        props.line as number,
+        props.column as number,
+        !!props.isPlanFile,
+      ).then(() => {
         requestAnimationFrame(() => editorInstance?.layout());
       });
     },
@@ -303,7 +321,12 @@ export default function EditorPane(props: EditorPaneProps) {
   // File tab management
   // ---------------------------------------------------------------------------
 
-  const openFileTab = async (filePath: string, line?: number, column?: number): Promise<void> => {
+  const openFileTab = async (
+    filePath: string,
+    line?: number,
+    column?: number,
+    isPlanFile = false,
+  ): Promise<void> => {
     if (!monacoRef || !editorInstance) return;
 
     // Check if already open in THIS pane
@@ -327,8 +350,22 @@ export default function EditorPane(props: EditorPaneProps) {
       return;
     }
 
-    // Read file content from Go backend
-    const content = await readFileContents(workspaceId(), filePath);
+    // Read file content from Go backend.
+    // Plan files live outside any workspace root (e.g. ~/.claude/plans/) so we
+    // route them through readPlanFile, which validates against an allow-list of
+    // plan directories and propagates errors instead of silently returning ''.
+    let content: string;
+    if (isPlanFile) {
+      try {
+        content = await readPlanFile(filePath);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error('[EditorPane] readPlanFile failed:', err);
+        content = `// Failed to open plan: ${message}\n// Path: ${filePath}\n`;
+      }
+    } else {
+      content = await readFileContents(workspaceId(), filePath);
+    }
     const language = detectLanguage(filePath);
     const label = filePath.split('/').pop() ?? filePath;
 
@@ -355,6 +392,7 @@ export default function EditorPane(props: EditorPaneProps) {
       dirty: false,
       originalContent: content,
       viewState: null,
+      isPlanFile,
     };
 
     const newIndex = files().length;
@@ -633,7 +671,19 @@ export default function EditorPane(props: EditorPaneProps) {
     if (!model) return;
 
     const content = model.getValue();
-    const success = await writeFileContents(file.workspaceId, file.filePath, content);
+
+    let success: boolean;
+    if (file.isPlanFile) {
+      try {
+        await writePlanFile(file.filePath, content);
+        success = true;
+      } catch (err) {
+        console.error('[EditorPane] writePlanFile failed:', err);
+        success = false;
+      }
+    } else {
+      success = await writeFileContents(file.workspaceId, file.filePath, content);
+    }
 
     if (success) {
       // Update the original content baseline — file is now clean
@@ -641,8 +691,11 @@ export default function EditorPane(props: EditorPaneProps) {
         i === activeFileIndex() ? { ...f, dirty: false, originalContent: content } : f,
       ));
 
-      // Invalidate blame cache so next activation re-fetches fresh data
-      blameManager?.invalidateCache(file.workspaceId, file.filePath);
+      // Invalidate blame cache so next activation re-fetches fresh data.
+      // Plan files live outside any workspace, so the blame cache key is moot.
+      if (!file.isPlanFile) {
+        blameManager?.invalidateCache(file.workspaceId, file.filePath);
+      }
     }
   };
 

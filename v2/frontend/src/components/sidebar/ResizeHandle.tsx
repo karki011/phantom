@@ -8,6 +8,7 @@ import {
   leftSidebarCollapsed,
   setLeftSidebarCollapsed,
   persistSidebarWidth,
+  setIsLeftResizing,
 } from '@/core/signals/worktrees';
 
 const MIN_WIDTH = 180;
@@ -28,6 +29,7 @@ export function ResizeHandle() {
   function onPointerUp() {
     if (!dragging) return;
     dragging = false;
+    setIsLeftResizing(false);
     document.removeEventListener('pointermove', onPointerMove);
     document.removeEventListener('pointerup', onPointerUp);
     document.body.style.cursor = '';
@@ -37,6 +39,7 @@ export function ResizeHandle() {
   function onPointerDown(e: PointerEvent) {
     e.preventDefault();
     dragging = true;
+    setIsLeftResizing(true);
     startX = e.clientX;
     startWidth = leftSidebarWidth();
     document.addEventListener('pointermove', onPointerMove);

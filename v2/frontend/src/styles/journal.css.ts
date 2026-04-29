@@ -955,6 +955,17 @@ export const journalSections = style({
   gap: vars.space.lg,
 });
 
+// Scroll container for the body of Morning Brief / Work Log / End of Day.
+// Caps each section so a long brief or busy work log doesn't push the others
+// off-screen, and gives a thin scrollbar inside the section.
+export const sectionScroll = style({
+  maxHeight: '280px',
+  overflowY: 'auto',
+  paddingRight: vars.space.xs,
+  scrollbarWidth: 'thin',
+  scrollbarColor: `${vars.color.border} transparent`,
+});
+
 export const emptyWorkLog = style({
   fontSize: '0.75rem',
   color: vars.color.textDisabled,

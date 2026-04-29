@@ -477,18 +477,20 @@ export default function JournalPane() {
               locked={!!entry().morning_generated_at}
               timestamp={entry().morning_generated_at}
             />
-            <Show
-              when={entry().morning_brief}
-              fallback={
-                <GenerateButton
-                  label="Generate Morning Brief"
-                  generating={generatingMorning()}
-                  onClick={handleGenerateMorning}
-                />
-              }
-            >
-              <ContentBlock content={entry().morning_brief} variant="brief" />
-            </Show>
+            <div class={styles.sectionScroll}>
+              <Show
+                when={entry().morning_brief}
+                fallback={
+                  <GenerateButton
+                    label="Generate Morning Brief"
+                    generating={generatingMorning()}
+                    onClick={handleGenerateMorning}
+                  />
+                }
+              >
+                <ContentBlock content={entry().morning_brief} variant="brief" />
+              </Show>
+            </div>
           </div>
 
           <div class={styles.sectionDivider} />
@@ -500,16 +502,18 @@ export default function JournalPane() {
               icon={() => <Clock size={14} />}
               locked
             />
-            <Show
-              when={filteredWorkLog().length > 0}
-              fallback={
-                <div class={styles.emptyWorkLog}>
-                  No activity logged yet today
-                </div>
-              }
-            >
-              <WorkLogContent lines={filteredWorkLog()} />
-            </Show>
+            <div class={styles.sectionScroll}>
+              <Show
+                when={filteredWorkLog().length > 0}
+                fallback={
+                  <div class={styles.emptyWorkLog}>
+                    No activity logged yet today
+                  </div>
+                }
+              >
+                <WorkLogContent lines={filteredWorkLog()} />
+              </Show>
+            </div>
           </div>
 
           <div class={styles.sectionDivider} />
@@ -522,18 +526,20 @@ export default function JournalPane() {
               locked={!!entry().eod_generated_at}
               timestamp={entry().eod_generated_at}
             />
-            <Show
-              when={entry().end_of_day_recap}
-              fallback={
-                <GenerateButton
-                  label="Generate End of Day Recap"
-                  generating={generatingEod()}
-                  onClick={handleGenerateEod}
-                />
-              }
-            >
-              <ContentBlock content={entry().end_of_day_recap} variant="eod" />
-            </Show>
+            <div class={styles.sectionScroll}>
+              <Show
+                when={entry().end_of_day_recap}
+                fallback={
+                  <GenerateButton
+                    label="Generate End of Day Recap"
+                    generating={generatingEod()}
+                    onClick={handleGenerateEod}
+                  />
+                }
+              >
+                <ContentBlock content={entry().end_of_day_recap} variant="eod" />
+              </Show>
+            </div>
           </div>
 
           <div class={styles.sectionDivider} />

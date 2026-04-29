@@ -61,12 +61,18 @@ function FileStatusIcon(props: { status: string }) {
 
 // ── Individual file row ───────────────────────────────────────────────────────
 
+function basename(path: string): string {
+  const trimmed = path.replace(/\/+$/, '');
+  const last = trimmed.split('/').pop();
+  return last && last.length > 0 ? last : trimmed || path;
+}
+
 function StagedFileRow(props: {
   file: FileStatus;
   onUnstage: (path: string) => void;
   onFileClick: (file: FileStatus) => void;
 }) {
-  const name = () => props.file.path.split('/').pop() ?? props.file.path;
+  const name = () => basename(props.file.path);
   const absolutePath = () => {
     const base = getBasePath();
     return base ? `${base}/${props.file.path}` : props.file.path;
@@ -126,18 +132,21 @@ function UnstagedFileRow(props: {
   onStage: (path: string) => void;
   onFileClick: (file: FileStatus) => void;
 }) {
-  const name = () => props.file.path.split('/').pop() ?? props.file.path;
+  const name = () => basename(props.file.path);
   const absolutePath = () => {
     const base = getBasePath();
     return base ? `${base}/${props.file.path}` : props.file.path;
   };
   const isUntracked = () => props.file.status === '?';
+  const isDirectory = () => props.file.path.endsWith('/');
 
   return (
     <ContextMenu>
       <ContextMenu.Trigger as="div" class={styles.fileRow} onClick={() => props.onFileClick(props.file)}>
         <FileStatusIcon status={props.file.status} />
-        <span class={styles.fileRowName} title={props.file.path}>{name()}</span>
+        <span class={styles.fileRowName} title={props.file.path}>
+          {name()}{isDirectory() ? '/' : ''}
+        </span>
         <div class={styles.fileRowActions}>
           <Tip label="Discard changes" placement="left">
             <button

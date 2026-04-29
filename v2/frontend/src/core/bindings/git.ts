@@ -13,9 +13,14 @@ export async function getProjectBranches(projectId: string): Promise<string[]> {
   }
 }
 
-export async function createWorktree(projectId: string, branch: string, baseBranch: string): Promise<Workspace | null> {
+export async function createWorktree(
+  projectId: string,
+  branch: string,
+  baseBranch: string,
+  ticketUrl: string = '',
+): Promise<Workspace | null> {
   try {
-    const raw = (await App()?.CreateWorktree(projectId, branch, baseBranch)) ?? null;
+    const raw = (await App()?.CreateWorktree(projectId, branch, baseBranch, ticketUrl)) ?? null;
     return raw ? normalize<Workspace>(raw) : null;
   } catch {
     return null;

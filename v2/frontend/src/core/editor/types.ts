@@ -22,6 +22,12 @@ export interface EditorFileState {
   originalContent: string;
   /** Monaco editor view state for save/restore on tab switch */
   viewState: monaco.editor.ICodeEditorViewState | null;
+  /**
+   * True when filePath is an absolute path under an allow-listed plan
+   * directory. Routes I/O through readPlanFile/writePlanFile instead of
+   * the workspace-scoped readFileContents/writeFileContents.
+   */
+  isPlanFile?: boolean;
 }
 
 // ---------------------------------------------------------------------------

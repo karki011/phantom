@@ -95,3 +95,23 @@ func (a *App) SendChatMessage(conversationID, content, model string) *chat.Messa
 
 	return nil
 }
+
+// CompareChatMessage fans the given prompt out to every provider in providerIDs
+// in parallel. Each provider's response streams on the "chat:compare:event"
+// channel tagged with that provider's ID; a final aggregate event with an
+// empty provider ID signals that every branch has completed.
+//
+// Compare is ephemeral — no message rows are written. Returns immediately;
+// errors during the run flow through the same event channel as "error" events.
+func (a *App) CompareChatMessage(conversationID, prompt string, providerIDs []string) {
+	if a.Chat == nil {
+		slog.Warn("CompareChatMessage: chat service not initialised")
+		return
+	}
+
+	go func() {
+		if err := a.Chat.Compare(a.ctx, conversationID, prompt, providerIDs); err != nil {
+			slog.Error("CompareChatMessage failed", "err", err)
+		}
+	}()
+}

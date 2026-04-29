@@ -107,6 +107,11 @@ export function TaskOverlay(props: TaskOverlayProps) {
 
   const showPlanTab = () => allPlans().length > 0 || planGenerating();
   const hasContent = () => total() > 0 || planActive() || allPlans().length > 0 || planGenerating();
+  // When the panel expands with no tasks but a Plan tab is visible, land
+  // the user on Plan instead of an empty Tasks pane. Read once per mount
+  // by Kobalte's <Tabs defaultValue>, which is fine because the Tabs
+  // component re-mounts each time the Collapsible is re-opened.
+  const defaultTab = () => (total() === 0 && showPlanTab() ? 'plan' : 'tasks');
 
   return (
     <Show when={hasContent()}>
@@ -124,7 +129,7 @@ export function TaskOverlay(props: TaskOverlayProps) {
               <button class={styles.minimizeButton} onClick={() => setMinimized(true)}>−</button>
             </div>
             <Collapsible.Content>
-              <Tabs defaultValue="tasks">
+              <Tabs defaultValue={defaultTab()}>
                 <Tabs.List class={styles.tabsList}>
                   <Tabs.Trigger class={styles.tabTrigger} value="tasks">
                     Tasks
@@ -177,7 +182,7 @@ export function TaskOverlay(props: TaskOverlayProps) {
                           </div>
                           <button
                             class={styles.openButton}
-                            onClick={() => addTabWithData('editor', plan.title, { filePath: plan.filePath })}
+                            onClick={() => addTabWithData('editor', plan.title, { filePath: plan.filePath, isPlanFile: true })}
                           >
                             <FileText size={10} />
                             Open in Editor

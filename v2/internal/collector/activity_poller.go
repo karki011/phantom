@@ -400,17 +400,27 @@ func (p *ActivityPoller) parseLine(line []byte, sessionID string) *activityEvent
 		return nil
 	}
 
+	// Claude Code JSONL nests the actual payload under .message — unwrap so
+	// helpers below can read content/role/input without a root-level wrapper.
+	body := raw
+	if msg, ok := raw["message"].(map[string]interface{}); ok {
+		body = msg
+	}
+
+	// Use the outer envelope's type as the routing hint when present.
+	outerType, _ := raw["type"].(string)
+
 	now := time.Now().UnixMilli()
 
-	// Check for tool use.
-	if isToolUse(raw) {
-		toolName := extractToolName(raw)
-		detail := extractToolDetail(raw, toolName)
+	// Check for tool use (assistant messages with tool_use content blocks).
+	if isToolUse(body) {
+		toolName := extractToolName(body)
+		detail := extractToolDetail(body, toolName)
 		icon, ok := knownTools[toolName]
 		if !ok {
 			icon = "🔧" // MCP or unknown tool
 		}
-		return &activityEvent{
+		ev := &activityEvent{
 			SessionID: sessionID,
 			Timestamp: now,
 			Type:      fmt.Sprintf("tool:%s", strings.ToLower(toolName)),
@@ -418,43 +428,42 @@ func (p *ActivityPoller) parseLine(line []byte, sessionID string) *activityEvent
 			Category:  "tool",
 			Detail:    detail,
 		}
-	}
 
-	// Check for git operations in Bash tool output.
-	if content := extractBashContent(raw); content != "" {
-		if match := gitCmdRegex.FindStringSubmatch(content); len(match) > 1 {
-			return &activityEvent{
-				SessionID: sessionID,
-				Timestamp: now,
-				Type:      fmt.Sprintf("git:%s", match[1]),
-				Icon:      "🔀",
-				Category:  "git",
-				Detail:    truncate(content, 200),
+		// If the tool is Bash and the command is a git op, emit a git event instead.
+		if toolName == "Bash" {
+			if cmd := extractBashContent(body); cmd != "" {
+				if match := gitCmdRegex.FindStringSubmatch(cmd); len(match) > 1 {
+					ev.Type = fmt.Sprintf("git:%s", match[1])
+					ev.Icon = "🔀"
+					ev.Category = "git"
+					ev.Detail = truncate(cmd, 200)
+				}
 			}
 		}
+		return ev
 	}
 
 	// Check for user messages.
-	if isUserMessage(raw) {
+	if outerType == "user" || isUserMessage(body) {
 		return &activityEvent{
 			SessionID: sessionID,
 			Timestamp: now,
 			Type:      "message:user",
 			Icon:      "💬",
 			Category:  "message",
-			Detail:    truncateStringField(raw, "content", 120),
+			Detail:    truncateStringField(body, "content", 120),
 		}
 	}
 
 	// Check for assistant responses.
-	if isAssistantMessage(raw) {
+	if outerType == "assistant" || isAssistantMessage(body) {
 		return &activityEvent{
 			SessionID: sessionID,
 			Timestamp: now,
 			Type:      "message:assistant",
 			Icon:      "🤖",
 			Category:  "response",
-			Detail:    truncateStringField(raw, "content", 120),
+			Detail:    truncateStringField(body, "content", 120),
 		}
 	}
 

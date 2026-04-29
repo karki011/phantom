@@ -8,6 +8,7 @@ import {
   rightSidebarCollapsed,
   setRightSidebarCollapsed,
   setRightSidebarWidth,
+  setIsRightResizing,
 } from '@/core/signals/files';
 
 const MIN_WIDTH = 200;
@@ -29,6 +30,7 @@ export function RightResizeHandle() {
   function onPointerUp() {
     if (!dragging) return;
     dragging = false;
+    setIsRightResizing(false);
     document.removeEventListener('pointermove', onPointerMove);
     document.removeEventListener('pointerup', onPointerUp);
     document.body.style.cursor = '';
@@ -38,6 +40,7 @@ export function RightResizeHandle() {
   function onPointerDown(e: PointerEvent) {
     e.preventDefault();
     dragging = true;
+    setIsRightResizing(true);
     startX = e.clientX;
     startWidth = rightSidebarWidth();
     document.addEventListener('pointermove', onPointerMove);

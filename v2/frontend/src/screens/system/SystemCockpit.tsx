@@ -19,37 +19,33 @@ export function SystemCockpit(): JSX.Element {
 
   return (
     <div class={styles.cockpitContainer}>
-      <div class={styles.cockpitHeader}>
-        <div class={styles.cockpitHeaderRow}>
-          <Gauge size={28} class={styles.cockpitIcon} />
-          <div class={styles.cockpitTitle}>System Cockpit</div>
-          <span class={styles.cockpitBadge}>Live</span>
+      <Show when={cockpitView() === 'system'}>
+        <div class={styles.cockpitHeader}>
+          <div class={styles.cockpitHeaderRow}>
+            <Gauge size={28} class={styles.cockpitIcon} />
+            <div class={styles.cockpitTitle}>System Cockpit</div>
+            <span class={styles.cockpitBadge}>Live</span>
 
-          {/* View toggle when gamification is enabled */}
-          <Show when={gamificationEnabled()}>
-            <button
-              type="button"
-              class={styles.cockpitBadge}
-              style={{
-                cursor: 'pointer',
-                'margin-left': 'auto',
-                border: 'none',
-              }}
-              onClick={() => setCockpitView((v) => v === 'system' ? 'hunter' : 'system')}
-            >
-              {cockpitView() === 'system' ? 'Hunter Profile' : 'System View'}
-            </button>
-          </Show>
-        </div>
-        <p class={styles.cockpitSubtitle}>
-          <Show
-            when={cockpitView() === 'system'}
-            fallback="Your hunter stats, achievements, quests, and activity."
-          >
+            <Show when={gamificationEnabled()}>
+              <button
+                type="button"
+                class={styles.cockpitBadge}
+                style={{
+                  cursor: 'pointer',
+                  'margin-left': 'auto',
+                  border: 'none',
+                }}
+                onClick={() => setCockpitView('hunter')}
+              >
+                Hunter Profile
+              </button>
+            </Show>
+          </div>
+          <p class={styles.cockpitSubtitle}>
             Live system metrics, session analytics, resource monitoring, and project overview.
-          </Show>
-        </p>
-      </div>
+          </p>
+        </div>
+      </Show>
 
       <Show
         when={cockpitView() === 'system'}

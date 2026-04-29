@@ -1,8 +1,9 @@
 // PhantomOS v2 — Left sidebar: project/worktree navigation
 // Author: Subash Karki
 
-import { Show, For, onMount, createSignal } from 'solid-js';
-import { FolderPlus, GitBranch, HardDriveDownload, Settings2 } from 'lucide-solid';
+import { For, onMount, createSignal } from 'solid-js';
+import { LeftRail } from './LeftRail';
+import { ChevronsLeft, FolderPlus, GitBranch, HardDriveDownload, Settings2 } from 'lucide-solid';
 import { TextField } from '@kobalte/core/text-field';
 import { Tip } from '@/shared/Tip/Tip';
 import { PhantomModal, phantomModalStyles } from '@/shared/PhantomModal/PhantomModal';
@@ -11,12 +12,15 @@ import { CloneDialog } from '@/shared/CloneDialog/CloneDialog';
 import { ScanResultsDialog } from '@/shared/ScanResultsDialog/ScanResultsDialog';
 import { ManageProjectsDialog } from '@/shared/ManageProjectsDialog/ManageProjectsDialog';
 import * as styles from '@/styles/sidebar.css';
+import * as containerStyles from '@/styles/sidebar-animated-container.css';
 import {
   filteredProjects,
   sidebarSearch,
   setSidebarSearch,
   leftSidebarWidth,
   leftSidebarCollapsed,
+  setLeftSidebarCollapsed,
+  isLeftResizing,
   bootstrapWorktrees,
 } from '@/core/signals/worktrees';
 import { addProject, browseDirectory, cloneRepository, isGitRepo, initGitRepo } from '@/core/bindings';
@@ -26,8 +30,12 @@ import { ProjectSection } from './ProjectSection';
 import { ResizeHandle } from './ResizeHandle';
 
 export function WorktreeSidebar() {
+  // Gate the width transition until after the first frame so the initial
+  // render (boot with sidebar already expanded) doesn't animate from 0.
+  const [mounted, setMounted] = createSignal(false);
   onMount(() => {
     bootstrapWorktrees();
+    requestAnimationFrame(() => setMounted(true));
   });
 
 
@@ -82,14 +90,29 @@ export function WorktreeSidebar() {
     await bootstrapWorktrees();
   }
 
+  const collapsed = () => leftSidebarCollapsed();
+  const containerWidth = () => (collapsed() ? 44 : leftSidebarWidth());
+
   return (
-    <Show when={!leftSidebarCollapsed()}>
+    <div
+      class={containerStyles.animatedContainer}
+      style={{ width: `${containerWidth()}px` }}
+      data-mounted={mounted() ? 'true' : 'false'}
+      data-resizing={isLeftResizing() ? 'true' : 'false'}
+    >
+      {/* Rail layer (collapsed) — always mounted, fades in/out */}
+      <div class={containerStyles.fadeLayer} data-active={collapsed() ? 'true' : 'false'} aria-hidden={!collapsed()}>
+        <LeftRail />
+      </div>
+
+      {/* Expanded layer — always mounted, fades in/out */}
+      <div class={containerStyles.fadeLayer} data-active={!collapsed() ? 'true' : 'false'} aria-hidden={collapsed()}>
       <div
         class={styles.sidebar}
-        style={{ width: `${leftSidebarWidth()}px` }}
+        style={{ width: '100%' }}
       >
-        {/* Search input */}
-        <div class={styles.searchWrapper}>
+        {/* Search input + collapse chevron */}
+        <div class={styles.searchWrapper} style={{ display: 'flex', 'align-items': 'center', gap: '6px' }}>
           <TextField value={sidebarSearch()} onChange={setSidebarSearch} class={styles.searchInput}>
             <TextField.Input
               class={styles.searchInputField}
@@ -97,6 +120,16 @@ export function WorktreeSidebar() {
               aria-label="Search projects and branches"
             />
           </TextField>
+          <Tip label="Collapse sidebar (Cmd+B)">
+            <button
+              type="button"
+              class={`${styles.actionButton} ${styles.actionButtonCompact}`}
+              onClick={() => setLeftSidebarCollapsed(true)}
+              aria-label="Collapse sidebar"
+            >
+              <ChevronsLeft size={14} />
+            </button>
+          </Tip>
         </div>
 
         {/* Project list */}
@@ -182,6 +215,7 @@ export function WorktreeSidebar() {
           </div>
         </PhantomModal>
       </div>
-    </Show>
+      </div>
+    </div>
   );
 }

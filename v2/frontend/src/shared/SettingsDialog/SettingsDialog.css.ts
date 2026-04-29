@@ -86,6 +86,7 @@ export const themeGrid = style({
 });
 
 export const themeSwatch = style({
+  position: 'relative',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
@@ -103,24 +104,50 @@ export const themeSwatch = style({
   },
 });
 
-globalStyle(`${themeSwatch} > span:first-child`, {
-  width: '32px',
-  height: '32px',
-  borderRadius: vars.radius.full,
-  border: `2px solid ${vars.color.border}`,
-  transition: `all ${vars.animation.fast} ease`,
-});
-
-globalStyle(`${themeSwatch}:hover > span:first-child`, {
+globalStyle(`${themeSwatch}:hover > div:first-child`, {
   borderColor: vars.color.borderHover,
   boxShadow: `0 0 0 2px ${vars.color.bgHover}`,
 });
 
-export const themeSwatchActive = style({});
+export const themeSwatchActive = style({
+  background: `color-mix(in srgb, ${vars.color.accent} 12%, transparent)`,
+  outline: `1px solid color-mix(in srgb, ${vars.color.accent} 55%, transparent)`,
+  outlineOffset: '-1px',
+});
 
-globalStyle(`${themeSwatchActive} > span:first-child`, {
+globalStyle(`${themeSwatchActive} > div:first-child`, {
   borderColor: vars.color.accent,
-  boxShadow: `0 0 8px ${vars.color.accentGlow}`,
+  boxShadow: `0 0 0 2px ${vars.color.accent}, 0 0 12px ${vars.color.accentGlow}`,
+});
+
+globalStyle(`${themeSwatchActive} > span`, {
+  color: vars.color.accent,
+  fontWeight: 600,
+});
+
+export const themeSwatchCheck = style({
+  position: 'absolute',
+  top: '4px',
+  right: '4px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '14px',
+  height: '14px',
+  borderRadius: vars.radius.full,
+  background: vars.color.accent,
+  color: vars.color.textInverse,
+});
+
+export const themeSelectedLabel = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textSecondary,
+});
+
+globalStyle(`${themeSelectedLabel} > strong`, {
+  color: vars.color.accent,
+  fontWeight: 600,
 });
 
 export const themeSwatchLabel = style({
@@ -193,7 +220,20 @@ export const sectionRoot = style({
 export const settingGroup = style({
   display: 'flex',
   flexDirection: 'column',
-  gap: vars.space.sm,
+  gap: vars.space.md,
+  padding: vars.space.xl,
+  background: vars.color.bgTertiary,
+  borderRadius: vars.radius.lg,
+  border: `1px solid color-mix(in srgb, ${vars.color.border} 60%, transparent)`,
+});
+
+export const settingGroupHeader = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textSecondary,
+  textTransform: 'uppercase',
+  letterSpacing: '0.12em',
+  fontWeight: 400,
 });
 
 export const themeSwatchCircle = style({

@@ -29,6 +29,7 @@ const (
 	planMaxAge     = 48 * time.Hour
 	planReadLimit  = 4096 // 4KB — enough for matching + initial task counts
 	planCacheTTL   = 10 * time.Second
+	planFileMaxBytes = 1 << 20 // 1 MiB cap for ReadPlanFile / WritePlanFile
 )
 
 // planCacheEntry holds a cached scan result for a worktree.
@@ -197,4 +198,95 @@ func sortPlansByModTime(plans []PlanFile) {
 			plans[j], plans[j-1] = plans[j-1], plans[j]
 		}
 	}
+}
+
+// validatePlanPath checks an absolute path against the allow-list of plan
+// roots used by GetPlansForWorktree. Accepted shapes:
+//   <...>/.claude/plans/<name>.md
+//   <...>/docs/superpowers/plans/<name>.md
+// Returns the cleaned absolute path or an error.
+func validatePlanPath(absPath string) (string, error) {
+	if !filepath.IsAbs(absPath) {
+		return "", fmt.Errorf("plan path must be absolute: %s", absPath)
+	}
+	clean := filepath.Clean(absPath)
+	if !strings.HasSuffix(strings.ToLower(clean), ".md") {
+		return "", fmt.Errorf("plan path must end with .md: %s", clean)
+	}
+	parent := filepath.Dir(clean)
+	grand := filepath.Dir(parent)
+
+	if filepath.Base(parent) == "plans" && filepath.Base(grand) == ".claude" {
+		return clean, nil
+	}
+	if filepath.Base(parent) == "plans" &&
+		filepath.Base(grand) == "superpowers" &&
+		filepath.Base(filepath.Dir(grand)) == "docs" {
+		return clean, nil
+	}
+	return "", fmt.Errorf("plan path not under allowed roots (.claude/plans or docs/superpowers/plans): %s", clean)
+}
+
+// ReadPlanFile reads a plan markdown file by absolute path. The path must
+// resolve to one of the allow-listed plan directories. Used by the Plan tab
+// "Open in Editor" action — those paths originate from GetPlansForWorktree
+// and are absolute, including global plans under ~/.claude/plans/ that live
+// outside any workspace root.
+func (a *App) ReadPlanFile(absPath string) (string, error) {
+	slog.Info("app/ReadPlanFile: called", "absPath", absPath)
+
+	clean, err := validatePlanPath(absPath)
+	if err != nil {
+		slog.Error("app/ReadPlanFile: invalid path", "absPath", absPath, "err", err)
+		return "", err
+	}
+
+	info, err := os.Stat(clean)
+	if err != nil {
+		slog.Error("app/ReadPlanFile: stat failed", "absPath", clean, "err", err)
+		return "", err
+	}
+	if info.Size() > planFileMaxBytes {
+		slog.Error("app/ReadPlanFile: file too large", "absPath", clean, "size", info.Size())
+		return "", fmt.Errorf("plan file too large: %d bytes (max %d)", info.Size(), planFileMaxBytes)
+	}
+
+	data, err := os.ReadFile(clean)
+	if err != nil {
+		slog.Error("app/ReadPlanFile: read failed", "absPath", clean, "err", err)
+		return "", err
+	}
+
+	slog.Info("app/ReadPlanFile: success", "absPath", clean, "bytes", len(data))
+	return string(data), nil
+}
+
+// WritePlanFile writes a plan markdown file by absolute path. The path must
+// resolve to one of the allow-listed plan directories. Parent directories
+// are created if missing.
+func (a *App) WritePlanFile(absPath, content string) error {
+	slog.Info("app/WritePlanFile: called", "absPath", absPath, "bytes", len(content))
+
+	clean, err := validatePlanPath(absPath)
+	if err != nil {
+		slog.Error("app/WritePlanFile: invalid path", "absPath", absPath, "err", err)
+		return err
+	}
+	if len(content) > planFileMaxBytes {
+		err := fmt.Errorf("plan content too large: %d bytes (max %d)", len(content), planFileMaxBytes)
+		slog.Error("app/WritePlanFile: oversized payload", "absPath", clean, "err", err)
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(clean), 0755); err != nil {
+		slog.Error("app/WritePlanFile: mkdir failed", "dir", filepath.Dir(clean), "err", err)
+		return err
+	}
+	if err := os.WriteFile(clean, []byte(content), 0644); err != nil {
+		slog.Error("app/WritePlanFile: write failed", "absPath", clean, "err", err)
+		return err
+	}
+
+	slog.Info("app/WritePlanFile: success", "absPath", clean)
+	return nil
 }

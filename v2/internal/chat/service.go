@@ -1,5 +1,5 @@
 // Package chat provides the chat service for Phantom OS v2.
-// It manages conversations and messages, spawns the claude CLI
+// It manages conversations and messages, spawns the active provider's CLI
 // for streaming responses, and emits events to the frontend.
 // Author: Subash Karki
 package chat
@@ -13,12 +13,14 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
 
 	"github.com/subashkarki/phantom-os-v2/internal/db"
+	"github.com/subashkarki/phantom-os-v2/internal/provider"
 )
 
 const (
@@ -27,19 +29,29 @@ const (
 )
 
 // Service manages chat conversations, message persistence, and streaming
-// responses via the claude CLI.
+// responses via the active provider's CLI.
+//
+// `prov` is the single active provider used by SendMessage (normal chat).
+// `reg` is the full provider registry used by Compare (fan-out across
+// multiple providers). The single-provider path does not depend on `reg`,
+// so callers may pass nil during tests that exercise SendMessage only.
 type Service struct {
 	queries   *db.Queries
 	writer    *sql.DB
+	prov      provider.Provider
+	reg       *provider.Registry
 	emitEvent func(name string, data interface{})
 }
 
-// NewService creates a chat Service backed by the given DB connections.
-// emitEvent should be wailsRuntime.EventsEmit (or a test stub).
-func NewService(writer *sql.DB, emitEvent func(string, interface{})) *Service {
+// NewService creates a chat Service backed by the given DB connections,
+// active provider, and provider registry. emitEvent should be
+// wailsRuntime.EventsEmit (or a test stub).
+func NewService(writer *sql.DB, prov provider.Provider, reg *provider.Registry, emitEvent func(string, interface{})) *Service {
 	return &Service{
 		queries:   db.New(writer),
 		writer:    writer,
+		prov:      prov,
+		reg:       reg,
 		emitEvent: emitEvent,
 	}
 }
@@ -191,14 +203,14 @@ func (s *Service) SendMessage(ctx context.Context, conversationID, content, mode
 		model = defaultModel
 	}
 
-	// 1. Verify the claude binary is available.
-	claudePath, err := exec.LookPath("claude")
+	// 1. Resolve the active provider's CLI binary.
+	cliPath, err := s.prov.ExecutablePath()
 	if err != nil {
 		s.emitEvent("chat:stream", StreamEvent{
 			Type:    "error",
-			Content: "claude CLI not found in PATH. Please install it with: npm install -g @anthropic-ai/claude-code",
+			Content: fmt.Sprintf("%s CLI not found in PATH: %v", s.prov.Name(), err),
 		})
-		return nil, fmt.Errorf("chat: claude CLI not found: %w", err)
+		return nil, fmt.Errorf("chat: provider CLI not found: %w", err)
 	}
 
 	// 2. Persist the user message.
@@ -214,8 +226,12 @@ func (s *Service) SendMessage(ctx context.Context, conversationID, content, mode
 
 	prompt := buildPrompt(history)
 
-	// 4. Spawn the claude CLI process.
-	fullContent, err := s.streamFromClaude(ctx, claudePath, model, prompt, conversationID)
+	// 4. Spawn the provider CLI and stream its output to the standard
+	//    "chat:stream" channel — bound to the single-provider path.
+	emitStream := func(ev StreamEvent) {
+		s.emitEvent("chat:stream", ev)
+	}
+	fullContent, err := s.streamFromCLI(ctx, cliPath, model, prompt, conversationID, emitStream)
 	if err != nil {
 		s.emitEvent("chat:stream", StreamEvent{
 			Type:    "error",
@@ -237,7 +253,105 @@ func (s *Service) SendMessage(ctx context.Context, conversationID, content, mode
 }
 
 // ---------------------------------------------------------------------------
-// Claude CLI streaming
+// Compare — fan-out a single prompt to N providers in parallel
+// ---------------------------------------------------------------------------
+
+// Compare fans out the given prompt to every provider in providerIDs in
+// parallel and streams each provider's response on the "chat:compare:event"
+// channel. Each emitted event carries the providerID so the frontend can
+// route deltas to the correct column.
+//
+// Behaviour:
+//   - Unknown, disabled, or uninstalled providers are logged and skipped.
+//   - Returns an error only if zero providers resolve.
+//   - Each provider runs in its own goroutine; per-provider failures emit a
+//     "error" event for that provider but do not affect siblings.
+//   - Compare is ephemeral: nothing is persisted to the conversations table.
+//   - Emits a per-provider "done" event when each branch finishes, then a
+//     final aggregate event (ProviderID == "") when all branches have completed.
+//
+// We use a single Wails channel ("chat:compare:event") with a discriminated
+// payload rather than per-provider channels — this matches the existing
+// PhantomOS event convention (see internal/app/events.go) where one channel
+// per concern carries a typed payload.
+func (s *Service) Compare(ctx context.Context, conversationID, prompt string, providerIDs []string) error {
+	if s.reg == nil {
+		return fmt.Errorf("chat: compare requires a provider registry")
+	}
+
+	// Resolve provider IDs to live providers, skipping unknown/disabled.
+	resolved := make([]provider.Provider, 0, len(providerIDs))
+	resolvedIDs := make([]string, 0, len(providerIDs))
+	for _, id := range providerIDs {
+		p, ok := s.reg.Get(id)
+		if !ok {
+			log.Warn("chat: compare skipping unknown provider", "providerID", id)
+			continue
+		}
+		if !p.Enabled() || !p.IsInstalled() {
+			log.Warn("chat: compare skipping disabled or uninstalled provider", "providerID", id)
+			continue
+		}
+		resolved = append(resolved, p)
+		resolvedIDs = append(resolvedIDs, id)
+	}
+
+	if len(resolved) == 0 {
+		return fmt.Errorf("chat: compare: no usable providers in %v", providerIDs)
+	}
+
+	emitCompare := func(ev CompareEvent) {
+		ev.ConversationID = conversationID
+		s.emitEvent("chat:compare:event", ev)
+	}
+
+	var wg sync.WaitGroup
+	for i, p := range resolved {
+		wg.Add(1)
+		providerID := resolvedIDs[i]
+		prov := p
+		go func() {
+			defer wg.Done()
+
+			cliPath, err := prov.ExecutablePath()
+			if err != nil {
+				emitCompare(CompareEvent{
+					ProviderID: providerID,
+					Type:       "error",
+					Content:    fmt.Sprintf("%s CLI not found: %v", prov.Name(), err),
+				})
+				emitCompare(CompareEvent{ProviderID: providerID, Type: "done"})
+				return
+			}
+
+			// Per-provider emitter wraps StreamEvent in a CompareEvent
+			// tagged with this provider's ID.
+			emit := func(se StreamEvent) {
+				emitCompare(CompareEvent{
+					ProviderID: providerID,
+					Type:       se.Type,
+					Content:    se.Content,
+					ToolName:   se.ToolName,
+					ToolInput:  se.ToolInput,
+				})
+			}
+
+			if _, err := s.streamFromCLI(ctx, cliPath, defaultModel, prompt, conversationID, emit); err != nil {
+				emit(StreamEvent{Type: "error", Content: err.Error()})
+			}
+			emitCompare(CompareEvent{ProviderID: providerID, Type: "done"})
+		}()
+	}
+
+	wg.Wait()
+
+	// Final aggregate done — frontend uses this to know all columns finished.
+	emitCompare(CompareEvent{Type: "done"})
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Provider CLI streaming
 // ---------------------------------------------------------------------------
 
 // buildPrompt constructs a prompt string from conversation history.
@@ -276,12 +390,17 @@ func buildPrompt(history []Message) string {
 	return sb.String()
 }
 
-// streamFromClaude spawns the claude CLI with stream-json output, reads
-// NDJSON from stdout, emits "chat:stream" events, and returns the full
-// concatenated response text.
-func (s *Service) streamFromClaude(
+// streamFromCLI spawns the provider CLI with stream-json output, reads
+// NDJSON from stdout, invokes emit for each stream event, and returns the
+// full concatenated response text.
+//
+// The emit callback lets the caller route events to a specific Wails
+// channel — the single-provider path uses "chat:stream" while Compare
+// uses "chat:compare:event" with a provider-tagged payload.
+func (s *Service) streamFromCLI(
 	ctx context.Context,
-	claudePath, model, prompt, conversationID string,
+	cliPath, model, prompt, conversationID string,
+	emit func(StreamEvent),
 ) (string, error) {
 	args := []string{
 		"-p", prompt,
@@ -297,7 +416,7 @@ func (s *Service) streamFromClaude(
 	// Use a temp directory as CWD so no CLAUDE.md or .claude/ context is discovered.
 	// Each chat conversation starts clean — no workspace context leaks in.
 	tmpDir, _ := os.MkdirTemp("", "phantom-chat-*")
-	cmd := exec.CommandContext(ctx, claudePath, args...)
+	cmd := exec.CommandContext(ctx, cliPath, args...)
 	if tmpDir != "" {
 		cmd.Dir = tmpDir
 		defer os.RemoveAll(tmpDir)
@@ -314,7 +433,7 @@ func (s *Service) streamFromClaude(
 	}
 
 	if err := cmd.Start(); err != nil {
-		return "", fmt.Errorf("start claude process: %w", err)
+		return "", fmt.Errorf("start cli process: %w", err)
 	}
 
 	// Read stderr in background for error reporting.
@@ -344,11 +463,11 @@ func (s *Service) streamFromClaude(
 			continue
 		}
 
-		s.handleStreamEvent(&event, &fullContent, conversationID)
+		s.handleStreamEvent(&event, &fullContent, conversationID, emit)
 	}
 
 	if err := scanner.Err(); err != nil {
-		return fullContent.String(), fmt.Errorf("read claude stdout: %w", err)
+		return fullContent.String(), fmt.Errorf("read cli stdout: %w", err)
 	}
 
 	// Wait for the process to finish.
@@ -356,14 +475,14 @@ func (s *Service) streamFromClaude(
 		// If we got content, the process may have exited non-zero but still
 		// produced valid output. Return the content with the error.
 		if fullContent.Len() > 0 {
-			log.Warn("chat: claude process exited with error but produced content", "err", err)
+			log.Warn("chat: cli process exited with error but produced content", "err", err)
 			return fullContent.String(), nil
 		}
 		errMsg := stderrContent.String()
 		if errMsg == "" {
 			errMsg = err.Error()
 		}
-		return "", fmt.Errorf("claude process failed: %s", errMsg)
+		return "", fmt.Errorf("cli process failed: %s", errMsg)
 	}
 
 	return fullContent.String(), nil
@@ -378,7 +497,7 @@ func (s *Service) streamFromClaude(
 //   - {"type":"system",...} — hooks, skip
 //   - {"type":"rate_limit_event",...} — skip
 //   - {"type":"error",...} — errors
-func (s *Service) handleStreamEvent(event *cliStreamEvent, fullContent *strings.Builder, conversationID string) {
+func (s *Service) handleStreamEvent(event *cliStreamEvent, fullContent *strings.Builder, conversationID string, emit func(StreamEvent)) {
 	switch event.Type {
 	case "assistant":
 		if event.Message == nil {
@@ -393,21 +512,21 @@ func (s *Service) handleStreamEvent(event *cliStreamEvent, fullContent *strings.
 			case "text":
 				if block.Text != "" {
 					fullContent.WriteString(block.Text)
-					s.emitEvent("chat:stream", StreamEvent{
+					emit(StreamEvent{
 						Type:    "delta",
 						Content: block.Text,
 					})
 				}
 			case "thinking":
 				if block.Thinking != "" {
-					s.emitEvent("chat:stream", StreamEvent{
+					emit(StreamEvent{
 						Type:    "thinking",
 						Content: block.Thinking,
 					})
 				}
 			case "tool_use":
 				inputJSON, _ := json.Marshal(block.Input)
-				s.emitEvent("chat:stream", StreamEvent{
+				emit(StreamEvent{
 					Type:      "tool_use",
 					ToolName:  block.Name,
 					ToolInput: string(inputJSON),
@@ -419,7 +538,7 @@ func (s *Service) handleStreamEvent(event *cliStreamEvent, fullContent *strings.
 		// Final result — use result text if we haven't received content from assistant events.
 		if event.ResultText != "" && fullContent.Len() == 0 {
 			fullContent.WriteString(event.ResultText)
-			s.emitEvent("chat:stream", StreamEvent{
+			emit(StreamEvent{
 				Type:    "delta",
 				Content: event.ResultText,
 			})
@@ -430,7 +549,7 @@ func (s *Service) handleStreamEvent(event *cliStreamEvent, fullContent *strings.
 		if event.Error != nil {
 			errMsg = event.Error.Message
 		}
-		s.emitEvent("chat:stream", StreamEvent{
+		emit(StreamEvent{
 			Type:    "error",
 			Content: errMsg,
 		})

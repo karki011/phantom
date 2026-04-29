@@ -14,7 +14,6 @@ import {
   questProgressFill,
   questFooter,
   questProgress,
-  questType,
   xpBadge,
 } from '@/styles/gamification.css';
 
@@ -73,8 +72,6 @@ export const QuestCard = (props: QuestCardProps) => {
         </span>
         <span class={xpBadge}>+{props.quest.xp_reward} XP</span>
       </div>
-
-      <span class={questType}>Type: {props.quest.quest_type}</span>
     </div>
   );
 };

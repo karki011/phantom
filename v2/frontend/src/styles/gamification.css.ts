@@ -307,10 +307,13 @@ export const achievementCardUnlocked = style({
 });
 
 export const achievementCardLocked = style({
-  opacity: 0.4,
+  opacity: 0.45,
   borderLeftColor: 'transparent',
+  background: vars.color.bgPrimary,
+  filter: 'grayscale(0.85)',
   ':hover': {
-    opacity: 0.55,
+    opacity: 0.7,
+    filter: 'grayscale(0.6)',
   },
 });
 
@@ -327,7 +330,9 @@ export const achievementLockOverlay = style({
 
 export const achievementLockSvg = style({
   color: vars.color.textDisabled,
-  opacity: 0.5,
+  opacity: 0.85,
+  width: '32px',
+  height: '32px',
 });
 
 export const achievementIconArea = style({
@@ -866,7 +871,8 @@ export const achievementsCount = style({
 export const questsContainer = style({
   display: 'flex',
   flexDirection: 'column',
-  gap: vars.space.sm,
+  gap: vars.space.md,
+  marginTop: vars.space.lg,
 });
 
 export const questsHeader = style({

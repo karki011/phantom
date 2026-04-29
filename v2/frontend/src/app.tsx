@@ -21,8 +21,7 @@ import { OnboardingFlow } from './screens/onboarding';
 import { BootScreen } from './screens/boot';
 import { ShutdownCeremony, ShutdownConfirmModal, type ShutdownStats } from './screens/shutdown';
 import { playSound } from './core/audio/engine';
-import { TopTabBar } from './components/layout/TopTabBar';
-import { StatusBar } from './components/layout/StatusBar';
+import { WindowDragStrip } from './components/layout/WindowDragStrip';
 import { WorktreeSidebar, RightSidebar } from './components/sidebar';
 import { Workspace } from './components/panes/Workspace';
 import { switchWorkspace } from './core/panes/signals';
@@ -37,6 +36,7 @@ import { RecipePicker } from './shared/RecipePicker';
 import { ApprovalModal } from './shared/ApprovalModal/ApprovalModal';
 import { PromptComposer } from './shared/PromptComposer';
 import { composerVisible, closeComposer } from './core/signals/composer';
+import { activeTab, activePaneId } from './core/panes/signals';
 import { registerShutdownHandler, shutdownConfirmVisible } from './core/signals/shutdown';
 import { generateMorningBrief } from './core/bindings/journal';
 import { DocsScreen } from './screens/docs';
@@ -163,6 +163,18 @@ export function App() {
   const shellClass = () =>
     isFullscreen() ? styles.appShell : `${styles.appShell} ${shellStyles.trafficLightInset}`;
 
+  // The prompt composer is a terminal-input affordance — only meaningful when
+  // the user is looking at a terminal-shaped pane on the worktree top-tab.
+  const composerAllowed = () => {
+    if (activeTopTab() !== 'worktree') return false;
+    const kind = activeTab()?.panes[activePaneId()]?.kind;
+    return kind === 'terminal' || kind === 'tui';
+  };
+
+  createEffect(() => {
+    if (!composerAllowed() && composerVisible()) closeComposer();
+  });
+
   return (
     <div class={shellClass()}>
       <ToastRegion />
@@ -177,7 +189,9 @@ export function App() {
       <CommandPalette />
       <RecipePicker />
       <DocsScreen />
-      <PromptComposer visible={composerVisible()} onClose={closeComposer} />
+      <Show when={composerAllowed()}>
+        <PromptComposer visible={composerVisible()} onClose={closeComposer} />
+      </Show>
       <ShutdownConfirmModal sessionCount={shutdownStats()?.sessionCount} />
 
       <Show when={shuttingDown()}>
@@ -199,7 +213,7 @@ export function App() {
       </Show>
 
       <Show when={ready() && !showOnboarding() && bootCeremonyDone()}>
-        <TopTabBar />
+        <WindowDragStrip />
 
         <div class={shellStyles.mainContent}>
           <Show when={activeTopTab() === 'system'}>
@@ -222,8 +236,6 @@ export function App() {
             </div>
           </Show>
         </div>
-
-        <StatusBar />
       </Show>
     </div>
   );

@@ -1,7 +1,8 @@
 // PhantomOS v2 — Settings > Appearance section
 // Author: Subash Karki
 
-import { For } from 'solid-js';
+import { For, Show, createMemo } from 'solid-js';
+import { Check } from 'lucide-solid';
 import { buttonRecipe } from '../../../styles/recipes.css';
 import {
   applyTheme,
@@ -57,11 +58,18 @@ const FONT_STYLES: { id: FontStyleId; label: string }[] = [
 ];
 
 export default function AppearanceSection() {
+  const activeThemeLabel = createMemo(() =>
+    THEME_SWATCHES.find((s) => s.id === activeTheme())?.label ?? activeTheme(),
+  );
+
   return (
     <div class={styles.sectionRoot}>
       {/* Theme */}
       <div class={styles.settingGroup}>
-        <span class={styles.settingLabel}>Theme</span>
+        <span class={styles.settingGroupHeader}>Theme</span>
+        <span class={styles.themeSelectedLabel}>
+          Selected: <strong>{activeThemeLabel()}</strong>
+        </span>
         <div class={styles.themeGrid}>
           <For each={THEME_SWATCHES}>
             {(swatch) => {
@@ -73,11 +81,17 @@ export default function AppearanceSection() {
                   classList={{ [styles.themeSwatchActive]: isActive() }}
                   onClick={() => applyTheme(swatch.id)}
                   title={swatch.label}
+                  aria-pressed={isActive()}
                   style={{
                     '--swatch-accent': swatch.accent,
                     '--swatch-bg': swatch.bg,
                   }}
                 >
+                  <Show when={isActive()}>
+                    <span class={styles.themeSwatchCheck}>
+                      <Check size={10} strokeWidth={3} />
+                    </span>
+                  </Show>
                   <div
                     class={styles.themeSwatchCircle}
                     style={{ background: swatch.accent }}
@@ -92,7 +106,7 @@ export default function AppearanceSection() {
 
       {/* Font Style */}
       <div class={styles.settingGroup}>
-        <span class={styles.settingLabel}>Font Style</span>
+        <span class={styles.settingGroupHeader}>Font Style</span>
         <div class={styles.segmentedControl}>
           <For each={FONT_STYLES}>
             {(fs) => (
@@ -113,7 +127,7 @@ export default function AppearanceSection() {
 
       {/* Zoom Level */}
       <div class={styles.settingGroup}>
-        <span class={styles.settingLabel}>Zoom Level</span>
+        <span class={styles.settingGroupHeader}>Zoom Level</span>
         <div class={styles.segmentedControl}>
           <For each={ZOOM_LEVELS}>
             {(level) => (
@@ -134,7 +148,7 @@ export default function AppearanceSection() {
 
       {/* Brightness */}
       <div class={styles.settingGroup}>
-        <span class={styles.settingLabel}>Brightness · {activeBrightness()}%</span>
+        <span class={styles.settingGroupHeader}>Brightness · {activeBrightness()}%</span>
         <input
           type="range"
           class={styles.sliderInput}

@@ -4,8 +4,7 @@
 import { createMemo, createSignal, createEffect, on, onCleanup, Show, For, Index } from 'solid-js';
 import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw, Shield, Activity } from 'lucide-solid';
 import { activeWorktreeId } from '@/core/signals/app';
-import { worktreeMap } from '@/core/signals/worktrees';
-import { projects } from '@/core/signals/projects';
+import { activeProject, activeWorktree } from '@/core/signals/worktrees';
 import { addTabWithData } from '@/core/panes/signals';
 import { sessions } from '@/core/signals/sessions';
 import { cwdMatchesBidirectional } from '@/core/utils/path-match';
@@ -344,22 +343,6 @@ function RecipesCard(props: { projectId: string | null; repoPath: string | null 
 }
 
 export default function WorktreeHome() {
-  const activeWorktree = createMemo(() => {
-    const wtId = activeWorktreeId();
-    if (!wtId) return null;
-    for (const workspaces of Object.values(worktreeMap())) {
-      const match = workspaces.find((w) => w.id === wtId);
-      if (match) return match;
-    }
-    return null;
-  });
-
-  const activeProject = createMemo(() => {
-    const wt = activeWorktree();
-    if (!wt) return null;
-    return projects().find((p) => p.id === wt.project_id) ?? null;
-  });
-
   const [worktreeOpen, setWorktreeOpen] = createSignal(false);
   const [repoStatus, setRepoStatus] = createSignal<RepoStatus | null>(null);
   const [openPrs, setOpenPrs] = createSignal<PrStatusType[]>([]);
@@ -603,6 +586,22 @@ export default function WorktreeHome() {
         <div class={styles.statusHeader}>
           <span class={styles.statusIcon}><GitBranch size={14} /></span>
           <span class={styles.statusTitle}>Workspace Status</span>
+
+          <Show when={(() => {
+            const url = activeWorktree()?.ticket_url;
+            return url && (url.startsWith('http://') || url.startsWith('https://'));
+          })()}>
+            <Tip label={activeWorktree()!.ticket_url!} placement="bottom">
+              <button
+                type="button"
+                class={styles.statusRefreshButton}
+                onClick={() => openURL(activeWorktree()!.ticket_url!)}
+              >
+                <ExternalLink size={12} />
+                <span class={styles.statusRefreshLabel}>Ticket</span>
+              </button>
+            </Tip>
+          </Show>
 
           <Tip label={refreshing() ? 'Refreshing...' : 'Refresh workspace status, PR, and CI data'} placement="bottom">
             <button

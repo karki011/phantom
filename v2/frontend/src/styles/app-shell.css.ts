@@ -60,67 +60,130 @@ export const header = style({
   WebkitAppRegion: 'drag',
 } as any);
 
-// ── Top Tab Bar ───────────────────────────────────────────────────────────────
+// ── Window Drag Strip ─────────────────────────────────────────────────────────
 
-export const topTabBar = style({
-  height: '32px',
+// Wails v2 (macOS) does NOT honor `-webkit-app-region`. Its injected runtime
+// reads a custom CSS variable: `--wails-draggable: drag` (see
+// wails/v2/internal/frontend/runtime/desktop/main.js → `dragTest` calls
+// getComputedStyle(target).getPropertyValue('--wails-draggable')).
+// We set BOTH so the rule survives if Wails ever switches detection mechanism.
+export const windowDragStrip = style({
+  height: '44px',
   flexShrink: 0,
   display: 'flex',
-  flexDirection: 'row',
-  alignItems: 'stretch',
-  borderBottom: `1px solid ${vars.color.border}`,
+  alignItems: 'center',
   background: vars.color.bgSecondary,
-  paddingLeft: vars.space.sm,
-  gap: '2px',
-  transition: `padding-left 200ms ease`,
-  // Allow the tab bar to be dragged to move the window (Wails title bar area)
+  borderBottom: `1px solid ${vars.color.border}`,
+  paddingLeft: TRAFFIC_LIGHT_WIDTH,
+  paddingRight: vars.space.sm,
+  gap: vars.space.sm,
+  vars: {
+    '--wails-draggable': 'drag',
+  },
   WebkitAppRegion: 'drag',
-  selectors: {
-    [`${trafficLightInset} &`]: {
-      paddingLeft: TRAFFIC_LIGHT_WIDTH,
-    },
+} as any);
+
+export const windowDragStripActions = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  vars: {
+    '--wails-draggable': 'no-drag',
+  },
+  WebkitAppRegion: 'no-drag',
+} as any);
+
+export const windowDragStripCenter = style({
+  flex: 1,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: vars.space.xs,
+  minWidth: 0,
+  userSelect: 'none',
+  vars: {
+    '--wails-draggable': 'drag',
   },
 } as any);
 
-export const topTabList = style({
-  display: 'flex',
-  flexDirection: 'row',
-  alignItems: 'stretch',
-  gap: '2px',
-});
-
-export const topTab = style({
+export const windowDragStripRight = style({
   display: 'flex',
   alignItems: 'center',
-  paddingLeft: vars.space.md,
-  paddingRight: vars.space.md,
-  fontSize: vars.fontSize.sm,
-  fontFamily: vars.font.body,
+  gap: vars.space.sm,
+  flexShrink: 0,
+  vars: {
+    '--wails-draggable': 'no-drag',
+  },
+} as any);
+
+export const navHistoryButton = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '24px',
+  height: '24px',
+  borderRadius: vars.radius.sm,
+  background: 'transparent',
+  border: 'none',
+  color: vars.color.textSecondary,
+  cursor: 'pointer',
+  outline: 'none',
+  transition: `color ${vars.animation.fast} ease, background ${vars.animation.fast} ease`,
+  ':hover': {
+    color: vars.color.textPrimary,
+    background: vars.color.bgHover,
+  },
+  ':disabled': {
+    color: vars.color.textDisabled,
+    cursor: 'not-allowed',
+    opacity: 0.4,
+  },
+});
+
+// ── Top Tab Segmented Control (in WindowDragStrip) ───────────────────────────
+
+export const topTabSegmented = style({
+  display: 'inline-flex',
+  alignItems: 'stretch',
+  borderRadius: vars.radius.md,
+  background: vars.color.bgPrimary,
+  padding: '2px',
+  gap: '2px',
+  flexShrink: 0,
+});
+
+export const topTabSegment = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `0 ${vars.space.sm}`,
+  fontSize: vars.fontSize.xs,
+  fontFamily: vars.font.mono,
+  fontWeight: 600,
   color: vars.color.textSecondary,
   background: 'transparent',
   border: 'none',
-  borderBottom: '2px solid transparent',
+  borderRadius: vars.radius.sm,
   cursor: 'pointer',
-  userSelect: 'none',
-  transition: `color ${vars.animation.fast} ease, border-color ${vars.animation.fast} ease`,
   outline: 'none',
-  WebkitAppRegion: 'no-drag',
-
-  selectors: {
-    '&:hover': {
-      color: vars.color.textPrimary,
-      borderBottomColor: vars.color.accentMuted,
-    },
-    '&[data-selected]': {
-      color: vars.color.accent,
-      borderBottomColor: vars.color.accent,
-    },
-    '&[data-selected]:hover': {
-      color: vars.color.accent,
-      borderBottomColor: vars.color.accent,
-    },
+  height: '22px',
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+  transition: `color ${vars.animation.fast} ease, background ${vars.animation.fast} ease`,
+  ':hover': {
+    color: vars.color.textPrimary,
+    background: vars.color.bgHover,
   },
-} as any);
+});
+
+export const topTabSegmentActive = style({
+  color: vars.color.accent,
+  background: vars.color.accentMuted,
+  ':hover': {
+    color: vars.color.accent,
+    background: vars.color.accentMuted,
+  },
+});
 
 // ── Main Content ──────────────────────────────────────────────────────────────
 
@@ -147,24 +210,6 @@ export const centerWorkspace = style({
   overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column',
-});
-
-// ── Status Bar ────────────────────────────────────────────────────────────────
-
-export const statusBar = style({
-  height: '2.5rem',
-  flexShrink: 0,
-  display: 'flex',
-  flexDirection: 'row',
-  alignItems: 'center',
-  paddingLeft: vars.space.md,
-  paddingRight: vars.space.md,
-  borderTop: `1px solid ${vars.color.border}`,
-  background: vars.color.bgSecondary,
-  fontFamily: vars.font.mono,
-  fontSize: vars.fontSize.xs,
-  color: vars.color.textDisabled,
-  gap: vars.space.sm,
 });
 
 // ── Placeholder States ────────────────────────────────────────────────────────
@@ -290,37 +335,7 @@ export const headerIconButtonDanger = style({
   },
 });
 
-// ── Status Bar sub-elements ───────────────────────────────────────────────────
-
-export const statusLeft = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.xs,
-  flex: 1,
-});
-
-export const statusCenter = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.xs,
-  flex: 1,
-  justifyContent: 'center',
-});
-
-export const statusRight = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.xs,
-  flex: 1,
-  justifyContent: 'flex-end',
-});
-
-export const statusText = style({
-  fontSize: vars.fontSize.xs,
-  fontFamily: vars.font.mono,
-  color: vars.color.textSecondary,
-  whiteSpace: 'nowrap',
-});
+// ── Status sub-elements (used by WindowDragStrip Hunter button) ──────────────
 
 export const statusMuted = style({
   fontSize: vars.fontSize.xs,
@@ -332,34 +347,6 @@ export const statusDivider = style({
   fontSize: vars.fontSize.xs,
   color: vars.color.divider,
   userSelect: 'none',
-});
-
-export const statusBranding = style({
-  fontFamily: vars.font.display,
-  fontSize: vars.fontSize.xs,
-  fontWeight: 700,
-  color: vars.color.accent,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-  userSelect: 'none',
-  flexShrink: 0,
-});
-
-export const statusDotConnected = style({
-  width: '6px',
-  height: '6px',
-  borderRadius: '50%',
-  backgroundColor: vars.color.success ?? '#3AE8B0',
-  boxShadow: vars.shadow.successGlow,
-  flexShrink: 0,
-});
-
-export const statusDotDisconnected = style({
-  width: '6px',
-  height: '6px',
-  borderRadius: '50%',
-  backgroundColor: vars.color.danger,
-  flexShrink: 0,
 });
 
 // ── Boot Overlay ──────────────────────────────────────────────────────────────

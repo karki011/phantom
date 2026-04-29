@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"embed"
+	"errors"
 	"log"
 
 	"os"
@@ -35,6 +36,14 @@ import (
 var assets embed.FS
 
 func main() {
+	backfillJournal := false
+	for _, arg := range os.Args[1:] {
+		if arg == "--backfill-journal" {
+			backfillJournal = true
+			break
+		}
+	}
+
 	// 1. Open SQLite database (runs migrations automatically).
 	dbPath, err := db.DefaultDBPath()
 	if err != nil {
@@ -58,6 +67,15 @@ func main() {
 
 	// 5. Create shared journal service (single instance for all components).
 	journalSvc := journal.NewService("")
+
+	if backfillJournal {
+		log.Printf("phantomos: backfilling journal from DB...")
+		if err := collector.BackfillJournal(context.Background(), queries, database.Writer, journalSvc); err != nil {
+			log.Fatalf("phantomos: backfill: %v", err)
+		}
+		log.Printf("phantomos: backfill complete; exiting.")
+		os.Exit(0)
+	}
 
 	// 5a. Create App and inject services.
 	a := app.New()
@@ -95,17 +113,11 @@ func main() {
 	// Instantiate all providers using registered adapter factories.
 	provRegistry.InstantiateAll()
 
-	// Select the active provider: prefer Claude if available, else first enabled.
-	var activeProv provider.Provider
-	if p, ok := provRegistry.Get("claude"); ok {
-		activeProv = p
-	} else {
-		enabled := provRegistry.Enabled()
-		if len(enabled) > 0 {
-			activeProv = enabled[0]
-		} else {
-			log.Fatal("phantomos: no providers available")
-		}
+	// Select the active provider based on user preference, falling back to
+	// the first enabled provider. Fatal if no providers are available.
+	activeProv, err := selectActiveProvider(provRegistry, queries)
+	if err != nil {
+		log.Fatalf("phantomos: %v", err)
 	}
 
 	// Inject provider into app for bindings_stream and boot_scan.
@@ -195,8 +207,10 @@ func main() {
 		}
 	})
 
-	// 8a. Create chat service (conversations + Anthropic Messages API streaming).
-	chatSvc := chat.NewService(database.Writer, emitFn)
+	// 8a. Create chat service (conversations + active-provider CLI streaming).
+	//     The registry is passed alongside the active provider so the chat
+	//     service can fan out Compare runs across multiple providers.
+	chatSvc := chat.NewService(database.Writer, activeProv, provRegistry, emitFn)
 	a.SetChat(chatSvc)
 
 	// 9. Create safety service (YAML ward rules + audit).
@@ -246,4 +260,33 @@ func main() {
 	if err != nil {
 		log.Fatalf("phantomos: wails run: %v", err)
 	}
+}
+
+// selectActiveProvider chooses the active provider using this precedence:
+//  1. The user-preferred provider stored in the "default_provider" preference,
+//     if set and currently registered.
+//  2. Legacy default: "claude", if registered.
+//  3. The first enabled+installed provider in the registry.
+//
+// Returns an error if no providers are available.
+func selectActiveProvider(reg *provider.Registry, queries *db.Queries) (provider.Provider, error) {
+	// 1. User preference (best-effort read; missing key or DB error -> fall through).
+	if pref, err := queries.GetPreference(context.Background(), "default_provider"); err == nil && pref != "" {
+		if p, ok := reg.Get(pref); ok {
+			return p, nil
+		}
+		log.Printf("phantomos: default_provider=%q not registered; falling back", pref)
+	}
+
+	// 2. Legacy default — preserves prior "prefer Claude" behaviour when no preference is set.
+	if p, ok := reg.Get("claude"); ok {
+		return p, nil
+	}
+
+	// 3. Fallback: first enabled+installed provider in registry.
+	if enabled := reg.Enabled(); len(enabled) > 0 {
+		return enabled[0], nil
+	}
+
+	return nil, errors.New("no providers available")
 }

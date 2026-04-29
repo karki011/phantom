@@ -1,9 +1,16 @@
-// PhantomOS v2 — Footer status bar
+// PhantomOS v2 — Draggable strip housing macOS traffic-light inset, nav history, primary tab toggle, system stats, and action icons
 // Author: Subash Karki
 
 import { createMemo, onCleanup, onMount, Show } from 'solid-js';
 import { APP_NAME } from '@/core/branding';
-import { backendConnected, activeWorktreeId, setActiveTopTab, setCockpitView } from '@/core/signals/app';
+import {
+  activeTopTab,
+  setActiveTopTab,
+  cockpitView,
+  setCockpitView,
+  activeWorktreeId,
+} from '@/core/signals/app';
+import { canGoBack, canGoForward, goBack, goForward, pushNav } from '@/core/signals/navigation';
 import { sessions } from '@/core/signals/sessions';
 import {
   systemStats,
@@ -16,15 +23,14 @@ import { toggleDocs } from '@/core/signals/docs';
 import { focusOrCreateTab, addTab } from '@/core/panes/signals';
 import { toggleCommandPalette } from '@/core/signals/command-palette';
 import { requestShutdown } from '@/core/signals/shutdown';
-import { gamificationEnabled, hunterProfile, hunterRank, dailyQuests } from '@/core/signals/gamification';
+import { gamificationEnabled, hunterProfile, dailyQuests } from '@/core/signals/gamification';
 import { RankBadge } from '@/shared/Gamification/RankBadge';
 import { XPProgressBar } from '@/shared/Gamification/XPProgressBar';
 import { Tip } from '@/shared/Tip/Tip';
+import { ChevronLeft, ChevronRight, SystemIcon, FolderIcon } from './header-icons';
 import * as shellStyles from '@/styles/app-shell.css';
 import * as gamStyles from '@/styles/gamification.css';
 import { headerIconPulse } from '@/components/ai-command-center/ai-command-center.css';
-
-// ── Inline SVG icons ──────────────────────────────────────────────────────────
 
 function BookIcon() {
   return (
@@ -91,15 +97,13 @@ function PowerIcon() {
   );
 }
 
-export function StatusBar() {
+export function WindowDragStrip() {
   onMount(() => {
     startSystemStatsPoll();
   });
   onCleanup(() => {
     stopSystemStatsPoll();
   });
-
-  const totalSessions = createMemo(() => sessions().length);
 
   const activeSessions = createMemo(() =>
     sessions().filter((s) => s.status === 'active' || s.status === 'running').length
@@ -113,26 +117,52 @@ export function StatusBar() {
   const stats = systemStats;
 
   return (
-    <footer class={shellStyles.statusBar} role="status" aria-label="System status">
-      {/* Left: Logo + Backend connection */}
-      <div class={shellStyles.statusLeft}>
-        <span class={shellStyles.statusBranding}>{APP_NAME}</span>
-        <span class={shellStyles.statusDivider}>·</span>
-        <span
-          class={
-            backendConnected()
-              ? shellStyles.statusDotConnected
-              : shellStyles.statusDotDisconnected
-          }
-          aria-hidden="true"
-        />
-        <span class={shellStyles.statusText}>
-          {backendConnected() ? 'Connected' : 'Disconnected'}
-        </span>
+    <div class={shellStyles.windowDragStrip}>
+      <div class={shellStyles.windowDragStripActions}>
+        <Tip label="Back" placement="bottom">
+          <button
+            type="button"
+            class={shellStyles.navHistoryButton}
+            disabled={!canGoBack()}
+            aria-label="Navigate back"
+            onClick={() => goBack()}
+          >
+            <ChevronLeft />
+          </button>
+        </Tip>
+        <Tip label="Forward" placement="bottom">
+          <button
+            type="button"
+            class={shellStyles.navHistoryButton}
+            disabled={!canGoForward()}
+            aria-label="Navigate forward"
+            onClick={() => goForward()}
+          >
+            <ChevronRight />
+          </button>
+        </Tip>
+        <div class={shellStyles.topTabSegmented} role="tablist" aria-label="Primary navigation">
+          {(['system', 'worktree'] as const).map((tab) => (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTopTab() === tab}
+              class={`${shellStyles.topTabSegment} ${activeTopTab() === tab ? shellStyles.topTabSegmentActive : ''}`}
+              onClick={() => {
+                const nextView = tab === 'system' ? 'system' : cockpitView();
+                setActiveTopTab(tab);
+                if (tab === 'system') setCockpitView('system');
+                pushNav({ tab, view: nextView });
+              }}
+            >
+              {tab === 'system' ? <SystemIcon /> : <FolderIcon />}
+              {tab === 'system' ? 'System' : 'Worktree'}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Center: System stats — sessions / CPU / RAM / battery / worktree */}
-      <div class={shellStyles.statusCenter}>
+      <div class={shellStyles.windowDragStripCenter}>
         <span class={shellStyles.sessionIndicator}>
           <span class={shellStyles.sessionDot} />
           {sessionLabel()}
@@ -151,40 +181,37 @@ export function StatusBar() {
             {stats().battery_charging ? '⚡' : '🔋'} {stats().battery_percent}%
           </span>
         </Show>
-        {activeWorktreeId() && (
-          <>
-            <span class={shellStyles.statDivider}>|</span>
-            <span class={shellStyles.statItem} title={activeWorktreeId() ?? ''}>
-              {(activeWorktreeId() ?? '').slice(0, 8)}
-            </span>
-          </>
-        )}
+        <Show when={activeWorktreeId()}>
+          <span class={shellStyles.statDivider}>|</span>
+          <span class={shellStyles.statItem} title={activeWorktreeId() ?? ''}>
+            {(activeWorktreeId() ?? '').slice(0, 8)}
+          </span>
+        </Show>
       </div>
 
-      {/* Right: Action icons + Hunter level + safety */}
-      <div class={shellStyles.statusRight}>
+      <div class={shellStyles.windowDragStripRight}>
         <div class={shellStyles.headerActions}>
-          <Tip label="Terminal" placement="top">
+          <Tip label="Terminal" placement="bottom">
             <button class={shellStyles.headerIconButton} type="button" aria-label="Open terminal" onClick={() => addTab('terminal')}>
               <TerminalIcon />
             </button>
           </Tip>
-          <Tip label="Command Palette" placement="top">
+          <Tip label="Command Palette" placement="bottom">
             <button class={shellStyles.headerIconButton} type="button" aria-label="Open command palette" onClick={() => toggleCommandPalette()}>
               <CommandIcon />
             </button>
           </Tip>
-          <Tip label="Docs" placement="top">
+          <Tip label="Docs" placement="bottom">
             <button class={shellStyles.headerIconButton} type="button" aria-label="Open documentation" onClick={() => toggleDocs()}>
               <BookIcon />
             </button>
           </Tip>
-          <Tip label="Daily Digest" placement="top">
+          <Tip label="Daily Digest" placement="bottom">
             <button class={shellStyles.headerIconButton} type="button" aria-label="Open daily digest" onClick={() => focusOrCreateTab('journal', 'Daily Digest')}>
               <JournalIcon />
             </button>
           </Tip>
-          <Tip label="AI Command Center" placement="top">
+          <Tip label="AI Command Center" placement="bottom">
             <button
               class={`${shellStyles.headerIconButton} ${aiCommandCenterSeen() ? '' : headerIconPulse}`}
               type="button"
@@ -194,12 +221,12 @@ export function StatusBar() {
               <BrainIcon />
             </button>
           </Tip>
-          <Tip label="Settings" placement="top">
+          <Tip label="Settings" placement="bottom">
             <button class={shellStyles.headerIconButton} type="button" aria-label="Open settings" onClick={() => openSettings()}>
               <GearIcon />
             </button>
           </Tip>
-          <Tip label="Shutdown" placement="top">
+          <Tip label="Shutdown" placement="bottom">
             <button class={`${shellStyles.headerIconButton} ${shellStyles.headerIconButtonDanger}`} type="button" aria-label={`Shutdown ${APP_NAME}`} onClick={() => requestShutdown()}>
               <PowerIcon />
             </button>
@@ -218,8 +245,14 @@ export function StatusBar() {
               aria-label="Open Hunter Profile"
               onClick={() => {
                 if (!gamificationEnabled()) return;
+                if (activeTopTab() === 'system' && cockpitView() === 'hunter') {
+                  setCockpitView('system');
+                  pushNav({ tab: 'system', view: 'system' });
+                  return;
+                }
                 setActiveTopTab('system');
                 setCockpitView('hunter');
+                pushNav({ tab: 'system', view: 'hunter' });
               }}
             >
               <RankBadge rank={profile().rank} size="sm" />
@@ -249,6 +282,6 @@ export function StatusBar() {
           )}
         </Show>
       </div>
-    </footer>
+    </div>
   );
 }

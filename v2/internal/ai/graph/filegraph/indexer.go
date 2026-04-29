@@ -71,6 +71,10 @@ func (ix *Indexer) Start(ctx context.Context) error {
 	}
 	ix.watcher = watcher
 
+	// Mark indexing synchronously before spawning the goroutine so callers
+	// observing IsIndexing() right after Start() never see a false negative.
+	ix.indexing.Store(true)
+
 	// Full index in background.
 	go ix.fullIndex(ctx)
 
@@ -98,7 +102,6 @@ func (ix *Indexer) Stop() {
 // fullIndex walks the project directory and parses all supported files.
 func (ix *Indexer) fullIndex(ctx context.Context) {
 	defer close(ix.done)
-	ix.indexing.Store(true)
 	defer ix.indexing.Store(false)
 
 	start := time.Now()

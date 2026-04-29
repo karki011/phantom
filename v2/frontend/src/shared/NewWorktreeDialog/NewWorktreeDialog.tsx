@@ -92,7 +92,7 @@ export function NewWorktreeDialog(props: NewWorktreeDialogProps) {
     setCreating(true);
     try {
       const [result] = await Promise.all([
-        createWorktree(props.projectId, branch, baseBranch()),
+        createWorktree(props.projectId, branch, baseBranch(), ticketLink()),
         new Promise<void>((res) => setTimeout(res, 800)),
       ]);
 

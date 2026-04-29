@@ -117,6 +117,9 @@ func (se *SessionEnricher) EnrichSession(ctx context.Context, sessionID string) 
 	prURL, prStatus := se.lookupPR(ctx, sessionID)
 
 	// 13. Persist journal data via raw SQL (journal columns from migration 003 + 006).
+	if filesTouched == nil {
+		filesTouched = []string{}
+	}
 	filesTouchedJSON, _ := json.Marshal(filesTouched)
 	toolSummaryJSON, _ := json.Marshal(toolBreakdown)
 	keywordsStr := strings.Join(keywords, ",")

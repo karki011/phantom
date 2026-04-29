@@ -93,6 +93,20 @@ func (p *ConfigProvider) Enabled() bool {
 	return p.Cfg.Enabled_
 }
 
+// ExecutablePath resolves the absolute path to the configured CLI binary
+// on the current PATH.
+func (p *ConfigProvider) ExecutablePath() (string, error) {
+	binary := p.Cfg.Detection.Binary
+	if binary == "" {
+		return "", fmt.Errorf("provider %q: no binary configured", p.Cfg.Provider)
+	}
+	path, err := exec.LookPath(binary)
+	if err != nil {
+		return "", fmt.Errorf("provider %q: %s CLI not found in PATH: %w", p.Cfg.Provider, binary, err)
+	}
+	return path, nil
+}
+
 // IsInstalled checks if the provider binary exists on PATH and if
 // at least one of the configured artifact paths exists.
 func (p *ConfigProvider) IsInstalled() bool {

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -444,7 +445,7 @@ func (sw *SessionWatcher) handleRemove(path string) {
 
 	// Enrich session with journal data (summary, files, git stats).
 	if sw.enricher != nil {
-		go sw.enricher.EnrichSession(sw.ctx, sessionID)
+		sw.enricher.EnrichSession(sw.ctx, sessionID)
 	}
 
 	// Append work log entry for session end.
@@ -532,7 +533,7 @@ func (sw *SessionWatcher) checkStale() {
 
 			// Enrich session with journal data (summary, files, git stats).
 			if sw.enricher != nil {
-				go sw.enricher.EnrichSession(sw.ctx, s.ID)
+				sw.enricher.EnrichSession(sw.ctx, s.ID)
 			}
 
 			// Append work log entry for session end.
@@ -749,7 +750,13 @@ func (sw *SessionWatcher) appendSessionEndLog(sessionID string) {
 		sw.journal.AppendWorkLog(today, fmt.Sprintf("%s Ended", ts))
 		return
 	}
+	sw.journal.AppendWorkLog(today, FormatSessionEndLine(s, ts))
+}
 
+// FormatSessionEndLine renders the canonical "Ended" work log line for a session
+// using the same gating and ordering as the live session-end path. The ts argument
+// is the leading "HH:MM" timestamp embedded in the line.
+func FormatSessionEndLine(s db.Session, ts string) string {
 	repoLabel := ""
 	if s.Cwd.Valid && s.Cwd.String != "" {
 		repoLabel = filepath.Base(s.Cwd.String)
@@ -763,7 +770,12 @@ func (sw *SessionWatcher) appendSessionEndLog(sessionID string) {
 	}
 
 	if s.StartedAt.Valid && s.StartedAt.Int64 > 0 {
-		dur := time.Since(time.Unix(s.StartedAt.Int64, 0))
+		var dur time.Duration
+		if s.EndedAt.Valid && s.EndedAt.Int64 >= s.StartedAt.Int64 {
+			dur = time.Unix(s.EndedAt.Int64, 0).Sub(time.Unix(s.StartedAt.Int64, 0))
+		} else {
+			dur = time.Since(time.Unix(s.StartedAt.Int64, 0))
+		}
 		if dur >= time.Hour {
 			parts = append(parts, fmt.Sprintf("%dh%dm", int(dur.Hours()), int(dur.Minutes())%60))
 		} else if dur >= time.Minute {
@@ -799,6 +811,34 @@ func (sw *SessionWatcher) appendSessionEndLog(sessionID string) {
 		parts = append(parts, fmt.Sprintf("$%.2f", float64(s.EstimatedCostMicros.Int64)/1_000_000))
 	}
 
+	if s.Outcome.Valid {
+		outcome := strings.ToLower(strings.TrimSpace(s.Outcome.String))
+		if outcome != "" && outcome != "unknown" {
+			parts = append(parts, outcome)
+		}
+	}
+
+	if s.Branch.Valid && s.Branch.String != "" && s.Branch.String != repoLabel {
+		parts = append(parts, fmt.Sprintf("branch:%s", s.Branch.String))
+	}
+
+	if s.FilesTouched.Valid && s.FilesTouched.String != "" {
+		var files []string
+		if err := json.Unmarshal([]byte(s.FilesTouched.String), &files); err == nil && len(files) > 0 {
+			parts = append(parts, fmt.Sprintf("%d files", len(files)))
+		}
+	}
+
+	if s.GitCommits.Valid && s.GitCommits.Int64 > 0 {
+		parts = append(parts, fmt.Sprintf("%d commits", s.GitCommits.Int64))
+	}
+
+	if s.PrUrl.Valid && s.PrUrl.String != "" {
+		if m := prNumberRegex.FindStringSubmatch(s.PrUrl.String); len(m) == 2 {
+			parts = append(parts, fmt.Sprintf("PR #%s", m[1]))
+		}
+	}
+
 	if s.FirstPrompt.Valid && s.FirstPrompt.String != "" {
 		prompt := s.FirstPrompt.String
 		if len(prompt) > 60 {
@@ -807,8 +847,10 @@ func (sw *SessionWatcher) appendSessionEndLog(sessionID string) {
 		parts = append(parts, fmt.Sprintf("\"%s\"", prompt))
 	}
 
-	sw.journal.AppendWorkLog(today, strings.Join(parts, " · "))
+	return strings.Join(parts, " · ")
 }
+
+var prNumberRegex = regexp.MustCompile(`/pull/(\d+)`)
 
 func shortModel(model string) string {
 	m := strings.ToLower(model)

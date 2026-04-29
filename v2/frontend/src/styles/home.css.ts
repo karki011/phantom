@@ -1076,18 +1076,20 @@ export const iconMuted = style({
 export const activeSessionsCard = style({
   display: 'flex',
   flexDirection: 'column',
+  gap: vars.space.md,
+  padding: vars.space.xl,
   background: vars.color.bgTertiary,
   borderRadius: vars.radius.lg,
   border: `1px solid color-mix(in srgb, ${vars.color.border} 60%, transparent)`,
-  overflow: 'hidden',
+  fontFamily: vars.font.mono,
 });
 
 export const activeSessionsHeader = style({
   display: 'flex',
+  flexDirection: 'row',
   alignItems: 'center',
   gap: vars.space.xs,
-  padding: `${vars.space.sm} ${vars.space.md}`,
-  borderBottom: `1px solid ${vars.color.border}`,
+  flexWrap: 'wrap',
 });
 
 export const activeSessionsTitle = style({
@@ -1117,9 +1119,8 @@ export const activeSessionsCount = style({
 export const activeSessionsScroll = style({
   display: 'flex',
   flexDirection: 'column',
-  gap: vars.space.xs,
-  padding: vars.space.sm,
-  maxHeight: '320px',
+  gap: vars.space.md,
+  maxHeight: '360px',
   overflowY: 'auto',
   '::-webkit-scrollbar': { width: '4px' },
   '::-webkit-scrollbar-thumb': { background: vars.color.border, borderRadius: '2px' },

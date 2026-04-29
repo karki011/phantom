@@ -20,6 +20,9 @@ const [statusMap, setStatusMap] = createSignal<Record<string, WorktreeStatus>>({
 const [expandedProjects, setExpandedProjects] = createSignal<Set<string>>(new Set());
 const [leftSidebarWidth, setLeftSidebarWidth] = createSignal(260);
 const [leftSidebarCollapsed, setLeftSidebarCollapsed] = createSignal(false);
+// True while the user is dragging the resize handle — used to pause the
+// collapse/expand width animation so per-pixel drag doesn't ease.
+const [isLeftResizing, setIsLeftResizing] = createSignal(false);
 const [sidebarSearch, setSidebarSearch] = createSignal('');
 
 // Which project is showing the inline create input
@@ -34,6 +37,24 @@ export const filteredProjects = createMemo(() => {
     const wts = worktreeMap()[p.id] ?? [];
     return wts.some((w) => w.branch.toLowerCase().includes(query));
   });
+});
+
+// Derived: the currently active worktree (across all projects)
+export const activeWorktree = createMemo(() => {
+  const wtId = activeWorktreeId();
+  if (!wtId) return null;
+  for (const workspaces of Object.values(worktreeMap())) {
+    const match = workspaces.find((w) => w.id === wtId);
+    if (match) return match;
+  }
+  return null;
+});
+
+// Derived: the project that owns the active worktree
+export const activeProject = createMemo(() => {
+  const wt = activeWorktree();
+  if (!wt) return null;
+  return projects().find((p) => p.id === wt.project_id) ?? null;
 });
 
 // Load worktrees for a single project
@@ -181,6 +202,8 @@ export {
   setLeftSidebarWidth,
   leftSidebarCollapsed,
   setLeftSidebarCollapsed,
+  isLeftResizing,
+  setIsLeftResizing,
   sidebarSearch,
   setSidebarSearch,
   creatingInProject,

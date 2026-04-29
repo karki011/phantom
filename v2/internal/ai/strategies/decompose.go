@@ -19,6 +19,11 @@ func (d *DecomposeStrategy) ID() string { return "decompose" }
 // Name returns a human-readable name.
 func (d *DecomposeStrategy) Name() string { return "Task Decomposition" }
 
+// Description returns a brief explanation of what this strategy does.
+func (d *DecomposeStrategy) Description() string {
+	return "Breaks complex tasks into ordered subtasks with dependency-aware guidance for incremental changes."
+}
+
 // ShouldActivate returns a score indicating how well this strategy fits.
 func (d *DecomposeStrategy) ShouldActivate(a TaskAssessment) (float64, string) {
 	switch {

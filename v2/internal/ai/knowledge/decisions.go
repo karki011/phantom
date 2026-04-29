@@ -7,11 +7,15 @@ package knowledge
 
 import (
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// ErrInvalidDecision is returned when Record is called with empty required fields.
+var ErrInvalidDecision = errors.New("decision goal and strategy_id must be non-empty")
 
 // Decision records a strategy choice made for a specific goal.
 type Decision struct {
@@ -65,7 +69,13 @@ func NewDecisionStore(db *sql.DB) (*DecisionStore, error) {
 }
 
 // Record persists a new decision and returns its ID.
+// Rejects writes with empty goal or strategyID to prevent corrupting the
+// ai_decisions table — past callers have leaked zero-value Decisions.
 func (ds *DecisionStore) Record(goal, strategyID string, confidence float64, complexity, risk string) (string, error) {
+	if strings.TrimSpace(goal) == "" || strings.TrimSpace(strategyID) == "" {
+		LogError("decisions", "Record-empty-fields", ErrInvalidDecision, "goal="+goal+" strategy_id="+strategyID)
+		return "", ErrInvalidDecision
+	}
 	id := uuid.New().String()
 	_, err := ds.db.Exec(
 		"INSERT INTO ai_decisions (id, goal, strategy_id, confidence, complexity, risk) VALUES (?, ?, ?, ?, ?, ?)",
@@ -82,6 +92,33 @@ func (ds *DecisionStore) RecordOutcome(decisionID string, success bool, failureR
 		id, decisionID, boolToInt(success), failureReason,
 	)
 	return err
+}
+
+// ListRecent returns the most recently recorded decisions, newest first.
+// Pass 0 (or a non-positive value) to use the default limit of 20.
+func (ds *DecisionStore) ListRecent(limit int) ([]Decision, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	rows, err := ds.db.Query(
+		"SELECT id, goal, strategy_id, confidence, complexity, risk, created_at FROM ai_decisions ORDER BY created_at DESC LIMIT ?",
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Decision
+	for rows.Next() {
+		var d Decision
+		if err := rows.Scan(&d.ID, &d.Goal, &d.StrategyID, &d.Confidence, &d.Complexity, &d.Risk, &d.CreatedAt); err != nil {
+			LogError("decisions", "ListRecent-scan", err)
+			continue
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
 }
 
 // FindSimilar returns past decisions whose goals are similar to the given goal.
