@@ -1,4 +1,4 @@
-// PhantomOS v2 — Guided tour step definitions
+// Phantom — Guided tour step definitions
 // Author: Subash Karki
 
 import type { TopTab } from '@/core/signals/app';
@@ -83,7 +83,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     element: '[data-tour="action-ai"]',
     title: '[SYSTEM] AI Command Center',
-    description: 'Strategy pipeline, decisions, evolution. The brain behind PhantomOS.',
+    description: 'Strategy pipeline, decisions, evolution. The brain behind Phantom.',
     side: 'bottom',
     align: 'end',
   },

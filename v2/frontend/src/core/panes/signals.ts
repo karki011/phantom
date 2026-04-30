@@ -1,5 +1,5 @@
 /**
- * PhantomOS v2 — SolidJS pane store
+ * Phantom — SolidJS pane store
  * Ported from v1 Jotai atoms to SolidJS createStore + produce
  * Author: Subash Karki
  */

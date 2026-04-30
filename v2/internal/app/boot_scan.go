@@ -1,4 +1,4 @@
-// Wails binding for PhantomOS boot screen system scan.
+// Wails binding for Phantom boot screen system scan.
 // Author: Subash Karki
 package app
 
@@ -241,7 +241,7 @@ func detectAgents(home string, provReg *provider.Registry) []AgentStatus {
 	return installed
 }
 
-// BootScan collects real system data for the PhantomOS boot screen.
+// BootScan collects real system data for the Phantom boot screen.
 // Called from the frontend via: (window as any).go?.['app']?.App?.BootScan()
 func (a *App) BootScan() (*BootScanResult, error) {
 	home, _ := os.UserHomeDir()

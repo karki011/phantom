@@ -1,5 +1,5 @@
 /**
- * PhantomOS v2 — Binary tree layout utilities
+ * Phantom — Binary tree layout utilities
  * Ported from v1 @phantom-os/panes layout-utils.ts
  * Author: Subash Karki
  *

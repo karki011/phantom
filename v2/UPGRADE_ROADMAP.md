@@ -1,8 +1,7 @@
-# Phantom-OS v2 — Consolidated Upgrade Roadmap
+# Phantom — Upgrade Roadmap
 
 **Author:** Subash Karki
 **Date:** 2026-04-29
-**Sources synthesized:** `AGENT_DECK_RESEARCH.md` + `AGENTCHATTR_RESEARCH.md`
 **Status:** Ranked roadmap — non-binding. Pick a slice, then commit.
 
 ---
@@ -14,21 +13,13 @@
 - **Phase 2 (Next, 2–4 weeks):** @mention autocomplete + agent pills, Channels-within-conversation, Multi-select delete, Conversation summaries, Cost dashboard + budgets, Skills Manager.
 - **Phase 3 (Later, multi-sprint):** Watchers (external event ingress), Conductor (persistent supervisor), Loop-guarded agent-to-agent chains, Export/Import zip.
 - **Three "killer combos"** where two ideas compound: (Fork + Channels), (Loop Guard + Conductor + Watchers), (@mention + Status semantics).
-- **Stack note:** Phantom-OS v2 = **Wails + Go + SolidJS + vanilla-extract + Kobalte + sqlc/SQLite**. Confirmed against `frontend/package.json` and `.claude/rules/coding-principles.md`. Not Chakra, not Mantine, not Electron. The parent `~/phantom-os/CLAUDE.md` (Electron + Mantine) describes a *different* sibling project; the global `~/.claude/CLAUDE.md` (Chakra v3) is for yet another project. **For v2, follow `v2/.claude/rules/coding-principles.md`.**
+- **Stack:** Phantom = **Wails + Go + SolidJS + vanilla-extract + Kobalte + sqlc/SQLite**. Follow `.claude/rules/coding-principles.md` for all conventions below.
 
 ---
 
-## 1. Stack reality check
+## 1. Stack conventions
 
-Three CLAUDE.md files say three different things. Resolved:
-
-| File | Says | Applies to |
-|---|---|---|
-| `~/.claude/CLAUDE.md` (global) | Chakra UI v3 mandatory | Some other project (likely a CloudZero web app) |
-| `~/phantom-os/CLAUDE.md` (parent) | Electron + Mantine + Hono + Jotai | Sibling Electron app at `~/phantom-os/apps/desktop/` |
-| `~/phantom-os/v2/.claude/rules/coding-principles.md` | SolidJS + Kobalte + vanilla-extract + sqlc | **This roadmap targets THIS file** |
-
-**Action:** When implementing any item below, follow `v2/.claude/rules/coding-principles.md`:
+When implementing any item below, follow `.claude/rules/coding-principles.md`:
 - `vars.color.*` / `vars.font.*` from `styles/theme.css.ts`
 - `buttonRecipe` from `recipes.css.ts` for buttons
 - `PhantomModal` for dialogs (never raw Kobalte `Dialog`)
@@ -55,7 +46,7 @@ ROI score = (user-visible benefit × likelihood-of-use) ÷ effort. Tied items br
 | 8 | **Channels within a conversation** | chattr | M | 2 | Decouples topics; pairs with Fork |
 | 9 | **Multi-select message delete** (drag select) | chattr | S | 2 | Privacy/hygiene gap; backend partial already |
 | 10 | **Conversation summaries** | chattr | M | 2 | Cuts cost/latency on resume; reuses journal/knowledge plumbing |
-| 11 | **Cost dashboard + budgets + export** | deck | M | 2 | Data exists in `internal/pricing/`; on-brand for CloudZero |
+| 11 | **Cost dashboard + budgets + export** | deck | M | 2 | Data exists in `internal/pricing/`; usage-cost visibility is core to a power-user AI workbench |
 | 12 | **Skills Manager** (project-scoped attach/detach) | deck | M | 2 | Pairs with worktree-centric model |
 | 13 | **Loop-guarded agent-to-agent chain** | chattr | M | 3 | Foundation for Conductor; promotes Compare to debate |
 | 14 | **Watchers** (GitHub/webhook → session) | deck | L | 3 | Strategic — turns Phantom into mission control |
@@ -148,7 +139,6 @@ From both research reports — DO NOT adopt these:
 - **Default `--dangerously-skip-permissions` / `--yolo` launchers** (chattr) — security ceiling, not a feature gap. Keep `internal/safety/`.
 - **Hats (SVG avatar overlays)** (chattr) — feature creep without customer ask.
 - **Public GitHub Discussions feedback widget** (deck) — wrong surface for a desktop app.
-- **Chakra UI v3 patterns** (global CLAUDE.md) — not applicable to this repo. Translate any "Chakra recipe" guidance to Kobalte primitive + vanilla-extract recipe.
 
 ---
 
