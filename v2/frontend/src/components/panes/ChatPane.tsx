@@ -876,8 +876,21 @@ export default function ChatPane(props: ChatPaneProps) {
    */
   const handleForkSession = async () => {
     const id = activeSessionId();
-    if (!id) return;
-    await forkSession(id, '');
+    if (!id) {
+      showWarningToast('No active session', 'Start a Claude session before forking.');
+      return;
+    }
+    try {
+      const newId = await forkSession(id, '');
+      if (!newId) {
+        showWarningToast('Fork failed', 'Backend returned no new session ID.');
+        return;
+      }
+      showToast(`Forked → ${newId.slice(0, 8)}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showWarningToast('Fork failed', msg);
+    }
   };
 
   // ── Render ──────────────────────────────────────────────────────────────
