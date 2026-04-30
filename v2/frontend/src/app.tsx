@@ -10,7 +10,7 @@ import { bootstrapSessions } from './core/signals/sessions';
 import { bootstrapWards } from './core/signals/wards';
 import { bootstrapProjects } from './core/signals/projects';
 import { bootstrapApp, activeTopTab, activeWorktreeId } from './core/signals/app';
-import { worktreeMap } from './core/signals/worktrees';
+import { worktreeMap, bootstrapWorktrees } from './core/signals/worktrees';
 import { loadPref, getPref } from './core/signals/preferences';
 import { startTour } from './core/tour/tour';
 import { initTheme, initFontStyle } from './core/signals/theme';
@@ -81,6 +81,11 @@ export function App() {
     bootstrapApp();
     bootstrapSessions();
     bootstrapProjects();
+
+    // Restore the last-active worktree BEFORE flipping ready=true so the
+    // initial render lands on the workspace instead of flashing WelcomePage.
+    // Idempotent: WorktreeSidebar.onMount calls this again as a safety net.
+    await bootstrapWorktrees();
 
     const wardsEnabled = await loadPref('wards_enabled');
     if (wardsEnabled === 'true') bootstrapWards();

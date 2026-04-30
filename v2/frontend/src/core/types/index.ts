@@ -103,6 +103,11 @@ export interface WorktreeStatus {
   ahead_by: number;
   behind_by: number;
   is_clean: boolean;
+  // Embedded RepoStatus file lists from the backend. Optional because some
+  // call sites (e.g. legacy `WorktreeInfo`-only paths) won't return them.
+  staged?: FileStatus[];
+  unstaged?: FileStatus[];
+  untracked?: FileStatus[];
   has_conflicts: boolean;
   conflicts: string[];
   active_session?: string;

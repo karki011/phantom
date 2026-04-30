@@ -5,7 +5,7 @@ import { createSignal, createMemo } from 'solid-js';
 import { onWailsEvent } from '../events';
 import { projects, bootstrapProjects } from './projects';
 import { activeWorktreeId, setActiveWorktreeId } from './app';
-import { listWorktrees, createWorktree, removeWorktree } from '../bindings';
+import { listWorktrees, createWorktree, removeWorktree, getAllWorktreeStatus } from '../bindings';
 import { setPref, loadPref } from './preferences';
 import { clearWorktreeCache } from '../panes/signals';
 import type { Workspace, WorktreeStatus } from '../types';
@@ -75,12 +75,61 @@ export async function refreshAllWorktrees(): Promise<void> {
   await Promise.all(allProjects.map((p) => loadProjectWorktrees(p.id)));
 }
 
-// Bootstrap: load persisted prefs, all worktrees, subscribe to events
+// Refresh per-worktree git status (staged/unstaged/untracked counts, ahead/behind)
+// keyed by worktree path. Used by the sidebar dirty-file badge and the
+// LeftRail branch tooltip. Coalesced via the existing `git:status` event and
+// a low-frequency interval poll.
+export async function refreshAllWorktreeStatuses(): Promise<void> {
+  try {
+    const all = await getAllWorktreeStatus();
+    const next: Record<string, WorktreeStatus> = {};
+    for (const s of all) {
+      if (s?.path) next[s.path] = s;
+    }
+    setStatusMap(next);
+  } catch (err) {
+    console.error('[worktrees] refreshAllWorktreeStatuses failed', err);
+  }
+}
+
+// Pick a sibling worktree to restore when the saved active worktree id is
+// stale (e.g. removed via `git worktree remove` outside the app). Returns
+// null if the project itself is gone or has no worktrees.
+//
+// Recency proxy: Workspace has no last_active/updated_at column, so we use
+// `created_at` desc (newer worktrees more likely to be the user's current
+// work) with branch name as a stable tiebreaker.
+export function findFallbackWorktreeId(savedProjectId: string): string | null {
+  const wts = worktreeMap()[savedProjectId];
+  if (!wts || wts.length === 0) return null;
+  const sorted = [...wts].sort((a, b) => {
+    const byCreated = (b.created_at ?? 0) - (a.created_at ?? 0);
+    if (byCreated !== 0) return byCreated;
+    return a.branch.localeCompare(b.branch);
+  });
+  return sorted[0]?.id ?? null;
+}
+
+// Bootstrap: load persisted prefs, all worktrees, subscribe to events.
+// Idempotent — safe to call from both App.onMount (eager restore) and the
+// sidebar mount path; subsequent calls are short-circuited.
+let worktreesBootstrapped = false;
 export async function bootstrapWorktrees(): Promise<void> {
+  if (worktreesBootstrapped) return;
+  worktreesBootstrapped = true;
+
   await bootstrapProjects();
   console.log('[worktrees] bootstrapping, projects:', projects().length);
   await refreshAllWorktrees();
   console.log('[worktrees] bootstrap complete, worktreeMap:', worktreeMap());
+
+  // Initial status load + low-frequency poll (every 15s) so dirty-file badges
+  // stay reasonably fresh even if fsnotify misses an event. The `git:status`
+  // event below covers the common case in real time.
+  refreshAllWorktreeStatuses();
+  setInterval(() => {
+    refreshAllWorktreeStatuses();
+  }, 15_000);
 
   // Restore sidebar width
   const savedWidth = await loadPref('sidebar_width');
@@ -89,23 +138,62 @@ export async function bootstrapWorktrees(): Promise<void> {
     if (!Number.isNaN(parsed)) setLeftSidebarWidth(parsed);
   }
 
-  // Auto-expand only the project containing the last active worktree
+  // Restore last-active worktree if it still exists. If the saved id is
+  // stale (worktree removed between sessions, malformed pref), try to fall
+  // back to another worktree from the same project before clearing. If the
+  // project is also gone, clear both prefs and fall through to the welcome
+  // screen.
   const savedWt = await loadPref('active_worktree_id');
   if (savedWt) {
-    setActiveWorktreeId(savedWt);
     const map = worktreeMap();
+    let ownerProjectId: string | null = null;
     for (const [projectId, wts] of Object.entries(map)) {
       if (wts.some((w: Workspace) => w.id === savedWt)) {
-        setExpandedProjects(new Set([projectId]));
+        ownerProjectId = projectId;
         break;
+      }
+    }
+    if (ownerProjectId) {
+      setActiveWorktreeId(savedWt);
+      setExpandedProjects(new Set([ownerProjectId]));
+      // Keep active_project_id in sync (back-fill for sessions saved before
+      // this pref was introduced).
+      setPref('active_project_id', ownerProjectId);
+    } else {
+      const savedProjectId = await loadPref('active_project_id');
+      const fallbackId = savedProjectId ? findFallbackWorktreeId(savedProjectId) : null;
+      if (fallbackId && savedProjectId) {
+        console.warn(
+          '[worktrees] saved active_worktree_id stale, falling back to sibling worktree:',
+          { stale: savedWt, fallback: fallbackId, project: savedProjectId },
+        );
+        setActiveWorktreeId(fallbackId);
+        setExpandedProjects(new Set([savedProjectId]));
+        setPref('active_worktree_id', fallbackId);
+      } else {
+        console.warn(
+          '[worktrees] saved active_worktree_id no longer exists and no project fallback, clearing:',
+          savedWt,
+        );
+        setPref('active_worktree_id', '');
+        setPref('active_project_id', '');
       }
     }
   }
 
   // Subscribe to backend events — refresh on changes
-  onWailsEvent('worktree:created', () => refreshAllWorktrees());
-  onWailsEvent('worktree:removed', () => refreshAllWorktrees());
-  onWailsEvent('worktree:updated', () => refreshAllWorktrees());
+  onWailsEvent('worktree:created', () => {
+    refreshAllWorktrees();
+    refreshAllWorktreeStatuses();
+  });
+  onWailsEvent('worktree:removed', () => {
+    refreshAllWorktrees();
+    refreshAllWorktreeStatuses();
+  });
+  onWailsEvent('worktree:updated', () => {
+    refreshAllWorktrees();
+    refreshAllWorktreeStatuses();
+  });
   // git:status fires per .git/index fsnotify event — coalesce bursts into a
   // single refresh so one user edit doesn't trigger N ListWorktrees calls.
   let gitStatusTimer: ReturnType<typeof setTimeout> | null = null;
@@ -114,9 +202,13 @@ export async function bootstrapWorktrees(): Promise<void> {
     gitStatusTimer = setTimeout(() => {
       gitStatusTimer = null;
       refreshAllWorktrees();
+      refreshAllWorktreeStatuses();
     }, 250);
   });
-  onWailsEvent('git:branch-changed', () => refreshAllWorktrees());
+  onWailsEvent('git:branch-changed', () => {
+    refreshAllWorktrees();
+    refreshAllWorktreeStatuses();
+  });
 }
 
 // Toggle a project's expanded state
@@ -139,10 +231,13 @@ export function selectWorktree(worktreeId: string): void {
   setActiveWorktreeId(worktreeId);
   setPref('active_worktree_id', worktreeId);
 
-  // Auto-expand the parent project when selecting a worktree
+  // Auto-expand the parent project when selecting a worktree, and persist
+  // its project id so we can fall back to a sibling worktree on next launch
+  // if this one is removed externally.
   const map = worktreeMap();
   for (const [projectId, wts] of Object.entries(map)) {
     if (wts.some((w: Workspace) => w.id === worktreeId)) {
+      setPref('active_project_id', projectId);
       setExpandedProjects((prev) => {
         if (prev.has(projectId)) return prev;
         const next = new Set(prev);
@@ -188,6 +283,7 @@ export async function removeWorktreeById(
     } else {
       setActiveWorktreeId(null);
       setPref('active_worktree_id', '');
+      setPref('active_project_id', '');
     }
   }
 
