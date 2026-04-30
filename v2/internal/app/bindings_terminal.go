@@ -74,8 +74,9 @@ func (a *App) CreateTerminal(id, worktreeId, projectId, cwd string, cols, rows i
 	return nil
 }
 
-// DestroyTerminal saves scrollback, unlinks from any Claude session,
-// marks the DB record as ended, kills the PTY, and unsubscribes events.
+// DestroyTerminal saves scrollback, kills any linked Claude session,
+// unlinks from the session, marks the DB record as ended, kills the PTY,
+// and unsubscribes events.
 func (a *App) DestroyTerminal(id string) error {
 	q := db.New(a.DB.Writer)
 	now := time.Now().Unix()
@@ -100,7 +101,16 @@ func (a *App) DestroyTerminal(id string) error {
 		}
 	}
 
-	// 3. Mark ended in DB.
+	// NOTE: Don't explicitly KillSession here. The Linker's CWD-based
+	// attribution can link the wrong Claude session to a pane (when multiple
+	// active sessions match the cwd), so killing on close is incorrect — it
+	// can SIGTERM a Claude that's actually running in a different pane.
+	// Closing the PTY (step below) sends SIGHUP to the actual foreground
+	// process group; whichever Claude lives in this PTY exits naturally,
+	// others stay alive. The session_watcher reconciles DB status from PID
+	// liveness, so dead sessions get marked completed without manual help.
+
+	// 4. Mark ended in DB.
 	if err := q.EndTerminalSession(a.ctx, db.EndTerminalSessionParams{
 		EndedAt: sql.NullInt64{Int64: now, Valid: true},
 		PaneID:  id,
@@ -191,7 +201,8 @@ func (a *App) DestroyTerminalsForWorktree(worktreeId string) error {
 		return fmt.Errorf("DestroyTerminalsForWorktree: list: %w", err)
 	}
 
-	// 2. Save scrollback for each before bulk-ending.
+	// 2. Save scrollback + kill any linked Claude session for each terminal
+	//    before bulk-ending (which clears the FK reference).
 	for _, t := range terminals {
 		sess, ok := a.Terminal.Get(t.PaneID)
 		if ok {
@@ -202,6 +213,8 @@ func (a *App) DestroyTerminalsForWorktree(worktreeId string) error {
 				LastActiveAt: sql.NullInt64{Int64: now, Valid: true},
 			})
 		}
+		// Don't KillSession here — see comment in DestroyTerminal.
+		// PTY close (step 4) sends SIGHUP to whatever's actually running.
 	}
 
 	// 3. Bulk-end in DB (also clears session_id).
@@ -248,6 +261,39 @@ func (a *App) GetTerminalScrollback(id string) string {
 		return ""
 	}
 	return string(sess.Scrollback.Bytes())
+}
+
+// SaveTerminalSnapshot persists a serialized xterm.js state for a pane.
+// The frontend produces this via @xterm/addon-serialize before unmounting
+// (e.g. when the user closes the window or detaches the pane). On a later
+// RestoreTerminal call we replay the full xterm visual state — cursor,
+// alt-screen, colors, and scrollback — instead of just dumping raw bytes.
+func (a *App) SaveTerminalSnapshot(paneId string, state string) error {
+	if a.DB == nil {
+		return fmt.Errorf("SaveTerminalSnapshot: db unavailable")
+	}
+	q := db.New(a.DB.Writer)
+	return q.UpdateTerminalSerializedState(a.ctx, db.UpdateTerminalSerializedStateParams{
+		PaneID:          paneId,
+		SerializedState: sql.NullString{String: state, Valid: state != ""},
+		LastActiveAt:    sql.NullInt64{Int64: time.Now().Unix(), Valid: true},
+	})
+}
+
+// GetTerminalSnapshot returns the previously-saved serialized xterm state
+// for a pane, or an empty string if none exists. The frontend writes the
+// returned string into the xterm instance with terminal.write() before
+// any backend output is replayed, restoring the visual state in one shot.
+func (a *App) GetTerminalSnapshot(paneId string) string {
+	if a.DB == nil {
+		return ""
+	}
+	q := db.New(a.DB.Reader)
+	state, err := q.GetTerminalSerializedState(a.ctx, paneId)
+	if err != nil || !state.Valid {
+		return ""
+	}
+	return state.String
 }
 
 // nullStr returns a valid sql.NullString for non-empty values, NULL otherwise.

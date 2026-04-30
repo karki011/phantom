@@ -6,12 +6,21 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/log"
 	"github.com/creack/pty"
 )
+
+// defaultLingerHours is the default time a detached PTY is kept alive
+// before the reaper kills it. Override via PHANTOM_PTY_LINGER_HOURS.
+const defaultLingerHours = 24
+
+// reaperTickInterval is how often the reaper checks for stale detached PTYs.
+const reaperTickInterval = 5 * time.Minute
 
 // Manager is the terminal lifecycle manager. It owns all active sessions
 // and serialises create/destroy operations.
@@ -43,9 +52,18 @@ func (m *Manager) Create(ctx context.Context, id, cwd string, cols, rows uint16)
 	// Build clean env.
 	env := buildCleanEnv()
 
+	// Default args + integration tweaks. When shell integration is enabled
+	// for this shell we replace `--login` with shell-specific flags and
+	// append a few env vars that the integration scripts read.
+	args := []string{"--login"}
+	if cfg, ok := shellIntegrationFor(shell); ok {
+		args = cfg.args
+		env = append(env, cfg.env...)
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 
-	cmd := exec.CommandContext(ctx, shell, "--login")
+	cmd := exec.CommandContext(ctx, shell, args...)
 	cmd.Dir = cwd
 	cmd.Env = env
 
@@ -150,6 +168,90 @@ func (m *Manager) Count() int {
 	})
 	return count
 }
+
+// MarkAttached records that a frontend listener attached to the session.
+// Clears any prior detach timestamp so the reaper won't kill it.
+func (m *Manager) MarkAttached(id string) {
+	if sess, ok := m.Get(id); ok {
+		sess.mu.Lock()
+		sess.LastDetachedAt = time.Time{}
+		sess.mu.Unlock()
+	}
+}
+
+// MarkDetached records that the last frontend listener dropped. Once
+// detached for longer than the linger window the reaper destroys the PTY.
+func (m *Manager) MarkDetached(id string) {
+	if sess, ok := m.Get(id); ok {
+		sess.mu.Lock()
+		sess.LastDetachedAt = time.Now()
+		sess.mu.Unlock()
+	}
+}
+
+// StartReaper launches a background goroutine that, every reaperTickInterval,
+// destroys any session whose LastDetachedAt is older than the linger window.
+// The window defaults to 24h and is overridable via PHANTOM_PTY_LINGER_HOURS.
+// The goroutine exits when ctx is cancelled.
+func (m *Manager) StartReaper(ctx context.Context) {
+	go m.reapLoop(ctx)
+}
+
+func (m *Manager) reapLoop(ctx context.Context) {
+	ticker := time.NewTicker(reaperTickInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.reapStale()
+		}
+	}
+}
+
+// reapStale destroys sessions detached longer than the configured linger window.
+// Attached sessions (LastDetachedAt zero) are never reaped.
+func (m *Manager) reapStale() {
+	linger := lingerWindow()
+	cutoff := time.Now().Add(-linger)
+
+	var toReap []string
+	m.sessions.Range(func(key, value any) bool {
+		sess := value.(*Session)
+		sess.mu.RLock()
+		detachedAt := sess.LastDetachedAt
+		sess.mu.RUnlock()
+		if !detachedAt.IsZero() && detachedAt.Before(cutoff) {
+			toReap = append(toReap, key.(string))
+		}
+		return true
+	})
+
+	for _, id := range toReap {
+		log.Info("terminal/manager: reaping stale detached session", "id", id, "linger", linger.String())
+		_ = m.Destroy(id)
+	}
+}
+
+// lingerWindow reads PHANTOM_PTY_LINGER_HOURS, falling back to defaultLingerHours.
+func lingerWindow() time.Duration {
+	if raw := os.Getenv("PHANTOM_PTY_LINGER_HOURS"); raw != "" {
+		if hours, err := strconv.Atoi(raw); err == nil && hours > 0 {
+			return time.Duration(hours) * time.Hour
+		}
+	}
+	return defaultLingerHours * time.Hour
+}
+
+// AdoptOrphans is a stub for future PTY-survives-Go-restart support. Today,
+// PTYs are children of the Go process and die with it on full quit (Cmd+Q),
+// so there are no live orphans to adopt. The MarkOrphanedTerminalsEnded DB
+// reconciliation already handles the post-restart cleanup. Method exists so
+// callers can wire it now and we can fill in a real implementation when the
+// detached-helper mode lands.
+func (m *Manager) AdoptOrphans(_ context.Context) {}
 
 // ---------------------------------------------------------------------------
 // Helpers

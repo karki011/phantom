@@ -71,3 +71,9 @@ SELECT * FROM terminal_sessions WHERE status = 'ended' AND ended_at >= ? ORDER B
 
 -- name: ReactivateTerminal :exec
 UPDATE terminal_sessions SET status = 'active', ended_at = NULL, started_at = ?, last_active_at = ? WHERE pane_id = ?;
+
+-- name: UpdateTerminalSerializedState :exec
+UPDATE terminal_sessions SET serialized_state = ?, last_active_at = ? WHERE pane_id = ?;
+
+-- name: GetTerminalSerializedState :one
+SELECT serialized_state FROM terminal_sessions WHERE pane_id = ?;

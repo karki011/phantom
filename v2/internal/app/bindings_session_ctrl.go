@@ -12,6 +12,47 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/session"
 )
 
+// reapZombieSessions marks every status='active' session as completed.
+// At app boot no Claude session can actually be running yet — any that
+// remain in 'active' state are leftovers from a previous run that died
+// without proper cleanup (the bug fixed in DestroyTerminal: closing a
+// tab unlinked the terminal but never killed the linked Claude session,
+// so the row sat at status='active' forever and showed up in the
+// resource monitor as a ghost).
+func (a *App) reapZombieSessions() {
+	if a.DB == nil {
+		return
+	}
+	qReader := db.New(a.DB.Reader)
+	qWriter := db.New(a.DB.Writer)
+
+	sessions, err := qReader.ListActiveSessions(context.Background())
+	if err != nil {
+		slog.Warn("reapZombieSessions: list", "err", err)
+		return
+	}
+	if len(sessions) == 0 {
+		return
+	}
+
+	now := time.Now().Unix()
+	reaped := 0
+	for _, s := range sessions {
+		if err := qWriter.UpdateSessionStatus(context.Background(), db.UpdateSessionStatusParams{
+			ID:      s.ID,
+			Status:  sql.NullString{String: "completed", Valid: true},
+			EndedAt: sql.NullInt64{Int64: now, Valid: true},
+		}); err != nil {
+			slog.Warn("reapZombieSessions: mark completed", "id", s.ID, "err", err)
+			continue
+		}
+		reaped++
+	}
+	if reaped > 0 {
+		slog.Info("reapZombieSessions: marked stale Claude sessions completed", "count", reaped)
+	}
+}
+
 // PauseSession pauses the named session, buffering its output.
 func (a *App) PauseSession(sessionID string) error {
 	if err := a.SessionCtrl.Pause(context.Background(), sessionID); err != nil {

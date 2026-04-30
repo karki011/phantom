@@ -530,3 +530,29 @@ func (q *Queries) UpdateTerminalScrollback(ctx context.Context, arg UpdateTermin
 	_, err := q.db.ExecContext(ctx, updateTerminalScrollback, arg.Scrollback, arg.LastActiveAt, arg.PaneID)
 	return err
 }
+
+const updateTerminalSerializedState = `-- name: UpdateTerminalSerializedState :exec
+UPDATE terminal_sessions SET serialized_state = ?, last_active_at = ? WHERE pane_id = ?
+`
+
+type UpdateTerminalSerializedStateParams struct {
+	SerializedState sql.NullString `json:"serialized_state"`
+	LastActiveAt    sql.NullInt64  `json:"last_active_at"`
+	PaneID          string         `json:"pane_id"`
+}
+
+func (q *Queries) UpdateTerminalSerializedState(ctx context.Context, arg UpdateTerminalSerializedStateParams) error {
+	_, err := q.db.ExecContext(ctx, updateTerminalSerializedState, arg.SerializedState, arg.LastActiveAt, arg.PaneID)
+	return err
+}
+
+const getTerminalSerializedState = `-- name: GetTerminalSerializedState :one
+SELECT serialized_state FROM terminal_sessions WHERE pane_id = ?
+`
+
+func (q *Queries) GetTerminalSerializedState(ctx context.Context, paneID string) (sql.NullString, error) {
+	row := q.db.QueryRowContext(ctx, getTerminalSerializedState, paneID)
+	var serialized_state sql.NullString
+	err := row.Scan(&serialized_state)
+	return serialized_state, err
+}

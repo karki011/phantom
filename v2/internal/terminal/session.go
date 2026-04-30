@@ -39,6 +39,12 @@ type Session struct {
 
 	CreatedAt    time.Time
 	LastActiveAt time.Time
+
+	// LastDetachedAt is set when the last frontend listener drops, cleared
+	// when a new one attaches. Zero means "currently attached / never been
+	// detached." The Manager's reaper destroys sessions that have been
+	// detached longer than the configured linger window (default 24h).
+	LastDetachedAt time.Time
 }
 
 // SessionInfo is a read-only metadata snapshot of a Session.
@@ -141,15 +147,21 @@ func (s *Session) Resize(cols, rows uint16) error {
 
 // Subscribe registers a new output listener and returns a receive-only
 // channel. The channel is buffered (256) to tolerate short consumer stalls.
+// Re-attaching clears any prior detach timestamp so the reaper won't kill
+// a session as soon as the user re-opens it.
 func (s *Session) Subscribe(id string) <-chan []byte {
 	ch := make(chan []byte, listenerBufSize)
 	s.mu.Lock()
 	s.listeners[id] = ch
+	// A live subscriber means "attached" — reset the detach clock.
+	s.LastDetachedAt = time.Time{}
 	s.mu.Unlock()
 	return ch
 }
 
-// Unsubscribe removes a listener and closes its channel.
+// Unsubscribe removes a listener and closes its channel. When the last
+// listener drops we stamp LastDetachedAt so the Manager reaper can age
+// the PTY out after the linger window.
 func (s *Session) Unsubscribe(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -157,6 +169,9 @@ func (s *Session) Unsubscribe(id string) {
 	if ch, ok := s.listeners[id]; ok {
 		close(ch)
 		delete(s.listeners, id)
+	}
+	if len(s.listeners) == 0 {
+		s.LastDetachedAt = time.Now()
 	}
 }
 

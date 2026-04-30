@@ -200,6 +200,11 @@ func (a *App) Startup(ctx context.Context) {
 		}
 	}
 
+	// Reap zombie Claude sessions: rows with status='active' whose underlying
+	// process is gone. Happens when previous closed tabs left the session row
+	// behind (pre-fix behaviour). Runs once at startup, fast.
+	go a.reapZombieSessions()
+
 	// Initialize AI graph context injection.
 	if a.DB != nil {
 		queries := db.New(a.DB.Reader)
@@ -234,6 +239,13 @@ func (a *App) Startup(ctx context.Context) {
 		if err := q.MarkOrphanedTerminalsEnded(a.ctx, sql.NullInt64{Int64: now, Valid: true}); err != nil {
 			log.Error("app: mark orphaned terminals", "err", err)
 		}
+	}
+
+	// Adopt any in-process orphans (no-op today; reserved for future detached-helper mode)
+	// and start the 24h linger reaper for detached PTYs.
+	if a.Terminal != nil {
+		a.Terminal.AdoptOrphans(a.ctx)
+		a.Terminal.StartReaper(a.ctx)
 	}
 
 	// Wire PID lookup so Controller can suspend/resume/kill Claude processes.

@@ -7,8 +7,10 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
+import { SerializeAddon } from '@xterm/addon-serialize';
 import { getZoomConfig } from '../signals/zoom';
 import { loadPref } from '../signals/preferences';
+import { saveTerminalSnapshot } from '../bindings/terminal';
 
 export const MONO_FONT_FAMILY = '"Hack", monospace';
 
@@ -47,6 +49,8 @@ export async function initTerminalPrefs(): Promise<void> {
 export interface TerminalSession {
   terminal: Terminal;
   fitAddon: FitAddon;
+  /** SerializeAddon — produces a string that replays full xterm visual state via terminal.write(). */
+  serializeAddon: SerializeAddon;
   wrapper: HTMLDivElement;
   sessionId: string;
   attached: boolean;
@@ -55,6 +59,8 @@ export interface TerminalSession {
   unsubscribe?: () => void;
   /** SearchAddon instance — available only when @xterm/addon-search is installed */
   searchAddon?: { findNext(term: string, opts?: object): void; findPrevious(term: string, opts?: object): void };
+  /** Cached serialize() output captured on the most recent detachSession call. */
+  lastSerializedState?: string;
 }
 
 const sessions = new Map<string, TerminalSession>();
@@ -96,6 +102,12 @@ export function createSession(
   const fitAddon = new FitAddon();
   terminal.loadAddon(fitAddon);
 
+  // SerializeAddon — captures full xterm state (cursor, alt-screen, colors,
+  // scrollback) as a string we can replay verbatim with terminal.write().
+  // Loaded eagerly so it tracks all output from the moment the session opens.
+  const serializeAddon = new SerializeAddon();
+  terminal.loadAddon(serializeAddon);
+
   // WebGL renderer for smooth scrolling and GPU-accelerated rendering.
   try {
     const webgl = new WebglAddon();
@@ -118,6 +130,7 @@ export function createSession(
   const session: TerminalSession = {
     terminal,
     fitAddon,
+    serializeAddon,
     wrapper,
     sessionId,
     attached: false,
@@ -162,6 +175,19 @@ export function detachSession(sessionId: string): void {
   const session = sessions.get(sessionId);
   if (!session) return;
 
+  // Snapshot the full xterm state BEFORE moving the wrapper. We persist the
+  // string to the Go side so a future cold-start can replay it via
+  // terminal.write() and restore cursor/alt-screen/colors in one shot.
+  // Best-effort: a serialize() failure must never block detach.
+  try {
+    const state = session.serializeAddon.serialize();
+    session.lastSerializedState = state;
+    // Fire-and-forget — DB write happens in background.
+    void saveTerminalSnapshot(sessionId, state);
+  } catch {
+    /* ignore — detach must always succeed */
+  }
+
   // Move wrapper back to offscreen — keeps xterm + PTY alive
   getOffscreen().appendChild(session.wrapper);
   session.attached = false;
@@ -191,7 +217,11 @@ export function getAllSessions(): TerminalSession[] {
 
 export function safeFit(session: TerminalSession): boolean {
   const parent = session.wrapper.parentElement;
-  if (!parent || parent.offsetWidth < 50 || parent.offsetHeight < 50) return false;
+  if (!parent) return false;
+  // Skip if detached/hidden (offsetParent null) or zero-sized — fit() at 0×0
+  // would propose 1×1 cells and SIGHUP the foreground process.
+  if (parent.offsetParent === null) return false;
+  if (parent.clientWidth < 50 || parent.clientHeight < 50) return false;
   try { session.fitAddon.fit(); } catch {}
   return true;
 }
