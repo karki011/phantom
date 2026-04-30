@@ -1,8 +1,8 @@
-// PhantomOS v2 — Settings dialog shell
+// Phantom — Settings dialog shell
 // Author: Subash Karki
 
 import { For, Switch, Match, lazy } from 'solid-js';
-import { Palette, Code2, Terminal, Sparkles, Brain, Cpu, Settings } from 'lucide-solid';
+import { Palette, Code2, Terminal, Sparkles, Brain, Cpu, Settings, Key } from 'lucide-solid';
 import { PhantomModal } from '@/shared/PhantomModal/PhantomModal';
 import {
   settingsOpen,
@@ -18,6 +18,7 @@ const EditorSection = lazy(() => import('./sections/EditorSection'));
 const TerminalSection = lazy(() => import('./sections/TerminalSection'));
 const FeaturesSection = lazy(() => import('./sections/FeaturesSection'));
 const AIEngineSection = lazy(() => import('./sections/AIEngineSection'));
+const AiProviderSection = lazy(() => import('./sections/AiProviderSection'));
 const ProvidersSection = lazy(() => import('./sections/ProvidersSection'));
 const SystemSection = lazy(() => import('./sections/SystemSection'));
 
@@ -27,6 +28,7 @@ const sidebarItems: { id: SettingsSection; label: string; icon: typeof Palette }
   { id: 'terminal', label: 'Terminal', icon: Terminal },
   { id: 'features', label: 'Features', icon: Sparkles },
   { id: 'ai-engine', label: 'AI Engine', icon: Brain },
+  { id: 'ai-provider', label: 'AI Provider', icon: Key },
   { id: 'providers', label: 'Providers', icon: Cpu },
   { id: 'system', label: 'System', icon: Settings },
 ];
@@ -75,6 +77,9 @@ export function SettingsDialog() {
             </Match>
             <Match when={settingsSection() === 'ai-engine'}>
               <AIEngineSection />
+            </Match>
+            <Match when={settingsSection() === 'ai-provider'}>
+              <AiProviderSection />
             </Match>
             <Match when={settingsSection() === 'providers'}>
               <ProvidersSection />

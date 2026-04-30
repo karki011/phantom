@@ -1,9 +1,9 @@
-// PhantomOS v2 — Settings dialog signals
+// Phantom — Settings dialog signals
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';
 
-export type SettingsSection = 'appearance' | 'editor' | 'terminal' | 'features' | 'ai-engine' | 'providers' | 'system';
+export type SettingsSection = 'appearance' | 'editor' | 'terminal' | 'features' | 'ai-engine' | 'ai-provider' | 'providers' | 'system';
 
 const [settingsOpen, setSettingsOpen] = createSignal(false);
 const [settingsSection, setSettingsSection] = createSignal<SettingsSection>('appearance');
