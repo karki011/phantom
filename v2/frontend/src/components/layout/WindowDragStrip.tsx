@@ -1,4 +1,4 @@
-// PhantomOS v2 — Draggable strip housing macOS traffic-light inset, nav history, primary tab toggle, system stats, and action icons
+// Phantom — Draggable strip housing macOS traffic-light inset, nav history, primary tab toggle, system stats, and action icons
 // Author: Subash Karki
 
 import { createMemo, onCleanup, onMount, Show } from 'solid-js';
@@ -235,54 +235,55 @@ export function WindowDragStrip() {
           </Tip>
         </div>
 
-        <Show
-          when={gamificationEnabled() && hunterProfile()}
-          fallback={<span class={shellStyles.statusMuted}>Hunter Lv —</span>}
-        >
-          {(profile) => (
-            <button
-              type="button"
-              data-tour="hunter-button"
-              class={gamStyles.statusHunterSection}
-              title="Open Hunter Profile"
-              aria-label="Open Hunter Profile"
-              onClick={() => {
-                if (!gamificationEnabled()) return;
-                if (activeTopTab() === 'system' && cockpitView() === 'hunter') {
-                  setCockpitView('system');
-                  pushNav({ tab: 'system', view: 'system' });
-                  return;
-                }
-                setActiveTopTab('system');
-                setCockpitView('hunter');
-                pushNav({ tab: 'system', view: 'hunter' });
-              }}
-            >
-              <RankBadge rank={profile().rank} size="sm" />
-              <span class={gamStyles.statusLevelText}>Lv {profile().level}</span>
-              <XPProgressBar
-                current={profile().xp}
-                required={profile().xp_to_next}
-                level={profile().level}
-                mini
-              />
-              <Show when={(dailyQuests() ?? []).length > 0}>
-                {(() => {
-                  const quests = () => dailyQuests() ?? [];
-                  const completed = () => quests().filter((q) => q.completed > 0).length;
-                  const total = () => quests().length;
-                  return (
-                    <>
-                      <span class={shellStyles.statusDivider}>·</span>
-                      <span class={shellStyles.statusMuted} title="Daily Quests">
-                        ⚔ {completed()}/{total()}
-                      </span>
-                    </>
-                  );
-                })()}
-              </Show>
-            </button>
-          )}
+        <Show when={gamificationEnabled()}>
+          <Show
+            when={hunterProfile()}
+            fallback={<span class={shellStyles.statusMuted}>Hunter Lv —</span>}
+          >
+            {(profile) => (
+              <button
+                type="button"
+                data-tour="hunter-button"
+                class={gamStyles.statusHunterSection}
+                title="Open Hunter Profile"
+                aria-label="Open Hunter Profile"
+                onClick={() => {
+                  if (activeTopTab() === 'system' && cockpitView() === 'hunter') {
+                    setCockpitView('system');
+                    pushNav({ tab: 'system', view: 'system' });
+                    return;
+                  }
+                  setActiveTopTab('system');
+                  setCockpitView('hunter');
+                  pushNav({ tab: 'system', view: 'hunter' });
+                }}
+              >
+                <RankBadge rank={profile().rank} size="sm" />
+                <span class={gamStyles.statusLevelText}>Lv {profile().level}</span>
+                <XPProgressBar
+                  current={profile().xp}
+                  required={profile().xp_to_next}
+                  level={profile().level}
+                  mini
+                />
+                <Show when={(dailyQuests() ?? []).length > 0}>
+                  {(() => {
+                    const quests = () => dailyQuests() ?? [];
+                    const completed = () => quests().filter((q) => q.completed > 0).length;
+                    const total = () => quests().length;
+                    return (
+                      <>
+                        <span class={shellStyles.statusDivider}>·</span>
+                        <span class={shellStyles.statusMuted} title="Daily Quests">
+                          ⚔ {completed()}/{total()}
+                        </span>
+                      </>
+                    );
+                  })()}
+                </Show>
+              </button>
+            )}
+          </Show>
         </Show>
       </div>
     </div>

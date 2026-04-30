@@ -1,4 +1,4 @@
-// PhantomOS v2 — Gamification reactive signals
+// Phantom — Gamification reactive signals
 // Author: Subash Karki
 
 import { createSignal, createMemo } from 'solid-js';
@@ -40,7 +40,7 @@ const [achievementUnlockEvent, setAchievementUnlockEvent] = createSignal<Achieve
 
 // ── Derived ─────────────────────────────────────────────────────────────────
 
-const gamificationEnabled = createMemo(() => getPref('gamification_enabled') !== 'false');
+const gamificationEnabled = createMemo(() => getPref('gamification') === 'true');
 
 const hunterLevel = createMemo(() => hunterProfile()?.level ?? 0);
 const hunterRank = createMemo(() => hunterProfile()?.rank ?? 'E');

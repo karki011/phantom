@@ -1,4 +1,4 @@
-// PhantomOS v2 — App shell (Wave 1: Worktree Workspace layout)
+// Phantom — App shell (Wave 1: Worktree Workspace layout)
 // Author: Subash Karki
 
 import { createSignal, createEffect, onMount, onCleanup, Show, untrack } from 'solid-js';
@@ -90,8 +90,8 @@ export function App() {
     const wardsEnabled = await loadPref('wards_enabled');
     if (wardsEnabled === 'true') bootstrapWards();
 
-    const gamEnabled = await loadPref('gamification_enabled');
-    if (gamEnabled !== 'false') bootstrapGamification();
+    const gamEnabled = await loadPref('gamification');
+    if (gamEnabled === 'true') bootstrapGamification();
 
     // Load active provider config (for new session commands)
     const { loadActiveProvider } = await import('@/core/signals/active-provider');
