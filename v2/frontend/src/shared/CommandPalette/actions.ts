@@ -4,7 +4,7 @@
 import type { Component } from 'solid-js';
 import {
   Terminal, SplitSquareHorizontal, SplitSquareVertical, X,
-  Monitor, GitBranch, Settings, FileSearch, BookOpen,
+  Monitor, GitBranch, GitFork, Settings, FileSearch, BookOpen,
   Pause, Play, Square, Sun, Moon, ZoomIn, ZoomOut, RotateCcw,
   PenTool, Sidebar, PanelRight, LayoutGrid, Eye, Plug,
 } from 'lucide-solid';
@@ -32,7 +32,7 @@ import { zoomIn, zoomOut, zoomReset, ZOOM_LEVELS, applyZoom } from '@/core/signa
 import { applyTheme, type ThemeId } from '@/core/signals/theme';
 
 // === Session signals + bindings ===
-import { activeSession, activeSessionId } from '@/core/signals/sessions';
+import { activeSession, activeSessionId, forkSession } from '@/core/signals/sessions';
 import { pauseSession, resumeSession, killSession } from '@/core/bindings/sessions';
 
 // === MCP Manager ===
@@ -292,6 +292,19 @@ const SESSION_ACTIONS: CommandAction[] = [
     icon: Plug,
     keywords: ['mcp', 'model context protocol', 'servers', 'phantom-ai', 'integration', 'plugin'],
     execute: () => openMcpManager(),
+  },
+  {
+    id: 'session:fork',
+    label: 'Fork Session',
+    category: 'Session',
+    icon: GitFork,
+    shortcut: '⌘⇧F',
+    keywords: ['fork', 'session', 'clone', 'branch', 'duplicate'],
+    enabled: () => activeSessionId() != null,
+    execute: () => {
+      const id = activeSessionId();
+      if (id) void forkSession(id, '');
+    },
   },
 ];
 

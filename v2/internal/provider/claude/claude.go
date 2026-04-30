@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/subashkarki/phantom-os-v2/internal/provider"
 )
 
@@ -392,6 +393,89 @@ func parseClaudeUsage(raw json.RawMessage) *provider.TokenUsage {
 		return nil
 	}
 	return usage
+}
+
+// ---------------------------------------------------------------------------
+// Fork support — clone an existing transcript under a new session ID
+// ---------------------------------------------------------------------------
+
+// SupportsFork returns true: Claude transcripts are simple JSONL files we can
+// safely clone on disk under the same encoded-CWD project directory.
+func (cp *ClaudeProvider) SupportsFork() bool {
+	return true
+}
+
+// ForkConversation clones the source session's JSONL transcript to a new
+// session ID under the same encoded-CWD project directory. The new session ID
+// is a freshly generated UUID v4. To avoid the session watcher racing on a
+// half-written file, the contents are written to a temp file first and then
+// atomically renamed into place.
+//
+// On the same filesystem, os.Link is used (effectively zero-copy). If linking
+// fails (cross-device, unsupported FS) we fall back to streaming io.Copy.
+//
+// newName is currently unused; reserved for embedding a friendly name in the
+// transcript or in future metadata.
+func (cp *ClaudeProvider) ForkConversation(sessionID, cwd, _ string) (string, error) {
+	if sessionID == "" {
+		return "", fmt.Errorf("sessionID is required")
+	}
+
+	srcPath, err := cp.FindConversationFile(sessionID, cwd)
+	if err != nil {
+		return "", fmt.Errorf("locate source transcript: %w", err)
+	}
+
+	newID := uuid.NewString()
+	dir := filepath.Dir(srcPath)
+	ext := cp.Cfg.Conversations.FileExtension
+	if ext == "" {
+		ext = ".jsonl"
+	}
+	dstPath := filepath.Join(dir, newID+ext)
+	tmpPath := filepath.Join(dir, newID+".tmp")
+
+	// Best-case: hardlink the source to the temp path (same filesystem only).
+	if err := os.Link(srcPath, tmpPath); err != nil {
+		// Fall back to an explicit copy for cross-device / unsupported FS.
+		if copyErr := copyFile(srcPath, tmpPath); copyErr != nil {
+			return "", fmt.Errorf("copy transcript: %w", copyErr)
+		}
+	}
+
+	if err := os.Rename(tmpPath, dstPath); err != nil {
+		_ = os.Remove(tmpPath) // best-effort cleanup
+		return "", fmt.Errorf("rename transcript into place: %w", err)
+	}
+
+	return newID, nil
+}
+
+// copyFile is the fallback path when os.Link is unavailable. It copies bytes
+// from src to dst using a streaming reader to keep memory bounded for large
+// transcripts.
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("open source: %w", err)
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
+		return fmt.Errorf("create destination: %w", err)
+	}
+
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		_ = os.Remove(dst)
+		return fmt.Errorf("copy bytes: %w", err)
+	}
+	if err := out.Close(); err != nil {
+		_ = os.Remove(dst)
+		return fmt.Errorf("close destination: %w", err)
+	}
+	return nil
 }
 
 // extractContent tries to get text content from a Claude JSONL line.

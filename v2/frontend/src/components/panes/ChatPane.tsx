@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronRight,
   FileText,
+  GitFork,
   Image,
   MessageSquare,
   PanelLeftClose,
@@ -47,6 +48,7 @@ import {
   getChatHistory,
 } from '@/core/bindings/chat';
 import { readFileContents } from '@/core/bindings/editor';
+import { activeSessionId, forkSession } from '@/core/signals/sessions';
 import type { Conversation, ChatMessage, StreamEvent } from '@/core/types';
 import { Select } from '@kobalte/core/select';
 import { Popover } from '@kobalte/core/popover';
@@ -54,6 +56,7 @@ import { showToast, showWarningToast } from '@/shared/Toast/Toast';
 import * as styles from '@/styles/chat.css';
 import * as paneStyles from './ChatPane.css';
 import { ImageLightbox } from '@/shared/ImageLightbox';
+import { buttonRecipe } from '@/styles/recipes.css';
 
 // ── Highlight.js language registrations (selective to keep bundle lean) ────
 import typescript from 'highlight.js/lib/languages/typescript';
@@ -852,6 +855,18 @@ export default function ChatPane(props: ChatPaneProps) {
     return conv?.title ?? 'Chat';
   };
 
+  // ── Fork session ────────────────────────────────────────────────────────
+
+  /**
+   * Fork the currently active Claude session (clones its on-disk transcript
+   * under a new session ID). No-op when no session is active.
+   */
+  const handleForkSession = async () => {
+    const id = activeSessionId();
+    if (!id) return;
+    await forkSession(id, '');
+  };
+
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
@@ -949,6 +964,16 @@ export default function ChatPane(props: ChatPaneProps) {
               onKeyDown={handleTitleKeyDown}
             />
           </Show>
+
+          <button
+            type="button"
+            class={buttonRecipe({ variant: 'ghost', size: 'sm' })}
+            onClick={() => void handleForkSession()}
+            disabled={activeSessionId() == null}
+            title="Fork session — clone transcript as new session"
+          >
+            <GitFork size={14} />
+          </button>
 
           <Select<string>
             value={model()}

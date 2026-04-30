@@ -3,7 +3,7 @@
 
 import { createSignal, createMemo } from 'solid-js';
 import type { Session } from '../types';
-import { getSessions, getSession } from '../bindings';
+import { getSessions, getSession, forkSession as forkSessionBinding } from '../bindings';
 import { onWailsEvent } from '../events';
 
 // ── Event payload types (Go backend sends these, NOT full Session objects) ──
@@ -118,6 +118,31 @@ export function bootstrapSessions(): void {
   });
 }
 
+// ── Actions ──────────────────────────────────────────────────────────────────
+
+/**
+ * Fork the given session: clones its transcript and inserts a new session row
+ * recording lineage. Optimistically inserts a placeholder; the real row will
+ * arrive via the `session:new` / `session:forked` event and reconcile.
+ *
+ * Returns the new session ID, or empty string on failure.
+ */
+async function forkSession(sessionId: string, name = ''): Promise<string> {
+  if (!sessionId) return '';
+  const newId = await forkSessionBinding(sessionId, name);
+  if (!newId) return '';
+
+  // Optimistically pull the new row so the UI updates immediately. The
+  // session:new / session:forked events will reconcile if anything drifted.
+  const fresh = await getSession(newId);
+  if (fresh) {
+    setSessions((prev) =>
+      prev.some((s) => s.id === fresh.id) ? prev : [fresh, ...prev],
+    );
+  }
+  return newId;
+}
+
 // ── Exports ───────────────────────────────────────────────────────────────────
 
-export { sessions, setSessions, activeSessionId, setActiveSessionId, activeSession };
+export { sessions, setSessions, activeSessionId, setActiveSessionId, activeSession, forkSession };

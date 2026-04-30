@@ -381,6 +381,94 @@ func TestEncodedPathConvention(t *testing.T) {
 	}
 }
 
+// TestForkConversation_WithCWD verifies that forking copies the source transcript
+// to a new session ID under the same encoded-CWD project directory and that the
+// content matches byte-for-byte.
+func TestForkConversation_WithCWD(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := testConfig()
+	cfg.Paths.Conversations = tmpDir
+
+	cp := New(cfg)
+
+	if !cp.SupportsFork() {
+		t.Fatal("ClaudeProvider.SupportsFork() = false, want true")
+	}
+
+	cwd := "/Users/subash/my-project"
+	sessionID := "source-session-123"
+
+	encodedPath := strings.ReplaceAll(cwd, "/", "-")
+	if strings.HasPrefix(encodedPath, "-") {
+		encodedPath = encodedPath[1:]
+	}
+
+	projectDir := filepath.Join(tmpDir, encodedPath)
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	srcPath := filepath.Join(projectDir, sessionID+".jsonl")
+	srcContent := []byte(`{"type":"human","content":"hello"}` + "\n" +
+		`{"type":"assistant","content":[{"type":"text","text":"hi"}]}` + "\n")
+	if err := os.WriteFile(srcPath, srcContent, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Fork it.
+	newID, err := cp.ForkConversation(sessionID, cwd, "")
+	if err != nil {
+		t.Fatalf("ForkConversation error: %v", err)
+	}
+	if newID == "" {
+		t.Fatal("ForkConversation returned empty new session ID")
+	}
+	if newID == sessionID {
+		t.Fatalf("ForkConversation returned same ID as source: %q", newID)
+	}
+
+	// New transcript must land in the same encoded-CWD directory.
+	dstPath := filepath.Join(projectDir, newID+".jsonl")
+	if _, err := os.Stat(dstPath); err != nil {
+		t.Fatalf("expected new transcript at %s: %v", dstPath, err)
+	}
+
+	// Content must match byte-for-byte.
+	got, err := os.ReadFile(dstPath)
+	if err != nil {
+		t.Fatalf("read new transcript: %v", err)
+	}
+	if string(got) != string(srcContent) {
+		t.Errorf("forked content mismatch\n got: %q\nwant: %q", got, srcContent)
+	}
+
+	// Source must still exist (fork is non-destructive).
+	if _, err := os.Stat(srcPath); err != nil {
+		t.Errorf("source transcript was removed by fork: %v", err)
+	}
+
+	// No leftover temp file.
+	tmpPath := filepath.Join(projectDir, newID+".tmp")
+	if _, err := os.Stat(tmpPath); err == nil {
+		t.Errorf("leftover temp file at %s", tmpPath)
+	}
+}
+
+// TestForkConversation_MissingSource verifies fork errors out when the source
+// transcript can't be located.
+func TestForkConversation_MissingSource(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := testConfig()
+	cfg.Paths.Conversations = tmpDir
+	cp := New(cfg)
+
+	_, err := cp.ForkConversation("does-not-exist", "/some/cwd", "")
+	if err == nil {
+		t.Error("expected error for missing source, got nil")
+	}
+}
+
 // TestPathResolver verifies the PathResolver methods return expanded paths.
 func TestPathResolver(t *testing.T) {
 	cfg := testConfig()

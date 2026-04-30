@@ -98,9 +98,95 @@ func (q *Queries) DeleteSession(ctx context.Context, id string) error {
 	return err
 }
 
+const forkSession = `-- name: ForkSession :exec
+INSERT INTO sessions (
+    id, parent_session_id, pid, cwd, repo, name, kind, model, entrypoint,
+    started_at, ended_at, status, task_count, completed_tasks,
+    xp_earned, input_tokens, output_tokens, cache_read_tokens,
+    cache_write_tokens, estimated_cost_micros, message_count,
+    tool_use_count, first_prompt, tool_breakdown,
+    last_input_tokens, context_used_pct, provider
+) VALUES (
+    ?, ?, ?, ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?,
+    ?, ?, ?, ?,
+    ?, ?, ?,
+    ?, ?, ?,
+    ?, ?, ?
+)
+`
+
+type ForkSessionParams struct {
+	ID                  string         `json:"id"`
+	ParentSessionID     sql.NullString `json:"parent_session_id"`
+	Pid                 sql.NullInt64  `json:"pid"`
+	Cwd                 sql.NullString `json:"cwd"`
+	Repo                sql.NullString `json:"repo"`
+	Name                sql.NullString `json:"name"`
+	Kind                sql.NullString `json:"kind"`
+	Model               sql.NullString `json:"model"`
+	Entrypoint          sql.NullString `json:"entrypoint"`
+	StartedAt           sql.NullInt64  `json:"started_at"`
+	EndedAt             sql.NullInt64  `json:"ended_at"`
+	Status              sql.NullString `json:"status"`
+	TaskCount           sql.NullInt64  `json:"task_count"`
+	CompletedTasks      sql.NullInt64  `json:"completed_tasks"`
+	XpEarned            sql.NullInt64  `json:"xp_earned"`
+	InputTokens         sql.NullInt64  `json:"input_tokens"`
+	OutputTokens        sql.NullInt64  `json:"output_tokens"`
+	CacheReadTokens     sql.NullInt64  `json:"cache_read_tokens"`
+	CacheWriteTokens    sql.NullInt64  `json:"cache_write_tokens"`
+	EstimatedCostMicros sql.NullInt64  `json:"estimated_cost_micros"`
+	MessageCount        sql.NullInt64  `json:"message_count"`
+	ToolUseCount        sql.NullInt64  `json:"tool_use_count"`
+	FirstPrompt         sql.NullString `json:"first_prompt"`
+	ToolBreakdown       sql.NullString `json:"tool_breakdown"`
+	LastInputTokens     sql.NullInt64  `json:"last_input_tokens"`
+	ContextUsedPct      sql.NullInt64  `json:"context_used_pct"`
+	Provider            string         `json:"provider"`
+}
+
+// Creates a new session row that inherits the source session's metadata while
+// recording its parent. Used by the session-fork feature to clone a transcript
+// under a new session ID. Token counters / lifecycle fields start at zero or
+// the caller's chosen defaults; the session watcher will reconcile them once
+// the new transcript is observed on disk.
+func (q *Queries) ForkSession(ctx context.Context, arg ForkSessionParams) error {
+	_, err := q.db.ExecContext(ctx, forkSession,
+		arg.ID,
+		arg.ParentSessionID,
+		arg.Pid,
+		arg.Cwd,
+		arg.Repo,
+		arg.Name,
+		arg.Kind,
+		arg.Model,
+		arg.Entrypoint,
+		arg.StartedAt,
+		arg.EndedAt,
+		arg.Status,
+		arg.TaskCount,
+		arg.CompletedTasks,
+		arg.XpEarned,
+		arg.InputTokens,
+		arg.OutputTokens,
+		arg.CacheReadTokens,
+		arg.CacheWriteTokens,
+		arg.EstimatedCostMicros,
+		arg.MessageCount,
+		arg.ToolUseCount,
+		arg.FirstPrompt,
+		arg.ToolBreakdown,
+		arg.LastInputTokens,
+		arg.ContextUsedPct,
+		arg.Provider,
+	)
+	return err
+}
+
 const getSession = `-- name: GetSession :one
 
-SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct, date, summary, outcome, files_touched, git_commits, git_lines_added, git_lines_removed, branch, pr_url, pr_status, provider FROM sessions WHERE id = ?
+SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct, date, summary, outcome, files_touched, git_commits, git_lines_added, git_lines_removed, branch, pr_url, pr_status, provider, session_goal, session_type, tool_summary, keywords, parent_session_id FROM sessions WHERE id = ?
 `
 
 // sessions.sql - CRUD operations for sessions table
@@ -145,12 +231,17 @@ func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 		&i.PrUrl,
 		&i.PrStatus,
 		&i.Provider,
+		&i.SessionGoal,
+		&i.SessionType,
+		&i.ToolSummary,
+		&i.Keywords,
+		&i.ParentSessionID,
 	)
 	return i, err
 }
 
 const listActiveSessions = `-- name: ListActiveSessions :many
-SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct, date, summary, outcome, files_touched, git_commits, git_lines_added, git_lines_removed, branch, pr_url, pr_status, provider FROM sessions WHERE status = 'active' ORDER BY started_at DESC
+SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct, date, summary, outcome, files_touched, git_commits, git_lines_added, git_lines_removed, branch, pr_url, pr_status, provider, session_goal, session_type, tool_summary, keywords, parent_session_id FROM sessions WHERE status = 'active' ORDER BY started_at DESC
 `
 
 func (q *Queries) ListActiveSessions(ctx context.Context) ([]Session, error) {
@@ -199,6 +290,81 @@ func (q *Queries) ListActiveSessions(ctx context.Context) ([]Session, error) {
 			&i.PrUrl,
 			&i.PrStatus,
 			&i.Provider,
+			&i.SessionGoal,
+			&i.SessionType,
+			&i.ToolSummary,
+			&i.Keywords,
+			&i.ParentSessionID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSessionForks = `-- name: ListSessionForks :many
+SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct, date, summary, outcome, files_touched, git_commits, git_lines_added, git_lines_removed, branch, pr_url, pr_status, provider, session_goal, session_type, tool_summary, keywords, parent_session_id FROM sessions WHERE parent_session_id = ? ORDER BY started_at DESC
+`
+
+// Returns all sessions whose parent_session_id matches the given session.
+func (q *Queries) ListSessionForks(ctx context.Context, parentSessionID sql.NullString) ([]Session, error) {
+	rows, err := q.db.QueryContext(ctx, listSessionForks, parentSessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Session{}
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.ID,
+			&i.Pid,
+			&i.Cwd,
+			&i.Repo,
+			&i.Name,
+			&i.Kind,
+			&i.Model,
+			&i.Entrypoint,
+			&i.StartedAt,
+			&i.EndedAt,
+			&i.Status,
+			&i.TaskCount,
+			&i.CompletedTasks,
+			&i.XpEarned,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CacheReadTokens,
+			&i.CacheWriteTokens,
+			&i.EstimatedCostMicros,
+			&i.MessageCount,
+			&i.ToolUseCount,
+			&i.FirstPrompt,
+			&i.ToolBreakdown,
+			&i.LastInputTokens,
+			&i.ContextUsedPct,
+			&i.Date,
+			&i.Summary,
+			&i.Outcome,
+			&i.FilesTouched,
+			&i.GitCommits,
+			&i.GitLinesAdded,
+			&i.GitLinesRemoved,
+			&i.Branch,
+			&i.PrUrl,
+			&i.PrStatus,
+			&i.Provider,
+			&i.SessionGoal,
+			&i.SessionType,
+			&i.ToolSummary,
+			&i.Keywords,
+			&i.ParentSessionID,
 		); err != nil {
 			return nil, err
 		}
@@ -214,7 +380,7 @@ func (q *Queries) ListActiveSessions(ctx context.Context) ([]Session, error) {
 }
 
 const listSessions = `-- name: ListSessions :many
-SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct, date, summary, outcome, files_touched, git_commits, git_lines_added, git_lines_removed, branch, pr_url, pr_status, provider FROM sessions ORDER BY started_at DESC
+SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct, date, summary, outcome, files_touched, git_commits, git_lines_added, git_lines_removed, branch, pr_url, pr_status, provider, session_goal, session_type, tool_summary, keywords, parent_session_id FROM sessions ORDER BY started_at DESC
 `
 
 func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
@@ -263,6 +429,11 @@ func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
 			&i.PrUrl,
 			&i.PrStatus,
 			&i.Provider,
+			&i.SessionGoal,
+			&i.SessionType,
+			&i.ToolSummary,
+			&i.Keywords,
+			&i.ParentSessionID,
 		); err != nil {
 			return nil, err
 		}
@@ -278,7 +449,7 @@ func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
 }
 
 const listSessionsByProvider = `-- name: ListSessionsByProvider :many
-SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct, date, summary, outcome, files_touched, git_commits, git_lines_added, git_lines_removed, branch, pr_url, pr_status, provider FROM sessions WHERE provider = ? ORDER BY started_at DESC
+SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct, date, summary, outcome, files_touched, git_commits, git_lines_added, git_lines_removed, branch, pr_url, pr_status, provider, session_goal, session_type, tool_summary, keywords, parent_session_id FROM sessions WHERE provider = ? ORDER BY started_at DESC
 `
 
 func (q *Queries) ListSessionsByProvider(ctx context.Context, provider string) ([]Session, error) {
@@ -327,6 +498,11 @@ func (q *Queries) ListSessionsByProvider(ctx context.Context, provider string) (
 			&i.PrUrl,
 			&i.PrStatus,
 			&i.Provider,
+			&i.SessionGoal,
+			&i.SessionType,
+			&i.ToolSummary,
+			&i.Keywords,
+			&i.ParentSessionID,
 		); err != nil {
 			return nil, err
 		}
@@ -342,7 +518,7 @@ func (q *Queries) ListSessionsByProvider(ctx context.Context, provider string) (
 }
 
 const listSessionsByStatus = `-- name: ListSessionsByStatus :many
-SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct, date, summary, outcome, files_touched, git_commits, git_lines_added, git_lines_removed, branch, pr_url, pr_status, provider FROM sessions WHERE status = ? ORDER BY started_at DESC
+SELECT id, pid, cwd, repo, name, kind, model, entrypoint, started_at, ended_at, status, task_count, completed_tasks, xp_earned, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_micros, message_count, tool_use_count, first_prompt, tool_breakdown, last_input_tokens, context_used_pct, date, summary, outcome, files_touched, git_commits, git_lines_added, git_lines_removed, branch, pr_url, pr_status, provider, session_goal, session_type, tool_summary, keywords, parent_session_id FROM sessions WHERE status = ? ORDER BY started_at DESC
 `
 
 func (q *Queries) ListSessionsByStatus(ctx context.Context, status sql.NullString) ([]Session, error) {
@@ -391,6 +567,11 @@ func (q *Queries) ListSessionsByStatus(ctx context.Context, status sql.NullStrin
 			&i.PrUrl,
 			&i.PrStatus,
 			&i.Provider,
+			&i.SessionGoal,
+			&i.SessionType,
+			&i.ToolSummary,
+			&i.Keywords,
+			&i.ParentSessionID,
 		); err != nil {
 			return nil, err
 		}

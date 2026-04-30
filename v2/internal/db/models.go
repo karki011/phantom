@@ -207,6 +207,11 @@ type Session struct {
 	PrUrl               sql.NullString `json:"pr_url"`
 	PrStatus            sql.NullString `json:"pr_status"`
 	Provider            string         `json:"provider"`
+	SessionGoal         sql.NullString `json:"session_goal"`
+	SessionType         sql.NullString `json:"session_type"`
+	ToolSummary         sql.NullString `json:"tool_summary"`
+	Keywords            sql.NullString `json:"keywords"`
+	ParentSessionID     sql.NullString `json:"parent_session_id"`
 }
 
 type SessionEvent struct {

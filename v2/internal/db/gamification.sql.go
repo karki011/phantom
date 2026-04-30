@@ -308,30 +308,6 @@ func (q *Queries) GetSessionCountForDate(ctx context.Context, arg GetSessionCoun
 	return cnt, err
 }
 
-const getTotalSpeedTasks = `-- name: GetTotalSpeedTasks :one
-SELECT COUNT(*) as cnt FROM tasks
-WHERE status = 'completed'
-  AND (updated_at - created_at) < 120000
-`
-
-func (q *Queries) GetTotalSpeedTasks(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getTotalSpeedTasks)
-	var cnt int64
-	err := row.Scan(&cnt)
-	return cnt, err
-}
-
-const getTotalXPEarned = `-- name: GetTotalXPEarned :one
-SELECT COALESCE(SUM(xp_earned), 0) as total_xp FROM activity_log
-`
-
-func (q *Queries) GetTotalXPEarned(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getTotalXPEarned)
-	var totalXp int64
-	err := row.Scan(&totalXp)
-	return totalXp, err
-}
-
 const getSpeedTaskCountForDate = `-- name: GetSpeedTaskCountForDate :one
 SELECT COUNT(*) as cnt FROM tasks
 WHERE status = 'completed'
@@ -349,6 +325,30 @@ func (q *Queries) GetSpeedTaskCountForDate(ctx context.Context, arg GetSpeedTask
 	var cnt int64
 	err := row.Scan(&cnt)
 	return cnt, err
+}
+
+const getTotalSpeedTasks = `-- name: GetTotalSpeedTasks :one
+SELECT COUNT(*) as cnt FROM tasks
+WHERE status = 'completed'
+  AND (updated_at - created_at) < 120000
+`
+
+func (q *Queries) GetTotalSpeedTasks(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getTotalSpeedTasks)
+	var cnt int64
+	err := row.Scan(&cnt)
+	return cnt, err
+}
+
+const getTotalXPEarned = `-- name: GetTotalXPEarned :one
+SELECT COALESCE(SUM(xp_earned), 0) as total_xp FROM activity_log
+`
+
+func (q *Queries) GetTotalXPEarned(ctx context.Context) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, getTotalXPEarned)
+	var total_xp interface{}
+	err := row.Scan(&total_xp)
+	return total_xp, err
 }
 
 const getUniqueRepoCount = `-- name: GetUniqueRepoCount :one

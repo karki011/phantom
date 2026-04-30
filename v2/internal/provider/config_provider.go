@@ -596,6 +596,19 @@ func (p *ConfigProvider) PromptTransport() PromptTransport {
 	}
 }
 
+// SupportsFork reports whether this provider supports cloning a session
+// transcript to a new session ID. The base config-driven implementation
+// returns false; adapters (e.g. ClaudeProvider) override to return true.
+func (p *ConfigProvider) SupportsFork() bool {
+	return false
+}
+
+// ForkConversation is the default no-op implementation. Adapters must
+// override this to provide provider-specific transcript cloning.
+func (p *ConfigProvider) ForkConversation(_, _, _ string) (string, error) {
+	return "", fmt.Errorf("fork not supported by provider %q", p.Cfg.Provider)
+}
+
 // ---------------------------------------------------------------------------
 // HealthCheck
 // ---------------------------------------------------------------------------

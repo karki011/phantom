@@ -91,3 +91,16 @@ export async function getSessionState(sessionId: string): Promise<SessionState |
     return null;
   }
 }
+
+/**
+ * Fork an existing session: clones its on-disk transcript under a new session
+ * ID and inserts a child session row recording the lineage. Returns the new
+ * session ID, or empty string on failure.
+ */
+export async function forkSession(sessionId: string, name = ''): Promise<string> {
+  try {
+    return (await App()?.ForkSession(sessionId, name)) ?? '';
+  } catch {
+    return '';
+  }
+}

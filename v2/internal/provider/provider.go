@@ -179,6 +179,19 @@ type CommandRunner interface {
 	NewSessionCommand(cwd string) string
 	AIGenerateCommand(prompt string) string
 	PromptTransport() PromptTransport
+
+	// SupportsFork reports whether the provider can clone a session transcript
+	// to a new session ID. Defaults to false; Claude returns true.
+	SupportsFork() bool
+
+	// ForkConversation clones an existing session's on-disk transcript to a
+	// new session ID under the same encoded-CWD directory. Implementations
+	// must avoid watcher truncation races by writing to a temp file first
+	// and atomically renaming into place. The returned newSessionID is a
+	// freshly generated UUID. cwd is the original session's working
+	// directory used to locate the source transcript; newName is reserved
+	// for future use (e.g. embedding a friendly name in the transcript).
+	ForkConversation(sessionID, cwd, newName string) (newSessionID string, err error)
 }
 
 // PathResolver provides access to the provider's filesystem paths.
