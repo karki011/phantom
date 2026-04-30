@@ -11,6 +11,7 @@ import { toggleQuickOpen } from './signals/quickopen';
 import { toggleComposer } from './signals/composer';
 import { toggleCommandPalette } from './signals/command-palette';
 import { openRecipePicker } from './signals/recipes';
+import { activeSessionId, forkSession } from './signals/sessions';
 
 const HMR_KEY = '__phantom_keyboard_handler';
 
@@ -137,6 +138,16 @@ export function registerKeyboardShortcuts(): () => void {
     if (meta && e.key === 'k') {
       e.preventDefault();
       toggleCommandPalette();
+      return;
+    }
+
+    // Cmd+Shift+F: Fork active session
+    if (meta && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
+      const id = activeSessionId();
+      if (id) {
+        e.preventDefault();
+        void forkSession(id, '');
+      }
       return;
     }
   }
