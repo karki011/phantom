@@ -60,11 +60,12 @@ func (cp *ClaudeProvider) FindConversationFile(sessionID, cwd string) (string, e
 	filename := sessionID + ext
 
 	if cwd != "" {
-		// Encoded-path convention: replace / with -, strip leading -
+		// Claude Code encoding: replace `/` and `.` with `-`. The leading
+		// dash is KEPT (e.g. `/Users/foo.bar` -> `-Users-foo-bar`). Verified
+		// against ~/.claude/projects/ on macOS — dirs always start with `-`
+		// and dots are dash-encoded.
 		encodedPath := strings.ReplaceAll(cwd, "/", "-")
-		if strings.HasPrefix(encodedPath, "-") {
-			encodedPath = encodedPath[1:]
-		}
+		encodedPath = strings.ReplaceAll(encodedPath, ".", "-")
 		projectDir := filepath.Join(convDir, encodedPath)
 
 		path := filepath.Join(projectDir, filename)

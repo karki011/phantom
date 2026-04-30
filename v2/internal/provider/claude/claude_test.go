@@ -85,9 +85,7 @@ func TestFindConversationFile_WithCWD(t *testing.T) {
 
 	// Encoded: /Users/subash/my-project -> -Users-subash-my-project -> Users-subash-my-project
 	encodedPath := strings.ReplaceAll(cwd, "/", "-")
-	if strings.HasPrefix(encodedPath, "-") {
-		encodedPath = encodedPath[1:]
-	}
+	encodedPath = strings.ReplaceAll(encodedPath, ".", "-")
 
 	projectDir := filepath.Join(tmpDir, encodedPath)
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
@@ -354,26 +352,28 @@ func TestCostCalculation(t *testing.T) {
 	}
 }
 
-// TestEncodedPathConvention verifies the exact encoding matches activity_poller.go's
-// findJSONLPath() logic: replace "/" with "-", strip leading "-".
+// TestEncodedPathConvention verifies the encoding Claude Code actually uses:
+// replace "/" with "-" AND replace "." with "-". Leading dash is KEPT.
+// Verified against ~/.claude/projects/ — directories like
+// `-Users-subash-karki--claude` (note `.claude` -> `--claude`).
 func TestEncodedPathConvention(t *testing.T) {
 	tests := []struct {
 		cwd  string
 		want string
 	}{
-		{"/Users/subash/project", "Users-subash-project"},
-		{"/home/user/my-app", "home-user-my-app"},
+		{"/Users/subash/project", "-Users-subash-project"},
+		{"/Users/subash.karki", "-Users-subash-karki"},
+		{"/Users/subash.karki/.claude", "-Users-subash-karki--claude"},
+		{"/home/user/my-app", "-home-user-my-app"},
 		{"relative/path", "relative-path"},
-		{"/", ""},
-		{"/a", "a"},
+		{"/", "-"},
+		{"/a", "-a"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.cwd, func(t *testing.T) {
 			encoded := strings.ReplaceAll(tt.cwd, "/", "-")
-			if strings.HasPrefix(encoded, "-") {
-				encoded = encoded[1:]
-			}
+			encoded = strings.ReplaceAll(encoded, ".", "-")
 			if encoded != tt.want {
 				t.Errorf("encoded(%q) = %q, want %q", tt.cwd, encoded, tt.want)
 			}
@@ -400,9 +400,7 @@ func TestForkConversation_WithCWD(t *testing.T) {
 	sessionID := "source-session-123"
 
 	encodedPath := strings.ReplaceAll(cwd, "/", "-")
-	if strings.HasPrefix(encodedPath, "-") {
-		encodedPath = encodedPath[1:]
-	}
+	encodedPath = strings.ReplaceAll(encodedPath, ".", "-")
 
 	projectDir := filepath.Join(tmpDir, encodedPath)
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
