@@ -6,7 +6,7 @@ import {
   Terminal, SplitSquareHorizontal, SplitSquareVertical, X,
   Monitor, GitBranch, Settings, FileSearch, BookOpen,
   Pause, Play, Square, Sun, Moon, ZoomIn, ZoomOut, RotateCcw,
-  PenTool, Sidebar, PanelRight, LayoutGrid, Eye,
+  PenTool, Sidebar, PanelRight, LayoutGrid, Eye, Plug,
 } from 'lucide-solid';
 
 // === Pane signals ===
@@ -34,6 +34,9 @@ import { applyTheme, type ThemeId } from '@/core/signals/theme';
 // === Session signals + bindings ===
 import { activeSession, activeSessionId } from '@/core/signals/sessions';
 import { pauseSession, resumeSession, killSession } from '@/core/bindings/sessions';
+
+// === MCP Manager ===
+import { openMcpManager } from '@/core/signals/mcp';
 
 // === Git bindings ===
 import { gitFetch, gitPull, gitPush } from '@/core/bindings/git';
@@ -281,6 +284,14 @@ const SESSION_ACTIONS: CommandAction[] = [
       const id = activeSessionId();
       if (id) void killSession(id);
     },
+  },
+  {
+    id: 'session:toggle-mcp-servers',
+    label: 'Toggle MCP servers',
+    category: 'Session',
+    icon: Plug,
+    keywords: ['mcp', 'model context protocol', 'servers', 'phantom-ai', 'integration', 'plugin'],
+    execute: () => openMcpManager(),
   },
 ];
 

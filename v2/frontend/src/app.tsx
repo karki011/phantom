@@ -34,6 +34,7 @@ import { SettingsDialog } from './shared/SettingsDialog/SettingsDialog';
 import { QuickOpen } from './shared/QuickOpen/QuickOpen';
 import { CommandPalette } from './shared/CommandPalette';
 import { RecipePicker } from './shared/RecipePicker';
+import { McpManagerDialog } from './shared/McpManagerDialog';
 import { ApprovalModal } from './shared/ApprovalModal/ApprovalModal';
 import { PromptComposer } from './shared/PromptComposer';
 import { composerVisible, closeComposer } from './core/signals/composer';
@@ -196,6 +197,7 @@ export function App() {
       <QuickOpen />
       <CommandPalette />
       <RecipePicker />
+      <McpManagerDialog />
       <DocsScreen />
       <Show when={composerAllowed()}>
         <PromptComposer visible={composerVisible()} onClose={closeComposer} />

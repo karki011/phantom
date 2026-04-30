@@ -51,3 +51,5 @@ export { getAIInsight } from './ai-insight';
 export type { AIInsightData, StrategyInfo, AssessmentInfo, ContextCoverage, KnowledgeStats, DecisionEntry } from './ai-insight';
 export { getEvolution } from './evolution';
 export type { EvolutionData, GapAlert, StrategyTrend } from './evolution';
+export { listMCPServers, toggleMCPServer, registerPhantomMCP } from './mcp';
+export type { MCPServer } from './mcp';
