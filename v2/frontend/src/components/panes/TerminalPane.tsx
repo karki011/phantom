@@ -21,6 +21,12 @@ import {
   getSession,
   safeFit,
 } from '@/core/terminal/registry';
+import { installShellIntegration } from '@/core/terminal/addons/shellIntegration';
+import { installQuickFix } from '@/core/terminal/addons/quickFix';
+import { installStickyScroll } from '@/core/terminal/addons/stickyScroll';
+import { installJumpToPrompt } from '@/core/terminal/addons/jumpToPrompt';
+import { TerminalCommandPalette } from '@/components/terminal/TerminalCommandPalette';
+import type { Terminal } from '@xterm/xterm';
 import { activeTerminalThemeId, resolveTerminalTheme } from '@/core/terminal/theme-manager';
 import {
   createTerminal as createBackendTerminal,
@@ -29,6 +35,7 @@ import {
   writeBubbleteaProgram,
   resizeTerminal,
   getTerminalScrollback,
+  getTerminalSnapshot,
   runTerminalCommand,
 } from '@/core/bindings';
 import { vars } from '@/styles/theme.css';
@@ -51,7 +58,24 @@ interface TerminalPaneProps {
 
 export default function TerminalPane(props: TerminalPaneProps) {
   let containerRef!: HTMLDivElement;
+  let wrapperRef!: HTMLDivElement;
   let searchInputRef!: HTMLInputElement;
+  // Per-pane addon cleanups (Quick-Fix, Sticky-Scroll, Jump-to-Prompt) —
+  // these hook to the wrapper element and must be re-installed on every
+  // mount because the wrapper is fresh each time, even when the xterm
+  // Terminal instance is reattached from the registry.
+  const addonCleanups: Array<() => void> = [];
+  const [paletteOpen, setPaletteOpen] = createSignal(false);
+
+  const installPaneAddons = (terminal: Terminal) => {
+    try { addonCleanups.push(installQuickFix(terminal, sessionId, wrapperRef)); } catch {}
+    try { addonCleanups.push(installStickyScroll(terminal, sessionId, wrapperRef)); } catch {}
+    try {
+      addonCleanups.push(installJumpToPrompt(terminal, sessionId, wrapperRef, {
+        onOpenPalette: () => setPaletteOpen(true),
+      }));
+    } catch {}
+  };
   // TUI panes supply their own sessionId; plain terminal panes use the paneId.
   const effectiveSessionId = props.sessionId || props.paneId;
   const isTui = !!props.sessionId;
@@ -103,17 +127,15 @@ export default function TerminalPane(props: TerminalPaneProps) {
     if (isReattach) {
       const session = attachSession(sessionId, containerRef);
       if (session) {
+        installPaneAddons(session.terminal);
         requestAnimationFrame(() =>
           requestAnimationFrame(() => {
-            try {
-              session.fitAddon.fit();
-              session.terminal.focus();
-            } catch {}
+            if (safeFit(session)) {
+              try { session.terminal.focus(); } catch {}
+            }
           }),
         );
-        setTimeout(() => {
-          try { session.fitAddon.fit(); } catch {}
-        }, 150);
+        setTimeout(() => { safeFit(session); }, 150);
         return;
       }
     }
@@ -137,8 +159,14 @@ export default function TerminalPane(props: TerminalPaneProps) {
 
     // Store the working directory on the session for file path resolution
     if (props.cwd) session.cwd = props.cwd;
+    // OSC 633 shell integration — must register before any PTY data arrives
+    // so we capture the very first prompt. Idempotent per sessionId.
+    installShellIntegration(session.terminal, sessionId);
     // Attach wrapper into visible container
     attachSession(sessionId, containerRef);
+    // Per-pane UX addons (Quick-Fix, Sticky-Scroll, Jump-to-Prompt) — wrapper-bound,
+    // must run after attachSession so wrapperRef is laid out for positioning.
+    installPaneAddons(session.terminal);
 
     const { WebLinksAddon } = await import('@xterm/addon-web-links');
     const { openURL } = await import('@/core/bindings');
@@ -297,8 +325,18 @@ export default function TerminalPane(props: TerminalPaneProps) {
       }
     });
 
-    // Wire resize events to Go backend
+    // Wire resize events to Go backend with min-size guard + dedupe.
+    // - Min size matches VS Code (MINIMUM_COLS=2, MINIMUM_ROWS=1) — anything
+    //   smaller is treated as "container not laid out yet, ignore".
+    // - Dedupe: skip the ioctl when cols/rows haven't actually changed since
+    //   the last call. Prevents SIGWINCH storms during layout transitions.
+    let lastCols = -1;
+    let lastRows = -1;
     session.terminal.onResize(({ cols, rows }: { cols: number; rows: number }) => {
+      if (cols < 2 || rows < 1) return;
+      if (cols === lastCols && rows === lastRows) return;
+      lastCols = cols;
+      lastRows = rows;
       void resizeTerminal(sessionId, cols, rows);
     });
 
@@ -325,7 +363,23 @@ export default function TerminalPane(props: TerminalPaneProps) {
     await waitForVisible();
 
     // Fit now that the container has real dimensions
-    try { session.fitAddon.fit(); } catch {}
+    safeFit(session);
+
+    // Replay the previously-saved xterm visual state BEFORE the PTY starts
+    // emitting fresh data. Restores cursor, alt-screen, colors, and scrollback
+    // in one shot. Empty string when there's no snapshot — first-launch path.
+    let snapshotReplayed = false;
+    if (props.restore) {
+      try {
+        const snapshot = await getTerminalSnapshot(sessionId);
+        if (snapshot) {
+          session.terminal.write(snapshot);
+          snapshotReplayed = true;
+        }
+      } catch {
+        /* fall through to scrollback fallback */
+      }
+    }
 
     // Create or restore PTY on the Go side — skipped for TUI panes (PTY already exists)
     if (!isTui) {
@@ -358,28 +412,29 @@ export default function TerminalPane(props: TerminalPaneProps) {
       }
     }
 
-    // Restore scrollback from previous session (best-effort)
-    try {
-      const scrollback = await getTerminalScrollback(sessionId);
-      if (scrollback) {
-        session.terminal.write(scrollback);
+    // Restore scrollback from previous session (best-effort).
+    // Skipped when we already replayed a serialize-addon snapshot — that's
+    // strictly richer than the raw scrollback ring buffer.
+    if (!snapshotReplayed) {
+      try {
+        const scrollback = await getTerminalScrollback(sessionId);
+        if (scrollback) {
+          session.terminal.write(scrollback);
+        }
+      } catch {
+        /* first launch — no scrollback to restore */
       }
-    } catch {
-      /* first launch — no scrollback to restore */
     }
 
     // Final fit, focus, and reveal
     requestAnimationFrame(() => {
-      try {
-        session.fitAddon.fit();
-        session.terminal.focus();
-      } catch {}
+      if (safeFit(session)) {
+        try { session.terminal.focus(); } catch {}
+      }
     });
 
     // Safety net: refit after flex layout fully settles
-    setTimeout(() => {
-      try { session.fitAddon.fit(); } catch {}
-    }, 250);
+    setTimeout(() => { safeFit(session); }, 250);
 
     // Wait for shell readiness before sending initial command.
     // Matches v1 pattern: wait for prompt regex, 3 output chunks, or 2s timeout.
@@ -529,6 +584,11 @@ export default function TerminalPane(props: TerminalPaneProps) {
   }
 
   onCleanup(() => {
+    // Dispose per-mount addons first (they reference wrapperRef which is about to die).
+    for (const fn of addonCleanups) {
+      try { fn(); } catch {}
+    }
+    addonCleanups.length = 0;
     // Detach but keep the session alive — PTY stays running for reattach
     detachSession(sessionId);
   });
@@ -557,11 +617,26 @@ export default function TerminalPane(props: TerminalPaneProps) {
   return (
     <div
       class={termStyles.terminalWrapper}
+      ref={wrapperRef!}
       onDragOver={(e: DragEvent) => e.preventDefault()}
       onDrop={handleTerminalDrop}
     >
       <div class={termStyles.terminalContainer} ref={containerRef!} />
       <TaskOverlay sessionId={derivedSessionId()} worktreePath={props.cwd ?? ''} />
+      {/* Cmd+P command palette — mounts a popover when paletteOpen() is true. */}
+      <Show when={paletteOpen()}>
+        {(_) => {
+          const session = getSession(sessionId);
+          return session ? (
+            <TerminalCommandPalette
+              open={paletteOpen}
+              onClose={() => setPaletteOpen(false)}
+              sessionId={sessionId}
+              terminal={session.terminal}
+            />
+          ) : null;
+        }}
+      </Show>
       <Show when={showSearch()}>
         <div class={termStyles.searchBar}>
           <TextField class={termStyles.searchInput}>
