@@ -27,8 +27,8 @@ Thumbs.db
 # Go
 vendor/
 
-# Docs (local planning only)
-docs/
+# Docs (local planning only — anchored to v2/docs, not nested screens/docs)
+/docs/
 
 # Secrets
 .env
