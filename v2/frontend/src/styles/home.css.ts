@@ -365,6 +365,7 @@ export const statusCard = style({
   flexDirection: 'column',
   gap: vars.space.md,
   padding: vars.space.xl,
+  maxHeight: '600px',
   background: vars.color.bgTertiary,
   borderRadius: vars.radius.lg,
   border: `1px solid color-mix(in srgb, ${vars.color.border} 60%, transparent)`,
@@ -477,6 +478,28 @@ export const statusBadgeWarn = style({
   backgroundColor: 'rgba(245, 158, 11, 0.15)',
   color: '#f59e0b',
   fontSize: vars.fontSize.xs,
+});
+
+// Text-only colored badges — no background, just semantic foreground. Used for
+// modified / untracked counts where the saturated bg was visually heavy.
+export const statusBadgeWarnSolid = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '2px 0',
+  color: '#f59e0b',
+  fontSize: vars.fontSize.xs,
+  fontWeight: 500,
+});
+
+export const statusBadgeAccentSolid = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '2px 0',
+  color: vars.color.accent,
+  fontSize: vars.fontSize.xs,
+  fontWeight: 500,
 });
 
 export const statusActionButton = style({
@@ -704,10 +727,11 @@ export const prListScroll = style({
   display: 'flex',
   flexDirection: 'column',
   gap: vars.space.xs,
-  maxHeight: '220px',
+  maxHeight: '380px',
   overflowY: 'auto',
-  '::-webkit-scrollbar': { width: '4px' },
-  '::-webkit-scrollbar-thumb': { background: vars.color.border, borderRadius: '2px' },
+  paddingRight: '4px',
+  '::-webkit-scrollbar': { width: '6px' },
+  '::-webkit-scrollbar-thumb': { background: vars.color.border, borderRadius: '3px' },
   '::-webkit-scrollbar-track': { background: 'transparent' },
 });
 
@@ -1708,5 +1732,195 @@ export const recipeCategoryBadge = style({
   background: `color-mix(in srgb, ${vars.color.accent} 10%, transparent)`,
   color: vars.color.accent,
   flexShrink: 0,
+});
+
+// ── Ship-It (merge) ────────────────────────────────────────────────────────
+
+export const shipItRow = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  marginTop: vars.space.sm,
+  flexWrap: 'wrap',
+});
+
+// Reviewer pill row above the Ship-It button.
+export const reviewerRow = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  flexWrap: 'wrap',
+  fontFamily: vars.font.mono,
+  fontSize: '0.65rem',
+  color: vars.color.textSecondary,
+  marginTop: '6px',
+});
+
+export const reviewerLabel = style({
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  color: vars.color.textDisabled,
+});
+
+export const reviewerLabelApproved = style({
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  color: vars.color.success,
+});
+
+export const reviewerLabelChanges = style({
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  color: vars.color.danger,
+});
+
+export const reviewerChip = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '3px',
+  padding: '1px 6px 1px 1px',
+  borderRadius: '999px',
+  background: vars.color.bgPrimary,
+  border: `1px solid ${vars.color.border}`,
+});
+
+export const reviewerAvatar = style({
+  width: '12px',
+  height: '12px',
+  borderRadius: '50%',
+  background: vars.color.bgSecondary,
+  objectFit: 'cover',
+  flexShrink: 0,
+});
+
+export const reviewerLogin = style({
+  fontSize: '0.65rem',
+  color: vars.color.textPrimary,
+});
+
+// Primary Ship-It button (split: action + caret).
+export const shipItButton = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `${vars.space.sm} ${vars.space.lg}`,
+  borderTopLeftRadius: vars.radius.md,
+  borderBottomLeftRadius: vars.radius.md,
+  borderTopRightRadius: 0,
+  borderBottomRightRadius: 0,
+  background: vars.color.accent,
+  color: vars.color.textInverse,
+  border: 'none',
+  cursor: 'pointer',
+  fontFamily: vars.font.body,
+  fontSize: '0.78rem',
+  fontWeight: 600,
+  transition: `all ${vars.animation.fast} ease`,
+  ':hover': {
+    opacity: '0.92',
+    boxShadow: `0 0 12px color-mix(in srgb, ${vars.color.accent} 30%, transparent)`,
+  },
+  ':disabled': {
+    opacity: '0.5',
+    cursor: 'not-allowed',
+    boxShadow: 'none',
+  },
+});
+
+// Secondary tone (used for BLOCKED → "Will queue auto-merge").
+export const shipItButtonSecondary = style({
+  background: 'transparent',
+  color: vars.color.accent,
+  border: `1px solid ${vars.color.accent}`,
+});
+
+// Behind-base variant (yellow).
+export const shipItButtonWarn = style({
+  background: '#f59e0b',
+  color: '#1a1a1a',
+});
+
+// Conflict variant (greyed-out, links to GitHub).
+export const shipItButtonDisabled = style({
+  background: vars.color.bgPrimary,
+  color: vars.color.textDisabled,
+  border: `1px dashed ${vars.color.border}`,
+  cursor: 'not-allowed',
+});
+
+// Caret button (split-button right side).
+export const shipItCaret = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: `${vars.space.sm} ${vars.space.sm}`,
+  borderTopRightRadius: vars.radius.md,
+  borderBottomRightRadius: vars.radius.md,
+  borderTopLeftRadius: 0,
+  borderBottomLeftRadius: 0,
+  background: vars.color.accent,
+  color: vars.color.textInverse,
+  border: 'none',
+  borderLeft: '1px solid color-mix(in srgb, white 15%, transparent)',
+  cursor: 'pointer',
+  transition: `all ${vars.animation.fast} ease`,
+  ':hover': { opacity: '0.92' },
+  ':disabled': { opacity: '0.5', cursor: 'not-allowed' },
+});
+
+export const shipItMenu = style({
+  position: 'absolute',
+  zIndex: 10,
+  marginTop: '4px',
+  background: vars.color.bgSecondary,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+  padding: '4px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '2px',
+  minWidth: '180px',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+});
+
+export const shipItMenuItem = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `${vars.space.xs} ${vars.space.sm}`,
+  borderRadius: vars.radius.sm,
+  background: 'transparent',
+  border: 'none',
+  color: vars.color.textPrimary,
+  fontFamily: vars.font.body,
+  fontSize: '0.75rem',
+  textAlign: 'left',
+  cursor: 'pointer',
+  ':hover': { background: vars.color.bgPrimary },
+});
+
+export const shipItMenuItemActive = style({
+  background: `color-mix(in srgb, ${vars.color.accent} 15%, transparent)`,
+});
+
+export const shipItSubText = style({
+  fontFamily: vars.font.mono,
+  fontSize: '0.65rem',
+  color: vars.color.textSecondary,
+  marginLeft: vars.space.sm,
+});
+
+export const shipItMergedPill = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+  padding: '4px 10px',
+  borderRadius: '999px',
+  background: `color-mix(in srgb, ${vars.color.success} 18%, transparent)`,
+  color: vars.color.success,
+  fontFamily: vars.font.mono,
+  fontSize: '0.7rem',
+  fontWeight: 600,
+  border: `1px solid color-mix(in srgb, ${vars.color.success} 35%, transparent)`,
 });
 

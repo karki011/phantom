@@ -188,6 +188,23 @@ export interface ActivityMetadata {
   command?: string;
 }
 
+export interface Reviewer {
+  login: string;
+  avatar_url: string;
+}
+
+export type MergeMethod = 'squash' | 'merge' | 'rebase';
+
+export interface RepoMergeConfig {
+  merge_commit_allowed: boolean;
+  squash_merge_allowed: boolean;
+  rebase_merge_allowed: boolean;
+  delete_branch_on_merge: boolean;
+  /** SQUASH | MERGE | REBASE (GitHub constants). */
+  viewer_default_merge_method: string;
+  has_merge_queue: boolean;
+}
+
 export interface PrStatus {
   number: number;
   title: string;
@@ -198,10 +215,27 @@ export interface PrStatus {
   base_ref_name: string;
   author: string;
   created_at: string;
+  merged_at?: string;
   checks_passed: number;
   checks_failed: number;
   checks_pending: number;
   checks_total: number;
+
+  /** CLEAN | BLOCKED | BEHIND | DIRTY | DRAFT | HAS_HOOKS | UNSTABLE | UNKNOWN */
+  merge_state_status?: string;
+  /** MERGEABLE | CONFLICTING | UNKNOWN */
+  mergeable?: string;
+  /** APPROVED | REVIEW_REQUIRED | CHANGES_REQUESTED | "" */
+  review_decision?: string;
+  is_auto_merging?: boolean;
+  auto_merge_method?: string;
+  merge_queue_state?: string;
+  merge_queue_position?: number;
+  merge_queue_eta?: number;
+
+  approvers?: Reviewer[];
+  changes_requested_by?: Reviewer[];
+  awaiting_review_from?: Reviewer[];
 }
 
 export interface CiRun {

@@ -42,20 +42,46 @@ func GetRemoteURL(ctx context.Context, repoPath string) (string, error) {
 
 // ghPrJSON is the raw JSON shape returned by `gh pr view`.
 type ghPrJSON struct {
-	Number             int              `json:"number"`
-	Title              string           `json:"title"`
-	State              string           `json:"state"`
-	IsDraft            bool             `json:"isDraft"`
-	URL                string           `json:"url"`
-	HeadRefName        string           `json:"headRefName"`
-	BaseRefName        string           `json:"baseRefName"`
-	Author             ghAuthorJSON     `json:"author"`
-	CreatedAt          string           `json:"createdAt"`
-	StatusCheckRollup  []ghCheckRunJSON `json:"statusCheckRollup"`
+	Number            int                   `json:"number"`
+	Title             string                `json:"title"`
+	State             string                `json:"state"`
+	IsDraft           bool                  `json:"isDraft"`
+	URL               string                `json:"url"`
+	HeadRefName       string                `json:"headRefName"`
+	BaseRefName       string                `json:"baseRefName"`
+	Author            ghAuthorJSON          `json:"author"`
+	CreatedAt         string                `json:"createdAt"`
+	MergedAt          string                `json:"mergedAt"`
+	StatusCheckRollup []ghCheckRunJSON      `json:"statusCheckRollup"`
+	Mergeable         string                `json:"mergeable"`
+	MergeStateStatus  string                `json:"mergeStateStatus"`
+	ReviewDecision    string                `json:"reviewDecision"`
+	AutoMergeRequest  *ghAutoMergeJSON      `json:"autoMergeRequest"`
+	LatestReviews     []ghReviewJSON        `json:"latestReviews"`
+	ReviewRequests    []ghReviewRequestJSON `json:"reviewRequests"`
 }
 
 type ghAuthorJSON struct {
-	Login string `json:"login"`
+	Login     string `json:"login"`
+	AvatarUrl string `json:"avatarUrl"`
+}
+
+type ghAutoMergeJSON struct {
+	MergeMethod string `json:"mergeMethod"`
+}
+
+type ghReviewJSON struct {
+	State       string       `json:"state"`
+	SubmittedAt string       `json:"submittedAt"`
+	Author      ghAuthorJSON `json:"author"`
+}
+
+// ghReviewRequestJSON: gh CLI returns either a user (login + avatarUrl)
+// or a team (name only, no login).
+type ghReviewRequestJSON struct {
+	Login     string `json:"login"`
+	Name      string `json:"name"`
+	AvatarUrl string `json:"avatarUrl"`
 }
 
 type ghCheckRunJSON struct {
@@ -87,7 +113,7 @@ func GetPrStatus(ctx context.Context, repoPath, branch string) (*PrStatus, error
 	log.Info("git/GetPrStatus: called", "repoPath", repoPath, "branch", branch)
 
 	cmd := exec.CommandContext(ctx, "gh", "pr", "view", branch,
-		"--json", "number,title,state,url,headRefName,baseRefName,isDraft,author,createdAt,statusCheckRollup",
+		"--json", "number,title,state,url,headRefName,baseRefName,isDraft,author,createdAt,mergedAt,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision,autoMergeRequest,latestReviews,reviewRequests",
 	)
 	cmd.Dir = repoPath
 	var stdout, stderr bytes.Buffer
@@ -106,23 +132,135 @@ func GetPrStatus(ctx context.Context, repoPath, branch string) (*PrStatus, error
 	}
 
 	passed, failed, pending := computeCheckSummary(raw.StatusCheckRollup)
-	pr := &PrStatus{
-		Number:        raw.Number,
-		Title:         raw.Title,
-		State:         raw.State,
-		IsDraft:       raw.IsDraft,
-		URL:           raw.URL,
-		HeadRefName:   raw.HeadRefName,
-		BaseRefName:   raw.BaseRefName,
-		Author:        raw.Author.Login,
-		CreatedAt:     raw.CreatedAt,
-		ChecksPassed:  passed,
-		ChecksFailed:  failed,
-		ChecksPending: pending,
-		ChecksTotal:   len(raw.StatusCheckRollup),
+	approvers, changesRequested := classifyReviews(raw.LatestReviews)
+	awaiting := mapReviewRequests(raw.ReviewRequests)
+
+	autoMethod := ""
+	if raw.AutoMergeRequest != nil {
+		autoMethod = raw.AutoMergeRequest.MergeMethod
 	}
-	log.Info("git/GetPrStatus: success", "number", pr.Number, "state", pr.State, "checks", pr.ChecksTotal)
+
+	pr := &PrStatus{
+		Number:             raw.Number,
+		Title:              raw.Title,
+		State:              raw.State,
+		IsDraft:            raw.IsDraft,
+		URL:                raw.URL,
+		HeadRefName:        raw.HeadRefName,
+		BaseRefName:        raw.BaseRefName,
+		Author:             raw.Author.Login,
+		CreatedAt:          raw.CreatedAt,
+		MergedAt:           raw.MergedAt,
+		ChecksPassed:       passed,
+		ChecksFailed:       failed,
+		ChecksPending:      pending,
+		ChecksTotal:        len(raw.StatusCheckRollup),
+		Mergeable:          raw.Mergeable,
+		MergeStateStatus:   raw.MergeStateStatus,
+		ReviewDecision:     raw.ReviewDecision,
+		IsAutoMerging:      raw.AutoMergeRequest != nil,
+		AutoMergeMethod:    autoMethod,
+		Approvers:          approvers,
+		ChangesRequestedBy: changesRequested,
+		AwaitingReviewFrom: awaiting,
+	}
+
+	// Best-effort: fetch merge queue state via GraphQL.
+	if state, position, eta, ok := getMergeQueueEntry(ctx, repoPath, raw.Number); ok {
+		pr.MergeQueueState = state
+		pr.MergeQueuePosition = position
+		pr.MergeQueueEta = eta
+	}
+
+	log.Info("git/GetPrStatus: success",
+		"number", pr.Number, "state", pr.State, "checks", pr.ChecksTotal,
+		"mergeState", pr.MergeStateStatus, "reviewDecision", pr.ReviewDecision)
 	return pr, nil
+}
+
+// classifyReviews returns the latest distinct approvers and reviewers who requested changes.
+// `latestReviews` from gh contains the most recent review per reviewer, so we just bucket by state.
+func classifyReviews(reviews []ghReviewJSON) (approvers, changesRequested []Reviewer) {
+	for _, r := range reviews {
+		if r.Author.Login == "" {
+			continue
+		}
+		switch strings.ToUpper(r.State) {
+		case "APPROVED":
+			approvers = append(approvers, Reviewer{Login: r.Author.Login, AvatarUrl: r.Author.AvatarUrl})
+		case "CHANGES_REQUESTED":
+			changesRequested = append(changesRequested, Reviewer{Login: r.Author.Login, AvatarUrl: r.Author.AvatarUrl})
+		}
+	}
+	return
+}
+
+// mapReviewRequests converts pending review requests (users + teams) into Reviewers.
+// Teams have a Name but no Login; we synthesize a "team:<name>" login so the FE can distinguish them.
+func mapReviewRequests(reqs []ghReviewRequestJSON) []Reviewer {
+	out := make([]Reviewer, 0, len(reqs))
+	for _, r := range reqs {
+		if r.Login != "" {
+			out = append(out, Reviewer{Login: r.Login, AvatarUrl: r.AvatarUrl})
+		} else if r.Name != "" {
+			out = append(out, Reviewer{Login: "team:" + r.Name})
+		}
+	}
+	return out
+}
+
+// getMergeQueueEntry queries GraphQL for queue state. Best-effort; returns ok=false on any error.
+// `gh pr view --json` does NOT expose mergeQueueEntry — graphql is the only path.
+func getMergeQueueEntry(ctx context.Context, repoPath string, prNumber int) (state string, position, eta int, ok bool) {
+	remote, err := GetRemoteURL(ctx, repoPath)
+	if err != nil {
+		return "", 0, 0, false
+	}
+	ownerRepo := parseOwnerRepo(remote)
+	if ownerRepo == "" {
+		return "", 0, 0, false
+	}
+	parts := strings.SplitN(ownerRepo, "/", 2)
+	if len(parts) != 2 {
+		return "", 0, 0, false
+	}
+	owner, name := parts[0], parts[1]
+
+	query := `query($owner:String!,$name:String!,$num:Int!){repository(owner:$owner,name:$name){pullRequest(number:$num){mergeQueueEntry{state position estimatedTimeToMerge}}}}`
+
+	cmd := exec.CommandContext(ctx, "gh", "api", "graphql",
+		"-f", "query="+query,
+		"-F", "owner="+owner,
+		"-F", "name="+name,
+		"-F", fmt.Sprintf("num=%d", prNumber),
+	)
+	cmd.Dir = repoPath
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		return "", 0, 0, false
+	}
+	var resp struct {
+		Data struct {
+			Repository struct {
+				PullRequest struct {
+					MergeQueueEntry *struct {
+						State                string `json:"state"`
+						Position             int    `json:"position"`
+						EstimatedTimeToMerge int    `json:"estimatedTimeToMerge"`
+					} `json:"mergeQueueEntry"`
+				} `json:"pullRequest"`
+			} `json:"repository"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &resp); err != nil {
+		return "", 0, 0, false
+	}
+	entry := resp.Data.Repository.PullRequest.MergeQueueEntry
+	if entry == nil {
+		return "", 0, 0, false
+	}
+	return entry.State, entry.Position, entry.EstimatedTimeToMerge, true
 }
 
 // ListOpenPrsForBase returns open PRs targeting the given base branch.
@@ -154,20 +292,35 @@ func ListOpenPrsForBase(ctx context.Context, repoPath, baseBranch string, limit 
 	prs := make([]PrStatus, 0, len(raw))
 	for _, r := range raw {
 		passed, failed, pending := computeCheckSummary(r.StatusCheckRollup)
+		approvers, changesRequested := classifyReviews(r.LatestReviews)
+		awaiting := mapReviewRequests(r.ReviewRequests)
+		autoMethod := ""
+		if r.AutoMergeRequest != nil {
+			autoMethod = r.AutoMergeRequest.MergeMethod
+		}
 		prs = append(prs, PrStatus{
-			Number:        r.Number,
-			Title:         r.Title,
-			State:         r.State,
-			IsDraft:       r.IsDraft,
-			URL:           r.URL,
-			HeadRefName:   r.HeadRefName,
-			BaseRefName:   r.BaseRefName,
-			Author:        r.Author.Login,
-			CreatedAt:     r.CreatedAt,
-			ChecksPassed:  passed,
-			ChecksFailed:  failed,
-			ChecksPending: pending,
-			ChecksTotal:   len(r.StatusCheckRollup),
+			Number:             r.Number,
+			Title:              r.Title,
+			State:              r.State,
+			IsDraft:            r.IsDraft,
+			URL:                r.URL,
+			HeadRefName:        r.HeadRefName,
+			BaseRefName:        r.BaseRefName,
+			Author:             r.Author.Login,
+			CreatedAt:          r.CreatedAt,
+			MergedAt:           r.MergedAt,
+			ChecksPassed:       passed,
+			ChecksFailed:       failed,
+			ChecksPending:      pending,
+			ChecksTotal:        len(r.StatusCheckRollup),
+			Mergeable:          r.Mergeable,
+			MergeStateStatus:   r.MergeStateStatus,
+			ReviewDecision:     r.ReviewDecision,
+			IsAutoMerging:      r.AutoMergeRequest != nil,
+			AutoMergeMethod:    autoMethod,
+			Approvers:          approvers,
+			ChangesRequestedBy: changesRequested,
+			AwaitingReviewFrom: awaiting,
 		})
 	}
 	log.Info("git/ListOpenPrsForBase: success", "count", len(prs))

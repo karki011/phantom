@@ -207,6 +207,23 @@ export const branchName = style({
   whiteSpace: 'nowrap',
 });
 
+// Compact dirty-file badge rendered after the branch name when the worktree
+// has uncommitted changes. Hidden entirely when the working tree is clean
+// (rendered conditionally in WorktreeItem). Format: `±N`.
+export const dirtyBadge = style({
+  fontSize: '10px',
+  fontFamily: vars.font.mono,
+  fontWeight: 600,
+  color: vars.color.accent,
+  backgroundColor: vars.color.accentMuted,
+  padding: `0 ${vars.space.xs}`,
+  borderRadius: vars.radius.sm,
+  flexShrink: 0,
+  lineHeight: '14px',
+  letterSpacing: '0.02em',
+  cursor: 'default',
+});
+
 export const sessionDot = style({
   width: '6px',
   height: '6px',

@@ -41,6 +41,11 @@ const (
 	EventCiUpdated      = "ci:updated"       // payload: []git.CiRun
 	EventPrsListUpdated = "prs:list-updated" // payload: []git.PrStatus
 
+	// Ship-It (merge action) lifecycle events.
+	EventPrMerging    = "pr:merging"     // payload: { worktreeId, prNumber, autoMerge bool }
+	EventPrMerged     = "pr:merged"      // payload: { worktreeId, prNumber }
+	EventMergeFailed  = "pr:merge-failed" // payload: { worktreeId, prNumber, message }
+
 	EventChatStream          = "chat:stream"             // payload: chat.StreamEvent
 	EventChatMessageComplete = "chat:message-complete"  // payload: *chat.Message
 

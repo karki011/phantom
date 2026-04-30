@@ -37,6 +37,10 @@ export {
   getBranchCommits,
   listOpenPrs,
   watchWorktree,
+  getRepoMergeConfig,
+  mergePr,
+  disableAutoMerge,
+  postMergeCleanup,
 } from './git';
 export { revealInFinder, openInFinder, openInDefaultApp, openURL } from './shell';
 export { getWards, saveWardRule, deleteWardRule, toggleWardRule, getWardPresets, applyWardPreset } from './wards';

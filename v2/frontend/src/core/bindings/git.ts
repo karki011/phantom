@@ -1,6 +1,6 @@
 // Author: Subash Karki
 
-import type { Workspace, RepoStatus, FileStatus, CommitInfo, FileEntry, PrStatus, CiRun, CheckAnnotation } from '../types';
+import type { Workspace, RepoStatus, FileStatus, CommitInfo, FileEntry, PrStatus, CiRun, CheckAnnotation, RepoMergeConfig, MergeMethod } from '../types';
 import { normalize } from './_normalize';
 
 const App = () => (window as any).go?.['app']?.App;
@@ -143,4 +143,34 @@ export async function listOpenPrs(worktreeId: string, limit: number = 5): Promis
 
 export async function watchWorktree(worktreeId: string): Promise<void> {
   try { await App()?.WatchWorktree(worktreeId); } catch {}
+}
+
+// ── Ship-It (merge) ────────────────────────────────────────────────────────
+
+export async function getRepoMergeConfig(worktreeId: string): Promise<RepoMergeConfig | null> {
+  try { return (await App()?.GetRepoMergeConfigForWorkspace(worktreeId)) ?? null; } catch { return null; }
+}
+
+/**
+ * Run `gh pr merge` for the workspace's branch.
+ * Returns "" on success, or an error message.
+ */
+export async function mergePr(
+  worktreeId: string,
+  method: MergeMethod,
+  autoMerge: boolean,
+  deleteBranch: boolean,
+): Promise<string> {
+  try { return (await App()?.MergePrForWorkspace(worktreeId, method, autoMerge, deleteBranch)) ?? ''; }
+  catch (err) { return err instanceof Error ? err.message : 'merge failed'; }
+}
+
+export async function disableAutoMerge(worktreeId: string): Promise<string> {
+  try { return (await App()?.DisableAutoMergeForWorkspace(worktreeId)) ?? ''; }
+  catch (err) { return err instanceof Error ? err.message : 'disable auto-merge failed'; }
+}
+
+export async function postMergeCleanup(worktreeId: string): Promise<string> {
+  try { return (await App()?.PostMergeCleanupForWorkspace(worktreeId)) ?? ''; }
+  catch (err) { return err instanceof Error ? err.message : 'cleanup failed'; }
 }

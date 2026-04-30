@@ -2,7 +2,7 @@
 // Author: Subash Karki
 
 import { createMemo, createSignal, createEffect, on, onCleanup, Show, For, Index } from 'solid-js';
-import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw, Shield, Activity } from 'lucide-solid';
+import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw, Shield, Activity, ChevronDown, GitMerge, Rocket } from 'lucide-solid';
 import { activeWorktreeId } from '@/core/signals/app';
 import { activeProject, activeWorktree } from '@/core/signals/worktrees';
 import { addTabWithData } from '@/core/panes/signals';
@@ -14,7 +14,7 @@ import { prStatus, setPrStatus, isCreatingPr, setIsCreatingPr, ghAvailable, setG
 import { SessionControls } from '@/shared/SessionControls/SessionControls';
 import { NewWorktreeDialog } from '@/shared/NewWorktreeDialog/NewWorktreeDialog';
 import { WardManager } from '@/shared/WardManager/WardManager';
-import { getWorkspaceStatus, gitPull, gitPush, getPrStatus, getCiRuns, getCiRunsForBranch, createPrWithAI, listOpenPrs, isGhCliAvailable, getCheckAnnotations, getFailedSteps, getSessionsByProject, getAllRecipes, getFavoriteRecipes, toggleRecipeFavorite } from '@/core/bindings';
+import { getWorkspaceStatus, gitPull, gitPush, getPrStatus, getCiRuns, getCiRunsForBranch, createPrWithAI, listOpenPrs, isGhCliAvailable, getCheckAnnotations, getFailedSteps, getSessionsByProject, getAllRecipes, getFavoriteRecipes, toggleRecipeFavorite, getRepoMergeConfig, mergePr, disableAutoMerge, postMergeCleanup } from '@/core/bindings';
 import { openURL } from '@/core/bindings/shell';
 import { getWards } from '@/core/bindings/wards';
 import type { WardRule } from '@/core/bindings/wards';
@@ -24,7 +24,7 @@ import { Tip } from '@/shared/Tip/Tip';
 import { vars } from '@/styles/theme.css';
 import { formatCost, formatDuration } from '@/core/signals/journal';
 import { openRecipePicker, recipePickerOpen } from '@/core/signals/recipes';
-import type { RepoStatus, PrStatus as PrStatusType, CiRun, CheckAnnotation, FailedStep, JournalEntry, EnrichedRecipe } from '@/core/types';
+import type { RepoStatus, PrStatus as PrStatusType, CiRun, CheckAnnotation, FailedStep, JournalEntry, EnrichedRecipe, RepoMergeConfig, Reviewer, MergeMethod } from '@/core/types';
 import * as styles from '@/styles/home.css';
 
 
@@ -350,6 +350,7 @@ export default function WorktreeHome() {
   const [statusLoading, setStatusLoading] = createSignal(true);
   const [activityLoading, setActivityLoading] = createSignal(true);
   const [refreshing, setRefreshing] = createSignal(false);
+  const [repoMergeCfg, setRepoMergeCfg] = createSignal<RepoMergeConfig | null>(null);
 
   const isDefaultBranch = createMemo(() => {
     const wt = activeWorktree();
@@ -421,8 +422,12 @@ export default function WorktreeHome() {
         const prs = await listOpenPrs(wtId, 20);
         if (!cancelled) setOpenPrs(prs);
       } else {
-        const [pr, ci] = await Promise.all([getPrStatus(wtId), getCiRuns(wtId)]);
-        if (!cancelled) { setPrStatus(pr); setCiSummary(ci); }
+        const [pr, ci, cfg] = await Promise.all([
+          getPrStatus(wtId),
+          getCiRuns(wtId),
+          getRepoMergeConfig(wtId),
+        ]);
+        if (!cancelled) { setPrStatus(pr); setCiSummary(ci); setRepoMergeCfg(cfg); }
       }
       if (!cancelled) setActivityLoading(false);
     })();
@@ -649,14 +654,23 @@ export default function WorktreeHome() {
               </button>
             </Show>
             <Show when={(repoStatus()?.staged?.length ?? 0) + (repoStatus()?.unstaged?.length ?? 0) > 0}>
-              <span class={styles.statusBadge} title="Modified files">
-                <FileEdit size={11} />{(repoStatus()?.staged?.length ?? 0) + (repoStatus()?.unstaged?.length ?? 0)}
-              </span>
+              <Tip
+                label={`${repoStatus()?.staged?.length ?? 0} staged · ${repoStatus()?.unstaged?.length ?? 0} unstaged`}
+                placement="bottom"
+              >
+                <span class={styles.statusBadgeWarnSolid}>
+                  <FileEdit size={11} />
+                  {(repoStatus()?.staged?.length ?? 0) + (repoStatus()?.unstaged?.length ?? 0)} modified
+                </span>
+              </Tip>
             </Show>
             <Show when={(repoStatus()?.untracked?.length ?? 0) > 0}>
-              <span class={styles.statusBadge} title="Untracked files">
-                <FileQuestion size={11} />{repoStatus()!.untracked!.length}
-              </span>
+              <Tip label="Files not yet added to git" placement="bottom">
+                <span class={styles.statusBadgeAccentSolid}>
+                  <FileQuestion size={11} />
+                  {repoStatus()!.untracked!.length} untracked
+                </span>
+              </Tip>
             </Show>
             <Show when={repoStatus()?.is_clean && (repoStatus()?.ahead_by ?? 0) === 0 && (repoStatus()?.behind_by ?? 0) === 0}>
               <span class={styles.statusClean}>Clean · In sync</span>
@@ -763,6 +777,10 @@ export default function WorktreeHome() {
                   <span class={styles.prCardMeta}>{prStatus()!.author} · {prAge(prStatus()!.created_at)}</span>
                 </div>
               </div>
+
+              {/* Reviewer row + Ship-It action */}
+              <ReviewerRow pr={prStatus()!} />
+              <ShipItButton pr={prStatus()!} cfg={repoMergeCfg()} />
 
               <Show when={ciSummary()}>
                 {(runs) => {
@@ -1030,6 +1048,353 @@ function FailedCheckItem(props: { run: CiRun }) {
 
       <Show when={loaded() && failedSteps().length === 0 && !props.run.description}>
         <div class={styles.ciDescription}>Failed — open in GitHub for details</div>
+      </Show>
+    </div>
+  );
+}
+
+// ── Reviewer row ───────────────────────────────────────────────────────────
+
+function ReviewerChip(props: { reviewer: Reviewer }) {
+  const isTeam = () => props.reviewer.login.startsWith('team:');
+  const displayLogin = () => isTeam() ? props.reviewer.login.slice(5) : props.reviewer.login;
+  return (
+    <span class={styles.reviewerChip}>
+      <Show when={!isTeam() && props.reviewer.avatar_url} fallback={
+        <span class={styles.reviewerAvatar} aria-hidden="true" />
+      }>
+        <img class={styles.reviewerAvatar} src={props.reviewer.avatar_url} alt="" loading="lazy" />
+      </Show>
+      <span class={styles.reviewerLogin}>{isTeam() ? `@${displayLogin()} (team)` : `@${displayLogin()}`}</span>
+    </span>
+  );
+}
+
+function ReviewerRow(props: { pr: PrStatusType }) {
+  const approvers = () => props.pr.approvers ?? [];
+  const changes = () => props.pr.changes_requested_by ?? [];
+  const awaiting = () => props.pr.awaiting_review_from ?? [];
+
+  return (
+    <Show when={approvers().length > 0 || changes().length > 0 || awaiting().length > 0}>
+      <div class={styles.reviewerRow}>
+        <Show when={approvers().length > 0}>
+          <span class={styles.reviewerLabelApproved}>
+            <CheckCircle size={10} style={{ display: 'inline', 'vertical-align': '-1px', 'margin-right': '3px' }} />
+            Approved by
+          </span>
+          <For each={approvers()}>{(r) => <ReviewerChip reviewer={r} />}</For>
+        </Show>
+
+        <Show when={changes().length > 0}>
+          <span class={styles.reviewerLabelChanges}>
+            <XCircle size={10} style={{ display: 'inline', 'vertical-align': '-1px', 'margin-right': '3px' }} />
+            Changes requested by
+          </span>
+          <For each={changes()}>{(r) => <ReviewerChip reviewer={r} />}</For>
+        </Show>
+
+        <Show when={approvers().length === 0 && changes().length === 0 && awaiting().length > 0}>
+          <span class={styles.reviewerLabel}>Awaiting review from</span>
+          <For each={awaiting()}>{(r) => <ReviewerChip reviewer={r} />}</For>
+        </Show>
+      </div>
+    </Show>
+  );
+}
+
+// ── Ship-It button ─────────────────────────────────────────────────────────
+
+interface ShipItComputed {
+  label: string;
+  tone: 'primary' | 'secondary' | 'warn' | 'disabled';
+  enabled: boolean;
+  autoMerge: boolean;
+  tooltip?: string;
+  externalUrl?: string;
+}
+
+function computeShipItState(pr: PrStatusType, cfg: RepoMergeConfig | null): ShipItComputed {
+  const ms = (pr.merge_state_status ?? '').toUpperCase();
+  const queueOnBase = cfg?.has_merge_queue ?? false;
+
+  if (queueOnBase) {
+    return {
+      label: 'Add to Merge Queue',
+      tone: 'primary',
+      enabled: true,
+      autoMerge: false,
+    };
+  }
+
+  if (pr.is_draft) {
+    return {
+      label: 'Mark ready',
+      tone: 'disabled',
+      enabled: false,
+      autoMerge: false,
+      tooltip: 'PR is a draft. Mark it ready in GitHub before shipping.',
+      externalUrl: pr.url,
+    };
+  }
+
+  switch (ms) {
+    case 'CLEAN':
+    case 'HAS_HOOKS':
+    case 'UNSTABLE':
+      return { label: 'Ship It', tone: 'primary', enabled: true, autoMerge: false, tooltip: 'Merge now' };
+    case 'BLOCKED':
+      return {
+        label: 'Ship It',
+        tone: 'secondary',
+        enabled: true,
+        autoMerge: true,
+        tooltip: 'Checks failing or review missing — will queue auto-merge (gh pr merge --auto)',
+      };
+    case 'BEHIND':
+      return {
+        label: 'Update branch & ship',
+        tone: 'warn',
+        enabled: true,
+        autoMerge: true,
+        tooltip: 'Branch is behind base — queues auto-merge so it ships once updated',
+      };
+    case 'DIRTY':
+      return {
+        label: 'Resolve conflicts',
+        tone: 'disabled',
+        enabled: false,
+        autoMerge: false,
+        tooltip: 'Branch has merge conflicts. Resolve in GitHub or locally.',
+        externalUrl: pr.url,
+      };
+    case 'DRAFT':
+      return {
+        label: 'Mark ready',
+        tone: 'disabled',
+        enabled: false,
+        autoMerge: false,
+        tooltip: 'PR is a draft. Mark it ready before shipping.',
+        externalUrl: pr.url,
+      };
+    default:
+      return {
+        label: 'Ship It',
+        tone: 'primary',
+        enabled: true,
+        autoMerge: false,
+        tooltip: 'Merge now',
+      };
+  }
+}
+
+const TONE_CLASS = {
+  primary: styles.shipItButton,
+  secondary: `${styles.shipItButton} ${styles.shipItButtonSecondary}`,
+  warn: `${styles.shipItButton} ${styles.shipItButtonWarn}`,
+  disabled: `${styles.shipItButton} ${styles.shipItButtonDisabled}`,
+} as const;
+
+const MERGE_METHOD_PREF_KEY = 'merge_method_default';
+
+function ShipItButton(props: { pr: PrStatusType; cfg: RepoMergeConfig | null }) {
+  const [busy, setBusy] = createSignal(false);
+  const [menuOpen, setMenuOpen] = createSignal(false);
+  const [done, setDone] = createSignal<'none' | 'merged'>('none');
+
+  // Determine current merge method (user pref → repo default → squash).
+  const persistedMethod = (): MergeMethod => {
+    const v = (getPref(MERGE_METHOD_PREF_KEY) || '').toLowerCase();
+    if (v === 'squash' || v === 'merge' || v === 'rebase') return v;
+    const def = (props.cfg?.viewer_default_merge_method ?? '').toLowerCase();
+    if (def === 'squash' || def === 'merge' || def === 'rebase') return def;
+    return 'squash';
+  };
+  const [method, setMethod] = createSignal<MergeMethod>(persistedMethod());
+
+  // Re-sync if cfg loads after first render.
+  createEffect(on(() => props.cfg, () => setMethod(persistedMethod())));
+
+  const allowedMethods = (): MergeMethod[] => {
+    const cfg = props.cfg;
+    if (!cfg) return ['squash'];
+    const out: MergeMethod[] = [];
+    if (cfg.squash_merge_allowed) out.push('squash');
+    if (cfg.merge_commit_allowed) out.push('merge');
+    if (cfg.rebase_merge_allowed) out.push('rebase');
+    return out.length > 0 ? out : ['squash'];
+  };
+
+  // State C — already merged.
+  const isMerged = () => props.pr.state === 'MERGED' || done() === 'merged';
+  // State B — in-flight.
+  const isAutoMerging = () => !!props.pr.is_auto_merging;
+  const isQueued = () => !!props.pr.merge_queue_state && props.pr.merge_queue_state !== '';
+
+  const computed = createMemo(() => computeShipItState(props.pr, props.cfg));
+
+  // Persist user pick.
+  const pickMethod = (m: MergeMethod) => {
+    setMethod(m);
+    setMenuOpen(false);
+    try {
+      // Best-effort: persist as a session preference. Falls back to in-memory only.
+      // (getPref/setPref are async but `set` is not always exposed — keep this simple.)
+      // If a setter exists, we'd call it here. For MVP, in-memory state is fine.
+    } catch { /* noop */ }
+  };
+
+  const handleShipIt = async () => {
+    const wtId = activeWorktreeId();
+    if (!wtId || busy()) return;
+    const c = computed();
+    if (!c.enabled) {
+      if (c.externalUrl) openURL(c.externalUrl);
+      return;
+    }
+    setBusy(true);
+    try {
+      const deleteBranch = props.cfg?.delete_branch_on_merge ?? false;
+      const errMsg = await mergePr(wtId, method(), c.autoMerge, deleteBranch);
+      if (errMsg) {
+        showWarningToast('Merge failed', errMsg);
+      } else if (c.autoMerge) {
+        showToast('Auto-merge enabled', 'PR will merge once checks pass');
+      } else {
+        showToast('Shipped', `Merged via ${method()}`);
+        setDone('merged');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCancelAuto = async () => {
+    const wtId = activeWorktreeId();
+    if (!wtId) return;
+    setBusy(true);
+    try {
+      const errMsg = await disableAutoMerge(wtId);
+      if (errMsg) showWarningToast('Cancel failed', errMsg);
+      else showToast('Auto-merge cancelled', 'PR will not auto-merge');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCleanup = async () => {
+    const wtId = activeWorktreeId();
+    if (!wtId) return;
+    setBusy(true);
+    try {
+      const errMsg = await postMergeCleanup(wtId);
+      if (errMsg) showWarningToast('Cleanup failed', errMsg);
+      else showToast('Cleaned up', 'Switched to base, pulled, deleted feature branch');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div class={styles.shipItRow} style={{ position: 'relative' }}>
+      {/* State C — merged */}
+      <Show when={isMerged()}>
+        <span class={styles.shipItMergedPill}>
+          <CheckCircle size={11} />
+          Merged
+        </span>
+        <button type="button" class={styles.statusActionButton} onClick={handleCleanup} disabled={busy()}>
+          {busy() ? 'Working...' : 'Pull main & cleanup'}
+        </button>
+      </Show>
+
+      {/* State B — auto-merging or queued */}
+      <Show when={!isMerged() && isAutoMerging()}>
+        <button type="button" class={`${styles.shipItButton} ${styles.shipItButtonDisabled}`} disabled>
+          <LoaderCircle size={11} style={{ animation: 'spin 1s linear infinite' }} />
+          Auto-merging when checks pass...
+        </button>
+        <button type="button" class={styles.statusActionButton} onClick={handleCancelAuto} disabled={busy()}>
+          Cancel auto-merge
+        </button>
+      </Show>
+
+      <Show when={!isMerged() && !isAutoMerging() && isQueued()}>
+        <button type="button" class={`${styles.shipItButton} ${styles.shipItButtonDisabled}`} disabled>
+          <LoaderCircle size={11} style={{ animation: 'spin 1s linear infinite' }} />
+          {props.pr.merge_queue_state === 'MERGING'
+            ? 'Merging...'
+            : `Queued · #${props.pr.merge_queue_position || '?'}${props.pr.merge_queue_eta ? ` · ~${props.pr.merge_queue_eta}m` : ''}`}
+        </button>
+      </Show>
+
+      {/* State A — pre-merge */}
+      <Show when={!isMerged() && !isAutoMerging() && !isQueued()}>
+        <Show
+          when={computed().tooltip}
+          fallback={
+            <button
+              type="button"
+              class={TONE_CLASS[computed().tone]}
+              onClick={handleShipIt}
+              disabled={!computed().enabled || busy()}
+            >
+              <Show when={busy()} fallback={<Rocket size={12} />}>
+                <LoaderCircle size={12} style={{ animation: 'spin 1s linear infinite' }} />
+              </Show>
+              {computed().label}
+            </button>
+          }
+        >
+          <Tip label={computed().tooltip} placement="top">
+            <button
+              type="button"
+              class={TONE_CLASS[computed().tone]}
+              onClick={handleShipIt}
+              disabled={!computed().enabled || busy()}
+            >
+              <Show when={busy()} fallback={<Rocket size={12} />}>
+                <LoaderCircle size={12} style={{ animation: 'spin 1s linear infinite' }} />
+              </Show>
+              {computed().label}
+            </button>
+          </Tip>
+        </Show>
+
+        {/* Caret only when method picker is meaningful (>1 allowed, not on queue) */}
+        <Show when={computed().enabled && !props.cfg?.has_merge_queue && allowedMethods().length > 1}>
+          <button
+            type="button"
+            class={styles.shipItCaret}
+            onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen()); }}
+            disabled={busy()}
+            aria-label="Choose merge method"
+          >
+            <ChevronDown size={12} />
+          </button>
+
+          <Show when={menuOpen()}>
+            <div class={styles.shipItMenu} style={{ top: '100%', left: '0' }}>
+              <For each={allowedMethods()}>
+                {(m) => (
+                  <button
+                    type="button"
+                    class={`${styles.shipItMenuItem} ${m === method() ? styles.shipItMenuItemActive : ''}`}
+                    onClick={() => pickMethod(m)}
+                  >
+                    <GitMerge size={12} />
+                    {m === 'squash' ? 'Squash and merge' : m === 'rebase' ? 'Rebase and merge' : 'Create a merge commit'}
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
+        </Show>
+
+        {/* Sub-line: method preview */}
+        <Show when={computed().enabled && !props.cfg?.has_merge_queue}>
+          <span class={styles.shipItSubText}>via {method()}</span>
+        </Show>
       </Show>
     </div>
   );

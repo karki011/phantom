@@ -229,6 +229,105 @@ func (a *App) GetCheckAnnotations(worktreeId string, checkName string) []git.Che
 	return annotations
 }
 
+// GetRepoMergeConfigForWorkspace returns repo-level merge settings (squash/merge/rebase
+// allowed, default method, queue presence) used to drive the Ship-It UI.
+func (a *App) GetRepoMergeConfigForWorkspace(worktreeId string) *git.RepoMergeConfig {
+	log.Info("app/GetRepoMergeConfigForWorkspace: called", "worktreeId", worktreeId)
+	repoPath, err := a.resolveWorkspacePath(worktreeId)
+	if err != nil {
+		log.Error("app/GetRepoMergeConfigForWorkspace: resolve failed", "err", err)
+		return nil
+	}
+	cfg := git.GetRepoMergeConfig(a.ctx, repoPath)
+	return &cfg
+}
+
+// MergePrForWorkspace runs `gh pr merge` for the workspace's branch.
+// On success, emits EventPrMerging (autoMerge) or EventPrMerged (direct ship)
+// and nudges the poller. Returns "" on success, error message on failure.
+func (a *App) MergePrForWorkspace(worktreeId, method string, autoMerge, deleteBranch bool) string {
+	log.Info("app/MergePrForWorkspace: called",
+		"worktreeId", worktreeId, "method", method, "autoMerge", autoMerge, "deleteBranch", deleteBranch)
+
+	repoPath, branch, err := a.resolveRepoBranch(worktreeId)
+	if err != nil {
+		return fmt.Sprintf("workspace not found: %v", err)
+	}
+
+	prNumber := 0
+	if pr, _ := git.GetPrStatus(a.ctx, repoPath, branch); pr != nil {
+		prNumber = pr.Number
+	}
+
+	if err := git.MergePr(a.ctx, repoPath, branch, method, autoMerge, deleteBranch); err != nil {
+		wailsRuntime.EventsEmit(a.ctx, EventMergeFailed, map[string]any{
+			"worktreeId": worktreeId,
+			"prNumber":   prNumber,
+			"message":    err.Error(),
+		})
+		log.Error("app/MergePrForWorkspace: merge failed", "err", err)
+		return err.Error()
+	}
+
+	if autoMerge {
+		wailsRuntime.EventsEmit(a.ctx, EventPrMerging, map[string]any{
+			"worktreeId": worktreeId,
+			"prNumber":   prNumber,
+			"autoMerge":  true,
+		})
+	} else {
+		wailsRuntime.EventsEmit(a.ctx, EventPrMerged, map[string]any{
+			"worktreeId": worktreeId,
+			"prNumber":   prNumber,
+		})
+	}
+
+	// Nudge the poller so the FE sees the new state quickly.
+	select {
+	case a.prRefresh <- struct{}{}:
+	default:
+	}
+
+	log.Info("app/MergePrForWorkspace: success", "worktreeId", worktreeId, "prNumber", prNumber)
+	return ""
+}
+
+// DisableAutoMergeForWorkspace cancels a pending `--auto` merge on the workspace's branch.
+// Returns "" on success, error message on failure.
+func (a *App) DisableAutoMergeForWorkspace(worktreeId string) string {
+	log.Info("app/DisableAutoMergeForWorkspace: called", "worktreeId", worktreeId)
+	repoPath, branch, err := a.resolveRepoBranch(worktreeId)
+	if err != nil {
+		return fmt.Sprintf("workspace not found: %v", err)
+	}
+	if err := git.DisableAutoMerge(a.ctx, repoPath, branch); err != nil {
+		log.Error("app/DisableAutoMergeForWorkspace: failed", "err", err)
+		return err.Error()
+	}
+	select {
+	case a.prRefresh <- struct{}{}:
+	default:
+	}
+	return ""
+}
+
+// PostMergeCleanupForWorkspace switches to the base branch, pulls, and deletes
+// the local feature branch. Returns "" on success.
+func (a *App) PostMergeCleanupForWorkspace(worktreeId string) string {
+	log.Info("app/PostMergeCleanupForWorkspace: called", "worktreeId", worktreeId)
+	repoPath, branch, err := a.resolveRepoBranch(worktreeId)
+	if err != nil {
+		return fmt.Sprintf("workspace not found: %v", err)
+	}
+	baseBranch := resolveBaseBranch(a, worktreeId, repoPath)
+	if err := git.PostMergeCleanup(a.ctx, repoPath, baseBranch, branch); err != nil {
+		log.Error("app/PostMergeCleanupForWorkspace: failed", "err", err)
+		return err.Error()
+	}
+	wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+	return ""
+}
+
 // resolveBaseBranch returns the base branch for a workspace by consulting the project's
 // DefaultBranch field, falling back to git auto-detection.
 func resolveBaseBranch(a *App, worktreeId, repoPath string) string {

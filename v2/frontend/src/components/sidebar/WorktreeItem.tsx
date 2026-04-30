@@ -1,7 +1,7 @@
 // PhantomOS v2 — Single worktree row with context menu
 // Author: Subash Karki
 
-import { Show, createSignal } from 'solid-js';
+import { Show, createMemo, createSignal } from 'solid-js';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Terminal, Trash2, GitBranch, GitFork, FolderOpen, ExternalLink, Clipboard, Pencil, RefreshCw, ArrowDownFromLine, ArrowUpFromLine, X, LoaderCircle } from 'lucide-solid';
 
@@ -9,7 +9,7 @@ import * as styles from '@/styles/sidebar.css';
 import { spin } from '@/styles/utilities.css';
 import { activeWorktreeId } from '@/core/signals/app';
 import { sessions } from '@/core/signals/sessions';
-import { selectWorktree, removeWorktreeById } from '@/core/signals/worktrees';
+import { selectWorktree, removeWorktreeById, statusMap } from '@/core/signals/worktrees';
 import { addTabWithData } from '@/core/panes/signals';
 import { gitFetch, gitPull, gitPush, getWorkspaceStatus } from '@/core/bindings';
 import { showToast, showWarningToast } from '@/shared/Toast/Toast';
@@ -42,6 +42,30 @@ export function WorktreeItem(props: WorktreeItemProps) {
   const [showRename, setShowRename] = createSignal(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
   const [dirtyCount, setDirtyCount] = createSignal(0);
+
+  // Live dirty-file counts from the global status map. Hidden when clean.
+  const dirtyStatus = createMemo(() => {
+    const path = props.worktree.worktree_path;
+    if (!path) return null;
+    const s = statusMap()[path];
+    if (!s) return null;
+    const staged = s.staged?.length ?? 0;
+    const unstaged = s.unstaged?.length ?? 0;
+    const untracked = s.untracked?.length ?? 0;
+    const total = staged + unstaged + untracked;
+    if (total === 0) return null;
+    return { staged, unstaged, untracked, total };
+  });
+
+  const dirtyTooltip = () => {
+    const d = dirtyStatus();
+    if (!d) return '';
+    const parts: string[] = [];
+    if (d.staged > 0) parts.push(`${d.staged} staged`);
+    if (d.unstaged > 0) parts.push(`${d.unstaged} unstaged`);
+    if (d.untracked > 0) parts.push(`${d.untracked} untracked`);
+    return parts.join(' · ');
+  };
 
   const tooltipLabel = () => {
     const wt = props.worktree;
@@ -117,6 +141,17 @@ export function WorktreeItem(props: WorktreeItemProps) {
         <span class={styles.branchName}>
           {props.worktree.branch}
         </span>
+        <Show when={dirtyStatus()}>
+          {(d) => (
+            <span
+              class={styles.dirtyBadge}
+              title={dirtyTooltip()}
+              aria-label={`${d().total} uncommitted file${d().total === 1 ? '' : 's'}`}
+            >
+              ±{d().total}
+            </span>
+          )}
+        </Show>
         {props.hasActiveSession && (
           <span class={styles.sessionDot} data-live-state={session()?.live_state} />
         )}
