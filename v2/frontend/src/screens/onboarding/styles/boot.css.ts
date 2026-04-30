@@ -13,6 +13,12 @@ const cursorBlink = keyframes({
   '50%, 100%': { opacity: 0 },
 });
 
+export const bootMark = style({
+  position: 'relative',
+  zIndex: 1,
+  marginBottom: vars.space.xl,
+});
+
 export const terminal = style({
   position: 'absolute',
   inset: 0,

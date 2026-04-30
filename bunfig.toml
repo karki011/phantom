@@ -1,3 +1,0 @@
-[install]
-# Trust native module builds
-trustedDependencies = ["better-sqlite3", "bufferutil", "electron", "esbuild", "node-pty", "utf-8-validate"]

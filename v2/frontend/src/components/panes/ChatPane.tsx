@@ -49,7 +49,11 @@ import {
 import { readFileContents } from '@/core/bindings/editor';
 import type { Conversation, ChatMessage, StreamEvent } from '@/core/types';
 import { Select } from '@kobalte/core/select';
+import { Popover } from '@kobalte/core/popover';
+import { showToast, showWarningToast } from '@/shared/Toast/Toast';
 import * as styles from '@/styles/chat.css';
+import * as paneStyles from './ChatPane.css';
+import { ImageLightbox } from '@/shared/ImageLightbox';
 
 // ── Highlight.js language registrations (selective to keep bundle lean) ────
 import typescript from 'highlight.js/lib/languages/typescript';
@@ -168,7 +172,12 @@ const formatAttachmentsForMessage = (attachments: Attachment[]): string => {
 
 // ── Markdown Content Component (marked + DOMPurify + highlight.js) ──────────
 
-const MarkdownContent = (props: { text: string }) => {
+interface MarkdownContentProps {
+  text: string;
+  onImageClick?: (src: string, alt: string) => void;
+}
+
+const MarkdownContent = (props: MarkdownContentProps) => {
   let ref: HTMLDivElement | undefined;
 
   const html = () => DOMPurify.sanitize(marked.parse(props.text) as string);
@@ -194,9 +203,30 @@ const MarkdownContent = (props: { text: string }) => {
     });
   };
 
+  // DOMPurify strips inline onclick attrs — wire image clicks via addEventListener
+  // after each re-render. Marker attribute prevents double-binding.
+  const wireImageClickHandlers = () => {
+    if (!ref) return;
+    const handler = props.onImageClick;
+    if (!handler) return;
+    ref.querySelectorAll('img').forEach((img) => {
+      const el = img as HTMLImageElement;
+      if (el.dataset.lightboxTrigger === 'true') return;
+      el.dataset.lightboxTrigger = 'true';
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handler(el.currentSrc || el.src, el.alt || '');
+      });
+    });
+  };
+
   createEffect(() => {
     html(); // track reactivity
-    requestAnimationFrame(addCopyButtons);
+    requestAnimationFrame(() => {
+      addCopyButtons();
+      wireImageClickHandlers();
+    });
   });
 
   return <div class={styles.markdownProse} ref={ref} innerHTML={html()} />;
@@ -252,7 +282,10 @@ interface DisplayMessage extends ChatMessage {
   tool_uses?: Array<{ name: string; input: string }>;
 }
 
-function MessageBubble(props: { message: DisplayMessage }) {
+function MessageBubble(props: {
+  message: DisplayMessage;
+  onImageClick?: (src: string, alt: string) => void;
+}) {
   const isUser = () => props.message.role === 'user';
 
   return (
@@ -277,7 +310,7 @@ function MessageBubble(props: { message: DisplayMessage }) {
 
         {/* Message content */}
         <Show when={props.message.content}>
-          <MarkdownContent text={props.message.content} />
+          <MarkdownContent text={props.message.content} onImageClick={props.onImageClick} />
         </Show>
 
         {/* Streaming cursor */}
@@ -310,6 +343,16 @@ export default function ChatPane(props: ChatPaneProps) {
   const [dragOver, setDragOver] = createSignal(false);
   const [editingTitle, setEditingTitle] = createSignal(false);
   const [titleDraft, setTitleDraft] = createSignal('');
+
+  // Image lightbox state — opened by clicks on rendered <img> in MarkdownContent.
+  const [lightbox, setLightbox] = createSignal<{ src: string; alt: string } | null>(null);
+  const lightboxOpen = () => lightbox() !== null;
+  const lightboxSrc = () => lightbox()?.src ?? '';
+  const lightboxAlt = () => lightbox()?.alt ?? '';
+  const openLightbox = (src: string, alt: string) => setLightbox({ src, alt });
+  const handleLightboxOpenChange = (open: boolean) => {
+    if (!open) setLightbox(null);
+  };
 
   let messagesEndRef: HTMLDivElement | undefined;
   let textareaRef: HTMLTextAreaElement | undefined;
@@ -872,7 +915,7 @@ export default function ChatPane(props: ChatPaneProps) {
               </Show>
 
               <For each={messages()}>
-                {(msg) => <MessageBubble message={msg} />}
+                {(msg) => <MessageBubble message={msg} onImageClick={openLightbox} />}
               </For>
 
               <Show when={sending() && !messages().some((m) => m.role === 'assistant' && m.streaming)}>

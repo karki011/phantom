@@ -47,13 +47,6 @@ export const openFileInEditor = (options: OpenFileOptions): void => {
     }
   }
 
-  const isMarkdown = filePath.endsWith('.md') || filePath.endsWith('.mdx');
-
-  if (isMarkdown) {
-    addTabWithData('markdown-preview', fileName, { workspaceId, filePath });
-    return;
-  }
-
   if (targetPaneId) {
     // Dispatch event to add a file tab to the existing editor pane
     window.dispatchEvent(new CustomEvent('phantom:editor-open-file', {

@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -355,9 +356,12 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 			slog.Error("session_watcher: update session", "session_id", sessionID, "err", err)
 			return
 		}
+		jsonlPath, _ := sw.prov.FindConversationFile(sessionID, raw.Cwd)
+		liveState := computeLiveState(jsonlPath, status, time.Now().Unix())
 		sw.emitEvent(EventSessionUpdate, map[string]interface{}{
-			"sessionId": sessionID,
-			"status":    status,
+			"sessionId":  sessionID,
+			"status":     status,
+			"live_state": liveState,
 		})
 	} else {
 		// Session does not exist — create
@@ -714,9 +718,12 @@ func (sw *SessionWatcher) resurrectAlive() {
 			slog.Error("session_watcher: resurrectAlive: update", "session_id", s.ID, "err", err)
 			continue
 		}
+		jsonlPath, _ := sw.prov.FindConversationFile(s.ID, s.Cwd.String)
+		liveState := computeLiveState(jsonlPath, "active", time.Now().Unix())
 		sw.emitEvent(EventSessionUpdate, map[string]interface{}{
-			"sessionId": s.ID,
-			"status":    "active",
+			"sessionId":  s.ID,
+			"status":     "active",
+			"live_state": liveState,
 		})
 		if sw.onActive != nil {
 			sw.onActive(s.ID, "")
