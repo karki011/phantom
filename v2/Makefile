@@ -6,7 +6,7 @@
 -include ../.env.notarize
 export APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
 
-APP_NAME      := PhantomOS
+APP_NAME      := Phantom
 APP_BUNDLE    := build/bin/$(APP_NAME).app
 SIGN_IDENTITY := Developer ID Application: Subash Karki (Z825V2BBX9)
 TEAM_ID       := Z825V2BBX9
