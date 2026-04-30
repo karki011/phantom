@@ -4,14 +4,13 @@ import { motion, useScroll, useTransform } from "motion/react";
 import { useRef } from "react";
 
 const lines = [
-  { kind: "comment", text: "// Phantom: one window. Every dev tool." },
-  { kind: "code", text: "$ phantom open ~/code/my-app" },
-  { kind: "result", text: "  ↳ opening editor · terminal · ai-chat" },
+  { kind: "comment", text: "// One window. Every dev tool. Shared context." },
   { kind: "code", text: "$ git status" },
   { kind: "result", text: "  M  src/api/routes.ts" },
   { kind: "result", text: "  M  src/db/schema.ts" },
-  { kind: "ai", text: "✦ ai: I see two related files changed." },
-  { kind: "ai", text: "  Want me to draft the commit message?" },
+  { kind: "result", text: "  ↳ diff pane updates instantly" },
+  { kind: "result", text: "  ↳ editor sees both files" },
+  { kind: "ai", text: "✦ ai pane: same context — no copy-paste" },
 ];
 
 const colorFor = (kind: string) => {

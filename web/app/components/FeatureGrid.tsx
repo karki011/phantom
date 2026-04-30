@@ -13,7 +13,7 @@ type Feature = {
 const features: Feature[] = [
   {
     title: "Terminal",
-    desc: "Full PTY with shell integration, link detection, and tabbed sessions.",
+    desc: "xterm.js 6.0 with GPU-accelerated WebGL rendering. Multi-tab, up to 6 split panes per tab, hot-persistent PTYs that survive tab switches, ring-buffer scrollback, and 497 built-in themes.",
     accent: "from-sky-400/30 to-cyan-400/10",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-5 w-5">
@@ -24,7 +24,7 @@ const features: Feature[] = [
   },
   {
     title: "Editor",
-    desc: "Monaco-based editor with syntax highlighting and inline diffs.",
+    desc: "Monaco-based code editor with syntax highlighting, inline diff review, git blame, and per-tab context menus. Native window-level fonts and ligatures.",
     accent: "from-violet-400/30 to-fuchsia-400/10",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-5 w-5">
@@ -34,8 +34,8 @@ const features: Feature[] = [
     ),
   },
   {
-    title: "AI Chat",
-    desc: "Code-aware context injection. Your model knows your repo.",
+    title: "AI Sessions",
+    desc: "Multi-provider out of the box: Claude Code, Codex, and Gemini. Auto-detects CLIs on your PATH, scopes sessions per worktree, and lets you add custom providers via YAML.",
     accent: "from-pink-400/30 to-rose-400/10",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-5 w-5">
@@ -47,8 +47,8 @@ const features: Feature[] = [
     ),
   },
   {
-    title: "Git Diff",
-    desc: "Live diff viewer that watches your worktree and reacts in real time.",
+    title: "Git Worktrees",
+    desc: "First-class worktree support — work on multiple branches without stashing. Each worktree gets its own terminal context, sessions, and a live diff viewer that reacts to filesystem changes.",
     accent: "from-emerald-400/30 to-teal-400/10",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-5 w-5">
@@ -59,19 +59,19 @@ const features: Feature[] = [
     ),
   },
   {
-    title: "Journal",
-    desc: "Per-project journaling. Capture decisions next to the code.",
+    title: "Daily Digest",
+    desc: "Morning brief that summarizes yesterday's commits, sessions, and decisions per project. Persisted in local SQLite so it stays with you across worktrees.",
     accent: "from-amber-400/30 to-orange-400/10",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-5 w-5">
-        <path d="M5 4h12a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2V4Z" />
-        <path d="M5 4v14a2 2 0 0 0 2 2M9 8h7M9 12h5" strokeLinecap="round" />
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" strokeLinecap="round" />
       </svg>
     ),
   },
   {
     title: "Hooks + MCP",
-    desc: "AI acts on file changes and shell commands through hooks and MCP.",
+    desc: "Hook-aware AI engine. Pre/post-edit and shell hooks fire on every file change and command. MCP channels let any model see exactly what just happened — no copy-paste briefing.",
     accent: "from-indigo-400/30 to-blue-400/10",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-5 w-5">

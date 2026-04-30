@@ -67,9 +67,10 @@ Set these at **Settings → Secrets and variables → Actions** on `karki011/pha
 2. **Token name:** `release-please-phantom`
 3. **Resource owner:** `karki011`
 4. **Repository access:** Only select repositories → `karki011/phantom`
-5. **Repository permissions:**
+5. **Repository permissions** (all three required):
    - Contents: **Read and write**
    - Pull requests: **Read and write**
+   - Issues: **Read and write** (release-please uses label endpoints to mark PRs `autorelease: pending` / `autorelease: tagged`)
    - Metadata: Read-only (auto)
 6. **Expiration:** 1 year (or "No expiration" if you don't want to manage rotation)
 7. Click **Generate token** → copy the value
