@@ -1,4 +1,4 @@
-// PhantomOS v2 — Command palette action registry
+// Phantom — Command palette action registry
 // Author: Subash Karki
 
 import type { Component } from 'solid-js';
@@ -344,8 +344,8 @@ const THEME_LABELS: Record<ThemeId, string> = {
   'shadow-monarch-light': 'Shadow Monarch Light',
   'hunter-rank-dark': 'Hunter Rank Dark',
   'hunter-rank-light': 'Hunter Rank Light',
-  'cz-dark': 'CloudZero Dark',
-  'cz-light': 'CloudZero Light',
+  'teal-dark': 'Teal Dark',
+  'teal-light': 'Teal Light',
   'cyberpunk': 'Cyberpunk',
   'dracula': 'Dracula',
   'nord-dark': 'Nord Dark',

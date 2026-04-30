@@ -1,4 +1,4 @@
-// PhantomOS v2 — Settings > Appearance section
+// Phantom — Settings > Appearance section
 // Author: Subash Karki
 
 import { For, Show, createMemo } from 'solid-js';
@@ -30,14 +30,14 @@ const THEME_SWATCHES: { id: ThemeId; label: string; accent: string; bg: string }
   { id: 'system-core-dark',      label: 'System Core',    accent: '#56CCFF', bg: '#060B14' },
   { id: 'shadow-monarch-dark',   label: 'Shadow Monarch', accent: '#8B5CFF', bg: '#050309' },
   { id: 'hunter-rank-dark',      label: 'Hunter Rank',    accent: '#3DDC97', bg: '#0A0E10' },
-  { id: 'cz-dark',               label: 'CloudZero',      accent: '#4599ac', bg: '#0d0d10' },
+  { id: 'teal-dark',             label: 'Teal Dark',      accent: '#4599ac', bg: '#0d0d10' },
   { id: 'cyberpunk',             label: 'Cyberpunk',      accent: '#ec4899', bg: '#0a0a1a' },
   { id: 'dracula',               label: 'Dracula',        accent: '#bd93f9', bg: '#282a36' },
   { id: 'nord-dark',             label: 'Nord Dark',      accent: '#88c0d0', bg: '#2e3440' },
   { id: 'system-core-light',     label: 'System Light',   accent: '#169DDB', bg: '#F4FAFF' },
   { id: 'shadow-monarch-light',  label: 'Monarch Light',  accent: '#6F45E8', bg: '#FAF7FF' },
   { id: 'hunter-rank-light',     label: 'Hunter Light',   accent: '#12B76A', bg: '#F5FAF8' },
-  { id: 'cz-light',              label: 'CZ Light',       accent: '#2286a1', bg: '#f1f1f4' },
+  { id: 'teal-light',            label: 'Teal Light',     accent: '#2286a1', bg: '#f1f1f4' },
   { id: 'nord-light',            label: 'Nord Light',     accent: '#5e81ac', bg: '#eceff4' },
   { id: 'one-dark-pro',           label: 'One Dark',       accent: '#61afef', bg: '#282c34' },
   { id: 'github-dark',            label: 'GitHub Dark',    accent: '#58a6ff', bg: '#0d1117' },

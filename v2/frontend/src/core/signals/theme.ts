@@ -8,8 +8,8 @@ import {
   shadowMonarchLightTheme,
   hunterRankDarkTheme,
   hunterRankLightTheme,
-  czDarkTheme,
-  czLightTheme,
+  tealDarkTheme,
+  tealLightTheme,
   cyberpunkTheme,
   draculaTheme,
   nordDarkTheme,
@@ -35,8 +35,8 @@ export type ThemeId =
   | 'shadow-monarch-light'
   | 'hunter-rank-dark'
   | 'hunter-rank-light'
-  | 'cz-dark'
-  | 'cz-light'
+  | 'teal-dark'
+  | 'teal-light'
   | 'cyberpunk'
   | 'dracula'
   | 'nord-dark'
@@ -61,8 +61,8 @@ const themeClassMap: Record<ThemeId, string> = {
   'shadow-monarch-light': shadowMonarchLightTheme,
   'hunter-rank-dark': hunterRankDarkTheme,
   'hunter-rank-light': hunterRankLightTheme,
-  'cz-dark': czDarkTheme,
-  'cz-light': czLightTheme,
+  'teal-dark': tealDarkTheme,
+  'teal-light': tealLightTheme,
   'cyberpunk': cyberpunkTheme,
   'dracula': draculaTheme,
   'nord-dark': nordDarkTheme,
@@ -121,8 +121,8 @@ export function initTheme(savedTheme: string): void {
     'shadow-monarch-light',
     'hunter-rank-dark',
     'hunter-rank-light',
-    'cz-dark',
-    'cz-light',
+    'teal-dark',
+    'teal-light',
     'cyberpunk',
     'dracula',
     'nord-dark',

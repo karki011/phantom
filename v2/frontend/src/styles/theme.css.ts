@@ -471,8 +471,8 @@ export const hunterRankLightTheme = createTheme(vars, {
   animation: { fast: '150ms', normal: '300ms', slow: '500ms' },
 });
 
-// CZ Dark — CloudZero brand: teal accents, dark navy backgrounds, warm orange CTA
-export const czDarkTheme = createTheme(vars, {
+// Teal Dark — teal accents, dark navy backgrounds, warm orange CTA
+export const tealDarkTheme = createTheme(vars, {
   color: {
     bgPrimary: '#0d0d10',
     bgSecondary: '#161619',
@@ -537,8 +537,8 @@ export const czDarkTheme = createTheme(vars, {
   animation: { fast: '150ms', normal: '300ms', slow: '500ms' },
 });
 
-// CZ Light — CloudZero brand light mode: soft warm grey surfaces, teal accent
-export const czLightTheme = createTheme(vars, {
+// Teal Light — soft warm grey surfaces, teal accent
+export const tealLightTheme = createTheme(vars, {
   color: {
     bgPrimary: '#f1f1f4',
     bgSecondary: '#f7f7f9',
