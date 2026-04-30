@@ -1,7 +1,7 @@
 // Author: Subash Karki
 
 import type { PhaseConfig, PhaseId, BootLine, Ability, BootScanData } from './types';
-import { APP_VERSION } from '../../../core/branding';
+import { APP_VERSION, APP_NAME_SPACED } from '../../../core/branding';
 
 export const phaseOrder: PhaseId[] = [
   'awakening',
@@ -17,7 +17,7 @@ function buildAgentLines(scan?: BootScanData): BootLine[] {
   const installed = scan?.agents.filter((a) => a.installed) ?? [];
   if (installed.length === 0) {
     return [{
-      text: 'Scanning for AI agents ............... none detected',
+      text: 'AI agents ............... none detected',
       delay: 400,
       prompt: '$',
       sound: 'scan',
@@ -26,23 +26,21 @@ function buildAgentLines(scan?: BootScanData): BootLine[] {
   }
 
   const lines: BootLine[] = [{
-    text: `Scanning for AI agents ............... ${installed.length} detected`,
+    text: `AI agents ............... ${installed.length} detected`,
     delay: 400,
     prompt: '$',
     sound: 'scan',
-    speech: `${installed.length} AI agent${installed.length === 1 ? '' : 's'} detected.`,
+    speech: `${installed.length} AI agent${installed.length === 1 ? '' : 's'} found.`,
     waitForSpeech: true,
     charDelay: 18,
   }];
 
   for (const agent of installed) {
     const ver = agent.version ? ` ${agent.version}` : '';
-    const pad = '.'.repeat(Math.max(1, 40 - agent.name.length - ver.length));
     lines.push({
-      text: `  ${agent.name}${ver} ${pad} online`,
-      delay: 200,
+      text: `  · ${agent.name}${ver}`,
+      delay: 150,
       style: 'dim',
-      sound: 'scan',
       charDelay: 12,
     });
   }
@@ -54,7 +52,7 @@ export function buildBootScript(sessionCount: number, scan?: BootScanData): Boot
   const isReturning = sessionCount > 0;
   return [
     {
-      text: 'S Y S T E M',
+      text: APP_NAME_SPACED,
       delay: 1200,
       style: 'title',
       sound: 'bass',
@@ -82,51 +80,21 @@ export function buildBootScript(sessionCount: number, scan?: BootScanData): Boot
     { text: '', delay: 600, style: 'separator' },
     {
       text: sessionCount === 0
-        ? 'Loading recent sessions ............... first run, nothing to load'
-        : `Loading recent sessions ............... ${sessionCount} session${sessionCount === 1 ? '' : 's'} found`,
+        ? 'Recent sessions ......... first run'
+        : `Recent sessions ......... ${sessionCount} found`,
       delay: 800,
       sound: 'scan',
       prompt: '$',
       speech: sessionCount === 0
-        ? 'First time here. Setting things up.'
+        ? 'First time here. Welcome.'
         : `Found ${sessionCount} of your past session${sessionCount === 1 ? '' : 's'}.`,
       waitForSpeech: true,
       charDelay: 18,
     },
     {
-      text: 'Setting up local storage .............. ready',
-      delay: 600,
-      sound: 'scan',
-      prompt: '$',
-      speech: 'Your data is safe.',
-      waitForSpeech: true,
-    },
-    {
-      text: 'Starting terminal ..................... ready',
-      delay: 500,
-      prompt: '$',
-      speech: 'Terminal is ready.',
-      waitForSpeech: true,
-    },
-    {
-      text: 'Enabling safety checks ................ 3 active',
-      delay: 600,
-      sound: 'scan',
-      prompt: '$',
-      speech: 'Safety checks are on.',
-      waitForSpeech: true,
-    },
-    {
-      text: 'Watching for changes .................. ready',
-      delay: 500,
-      prompt: '$',
-      speech: 'Watching your project for changes.',
-      waitForSpeech: true,
-    },
-    {
       text: scan?.gitInstalled
-        ? `Checking git .......................... ${scan.gitVersion ?? 'ready'}`
-        : 'Checking git .......................... not found',
+        ? `git ..................... ${scan.gitVersion ?? 'ready'}`
+        : 'git ..................... not found',
       delay: 400,
       prompt: '$',
       sound: 'scan',
@@ -135,23 +103,23 @@ export function buildBootScript(sessionCount: number, scan?: BootScanData): Boot
     ...buildAgentLines(scan),
     { text: '', delay: 600, style: 'separator' },
     {
-      text: 'SYSTEM SYNCHRONIZATION COMPLETE',
+      text: 'All set.',
       delay: 800,
       style: 'success',
       sound: 'ok',
-      speech: 'Synchronization complete.',
+      speech: 'All set.',
       waitForSpeech: true,
     },
-    { text: '', delay: 1000, style: 'separator' },
+    { text: '', delay: 800, style: 'separator' },
     {
-      text: 'Initiating System Bind Protocol...',
-      delay: 1200,
+      text: "Let's get you set up.",
+      delay: 1000,
       style: 'accent',
       sound: 'whoosh',
-      speech: 'Operator recognized. Beginning system bind.',
-      speechRate: 0.82,
+      speech: "Let's get you set up.",
+      speechRate: 0.88,
       waitForSpeech: true,
-      charDelay: 45,
+      charDelay: 40,
     },
   ];
 }
