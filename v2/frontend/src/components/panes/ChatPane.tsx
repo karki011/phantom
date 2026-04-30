@@ -1113,6 +1113,7 @@ export default function ChatPane(props: ChatPaneProps) {
               }}
               placement="top-start"
               gutter={8}
+              modal={false}
             >
               <Popover.Anchor class={paneStyles.slashAnchor}>
                 <textarea
@@ -1127,7 +1128,13 @@ export default function ChatPane(props: ChatPaneProps) {
                 />
               </Popover.Anchor>
               <Popover.Portal>
-                <Popover.Content class={paneStyles.slashPopoverContent}>
+                <Popover.Content
+                  class={paneStyles.slashPopoverContent}
+                  onOpenAutoFocus={(e) => e.preventDefault()}
+                  onCloseAutoFocus={(e) => e.preventDefault()}
+                  onPointerDownOutside={(e) => e.preventDefault()}
+                  onFocusOutside={(e) => e.preventDefault()}
+                >
                   <div class={paneStyles.slashPopoverHeader}>Slash commands</div>
                   <For each={SLASH_COMMANDS}>
                     {(c) => (
