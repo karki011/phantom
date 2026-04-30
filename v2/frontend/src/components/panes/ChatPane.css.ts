@@ -9,7 +9,7 @@ const popoverFadeIn = keyframes({
   '100%': { opacity: 1, transform: 'translateY(0)' },
 });
 
-// Wraps the textarea so we can anchor the slash help popover above it
+// Wraps the textarea so the slash help popover anchors to it.
 export const slashAnchor = style({
   flex: 1,
   position: 'relative',
@@ -42,11 +42,14 @@ export const slashCommandRow = style({
   display: 'flex',
   alignItems: 'center',
   gap: vars.space.sm,
-  padding: `${vars.space.sm}`,
+  padding: vars.space.sm,
   borderRadius: vars.radius.sm,
   cursor: 'default',
   selectors: {
     '&[data-active="true"]': {
+      background: vars.color.bgHover,
+    },
+    '&:hover': {
       background: vars.color.bgHover,
     },
   },

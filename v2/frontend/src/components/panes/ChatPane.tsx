@@ -113,6 +113,20 @@ const MODELS = [
   { value: 'haiku', label: 'Haiku' },
 ];
 
+// ── Slash commands (Phase 1) ────────────────────────────────────────────────
+// `/summary` and `/continue` are deferred to Phase 2 — do not register here.
+
+interface SlashCommandSpec {
+  name: string;        // including leading slash, e.g. '/clear'
+  description: string;
+}
+
+const SLASH_COMMANDS: SlashCommandSpec[] = [
+  { name: '/clear', description: 'Clear current conversation messages' },
+  { name: '/copy', description: 'Copy last assistant message to clipboard' },
+  { name: '/help', description: 'Show available slash commands' },
+];
+
 const uid = () => `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 // ── Attachment types & helpers ──────────────────────────────────────────────
@@ -513,8 +527,98 @@ export default function ChatPane(props: ChatPaneProps) {
     }
   };
 
+  // ── Slash command handlers ─────────────────────────────────────────────
+  // Author: Subash Karki — Phase 1 PR 2 (UPGRADE_ROADMAP)
+
+  const [slashHelpOpen, setSlashHelpOpen] = createSignal(false);
+
+  /** Reset input + textarea height after a slash command runs. */
+  const resetInput = () => {
+    setInput('');
+    setSlashHelpOpen(false);
+    if (textareaRef) {
+      textareaRef.style.height = 'auto';
+    }
+  };
+
+  /** Run a registered slash command. Returns true if handled. */
+  const runSlashCommand = async (raw: string): Promise<boolean> => {
+    const cmd = raw.trim().toLowerCase();
+    const convId = activeConvId();
+
+    if (cmd === '/help') {
+      // Show the popover and keep input at '/' so it stays anchored.
+      setSlashHelpOpen(true);
+      setInput('/');
+      return true;
+    }
+
+    if (cmd === '/clear') {
+      if (!convId) {
+        showWarningToast('No conversation', 'Open or create a conversation first.');
+        resetInput();
+        return true;
+      }
+      // No backend `DeleteMessages` binding exists — clear by replacing the
+      // conversation. Preserve the title so the user keeps their context.
+      const previousTitle = activeTitle();
+      const ok = await deleteConversation(convId);
+      if (!ok) {
+        showWarningToast('Clear failed', 'Could not clear conversation.');
+        resetInput();
+        return true;
+      }
+      const fresh = await createConversation(workspaceId(), previousTitle, model());
+      batch(() => {
+        setConversations((prev) => {
+          const without = prev.filter((c) => c.id !== convId);
+          return fresh ? [fresh, ...without] : without;
+        });
+        if (fresh) {
+          setActiveConvId(fresh.id);
+        } else {
+          const remaining = conversations().filter((c) => c.id !== convId);
+          setActiveConvId(remaining.length > 0 ? remaining[0].id : null);
+        }
+        setMessages([]);
+      });
+      showToast('Conversation cleared');
+      resetInput();
+      return true;
+    }
+
+    if (cmd === '/copy') {
+      const lastAssistant = [...messages()].reverse().find((m) => m.role === 'assistant');
+      if (!lastAssistant || !lastAssistant.content.trim()) {
+        showWarningToast('Nothing to copy', 'No assistant message yet.');
+        resetInput();
+        return true;
+      }
+      try {
+        await navigator.clipboard.writeText(lastAssistant.content);
+        showToast('Copied last reply');
+      } catch {
+        showWarningToast('Copy failed', 'Clipboard access denied.');
+      }
+      resetInput();
+      return true;
+    }
+
+    // Unknown command — keep input so the user can edit it.
+    showWarningToast(`Unknown command: ${raw.trim()}`, 'Type / to see available commands.');
+    return true;
+  };
+
   const handleSend = async () => {
-    const text = input().trim();
+    const rawText = input();
+    const text = rawText.trim();
+
+    // Slash command interception — must run before any send / convId checks.
+    if (text.startsWith('/') && !text.includes('\n') && attachments().length === 0) {
+      await runSlashCommand(text);
+      return;
+    }
+
     const convId = activeConvId();
     const hasAttachments = attachments().length > 0;
     if ((!text && !hasAttachments) || !convId || sending()) return;
@@ -977,16 +1081,40 @@ export default function ChatPane(props: ChatPaneProps) {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-            <textarea
-              ref={textareaRef}
-              class={styles.inputTextarea}
-              placeholder={dragOver() ? 'Drop files here...' : 'Ask Claude anything...'}
-              value={input()}
-              onInput={handleInput}
-              onKeyDown={handleKeyDown}
-              rows={1}
-              disabled={sending()}
-            />
+            <Popover
+              open={slashHelpOpen() || input().trim() === '/'}
+              onOpenChange={(open) => {
+                if (!open) setSlashHelpOpen(false);
+              }}
+              placement="top-start"
+              gutter={8}
+            >
+              <Popover.Anchor class={paneStyles.slashAnchor}>
+                <textarea
+                  ref={textareaRef}
+                  class={styles.inputTextarea}
+                  placeholder={dragOver() ? 'Drop files here...' : 'Ask Claude anything... (type / for commands)'}
+                  value={input()}
+                  onInput={handleInput}
+                  onKeyDown={handleKeyDown}
+                  rows={1}
+                  disabled={sending()}
+                />
+              </Popover.Anchor>
+              <Popover.Portal>
+                <Popover.Content class={paneStyles.slashPopoverContent}>
+                  <div class={paneStyles.slashPopoverHeader}>Slash commands</div>
+                  <For each={SLASH_COMMANDS}>
+                    {(c) => (
+                      <div class={paneStyles.slashCommandRow}>
+                        <span class={paneStyles.slashCommandName}>{c.name}</span>
+                        <span class={paneStyles.slashCommandDesc}>{c.description}</span>
+                      </div>
+                    )}
+                  </For>
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover>
             <button
               type="button"
               class={styles.sendButton}
