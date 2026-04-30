@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: oklch(0.16 0.005 270);
+  --color-bg-elevated: oklch(0.20 0.008 270);
+  --color-fg: oklch(0.96 0.005 270);
+  --color-fg-muted: oklch(0.70 0.01 270);
+  --color-fg-subtle: oklch(0.50 0.01 270);
+  --color-accent: oklch(0.78 0.16 200);
+  --color-border: oklch(0.28 0.008 270);
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "ss01", "cv11";
+}

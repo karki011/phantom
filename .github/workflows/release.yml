@@ -1,0 +1,135 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g. 0.1.2). Defaults to wails.json productVersion."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, sign, notarize, publish
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: v2
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: ver
+        working-directory: .
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION=$(jq -r '.info.productVersion' v2/wails.json)
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building Phantom $VERSION"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: v2/frontend/pnpm-lock.yaml
+
+      - name: Install Wails CLI
+        working-directory: .
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+
+      - name: Sync version into wails.json + VERSION
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          jq --arg v "$VERSION" '.info.productVersion = $v' wails.json > wails.json.tmp
+          mv wails.json.tmp wails.json
+          echo "$VERSION" > VERSION
+          echo "wails.json productVersion: $(jq -r '.info.productVersion' wails.json)"
+
+      - name: Import Apple Developer ID certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 }}
+          p12-password: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
+
+      - name: Build, sign, notarize, zip
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: make release-zip
+
+      - name: Verify signed + notarized bundle
+        run: |
+          codesign --verify --strict --deep --verbose=2 build/bin/Phantom.app
+          xcrun stapler validate build/bin/Phantom.app
+          spctl -a -t exec -vv build/bin/Phantom.app
+
+      - name: Upload artifact (workflow run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phantom-${{ steps.ver.outputs.version }}-macos-universal
+          path: v2/build/dist/Phantom-*.zip
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Generate release notes
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        working-directory: .
+        run: |
+          PREV=$(git tag -l 'v*.*.*' --sort=-v:refname | grep -v "^${GITHUB_REF_NAME}$" | head -1)
+          {
+            if [ -n "$PREV" ]; then
+              echo "## Changes since $PREV"
+              echo
+              git log --pretty=format:"- %s (%h)" "${PREV}..${GITHUB_REF_NAME}"
+            else
+              echo "Initial public release of Phantom."
+            fi
+            echo
+            echo
+            echo "## Install"
+            echo
+            echo "1. Download \`Phantom-${{ steps.ver.outputs.version }}.zip\` below"
+            echo "2. Unzip and drag \`Phantom.app\` to \`/Applications\`"
+            echo "3. Double-click — signed, notarized, stapled. No Gatekeeper prompt."
+            echo
+            echo "**Platform:** macOS only (universal — Apple Silicon + Intel)."
+          } > release-notes.md
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Phantom ${{ steps.ver.outputs.version }}
+          body_path: release-notes.md
+          files: v2/build/dist/Phantom-*.zip
+          fail_on_unmatched_files: true

@@ -16,7 +16,7 @@ coverage
 release/
 *.dmg
 *.blockmap
-docs
+
 # Environment
 .env
 .env.local
