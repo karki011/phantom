@@ -98,9 +98,6 @@ export async function getSessionState(sessionId: string): Promise<SessionState |
  * session ID, or empty string on failure.
  */
 export async function forkSession(sessionId: string, name = ''): Promise<string> {
-  try {
-    return (await App()?.ForkSession(sessionId, name)) ?? '';
-  } catch {
-    return '';
-  }
+  // Don't swallow errors — caller wants the message to surface in a toast.
+  return (await App()?.ForkSession(sessionId, name)) ?? '';
 }
