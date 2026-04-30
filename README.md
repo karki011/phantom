@@ -1,73 +1,119 @@
-# Phantom OS
+# Phantom
 
-**A gamified desktop app for Claude Code — track sessions, manage worktrees, and level up your workflow.**
+**A native desktop workspace for developers — terminal, editor, AI chat, git diff, and journal in one tabbed pane system.**
+
+> **macOS only** (Apple Silicon + Intel). Windows and Linux are not supported today. See [Platform support](#platform-support).
 
 Built by [Subash Karki](https://github.com/karki011)
 
-## Quick Start
+---
+
+## What it is
+
+Phantom collapses your terminal, code editor, AI chat, git diff viewer, journal, and markdown preview into a single tabbed pane system — so you stop alt-tabbing between iTerm, VS Code, ChatGPT, and your git client and just work in one place. It's built on Wails (Go + SolidJS) for native performance, watches your filesystem in real time, routes every git call through a hardened wrapper to keep state sane, and ships with a first-class AI engine that's hook-aware and MCP-channel-ready — meaning the AI can see what you're editing, what changed, and what you ran, then act on it.
+
+## Status
+
+- **Platform:** macOS only (Apple Silicon + Intel — universal binary)
+- **Version:** 0.1.1 — pre-release, public preview
+- **Distribution:** Signed with Apple Developer ID + notarized + stapled (no Gatekeeper prompts)
+
+## Platform support
+
+| OS | Status | Why |
+|---|---|---|
+| **macOS** (Apple Silicon + Intel) | ✅ Supported | Primary target. Universal binary, signed + notarized. |
+| **Windows** | ❌ Not supported | No build target, no installer, untested. Wails *can* target Windows via WebView2 — contributors welcome. |
+| **Linux** | ❌ Not supported | No build target, untested. Wails *can* target Linux via WebKitGTK — contributors welcome. |
+
+Phantom is built for macOS first because the AI engine, file watcher, audio cues, and shell integration are all tuned to macOS conventions (`~/Library/`, AVFoundation, etc.). Cross-platform support isn't on the near-term roadmap. If you need Windows or Linux, open an issue or send a PR — but treat both as greenfield work.
+
+## Install (prebuilt)
+
+1. Download `Phantom-0.1.1.zip` from [Releases](https://github.com/karki011/phantom/releases)
+2. Unzip and drag `Phantom.app` to `/Applications`
+3. Double-click — no first-launch internet required (notarization is stapled)
+
+## Build from source
+
+> Build instructions assume macOS. Windows/Linux builds are not supported.
+
+### Prerequisites
+
+- macOS with Xcode Command Line Tools
+- [Go](https://go.dev/) 1.25+
+- [Wails CLI](https://wails.io/) — `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
+- [Node.js](https://nodejs.org/) 22+ and [pnpm](https://pnpm.io/) 10+
+
+### Dev
 
 ```bash
-# Prerequisites: Bun 1.3+, Node.js 22+
-bun install
-bun run dev
+cd v2
+wails dev      # or: make dev
 ```
 
-This starts both the API server (port 3849) and the Electron desktop app.
-
-### Shell Aliases (optional)
+### Release (signed + notarized + zipped)
 
 ```bash
-alias pod="cd ~/phantom-os && bun run dev"      # Start everything
-alias poa="cd ~/phantom-os && bun run dev:api"   # API server only
-alias poc="cd ~/phantom-os"                       # Jump to project
+cd v2
+make release-zip
 ```
+
+Apple notarization credentials are loaded from `phantom-os/.env.notarize` (gitignored — see `.env.notarize.example`).
 
 ## Features
 
-### Session Dashboard
-Real-time monitoring of all Claude Code sessions — token usage, costs, tool breakdowns, and activity streams. Watches `~/.claude/sessions/` automatically.
+| Pane | What it does |
+|---|---|
+| **Terminal** | Full PTY with shell integration |
+| **TUI** | Interactive TUI apps (vim, lazygit, etc.) |
+| **Editor** | Monaco-based code editor with diff support |
+| **Chat** | AI chat with code-aware context injection |
+| **Diff** | Live git diff viewer |
+| **Home** | Workspace dashboard and quick launch |
+| **Journal** | Per-project journaling |
+| **Markdown preview** | Side-by-side rendered markdown |
 
-### AI Engine (phantom-ai)
-Graph-backed code intelligence that auto-injects into Claude sessions via MCP. Provides blast radius analysis, dependency paths, and related file discovery — so Claude understands your codebase structure before making changes.
+Plus: real-time filesystem watching (fsnotify), per-pane state persistence, custom audio engine for ambient feedback, AI engine with MCP channels for tool integration, and a hook system that lets the AI act on file changes and shell commands.
 
-### Terminal
-Full terminal with `node-pty` and `xterm.js`. Supports split panes, tab management, and 3-tier persistence:
-- **Hot restore** — survives worktree switches (xterm stays alive in memory)
-- **Warm restore** — PTY daemon persists across WebSocket disconnects
-- **Cold restore** — scrollback snapshots restore on app restart
+## Architecture
 
-### Worktree Management
-Create, switch, and manage git worktrees. Each worktree gets its own pane layout, terminal sessions, and editor state — all persisted to SQLite.
+Three-layer split:
 
-### Split Pane Workspace
-Binary tree layout system with drag-and-drop, horizontal/vertical splits, resizable dividers, and per-worktree persistence. Pane types: Terminal, Editor, Chat, Diff, Home.
+- **Go backend** (`v2/internal/`) — git operations, file watching, AI engine, SQLite persistence
+- **Wails bindings** — type-safe RPC between Go and the frontend
+- **SolidJS frontend** (`v2/frontend/src/`) — reactive UI, pane orchestration, vanilla-extract styling
 
-### Chat with Claude
-Built-in chat interface using `claude -p` with conversation history, model selection (Sonnet/Opus/Haiku), streaming responses, and file attachments.
-
-### Code Editor
-Monaco editor with syntax highlighting, IntelliSense, and diff viewer. Lazy-loaded with web worker offloading.
-
-### Gamification
-Optional RPG layer — XP for sessions and tasks, hunter ranks (E through SSS), daily quests, streaks, and 28+ achievements. Toggle on/off from the header.
-
-### Concise Mode
-One-click toggle that injects a system prompt making Claude ~65-75% less verbose while keeping full technical accuracy.
-
-### Themes
-4 built-in themes (CZ Dark, Cyberpunk, Nord, Dracula) with a pluggable token system for custom themes.
-
-## Tech Stack
+## Tech stack
 
 | Layer | Technology |
-|-------|-----------|
-| Runtime | Bun 1.3 |
-| Desktop | Electron 41 + electron-vite |
-| Frontend | React 19 + Mantine v9 + Jotai |
-| Backend | Hono (port 3849) |
-| Database | SQLite (better-sqlite3 + Drizzle ORM) |
-| Terminal | node-pty + xterm.js |
+|---|---|
+| Desktop runtime | [Wails](https://wails.io/) v2.12 + WebKit |
+| Backend | Go 1.25 |
+| Frontend | [SolidJS](https://www.solidjs.com/) + TypeScript |
+| Styling | [vanilla-extract](https://vanilla-extract.style/) (typed CSS modules) |
+| Database | SQLite via [sqlc](https://sqlc.dev/) |
 | Editor | Monaco |
-| AI Engine | MCP server + code graph |
-| Monorepo | Turborepo + Bun workspaces |
+| File watching | fsnotify |
+| AI integration | MCP (Model Context Protocol) channels + hook system |
 
+## Project layout
+
+```
+phantom-os/
+├── v2/                     # Active codebase (this is the app)
+│   ├── internal/           # Go backend
+│   ├── frontend/           # SolidJS frontend
+│   ├── build/              # Build artifacts + macOS plist/entitlements
+│   └── Makefile            # dev / release / signing targets
+├── .env.notarize.example   # Apple notarization template
+└── .gitignore
+```
+
+## Contributing
+
+This is an early-stage project. Issues and PRs welcome — but expect things to move fast and break.
+
+## License
+
+TBD.
