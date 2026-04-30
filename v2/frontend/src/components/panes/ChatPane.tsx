@@ -824,7 +824,20 @@ export default function ChatPane(props: ChatPaneProps) {
   // ── Keyboard ────────────────────────────────────────────────────────────
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    // Ctrl+Enter or Cmd+Enter to send
+    // Plain Enter sends slash commands (single-line, no shift) — convenience.
+    if (
+      e.key === 'Enter' &&
+      !e.shiftKey &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      input().trim().startsWith('/') &&
+      !input().includes('\n')
+    ) {
+      e.preventDefault();
+      handleSend();
+      return;
+    }
+    // Ctrl+Enter or Cmd+Enter to send normal messages.
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleSend();
