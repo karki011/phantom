@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/journal"
@@ -232,10 +233,15 @@ func (a *App) getJournalService() *journal.Service {
 }
 
 // getJournalGenerator returns a generator backed by the reader DB,
-// with AI digest capabilities for enriched journal entries.
+// with AI digest capabilities for enriched journal entries. Attaches
+// the active AI provider (when configured) so EnrichEndOfDay can run.
 func (a *App) getJournalGenerator() *journal.Generator {
 	q := db.New(a.DB.Reader)
-	return journal.NewGeneratorWithDB(q, a.DB.Reader)
+	g := journal.NewGeneratorWithDB(q, a.DB.Reader)
+	if a.prov != nil {
+		g.SetProvider(a.prov)
+	}
+	return g
 }
 
 // getProjectInfos returns ProjectInfo for all registered projects.
@@ -300,7 +306,44 @@ func (a *App) GenerateEndOfDay(date string, project string) journal.JournalEntry
 	content := gen.GenerateEndOfDay(a.ctx, projects, project)
 
 	svc.SetEndOfDay(date, content, project)
+
+	// Async narrative enrichment via the user's configured AI provider.
+	// Fire-and-forget: the deterministic recap is already persisted, so
+	// the work log renders immediately. When the LLM call returns we
+	// write the narrative supplement and emit a Wails event the frontend
+	// can listen for to re-fetch and re-render. Hard-bounded by the 60s
+	// timeout inside Generator.EnrichEndOfDay so a hung CLI never leaks.
+	if gen.Provider() != nil {
+		go a.enrichJournalNarrative(date, project, content)
+	}
+
 	return svc.GetEntry(date, project)
+}
+
+// enrichJournalNarrative runs the LLM enrichment in a goroutine and
+// persists the result. Best-effort: any error is logged and dropped, the
+// journal stays at the deterministic recap level.
+func (a *App) enrichJournalNarrative(date, project, recap string) {
+	gen := a.getJournalGenerator()
+	if gen.Provider() == nil {
+		return
+	}
+	narrative, err := gen.EnrichEndOfDay(a.ctx, recap)
+	if err != nil {
+		log.Warn("enrichJournalNarrative: failed", "date", date, "project", project, "err", err)
+		return
+	}
+	svc := a.getJournalService()
+	if !svc.SetEndOfDayNarrative(date, narrative, project) {
+		log.Warn("enrichJournalNarrative: persistence rejected", "date", date, "project", project)
+		return
+	}
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "journal:enriched", map[string]string{
+			"date":    date,
+			"project": project,
+		})
+	}
 }
 
 // UpdateJournalNotes updates the user-editable notes section for a date.

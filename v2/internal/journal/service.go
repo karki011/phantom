@@ -25,7 +25,13 @@ type JournalEntry struct {
 	WorkLog            []string `json:"work_log"`
 	EndOfDayRecap      string   `json:"end_of_day_recap"`
 	EodGeneratedAt     int64    `json:"eod_generated_at"`
-	Notes              string   `json:"notes"`
+	// EndOfDayNarrative is the optional LLM-generated prose summary that
+	// supplements the deterministic recap. Populated asynchronously after
+	// the recap is generated; absent when LLM enrichment is disabled or
+	// hasn't completed yet.
+	EndOfDayNarrative string `json:"end_of_day_narrative,omitempty"`
+	EodNarrativeAt    int64  `json:"eod_narrative_at,omitempty"`
+	Notes             string `json:"notes"`
 }
 
 // Service manages file-based journal entries.
@@ -80,6 +86,7 @@ type frontmatter struct {
 	date               string
 	morningGeneratedAt int64
 	eodGeneratedAt     int64
+	eodNarrativeAt     int64
 }
 
 func parseFrontmatter(raw string) (frontmatter, string) {
@@ -114,6 +121,10 @@ func parseFrontmatter(raw string) (frontmatter, string) {
 			if val != "null" && val != "" {
 				fm.eodGeneratedAt, _ = strconv.ParseInt(val, 10, 64)
 			}
+		case "eodNarrativeAt":
+			if val != "null" && val != "" {
+				fm.eodNarrativeAt, _ = strconv.ParseInt(val, 10, 64)
+			}
 		}
 	}
 	return fm, body
@@ -128,7 +139,12 @@ func serializeFrontmatter(fm frontmatter) string {
 	if fm.eodGeneratedAt > 0 {
 		eodAt = strconv.FormatInt(fm.eodGeneratedAt, 10)
 	}
-	return fmt.Sprintf("---\ndate: \"%s\"\nmorningGeneratedAt: %s\neodGeneratedAt: %s\n---", fm.date, morningAt, eodAt)
+	narrativeAt := "null"
+	if fm.eodNarrativeAt > 0 {
+		narrativeAt = strconv.FormatInt(fm.eodNarrativeAt, 10)
+	}
+	return fmt.Sprintf("---\ndate: \"%s\"\nmorningGeneratedAt: %s\neodGeneratedAt: %s\neodNarrativeAt: %s\n---",
+		fm.date, morningAt, eodAt, narrativeAt)
 }
 
 // --------------------------------------------------------------------------
@@ -136,10 +152,11 @@ func serializeFrontmatter(fm frontmatter) string {
 // --------------------------------------------------------------------------
 
 type sections struct {
-	morningBrief string
-	workLog      string
-	endOfDay     string
-	notes        string
+	morningBrief    string
+	workLog         string
+	endOfDay        string
+	endOfDayNarrative string
+	notes           string
 }
 
 func parseSections(body string) sections {
@@ -161,6 +178,8 @@ func parseSections(body string) sections {
 			result.workLog = content
 		case "End of Day":
 			result.endOfDay = content
+		case "End of Day Narrative":
+			result.endOfDayNarrative = content
 		case "Notes":
 			result.notes = content
 		}
@@ -199,6 +218,11 @@ func parseJournal(raw string) JournalEntry {
 		eod = ""
 	}
 
+	narrative := secs.endOfDayNarrative
+	if narrative == "_Not yet generated_" {
+		narrative = ""
+	}
+
 	return JournalEntry{
 		Date:               fm.date,
 		MorningBrief:       morningBrief,
@@ -206,6 +230,8 @@ func parseJournal(raw string) JournalEntry {
 		WorkLog:            parseWorkLogLines(secs.workLog),
 		EndOfDayRecap:      eod,
 		EodGeneratedAt:     fm.eodGeneratedAt,
+		EndOfDayNarrative:  narrative,
+		EodNarrativeAt:     fm.eodNarrativeAt,
 		Notes:              secs.notes,
 	}
 }
@@ -215,6 +241,7 @@ func serializeJournal(entry JournalEntry) string {
 		date:               entry.Date,
 		morningGeneratedAt: entry.MorningGeneratedAt,
 		eodGeneratedAt:     entry.EodGeneratedAt,
+		eodNarrativeAt:     entry.EodNarrativeAt,
 	})
 
 	morningSection := entry.MorningBrief
@@ -236,6 +263,11 @@ func serializeJournal(entry JournalEntry) string {
 		eodSection = "_Not yet generated_"
 	}
 
+	narrativeSection := entry.EndOfDayNarrative
+	if narrativeSection == "" {
+		narrativeSection = "_Not yet generated_"
+	}
+
 	return strings.Join([]string{
 		fm,
 		"",
@@ -250,6 +282,10 @@ func serializeJournal(entry JournalEntry) string {
 		"## End of Day",
 		"",
 		eodSection,
+		"",
+		"## End of Day Narrative",
+		"",
+		narrativeSection,
 		"",
 		"## Notes",
 		"",
@@ -328,6 +364,35 @@ func (s *Service) SetEndOfDay(date, content string, project ...string) bool {
 	}
 	entry.EndOfDayRecap = content
 	entry.EodGeneratedAt = time.Now().UnixMilli()
+	if entry.Date == "" {
+		entry.Date = date
+	}
+	_ = os.WriteFile(s.journalPath(date, p), []byte(serializeJournal(entry)), 0o644)
+	return true
+}
+
+// SetEndOfDayNarrative writes the LLM-generated narrative supplement to
+// the journal entry. Unlike SetEndOfDay (immutable), the narrative may be
+// re-written if a later enrichment pass produces a better summary — the
+// recap itself remains immutable. The recap must already be set; calling
+// this on an unset recap is a no-op.
+//
+// Returns true if the narrative was written, false otherwise.
+func (s *Service) SetEndOfDayNarrative(date, content string, project ...string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ensureDir()
+
+	p := ""
+	if len(project) > 0 {
+		p = project[0]
+	}
+	entry := s.GetEntry(date, p)
+	if entry.EodGeneratedAt == 0 {
+		return false // recap not yet generated; narrative is meaningless without it
+	}
+	entry.EndOfDayNarrative = content
+	entry.EodNarrativeAt = time.Now().UnixMilli()
 	if entry.Date == "" {
 		entry.Date = date
 	}

@@ -292,7 +292,16 @@ export interface DailyJournalEntry {
   work_log: string[];
   end_of_day_recap: string;
   eod_generated_at: number;
+  /** Optional LLM-generated narrative supplement; populated asynchronously after recap. */
+  end_of_day_narrative?: string;
+  eod_narrative_at?: number;
   notes: string;
+}
+
+/** Payload of the `journal:enriched` Wails event fired when the LLM narrative lands. */
+export interface JournalEnrichedEvent {
+  date: string;
+  project: string;
 }
 
 export interface DailyStats {
