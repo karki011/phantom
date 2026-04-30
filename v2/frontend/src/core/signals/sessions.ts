@@ -34,9 +34,30 @@ interface SessionContextEvent {
 // ── Signals ───────────────────────────────────────────────────────────────────
 
 const [sessions, setSessions] = createSignal<Session[]>([]);
-const [activeSessionId, setActiveSessionId] = createSignal<string | null>(null);
+// Explicit override — set by UI when the user picks a specific session.
+// When null, activeSessionId() falls back to the most recent active session.
+const [explicitSessionId, setActiveSessionId] = createSignal<string | null>(null);
 
 // ── Derived ───────────────────────────────────────────────────────────────────
+
+// Pick the freshest active/running session as a sensible default. This makes
+// Cmd+Shift+F (fork) and the palette "Fork Session" action actually trigger
+// without requiring an explicit session picker UI.
+const fallbackActiveSessionId = createMemo<string | null>(() => {
+  const candidates = sessions().filter(
+    (s) => s.status === 'active' || s.status === 'paused',
+  );
+  if (candidates.length === 0) return null;
+  // Prefer the most recently started; sessions list isn't guaranteed sorted.
+  const sorted = [...candidates].sort(
+    (a, b) => (b.started_at ?? 0) - (a.started_at ?? 0),
+  );
+  return sorted[0]?.id ?? null;
+});
+
+const activeSessionId = createMemo<string | null>(() => {
+  return explicitSessionId() ?? fallbackActiveSessionId();
+});
 
 const activeSession = createMemo<Session | null>(() => {
   const id = activeSessionId();
