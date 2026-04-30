@@ -22,8 +22,8 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/ai/strategies"
 	"github.com/subashkarki/phantom-os-v2/internal/api"
 	"github.com/subashkarki/phantom-os-v2/internal/branding"
-	"github.com/subashkarki/phantom-os-v2/internal/chat"
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
+	"github.com/subashkarki/phantom-os-v2/internal/composer"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/gamification"
 	"github.com/subashkarki/phantom-os-v2/internal/git"
@@ -83,7 +83,7 @@ type App struct {
 	Stream            *stream.Service
 	SessionCtrl       *session.Controller
 	Safety            *safety.Service
-	Chat              *chat.Service
+	Composer          *composer.Service
 	Gamification      *gamification.Service
 	collectorRegistry *collector.Registry
 
@@ -97,9 +97,6 @@ type App struct {
 
 	// apiServer is the lightweight HTTP API for Claude Code hook communication.
 	apiServer *api.Server
-
-	// Chat safety middleware — initialized during Startup from Safety service.
-	chatMiddleware *safety.ChatMiddleware
 }
 
 func New() *App {
@@ -129,8 +126,8 @@ func (a *App) SetSafety(s *safety.Service) { a.Safety = s }
 // SetSessionCtrl injects the session controller before Wails calls Startup.
 func (a *App) SetSessionCtrl(c *session.Controller) { a.SessionCtrl = c }
 
-// SetChat injects the chat service before Wails calls Startup.
-func (a *App) SetChat(c *chat.Service) { a.Chat = c }
+// SetComposer injects the composer service before Wails calls Startup.
+func (a *App) SetComposer(c *composer.Service) { a.Composer = c }
 
 // SetGamification injects the gamification service before Wails calls Startup.
 func (a *App) SetGamification(g *gamification.Service) { a.Gamification = g }
@@ -221,16 +218,6 @@ func (a *App) Startup(ctx context.Context) {
 	// Start lightweight HTTP API server for Claude Code hook communication.
 	a.startAPIServer()
 
-	// Initialize chat safety middleware.
-	if a.Safety != nil {
-		emitFn := func(name string, data interface{}) {
-			wailsRuntime.EventsEmit(a.ctx, name, data)
-		}
-		piiEnabled := a.GetPreference("chat_pii_scan") != "false" // enabled by default
-		a.chatMiddleware = safety.NewChatMiddleware(a.Safety, piiEnabled, emitFn)
-		log.Info("app: chat safety middleware initialized", "pii_scan", piiEnabled)
-	}
-
 	// Mark orphaned terminals (active in DB but no live PTY) as ended.
 	// Handles crash recovery: terminals that were active when the app last exited.
 	if a.DB != nil {
@@ -262,14 +249,8 @@ func (a *App) Startup(ctx context.Context) {
 		})
 	}
 
-	// Wire stream event hook — chains safety evaluation + chat safety + activity detection.
+	// Wire stream event hook — chains safety evaluation + activity detection.
 	if a.Stream != nil {
-		// Capture the chat middleware hook (may be nil if safety isn't initialized).
-		var chatHook func(ctx context.Context, ev *stream.Event)
-		if a.chatMiddleware != nil {
-			chatHook = a.chatMiddleware.StreamEventHook()
-		}
-
 		a.Stream.SetEventHook(func(ctx context.Context, ev *stream.Event) {
 			// Activity detection (async, zero-blocking) — runs for all providers.
 			a.detectActivityEvents(ev)
@@ -286,12 +267,6 @@ func (a *App) Startup(ctx context.Context) {
 						break
 					}
 				}
-			}
-
-			// Chat safety evaluation — lightweight, non-blocking.
-			// Evaluates user/assistant messages in the stream for PII and chat-specific rules.
-			if chatHook != nil {
-				chatHook(ctx, ev)
 			}
 		})
 	}

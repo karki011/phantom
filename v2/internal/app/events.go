@@ -46,9 +46,6 @@ const (
 	EventPrMerged     = "pr:merged"      // payload: { worktreeId, prNumber }
 	EventMergeFailed  = "pr:merge-failed" // payload: { worktreeId, prNumber, message }
 
-	EventChatStream          = "chat:stream"             // payload: chat.StreamEvent
-	EventChatMessageComplete = "chat:message-complete"  // payload: *chat.Message
-
 	EventGamificationXPGained           = "gamification:xp_gained"            // payload: {amount, total, trigger}
 	EventGamificationLevelUp            = "gamification:level_up"             // payload: {level, xpToNext}
 	EventGamificationRankUp             = "gamification:rank_up"              // payload: {rank, title}

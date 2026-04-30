@@ -1,4 +1,4 @@
-// event.go defines the typed event model for the PhantomOS stream parser.
+// event.go defines the typed event model for the Phantom stream parser.
 // Author: Subash Karki
 package stream
 

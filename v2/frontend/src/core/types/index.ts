@@ -1,4 +1,4 @@
-// PhantomOS v2 — TypeScript types matching Go models
+// Phantom — TypeScript types matching Go models
 // Author: Subash Karki
 
 export interface Session {
@@ -360,33 +360,6 @@ export interface DailyStats {
   total_commits: number;
   pr_count: number;
   top_files: string | null;
-}
-
-// ── Chat ───────────────────────────────────────────────────────────────────
-
-export interface Conversation {
-  id: string;
-  workspace_id: string;
-  title: string;
-  model: string;
-  created_at: number;
-  updated_at: number;
-}
-
-export interface ChatMessage {
-  id: string;
-  conversation_id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  model: string;
-  created_at: number;
-}
-
-export interface StreamEvent {
-  type: 'delta' | 'done' | 'error' | 'thinking' | 'tool_use';
-  content?: string;
-  tool_name?: string;
-  tool_input?: string;
 }
 
 // ── Gamification ──────────────────────────────────────────────────────────

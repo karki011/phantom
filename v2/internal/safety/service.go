@@ -18,7 +18,7 @@ type journalAppender interface {
 	AppendWorkLog(date, line string)
 }
 
-// Service is the entry point for the PhantomOS Safety Rules Engine.
+// Service is the entry point for the Phantom Safety Rules Engine.
 type Service struct {
 	loader    *Loader
 	evaluator *Evaluator

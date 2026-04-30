@@ -28,24 +28,6 @@ type ActivityLog struct {
 	Provider  string         `json:"provider"`
 }
 
-type ChatConversation struct {
-	ID          string         `json:"id"`
-	WorkspaceID sql.NullString `json:"workspace_id"`
-	Title       string         `json:"title"`
-	Model       sql.NullString `json:"model"`
-	CreatedAt   int64          `json:"created_at"`
-	UpdatedAt   int64          `json:"updated_at"`
-}
-
-type ChatMessage struct {
-	ID             string         `json:"id"`
-	ConversationID sql.NullString `json:"conversation_id"`
-	WorkspaceID    sql.NullString `json:"workspace_id"`
-	Role           string         `json:"role"`
-	Content        string         `json:"content"`
-	Model          sql.NullString `json:"model"`
-	CreatedAt      int64          `json:"created_at"`
-}
 
 type CustomRecipe struct {
 	ID          string         `json:"id"`

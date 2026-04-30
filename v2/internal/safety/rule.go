@@ -1,4 +1,4 @@
-// rule.go defines the Rule type and matching logic for the PhantomOS Safety Rules Engine.
+// rule.go defines the Rule type and matching logic for the Phantom Safety Rules Engine.
 // Author: Subash Karki
 package safety
 

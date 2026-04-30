@@ -1,4 +1,4 @@
-// PhantomOS v2 — main entry point.
+// Phantom — main entry point.
 // Author: Subash Karki
 package main
 
@@ -13,8 +13,8 @@ import (
 	"sync"
 
 	"github.com/subashkarki/phantom-os-v2/internal/app"
-	"github.com/subashkarki/phantom-os-v2/internal/chat"
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
+	"github.com/subashkarki/phantom-os-v2/internal/composer"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/gamification"
 	"github.com/subashkarki/phantom-os-v2/internal/journal"
@@ -207,11 +207,9 @@ func main() {
 		}
 	})
 
-	// 8a. Create chat service (conversations + active-provider CLI streaming).
-	//     The registry is passed alongside the active provider so the chat
-	//     service can fan out Compare runs across multiple providers.
-	chatSvc := chat.NewService(database.Writer, activeProv, provRegistry, emitFn)
-	a.SetChat(chatSvc)
+	// 8. Create composer service (agentic edit pane backed by `claude`).
+	composerSvc := composer.NewService(database.Writer, emitFn)
+	a.SetComposer(composerSvc)
 
 	// 9. Create safety service (YAML ward rules + audit).
 	home, _ := os.UserHomeDir()
@@ -234,7 +232,7 @@ func main() {
 	// 11. Run Wails. OnStartup / OnShutdown delegate to App methods which
 	//    also start/stop the registry and close the DB in correct order.
 	err = wails.Run(&options.App{
-		Title:            "PhantomOS",
+		Title:            "Phantom",
 		Width:            1400,
 		Height:           900,
 		MinWidth:         800,

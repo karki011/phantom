@@ -1,4 +1,4 @@
-// PhantomOS v2 — Pane type registry
+// Phantom — Pane type registry
 // Author: Subash Karki
 
 import { lazy, type Component } from 'solid-js';
@@ -12,7 +12,12 @@ const registry: Partial<Record<PaneType, Component<any>>> = {
   editor: lazy(() => import('./EditorPane')),
   diff: lazy(() => import('./DiffPane')),
   journal: lazy(() => import('./JournalPane')),
-  chat: lazy(() => import('./ChatPane')),
+  // Chat was replaced by Composer. Saved tabs that still reference `chat`
+  // render a small redirect tile that one-click migrates them. Remove
+  // this entry once we're confident no persisted sessions still carry
+  // `kind: 'chat'`.
+  chat: lazy(() => import('./ChatRedirect')),
+  composer: lazy(() => import('./ComposerPane')),
   'markdown-preview': lazy(() => import('./MarkdownPreviewPane')),
 };
 

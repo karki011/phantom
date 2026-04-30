@@ -1,4 +1,4 @@
-// PhantomOS v2 — Prompt composer visibility signal
+// Phantom — Prompt composer visibility signal
 // Author: Subash Karki
 
 import { createSignal, createEffect } from 'solid-js';

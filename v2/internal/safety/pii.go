@@ -1,4 +1,4 @@
-// pii.go implements PII detection and masking for the PhantomOS Safety Rules Engine.
+// pii.go implements PII detection and masking for the Phantom Safety Rules Engine.
 // Author: Subash Karki
 package safety
 

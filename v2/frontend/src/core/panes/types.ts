@@ -1,7 +1,7 @@
-// PhantomOS v2 — Pane layout types
+// Phantom — Pane layout types
 // Author: Subash Karki
 
-export type PaneType = 'terminal' | 'tui' | 'editor' | 'chat' | 'diff' | 'home' | 'journal' | 'markdown-preview';
+export type PaneType = 'terminal' | 'tui' | 'editor' | 'chat' | 'composer' | 'diff' | 'home' | 'journal' | 'markdown-preview';
 
 // ---------------------------------------------------------------------------
 // Layout tree (binary tree of panes)

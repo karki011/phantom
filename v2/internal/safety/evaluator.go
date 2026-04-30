@@ -1,4 +1,4 @@
-// evaluator.go implements the rule evaluation engine for the PhantomOS Safety Rules Engine.
+// evaluator.go implements the rule evaluation engine for the Phantom Safety Rules Engine.
 // Author: Subash Karki
 package safety
 

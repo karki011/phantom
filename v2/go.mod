@@ -10,6 +10,7 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/google/uuid v1.6.0
+	github.com/keybase/go-keychain v0.0.1
 	github.com/mark3labs/mcp-go v0.49.0
 	github.com/wailsapp/wails/v2 v2.12.0
 	golang.org/x/sys v0.42.0
