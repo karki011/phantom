@@ -82,7 +82,7 @@ func fetchRepoMergeConfig(ctx context.Context, repoPath, ownerRepo string) RepoM
 
 	query := `query($owner:String!,$name:String!){repository(owner:$owner,name:$name){mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed deleteBranchOnMerge viewerDefaultMergeMethod mergeQueue{id}}}`
 
-	cmd := exec.CommandContext(ctx, "gh", "api", "graphql",
+	cmd := exec.CommandContext(ctx, ghBin(), "api", "graphql",
 		"-f", "query="+query,
 		"-F", "owner="+owner,
 		"-F", "name="+name,
