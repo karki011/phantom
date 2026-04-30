@@ -341,12 +341,12 @@ func (q *Queries) GetTotalSpeedTasks(ctx context.Context) (int64, error) {
 }
 
 const getTotalXPEarned = `-- name: GetTotalXPEarned :one
-SELECT COALESCE(SUM(xp_earned), 0) as total_xp FROM activity_log
+SELECT CAST(COALESCE(SUM(xp_earned), 0) AS INTEGER) as total_xp FROM activity_log
 `
 
-func (q *Queries) GetTotalXPEarned(ctx context.Context) (interface{}, error) {
+func (q *Queries) GetTotalXPEarned(ctx context.Context) (int64, error) {
 	row := q.db.QueryRowContext(ctx, getTotalXPEarned)
-	var total_xp interface{}
+	var total_xp int64
 	err := row.Scan(&total_xp)
 	return total_xp, err
 }

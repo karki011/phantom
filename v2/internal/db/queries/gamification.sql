@@ -165,7 +165,7 @@ WHERE status = 'completed'
   AND (updated_at - created_at) < 120000;
 
 -- name: GetTotalXPEarned :one
-SELECT COALESCE(SUM(xp_earned), 0) as total_xp FROM activity_log;
+SELECT CAST(COALESCE(SUM(xp_earned), 0) AS INTEGER) as total_xp FROM activity_log;
 
 -- name: LogActivity :exec
 INSERT INTO activity_log (timestamp, type, session_id, metadata, xp_earned, provider)
