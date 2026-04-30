@@ -999,6 +999,14 @@ export default function ChatPane(props: ChatPaneProps) {
           </div>
         </Show>
       </div>
+
+      {/* Full-screen image viewer — wired via MarkdownContent onImageClick */}
+      <ImageLightbox
+        open={lightboxOpen}
+        onOpenChange={handleLightboxOpenChange}
+        src={lightboxSrc}
+        alt={lightboxAlt}
+      />
     </div>
   );
 }
