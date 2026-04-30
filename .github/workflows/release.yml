@@ -100,36 +100,13 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-      - name: Generate release notes
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-        working-directory: .
-        run: |
-          PREV=$(git tag -l 'v*.*.*' --sort=-v:refname | grep -v "^${GITHUB_REF_NAME}$" | head -1)
-          {
-            if [ -n "$PREV" ]; then
-              echo "## Changes since $PREV"
-              echo
-              git log --pretty=format:"- %s (%h)" "${PREV}..${GITHUB_REF_NAME}"
-            else
-              echo "Initial public release of Phantom."
-            fi
-            echo
-            echo
-            echo "## Install"
-            echo
-            echo "1. Download \`Phantom-${{ steps.ver.outputs.version }}.zip\` below"
-            echo "2. Unzip and drag \`Phantom.app\` to \`/Applications\`"
-            echo "3. Double-click — signed, notarized, stapled. No Gatekeeper prompt."
-            echo
-            echo "**Platform:** macOS only (universal — Apple Silicon + Intel)."
-          } > release-notes.md
-
-      - name: Publish GitHub Release
+      - name: Publish GitHub Release (or attach asset to existing release-please release)
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Phantom ${{ steps.ver.outputs.version }}
-          body_path: release-notes.md
           files: v2/build/dist/Phantom-*.zip
+          # body intentionally omitted: release-please owns the changelog.
+          # softprops will leave the existing release body untouched.
           fail_on_unmatched_files: true

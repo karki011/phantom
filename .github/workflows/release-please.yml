@@ -1,0 +1,25 @@
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          # IMPORTANT: a PAT is required so the tag push from this job
+          # triggers the downstream release.yml workflow. GITHUB_TOKEN-
+          # triggered events do not fire other workflows by design.
+          # Create a fine-grained PAT with: contents:write, pull-requests:write
+          # Store as repo secret RELEASE_PLEASE_TOKEN.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
