@@ -1,6 +1,6 @@
-# PhantomOS v2
+# Phantom
 
-PhantomOS is a Wails-based desktop app for managing AI coding sessions across multiple providers (Claude Code, Codex, etc.) with a config-driven provider architecture.
+Phantom is a Wails-based desktop app for managing AI coding sessions across multiple providers (Claude Code, Codex, etc.) with a config-driven provider architecture.
 
 ## How this was built
 
@@ -10,6 +10,14 @@ Other models and tools are supported through the same provider abstraction, but 
 Author: Subash Karki — solo project, hacked together in evenings.
 Trade-off worth naming: rapid iteration and opinionated defaults, with the occasional rough edge you'd expect from one person shipping after dinner.
 
+## Highlights
+
+- **Composer** — agentic edit pane with Accept/Discard cards, past-session sidebar, and right-click actions. Default model is Opus.
+- **Terminal shell integration** — OSC 633 marks, Quick-Fix on errors, sticky scroll, jump-to-prompt, and a Cmd+P palette over command history.
+- **Workspace Ship-It** — merge button + reviewer chips on the Workspace card; sidebar shows a `±N` dirty-files badge per worktree.
+- **BYOK** — store your own Anthropic API key in the macOS Keychain via Settings → AI Provider; fall back to the Claude subscription anytime.
+- **Persistent terminals** — addon-serialize PTY snapshot + tab auto-rename via OSC 0/1/2 keep sessions where you left them.
+
 ## Quick start
 
 ```bash
@@ -17,7 +25,7 @@ make frontend-install
 make dev
 ```
 
-See `Makefile` for all targets (`build`, `release-dmg`, `mcp-build`, etc.).
+Open Composer from the QuickLaunch grid (or hit Cmd+I to focus the prompt composer). See `Makefile` for all targets (`build`, `release-dmg`, `mcp-build`, etc.).
 
 ## Repository layout
 
@@ -41,7 +49,7 @@ The file is committed to the repo so it can be fetched directly via raw URL.
 
 ## Authoritative docs
 
-- `docs/ai-engine.md` — PhantomOS AI engine (graph, blast radius, orchestrator).
+- `docs/ai-engine.md` — Phantom AI engine (graph, blast radius, orchestrator).
 - `docs/DESIGN-config-driven-architecture.md` — provider abstraction.
 - `docs/PLAN-home-redesign.md` — home screen redesign plan.
 - `docs/PLAN-phase-1-upgrades.md` — current phase 1 PR plan.

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Documentation content
+// Phantom — Documentation content
 // Author: Subash Karki
 // Updated: 2026-04-27
 
@@ -1135,156 +1135,132 @@ export const DOC_SECTIONS: DocSection[] = [
   },
 
   // ─────────────────────────────────────────────
-  // CHAT
+  // COMPOSER
   // ─────────────────────────────────────────────
   {
-    title: 'Chat',
+    title: 'Composer',
     items: [
       {
-        id: 'chat-overview',
-        label: 'Chat Overview',
+        id: 'composer-overview',
+        label: 'Overview',
         content: {
-          title: 'Chat Overview',
+          title: 'Composer',
           sections: [
             {
               type: 'paragraph',
-              text: 'PhantomOS includes a built-in AI chat interface powered by the Claude CLI. Chat lives alongside your terminal and editor, providing a persistent conversational workspace for questions, code generation, and brainstorming.',
-            },
-            {
-              type: 'heading',
-              text: 'Conversations',
+              text: 'Composer is the agentic edit pane that replaced Chat. It runs the `claude` CLI in turn-by-turn mode and surfaces every proposed file change as an inline edit card with Accept and Discard actions — no edit lands on disk until you click through.',
             },
             {
               type: 'paragraph',
-              text: 'The conversations sidebar lists all your chat threads. Create new conversations, rename them for organization, or delete ones you no longer need. Each conversation maintains its full message history.',
+              text: 'Open it from the QuickLaunch grid, the command palette, or by adding a new Composer tab. Each tab is bound to a `cwd` (the worktree it operates against) and one `claude` session — switching sessions inside the pane re-binds in place without spawning a new tab.',
             },
             {
               type: 'heading',
-              text: 'Streaming Responses',
+              text: 'Edit cards',
+            },
+            {
+              type: 'paragraph',
+              text: 'When the assistant proposes an edit, Composer renders a card showing the file, a unified diff, and Accept / Discard buttons. Accepted cards are written to disk and tracked alongside the conversation; discarded cards are dropped. The full assistant response text is persisted (migration 010) so re-opening a session shows the conversation, not just the user prompts.',
+            },
+          ],
+        },
+      },
+      {
+        id: 'composer-sidebar',
+        label: 'Past Sessions Sidebar',
+        content: {
+          title: 'Past Sessions Sidebar',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'The left rail of Composer lists every past `claude` session for the current worktree, ordered most-recent-first. Click a row to swap the pane in place; the existing tab stays put and rebinds to the new session.',
+            },
+            {
+              type: 'heading',
+              text: 'Right-click actions',
             },
             {
               type: 'list',
               items: [
-                'Responses stream in real time as the AI generates them',
-                'Thinking blocks are displayed in a collapsible section, showing the AI\'s reasoning process',
-                'Tool use is displayed inline — you can see which tools the AI invokes and their results',
-                'Long responses render progressively without blocking the UI',
+                'Open in new tab — Cmd+Click also works as a shortcut',
+                'Delete session — hard delete with confirm; if the deleted session is the one currently bound, the pane resets to a fresh conversation',
               ],
             },
             {
+              type: 'paragraph',
+              text: 'The session row tooltip shows the first prompt, the session ID, and the available shortcuts. New conversations get a row as soon as the first prompt is sent.',
+            },
+          ],
+        },
+      },
+      {
+        id: 'composer-no-context',
+        label: 'No Project Context Toggle',
+        content: {
+          title: 'No Project Context Toggle',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'The "No project context" toggle (the pill at the top of the prompt area) runs each turn in a fresh temp directory. The CLI never sees `CLAUDE.md`, `.claude/`, or any of the worktree files unless you explicitly attach them via @-mentions.',
+            },
+            {
+              type: 'paragraph',
+              text: 'Useful when you want a clean answer that is not biased by project conventions, or when you are debugging whether a behaviour is coming from project context. The choice is persisted as a user preference (`composer_no_context_default`) so it survives across sessions and tabs.',
+            },
+          ],
+        },
+      },
+      {
+        id: 'composer-byok',
+        label: 'BYOK Anthropic API Key',
+        content: {
+          title: 'BYOK Anthropic API Key',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'PhantomOS can run Composer against your own Anthropic API key instead of the Claude subscription that the `claude` CLI normally uses. Open Settings → AI Provider and switch from Subscription to BYOK.',
+            },
+            {
+              type: 'list',
+              items: [
+                'Paste your `sk-ant-...` key — stored in the macOS Keychain, never on disk in plaintext',
+                'Test verifies the key against the Anthropic API before saving',
+                'Clear removes the key from the Keychain and falls back to subscription mode',
+                'Switch back to Subscription anytime; the key stays stored until you explicitly clear it',
+              ],
+            },
+            {
+              type: 'paragraph',
+              text: 'BYOK is per-machine, not per-worktree. Once the key is saved, every Composer turn on this Mac uses it.',
+            },
+          ],
+        },
+      },
+      {
+        id: 'composer-defaults',
+        label: 'Defaults & Models',
+        content: {
+          title: 'Defaults & Models',
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'Composer defaults to the Opus model. The dropdown in the prompt header lets you switch per-turn; the choice does not stick across new conversations on purpose — Opus is the safe default for agentic edits and you opt down explicitly when you want speed.',
+            },
+            {
               type: 'heading',
-              text: 'Keyboard',
+              text: 'Send shortcuts',
             },
             {
               type: 'shortcuts',
               shortcuts: [
-                { keys: ['Enter'], action: 'Send message' },
-                { keys: ['Shift', 'Enter'], action: 'New line in message' },
-              ],
-            },
-          ],
-        },
-      },
-      {
-        id: 'chat-model-selection',
-        label: 'Model Selection',
-        content: {
-          title: 'Model Selection',
-          sections: [
-            {
-              type: 'paragraph',
-              text: 'Switch between AI models using the dropdown in the chat header. Different models offer tradeoffs between speed, cost, and capability.',
-            },
-            {
-              type: 'heading',
-              text: 'Available Models',
-            },
-            {
-              type: 'table',
-              headers: ['Model', 'Best For'],
-              rows: [
-                ['Sonnet', 'General-purpose coding tasks. Fast responses with strong reasoning.'],
-                ['Opus', 'Complex multi-step tasks requiring deep analysis and planning.'],
-                ['Haiku', 'Quick questions, simple edits, and low-latency interactions.'],
+                { keys: ['Cmd', 'Enter'], action: 'Send prompt' },
+                { keys: ['Ctrl', 'Enter'], action: 'Send prompt' },
+                { keys: ['Enter'], action: 'Newline in the composer' },
               ],
             },
             {
               type: 'paragraph',
-              text: 'The selected model applies to the current conversation. You can switch models mid-conversation — the AI retains the full message history regardless of which model generated each response.',
-            },
-          ],
-        },
-      },
-      {
-        id: 'chat-markdown',
-        label: 'Markdown & Code',
-        content: {
-          title: 'Markdown & Code Rendering',
-          sections: [
-            {
-              type: 'paragraph',
-              text: 'Chat messages render full GitHub-Flavored Markdown (GFM) with syntax-highlighted code blocks. This makes AI responses easy to read and code easy to copy.',
-            },
-            {
-              type: 'heading',
-              text: 'Supported Formatting',
-            },
-            {
-              type: 'list',
-              items: [
-                'Headers (h1-h6) with proper sizing and spacing',
-                'Tables with aligned columns and header rows',
-                'Ordered and unordered lists with nesting',
-                'Blockquotes with left-border styling',
-                'Inline code with monospace background',
-                'Bold, italic, and strikethrough text',
-                'Links with hover previews',
-              ],
-            },
-            {
-              type: 'heading',
-              text: 'Code Blocks',
-            },
-            {
-              type: 'paragraph',
-              text: 'Fenced code blocks include syntax highlighting for 12 languages: TypeScript, JavaScript, Go, Python, Rust, JSON, YAML, HTML, CSS, Bash, SQL, and Markdown. Each code block has a copy button in the top-right corner for one-click clipboard copying.',
-            },
-          ],
-        },
-      },
-      {
-        id: 'chat-file-attachments',
-        label: 'File Attachments',
-        content: {
-          title: 'File Attachments',
-          sections: [
-            {
-              type: 'paragraph',
-              text: 'Attach files and images to chat messages by dragging and dropping them into the message input area. Attachments provide additional context for the AI to reference.',
-            },
-            {
-              type: 'heading',
-              text: 'Image Attachments',
-            },
-            {
-              type: 'paragraph',
-              text: 'Drop images (PNG, JPG, GIF, WebP) into the chat input to attach them. A thumbnail preview appears below the input area. Images are sent to the AI for visual analysis — useful for UI screenshots, error messages, or diagrams.',
-            },
-            {
-              type: 'heading',
-              text: 'Code File Attachments',
-            },
-            {
-              type: 'paragraph',
-              text: 'Drop code files into the chat to include their contents. The file is read and inserted as a fenced code block with the appropriate language tag. This is faster than copy-pasting large files.',
-            },
-            {
-              type: 'heading',
-              text: 'Sidebar Drag-and-Drop',
-            },
-            {
-              type: 'paragraph',
-              text: 'Files from the left sidebar file tree can be dragged directly into the chat input. This works for both the worktree file browser and the Quick Open results — no need to find the file in Finder first.',
+              text: 'New conversation clears the pane and starts a fresh `claude` session bound to the current `cwd`. Cancel stops the in-flight turn without losing the conversation.',
             },
           ],
         },
