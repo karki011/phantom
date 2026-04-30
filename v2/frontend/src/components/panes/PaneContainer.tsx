@@ -99,14 +99,16 @@ export function PaneContainer(props: PaneContainerProps) {
                   <Rows2 size={12} />
                 </button>
               </Show>
-              <button
-                class={`${styles.paneHeaderButton} danger`}
-                title="Close pane"
-                onClick={handleClose}
-                type="button"
-              >
-                <X size={12} />
-              </button>
+              <Show when={!props.isSolo}>
+                <button
+                  class={`${styles.paneHeaderButton} danger`}
+                  title="Close pane"
+                  onClick={handleClose}
+                  type="button"
+                >
+                  <X size={12} />
+                </button>
+              </Show>
             </div>
           </Show>
         </div>

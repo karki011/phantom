@@ -59,15 +59,24 @@ function SplitRenderer(props: SplitRendererProps) {
   const firstPct = () => props.split.splitPercentage;
   const secondPct = () => 100 - props.split.splitPercentage;
 
-  const containerClass =
-    props.split.direction === 'horizontal'
-      ? styles.layoutSplitHorizontal
-      : styles.layoutSplitVertical;
+  const isHorizontal = props.split.direction === 'horizontal';
+  const containerClass = isHorizontal
+    ? styles.layoutSplitHorizontal
+    : styles.layoutSplitVertical;
+
+  const wrapperStyle = (pct: number) => ({
+    flex: `0 0 ${pct}%`,
+    overflow: 'hidden',
+    'min-width': 0,
+    'min-height': 0,
+    display: 'flex',
+    'flex-direction': isHorizontal ? 'row' : 'column',
+  });
 
   return (
     <div class={containerClass} ref={containerRef}>
       {/* First child */}
-      <div style={{ flex: `0 0 ${firstPct()}%`, overflow: 'hidden', 'min-width': 0, 'min-height': 0 }}>
+      <div style={wrapperStyle(firstPct())}>
         <LayoutRenderer layout={props.split.first} path={[...props.path, 0]} />
       </div>
 
@@ -80,7 +89,7 @@ function SplitRenderer(props: SplitRendererProps) {
       />
 
       {/* Second child */}
-      <div style={{ flex: `0 0 ${secondPct()}%`, overflow: 'hidden', 'min-width': 0, 'min-height': 0 }}>
+      <div style={wrapperStyle(secondPct())}>
         <LayoutRenderer layout={props.split.second} path={[...props.path, 1]} />
       </div>
     </div>

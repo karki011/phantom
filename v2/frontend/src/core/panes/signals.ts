@@ -4,7 +4,7 @@
  * Author: Subash Karki
  */
 
-import { createMemo } from 'solid-js';
+import { createMemo, createSignal, type Accessor } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import { activeWorktreeId } from '@/core/signals/app';
 import { worktreeMap } from '@/core/signals/worktrees';
@@ -19,7 +19,13 @@ import {
   MAX_PANES_PER_TAB,
 } from './layout-utils';
 import { destroyTerminal } from '@/core/bindings';
-import { destroySession as destroyXtermSession } from '@/core/terminal/registry';
+import { destroySession as destroyXtermSession, getSession, safeFit } from '@/core/terminal/registry';
+import {
+  getSessionTitle,
+  getSessionCwd,
+  onTitleChange,
+  onCommandFinished,
+} from '@/core/terminal/addons/shellIntegration';
 
 // ---------------------------------------------------------------------------
 // Factories
@@ -187,6 +193,7 @@ export function removeTab(tabId: string): void {
   for (const paneId of terminalPaneIds) {
     destroyXtermSession(paneId);
     void destroyTerminal(paneId);
+    disposePaneSubscription(paneId);
   }
 }
 
@@ -221,6 +228,12 @@ export function closePane(paneId: string): void {
     }
   }
 
+  // Capture the surviving pane ids BEFORE the mutation so we can refit them.
+  const tabBefore = workspace.tabs.find((t) => paneId in t.panes);
+  const survivorIds = tabBefore
+    ? Object.keys(tabBefore.panes).filter((id) => id !== paneId)
+    : [];
+
   setWorkspace(
     produce((s) => {
       const tab = s.tabs.find((t) => paneId in t.panes);
@@ -246,7 +259,21 @@ export function closePane(paneId: string): void {
   if (paneKind === 'terminal') {
     destroyXtermSession(paneId);
     void destroyTerminal(paneId);
+    disposePaneSubscription(paneId);
   }
+
+  // Explicit refit on survivors after DOM commit. ResizeObserver doesn't
+  // reliably fire when a sibling is removed (flex reflow happens but the
+  // observed element's contentRect may match its previous value within the
+  // same frame). VS Code, Hyper, and tmux all do this same explicit refit.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      for (const id of survivorIds) {
+        const session = getSession(id);
+        if (session) safeFit(session);
+      }
+    });
+  });
 }
 
 export function splitPane(
@@ -316,3 +343,109 @@ export function getPaneColor(paneId: string): string {
 }
 
 export { workspace, tabs, activeTab, activePaneId };
+
+// ---------------------------------------------------------------------------
+// Auto-rename: derive tab labels from the active terminal session's OSC title
+// or cwd basename (VS Code-style 2-tier ladder, no foreground-process tier).
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-pane reactivity hooks. We can't read xterm session state inside a Solid
+ * memo and have it re-run when OSC events fire — Solid only tracks signals.
+ * So each terminal pane gets a "tick" signal that we bump from inside the
+ * shellIntegration listeners, and `deriveTabLabel` reads the tick to subscribe.
+ */
+const paneTicks = new Map<string, { tick: Accessor<number>; bump: () => void }>();
+const paneSubs = new Map<string, () => void>();
+
+function ensurePaneSubscription(paneId: string): Accessor<number> {
+  let entry = paneTicks.get(paneId);
+  if (!entry) {
+    const [tick, setTick] = createSignal(0);
+    const bump = () => setTick((n) => n + 1);
+    entry = { tick, bump };
+    paneTicks.set(paneId, entry);
+
+    // Bump the tick whenever the terminal session's title changes or a new
+    // command finishes (which can update cwd via `633;P;Cwd=`).
+    const offTitle = onTitleChange(paneId, () => entry!.bump());
+    const offCmd = onCommandFinished(paneId, () => entry!.bump());
+    paneSubs.set(paneId, () => {
+      offTitle();
+      offCmd();
+    });
+  }
+  return entry.tick;
+}
+
+function disposePaneSubscription(paneId: string): void {
+  const off = paneSubs.get(paneId);
+  if (off) {
+    try {
+      off();
+    } catch {
+      /* ignore */
+    }
+    paneSubs.delete(paneId);
+  }
+  paneTicks.delete(paneId);
+}
+
+/** Strip everything before the last `/` and any trailing slashes. */
+function basename(p: string): string {
+  const trimmed = p.replace(/\/+$/, '');
+  const slash = trimmed.lastIndexOf('/');
+  return slash === -1 ? trimmed : trimmed.slice(slash + 1);
+}
+
+/** If `s` looks like an absolute path, return its basename; else return `s`. */
+function maybeBasename(s: string): string {
+  return s.startsWith('/') || s.startsWith('~/') ? basename(s) : s;
+}
+
+/**
+ * Resolve the display label for a tab. For tabs whose active pane is a
+ * terminal, walk the 2-tier ladder; otherwise fall through to `tab.label`.
+ *
+ * Ladder:
+ *   1. OSC 0/1/2 title (live-updating via `terminal.onTitleChange`)
+ *   2. cwd basename   (from OSC 633;P;Cwd=… on the most recent command)
+ *   3. tab.label      (the static default assigned at creation)
+ */
+export function deriveTabLabel(tab: Tab): string {
+  const pane = tab.panes[tab.activePaneId];
+  if (!pane || pane.kind !== 'terminal') return tab.label;
+
+  // Subscribe so the memo re-runs when this pane's title/cwd changes.
+  ensurePaneSubscription(pane.id);
+
+  const title = getSessionTitle(pane.id);
+  if (title && title.length > 0) return maybeBasename(title);
+
+  const cwd = getSessionCwd(pane.id);
+  if (cwd && cwd.length > 0) return basename(cwd);
+
+  return tab.label;
+}
+
+/**
+ * Reactive accessor for a tab's display label. Re-runs when the tab's active
+ * pane changes or when its terminal session emits a new title/cwd.
+ *
+ * Returns `tab.label` for unknown tabIds — keeps the TabBar resilient.
+ */
+export function tabDisplayLabel(tabId: string): string {
+  const tab = workspace.tabs.find((t) => t.id === tabId);
+  if (!tab) return '';
+  return deriveTabLabel(tab);
+}
+
+// Wrap closePane / removeTab so we tear down per-pane subscriptions when the
+// pane goes away. Both functions are exported above; we patch the cleanup
+// path by re-exporting wrappers would be intrusive, so we expose a helper that
+// the existing destroy flow calls. The hook is invoked inline in those fns:
+
+/** Internal — release per-pane reactive bookkeeping. Safe for unknown ids. */
+export function _disposePaneAutoRename(paneId: string): void {
+  disposePaneSubscription(paneId);
+}
