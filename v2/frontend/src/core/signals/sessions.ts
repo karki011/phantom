@@ -18,6 +18,7 @@ interface SessionNewEvent {
 interface SessionUpdateEvent {
   sessionId: string;
   status?: string;
+  live_state?: 'running' | 'waiting' | 'idle' | 'error';
 }
 
 interface SessionEndEvent {
@@ -67,8 +68,11 @@ export function bootstrapSessions(): void {
   onWailsEvent<SessionUpdateEvent>('session:update', async (evt) => {
     const full = await getSession(evt.sessionId);
     if (full) {
+      const merged: Session = evt.live_state
+        ? { ...full, live_state: evt.live_state }
+        : full;
       setSessions((prev) =>
-        prev.map((s) => (s.id === full.id ? full : s)),
+        prev.map((s) => (s.id === merged.id ? merged : s)),
       );
     }
   });

@@ -13,6 +13,11 @@ export interface Session {
   started_at: number | null;
   ended_at: number | null;
   status: string | null;
+  /**
+   * Derived semantic state for the sidebar dot. Computed by the collector
+   * from the JSONL transcript + DB status; never persisted.
+   */
+  live_state?: 'running' | 'waiting' | 'idle' | 'error';
   task_count: number | null;
   completed_tasks: number | null;
   input_tokens: number | null;

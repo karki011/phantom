@@ -4,6 +4,10 @@ package collector
 
 // Collector event name constants. Use these instead of raw string literals
 // when calling emitEvent so the compiler catches typos.
+//
+// EventSessionUpdate carries sessionId, status, and a derived live_state
+// field (running|waiting|idle|error) computed from the JSONL transcript
+// and DB status. The DB status column stays narrow.
 const (
 	EventSessionNew     = "session:new"
 	EventSessionUpdate  = "session:update"

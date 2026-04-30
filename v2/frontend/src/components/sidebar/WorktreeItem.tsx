@@ -8,6 +8,7 @@ import { Terminal, Trash2, GitBranch, GitFork, FolderOpen, ExternalLink, Clipboa
 import * as styles from '@/styles/sidebar.css';
 import { spin } from '@/styles/utilities.css';
 import { activeWorktreeId } from '@/core/signals/app';
+import { sessions } from '@/core/signals/sessions';
 import { selectWorktree, removeWorktreeById } from '@/core/signals/worktrees';
 import { addTabWithData } from '@/core/panes/signals';
 import { gitFetch, gitPull, gitPush, getWorkspaceStatus } from '@/core/bindings';
@@ -27,6 +28,15 @@ interface WorktreeItemProps {
 
 export function WorktreeItem(props: WorktreeItemProps) {
   const isActive = () => activeWorktreeId() === props.worktree.id;
+  // Resolve the live session for this worktree by matching cwd to worktree_path.
+  // Used purely to read `live_state` for the sidebar dot.
+  const session = () => {
+    const path = props.worktree.worktree_path;
+    if (!path) return undefined;
+    return sessions().find(
+      (s) => s.cwd === path && (s.status === 'active' || s.status === 'paused'),
+    );
+  };
 
   const [showBranchPicker, setShowBranchPicker] = createSignal(false);
   const [showRename, setShowRename] = createSignal(false);
@@ -108,7 +118,7 @@ export function WorktreeItem(props: WorktreeItemProps) {
           {props.worktree.branch}
         </span>
         {props.hasActiveSession && (
-          <span class={styles.sessionDot} />
+          <span class={styles.sessionDot} data-live-state={session()?.live_state} />
         )}
       </ContextMenu.Trigger>
 

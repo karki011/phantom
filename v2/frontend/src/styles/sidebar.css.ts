@@ -216,6 +216,38 @@ export const sessionDot = style({
   boxShadow: `0 0 4px ${vars.color.success}`,
 });
 
+// Live-state semantics for the session dot. The DB `status` stays narrow
+// (`active|completed|paused`); this `data-live-state` attribute is derived
+// in the collector and emitted on `session:update` events.
+const liveStateBreathe = keyframes({
+  '0%, 100%': { opacity: 1, transform: 'scale(1)' },
+  '50%': { opacity: 0.55, transform: 'scale(0.85)' },
+});
+
+globalStyle(`${sessionDot}[data-live-state="running"]`, {
+  backgroundColor: vars.color.success,
+  boxShadow: `0 0 4px ${vars.color.success}`,
+  animation: `${liveStateBreathe} 1.4s ease-in-out infinite`,
+});
+
+globalStyle(`${sessionDot}[data-live-state="waiting"]`, {
+  backgroundColor: vars.color.warning,
+  boxShadow: `0 0 4px ${vars.color.warning}`,
+  animation: 'none',
+});
+
+globalStyle(`${sessionDot}[data-live-state="idle"]`, {
+  backgroundColor: vars.color.textDisabled,
+  boxShadow: 'none',
+  animation: 'none',
+});
+
+globalStyle(`${sessionDot}[data-live-state="error"]`, {
+  backgroundColor: vars.color.danger,
+  boxShadow: `0 0 4px ${vars.color.danger}`,
+  animation: 'none',
+});
+
 export const inlineInput = style({
   display: 'flex',
   alignItems: 'center',

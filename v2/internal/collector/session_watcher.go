@@ -893,6 +893,144 @@ func int64OrZeroCollector(n sql.NullInt64) int64 {
 
 // --- helpers ---
 
+// computeLiveState derives a fine-grained "live_state" for a session that the
+// frontend can render as a colored dot. The DB `status` column intentionally
+// stays narrow (`active|completed|paused`) because many queries pin on those
+// values; this function returns a wider semantic state for the wire payload
+// only — never persisted.
+//
+// States:
+//   - "running" — last activity within the last 2 seconds
+//   - "waiting" — trailing JSONL line is a `tool_use` with no matching `tool_result`
+//   - "idle"    — `5s < last_activity < 5min` AND dbStatus is "active"
+//   - "error"   — most recent JSONL line is `type:"error"` OR session ended
+//     with an unhealthy signal
+//
+// Reads only the trailing ~16KB of the JSONL via io.SeekEnd to avoid scanning
+// large transcripts; tolerates any I/O error by falling back to a sane default.
+func computeLiveState(jsonlPath, dbStatus string, lastActivityAt int64) string {
+	now := time.Now().Unix()
+	sinceActivity := now - lastActivityAt
+
+	if dbStatus != "active" {
+		if jsonlPath != "" && trailingJSONLIsError(jsonlPath) {
+			return "error"
+		}
+		return "idle"
+	}
+
+	if jsonlPath != "" && trailingJSONLIsError(jsonlPath) {
+		return "error"
+	}
+	if jsonlPath != "" && trailingToolUsePending(jsonlPath) {
+		return "waiting"
+	}
+
+	switch {
+	case sinceActivity < 2:
+		return "running"
+	case sinceActivity < 5*60:
+		return "idle"
+	default:
+		return "idle"
+	}
+}
+
+// readTrailingJSONLLines reads up to maxBytes from the end of the file and
+// returns the last N complete lines (most recent last).
+func readTrailingJSONLLines(path string, maxBytes int64, maxLines int) []string {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	stat, err := f.Stat()
+	if err != nil {
+		return nil
+	}
+	size := stat.Size()
+	readFrom := int64(0)
+	if size > maxBytes {
+		readFrom = size - maxBytes
+	}
+	if _, err := f.Seek(readFrom, io.SeekStart); err != nil {
+		return nil
+	}
+	buf := make([]byte, size-readFrom)
+	if _, err := io.ReadFull(f, buf); err != nil {
+		return nil
+	}
+
+	all := strings.Split(strings.TrimRight(string(buf), "\n"), "\n")
+	if readFrom > 0 && len(all) > 0 {
+		all = all[1:]
+	}
+	if len(all) > maxLines {
+		all = all[len(all)-maxLines:]
+	}
+	return all
+}
+
+// trailingJSONLIsError returns true if the most recent JSONL line is an error.
+func trailingJSONLIsError(path string) bool {
+	lines := readTrailingJSONLLines(path, 4096, 4)
+	if len(lines) == 0 {
+		return false
+	}
+	last := lines[len(lines)-1]
+	var probe struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal([]byte(last), &probe); err != nil {
+		return false
+	}
+	return probe.Type == "error"
+}
+
+// trailingToolUsePending returns true if the trailing window of JSONL lines
+// contains an assistant `tool_use` event with no matching `tool_result` after.
+func trailingToolUsePending(path string) bool {
+	lines := readTrailingJSONLLines(path, 16*1024, 32)
+	if len(lines) == 0 {
+		return false
+	}
+
+	type contentBlock struct {
+		Type      string `json:"type"`
+		ID        string `json:"id"`
+		ToolUseID string `json:"tool_use_id"`
+	}
+	type message struct {
+		Content []contentBlock `json:"content"`
+	}
+	type entry struct {
+		Type    string  `json:"type"`
+		Message message `json:"message"`
+	}
+
+	pending := map[string]struct{}{}
+	for _, raw := range lines {
+		var e entry
+		if err := json.Unmarshal([]byte(raw), &e); err != nil {
+			continue
+		}
+		for _, c := range e.Message.Content {
+			switch c.Type {
+			case "tool_use":
+				if c.ID != "" {
+					pending[c.ID] = struct{}{}
+				}
+			case "tool_result":
+				if c.ToolUseID != "" {
+					delete(pending, c.ToolUseID)
+				}
+			}
+		}
+	}
+	return len(pending) > 0
+}
+
 func nullString(s string) sql.NullString {
 	if s == "" {
 		return sql.NullString{}
