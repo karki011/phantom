@@ -8,6 +8,7 @@ import { speakSystem } from '../config/voice';
 import { buildBootScript } from '../config/phases';
 import type { BootLine, LineStyle, BootScanData } from '../config/types';
 import { BootRings } from './BootRings';
+import { PhantomMark } from '../../../shared/PhantomMark/PhantomMark';
 
 const App = () => (window as any).go?.['app']?.App;
 
@@ -147,6 +148,7 @@ export function BootTerminal(props: BootTerminalProps) {
   return (
     <div class={styles.terminal}>
       <BootRings progress={bootProgress()} total={totalLines} />
+      <PhantomMark size={88} pulse class={styles.bootMark} />
       <div class={styles.linesContainer}>
         <For each={lines()}>
           {(line, i) => (

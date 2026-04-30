@@ -2,8 +2,9 @@
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';
-import type { DailyJournalEntry, DailyStats } from '../types';
+import type { DailyJournalEntry, DailyStats, JournalEnrichedEvent } from '../types';
 import { getDailyJournalEntry, getDailyStatsRange } from '../bindings/journal';
+import { onWailsEvent } from '../events';
 
 // Selected date for the journal view
 export const [selectedDate, setSelectedDate] = createSignal<string>(
@@ -18,6 +19,8 @@ export const [journalEntry, setJournalEntry] = createSignal<DailyJournalEntry>({
   work_log: [],
   end_of_day_recap: '',
   eod_generated_at: 0,
+  end_of_day_narrative: '',
+  eod_narrative_at: 0,
   notes: '',
 });
 
@@ -51,10 +54,22 @@ export const loadMonthStats = async (year: number, month: number): Promise<void>
   setMonthStats(stats);
 };
 
-// Bootstrap journal data
+// Bootstrap journal data + subscribe to LLM enrichment events.
+// When the backend finishes narrating an EOD recap it emits
+// `journal:enriched` with `{date, project}`; if the user is viewing the
+// same date+project we silently re-fetch and the narrative slots in.
 export const bootstrapJournal = async (): Promise<void> => {
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
+
+  onWailsEvent<JournalEnrichedEvent>('journal:enriched', (evt) => {
+    if (!evt) return;
+    if (evt.date !== selectedDate()) return;
+    const currentProject = selectedProject() ?? '';
+    if (evt.project !== currentProject) return;
+    void loadJournalEntry(selectedDate(), selectedProject());
+  });
+
   await Promise.all([
     loadJournalEntry(today),
     loadMonthStats(now.getFullYear(), now.getMonth() + 1),

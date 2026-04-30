@@ -3,6 +3,7 @@
 import { JSX, Show, createSignal, onMount } from 'solid-js';
 import * as styles from './styles/panel.css';
 import { GlassPanel } from '../../shared/GlassPanel/GlassPanel';
+import { PhantomMark } from '../../shared/PhantomMark/PhantomMark';
 
 interface PhasePanelProps {
   title: string;
@@ -20,6 +21,7 @@ export function PhasePanel(props: PhasePanelProps) {
   return (
     <div class={styles.wrapper} classList={{ [styles.wrapperVisible]: visible() }}>
       <GlassPanel class={styles.panel}>
+        <PhantomMark size={88} pulse class={styles.brandMark} />
         <div class={styles.header}>
           <h2 class={styles.title}>{props.title}</h2>
           <Show when={props.subtitle}>

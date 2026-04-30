@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/subashkarki/phantom-os-v2/internal/db"
+	"github.com/subashkarki/phantom-os-v2/internal/terminal"
 )
 
 // terminalWSMessage is the JSON envelope sent over WebSocket for terminal data.
@@ -50,7 +51,20 @@ func (a *App) CreateTerminal(id, worktreeId, projectId, cwd string, cols, rows i
 	// 3. Wire PTY output to Wails events.
 	a.SubscribeTerminal(id)
 
-	// 4. Best-effort link to active Claude session.
+	// 4. Attach async transcript writer (best-effort, non-blocking).
+	//    The PTY hot path drops frames before stalling on disk, so a slow
+	//    writer can only cause transcript gaps — never UI lag.
+	if logDir, terr := terminal.TranscriptDir(); terr == nil {
+		if sess, ok := a.Terminal.Get(id); ok {
+			if attachErr := sess.AttachTranscript(a.ctx, logDir); attachErr != nil {
+				slog.Warn("CreateTerminal: attach transcript", "pane_id", id, "err", attachErr)
+			}
+		}
+	} else {
+		slog.Warn("CreateTerminal: resolve transcript dir", "pane_id", id, "err", terr)
+	}
+
+	// 5. Best-effort link to active Claude session.
 	if a.Linker != nil && cwd != "" {
 		if err := a.Linker.LinkTerminalToActiveSession(a.ctx, id, cwd, worktreeId, projectId); err != nil {
 			slog.Warn("CreateTerminal: link to session", "pane_id", id, "err", err)
@@ -154,6 +168,13 @@ func (a *App) RestoreTerminal(paneId string) error {
 
 	// 5. Subscribe to Wails events.
 	a.SubscribeTerminal(paneId)
+
+	// 6. Attach async transcript writer (best-effort, non-blocking).
+	if logDir, terr := terminal.TranscriptDir(); terr == nil {
+		if attachErr := sess.AttachTranscript(a.ctx, logDir); attachErr != nil {
+			slog.Warn("RestoreTerminal: attach transcript", "pane_id", paneId, "err", attachErr)
+		}
+	}
 
 	return nil
 }

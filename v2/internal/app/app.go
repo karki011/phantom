@@ -305,7 +305,7 @@ func (a *App) Startup(ctx context.Context) {
 
 func (a *App) DomReady(ctx context.Context) {
 	wailsRuntime.EventsEmit(a.ctx, "app:ready", map[string]interface{}{
-		"version": "0.1.0",
+		"version": "0.1.1",
 		"status":  "online",
 	})
 }
@@ -774,7 +774,7 @@ func (a *App) HealthCheck() HealthResponse {
 
 	return HealthResponse{
 		Status:     "ok",
-		Version:    "0.1.0",
+		Version:    "0.1.1",
 		UptimeMs:   time.Since(a.startTime).Milliseconds(),
 		WsPort:     9741,
 		GoVersion:  runtime.Version(),

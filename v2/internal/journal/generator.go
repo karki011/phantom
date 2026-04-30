@@ -8,11 +8,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/subashkarki/phantom-os-v2/internal/db"
+	"github.com/subashkarki/phantom-os-v2/internal/provider"
 )
 
 // ProjectInfo holds the minimal project data the generator needs.
@@ -25,8 +27,9 @@ type ProjectInfo struct {
 // Generator creates morning brief and end-of-day content using
 // git/gh commands and DB queries (sessions, tasks, worktrees).
 type Generator struct {
-	queries   *db.Queries
+	queries    *db.Queries
 	aiGatherer *AIDigestGatherer
+	prov       provider.Provider
 }
 
 // NewGenerator creates a Generator backed by a read-only Queries handle.
@@ -41,6 +44,72 @@ func NewGeneratorWithDB(q *db.Queries, rawDB db.DBTX) *Generator {
 		queries:    q,
 		aiGatherer: NewAIDigestGatherer(q, rawDB),
 	}
+}
+
+// SetProvider attaches an AI provider for narrative enrichment. Optional —
+// when nil, EnrichEndOfDay is a no-op and the journal stays at the
+// deterministic recap level.
+func (g *Generator) SetProvider(p provider.Provider) {
+	g.prov = p
+}
+
+// Provider returns the attached provider (may be nil).
+func (g *Generator) Provider() provider.Provider {
+	return g.prov
+}
+
+// EnrichEndOfDay runs the configured AI provider over the deterministic
+// end-of-day recap and returns a prose narrative. Synchronous — call from
+// a goroutine if you need non-blocking behaviour. Returns "" + error if
+// no provider is configured, the command fails, or the timeout expires.
+//
+// Timeout is bounded at 60s so a hung CLI never wedges the caller.
+func (g *Generator) EnrichEndOfDay(ctx context.Context, recap string) (string, error) {
+	if g.prov == nil {
+		return "", fmt.Errorf("journal: no provider configured for enrichment")
+	}
+	if strings.TrimSpace(recap) == "" {
+		return "", fmt.Errorf("journal: empty recap, nothing to enrich")
+	}
+
+	prompt := buildEnrichmentPrompt(recap)
+	// Escape single quotes for the shell command template (typical pattern:
+	// `claude --print -p '${PROMPT}'`).
+	escaped := strings.ReplaceAll(prompt, `'`, `'\''`)
+	cmdLine := g.prov.AIGenerateCommand(escaped)
+	if strings.TrimSpace(cmdLine) == "" {
+		return "", fmt.Errorf("journal: provider returned empty command")
+	}
+
+	enrichCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	c := exec.CommandContext(enrichCtx, "sh", "-c", cmdLine)
+	out, err := c.Output()
+	if err != nil {
+		return "", fmt.Errorf("journal: enrichment exec: %w", err)
+	}
+	narrative := strings.TrimSpace(string(out))
+	if narrative == "" {
+		return "", fmt.Errorf("journal: enrichment produced empty narrative")
+	}
+	slog.Info("journal: enrichment complete", "bytes", len(narrative))
+	return narrative, nil
+}
+
+// buildEnrichmentPrompt produces a focused prompt asking the LLM to
+// summarise the structured recap into a 4-6 sentence narrative.
+func buildEnrichmentPrompt(recap string) string {
+	return strings.Join([]string{
+		"You are summarising a developer's day from a structured journal recap.",
+		"Write 4-6 sentences in plain prose, second person ('you'). Highlight what",
+		"the developer accomplished, the main friction points, and any in-flight work.",
+		"Do not add bullet lists, headers, or new facts not present in the recap.",
+		"Do not preface with 'Here is your summary' — start directly with the narrative.",
+		"",
+		"Structured recap:",
+		recap,
+	}, "\n")
 }
 
 // run executes a shell command with a 10s timeout. Returns empty string on error.
@@ -129,6 +198,12 @@ func (g *Generator) GenerateMorningBrief(ctx context.Context, projects []Project
 			lines = append(lines, "")
 			lines = append(lines, aiSection)
 		}
+	}
+
+	// --- Yesterday's terminal activity ---
+	if termSection := FormatTerminalFactsSection(GatherTerminalFacts(yesterdayStr())); termSection != "" {
+		lines = append(lines, "")
+		lines = append(lines, termSection)
 	}
 
 	// Fallback
@@ -412,6 +487,12 @@ func (g *Generator) GenerateEndOfDay(ctx context.Context, projects []ProjectInfo
 			lines = append(lines, "")
 			lines = append(lines, hunterSection)
 		}
+	}
+
+	// --- Terminal activity (today's transcripts) ---
+	if termSection := FormatTerminalFactsSection(GatherTerminalFacts(todayStr())); termSection != "" {
+		lines = append(lines, "")
+		lines = append(lines, termSection)
 	}
 
 	// Fallback

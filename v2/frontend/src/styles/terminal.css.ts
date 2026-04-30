@@ -16,6 +16,7 @@ export const terminalContainer = style({
   width: '100%',
   height: '100%',
   overflow: 'hidden',
+  paddingInline: vars.space.md,
   // 'strict' includes size containment which prevents xterm from measuring
   // the true available width. Use layout+paint only so FitAddon.fit() sees
   // the correct container dimensions.

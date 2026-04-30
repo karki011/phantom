@@ -24,6 +24,12 @@ export const panel = style({
   gap: vars.space.xxl,
 });
 
+export const brandMark = style({
+  alignSelf: 'center',
+  marginBottom: vars.space.md,
+  opacity: 0.95,
+});
+
 export const header = style({
   display: 'flex',
   flexDirection: 'column',

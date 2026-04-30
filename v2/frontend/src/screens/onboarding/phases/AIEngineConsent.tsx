@@ -92,16 +92,18 @@ export function AIEngineConsent(props: AIEngineConsentProps) {
             Enable All
           </button>
           <button
-            class={buttonRecipe({ variant: 'ghost', size: 'md' })}
-            onClick={handleSkip}
-          >
-            Skip
-          </button>
-          <button
             class={buttonRecipe({ variant: 'primary', size: 'lg' })}
             onClick={handleConfirm}
           >
             Confirm
+          </button>
+        </div>
+        <div class={styles.skipRow}>
+          <button
+            class={buttonRecipe({ variant: 'ghost', size: 'sm' })}
+            onClick={handleSkip}
+          >
+            Skip
           </button>
         </div>
       </div>

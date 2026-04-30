@@ -538,6 +538,14 @@ export default function JournalPane() {
                 }
               >
                 <ContentBlock content={entry().end_of_day_recap} variant="eod" />
+
+                {/* LLM narrative supplement — slots in async via journal:enriched event. */}
+                <Show when={entry().end_of_day_narrative}>
+                  <div class={styles.narrativeBlock}>
+                    <div class={styles.narrativeLabel}>✨ Narrative</div>
+                    {entry().end_of_day_narrative}
+                  </div>
+                </Show>
               </Show>
             </div>
           </div>

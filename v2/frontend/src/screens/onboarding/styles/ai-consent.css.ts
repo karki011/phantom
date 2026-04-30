@@ -35,3 +35,10 @@ export const actionRow = style({
   gap: vars.space.md,
   paddingTop: vars.space.md,
 });
+
+export const skipRow = style({
+  display: 'flex',
+  justifyContent: 'center',
+  paddingTop: vars.space.sm,
+  opacity: 0.7,
+});

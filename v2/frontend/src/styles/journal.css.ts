@@ -770,6 +770,41 @@ export const contentBlock = style({
   border: '1px solid var(--block-border)',
 });
 
+export const narrativeBlock = style({
+  marginTop: vars.space.sm,
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  borderRadius: vars.radius.md,
+  background: `color-mix(in srgb, ${vars.color.accent} 6%, transparent)`,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 25%, transparent)`,
+  fontSize: '0.85rem',
+  lineHeight: 1.6,
+  color: vars.color.textPrimary,
+  whiteSpace: 'pre-wrap',
+});
+
+export const narrativeLabel = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+  fontSize: '0.7rem',
+  fontWeight: 600,
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+  color: vars.color.accent,
+  marginBottom: vars.space.xs,
+});
+
+export const narrativePending = style({
+  marginTop: vars.space.sm,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+  fontSize: '0.75rem',
+  color: vars.color.textSecondary,
+  fontStyle: 'italic',
+  opacity: 0.85,
+});
+
 export const contentBlockHeading = style({
   fontSize: '0.8rem',
   fontWeight: 600,

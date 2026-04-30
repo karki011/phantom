@@ -1,6 +1,7 @@
 // Author: Subash Karki
 
 import type { PhaseConfig, PhaseId, BootLine, Ability, BootScanData } from './types';
+import { APP_VERSION } from '../../../core/branding';
 
 export const phaseOrder: PhaseId[] = [
   'awakening',
@@ -62,18 +63,18 @@ export function buildBootScript(sessionCount: number, scan?: BootScanData): Boot
       waitForSpeech: true,
       charDelay: 100,
     },
-    { text: 'v 2 . 0', delay: 600, style: 'subtitle', charDelay: 70 },
+    { text: APP_VERSION, delay: 600, style: 'subtitle', charDelay: 70 },
     { text: '', delay: 800, style: 'separator' },
     {
       text: isReturning
-        ? 'An operator has returned.'
-        : 'A new operator has entered the system.',
+        ? 'Welcome back.'
+        : 'Welcome to PhantomOS.',
       delay: 1000,
       style: 'dramatic',
       sound: 'reveal',
       speech: isReturning
-        ? 'An operator has returned.'
-        : 'A new operator has entered the system.',
+        ? 'Welcome back.'
+        : 'Welcome to PhantomOS.',
       speechRate: 0.84,
       waitForSpeech: true,
       charDelay: 40,
@@ -81,51 +82,51 @@ export function buildBootScript(sessionCount: number, scan?: BootScanData): Boot
     { text: '', delay: 600, style: 'separator' },
     {
       text: sessionCount === 0
-        ? 'Tracing neural pathways .............. no prior echoes detected'
-        : `Tracing neural pathways .............. ${sessionCount} session echoes recovered`,
+        ? 'Loading recent sessions ............... first run, nothing to load'
+        : `Loading recent sessions ............... ${sessionCount} session${sessionCount === 1 ? '' : 's'} found`,
       delay: 800,
       sound: 'scan',
       prompt: '$',
       speech: sessionCount === 0
-        ? 'No prior sessions detected. A fresh bind will be established.'
-        : `Recovering ${sessionCount} session echoes. Nothing has been lost.`,
+        ? 'First time here. Setting things up.'
+        : `Found ${sessionCount} of your past session${sessionCount === 1 ? '' : 's'}.`,
       waitForSpeech: true,
       charDelay: 18,
     },
     {
-      text: 'Anchoring memory persistence ......... WAL mode active',
+      text: 'Setting up local storage .............. ready',
       delay: 600,
       sound: 'scan',
       prompt: '$',
-      speech: 'Memory is stable.',
+      speech: 'Your data is safe.',
       waitForSpeech: true,
     },
     {
-      text: 'Binding terminal interface ........... ready',
+      text: 'Starting terminal ..................... ready',
       delay: 500,
       prompt: '$',
-      speech: 'Terminal interface bound.',
+      speech: 'Terminal is ready.',
       waitForSpeech: true,
     },
     {
-      text: 'Attuning defense wards ............... 3 wards armed',
+      text: 'Enabling safety checks ................ 3 active',
       delay: 600,
       sound: 'scan',
       prompt: '$',
-      speech: 'Defense protocols active.',
+      speech: 'Safety checks are on.',
       waitForSpeech: true,
     },
     {
-      text: 'Synchronizing event stream ........... tailing active',
+      text: 'Watching for changes .................. ready',
       delay: 500,
       prompt: '$',
-      speech: 'Observing all active processes.',
+      speech: 'Watching your project for changes.',
       waitForSpeech: true,
     },
     {
       text: scan?.gitInstalled
-        ? `Verifying git ........................ ${scan.gitVersion ?? 'ready'}`
-        : 'Verifying git ........................ NOT FOUND',
+        ? `Checking git .......................... ${scan.gitVersion ?? 'ready'}`
+        : 'Checking git .......................... not found',
       delay: 400,
       prompt: '$',
       sound: 'scan',
