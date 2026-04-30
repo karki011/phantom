@@ -157,7 +157,7 @@ export function WindowDragStrip() {
               }}
             >
               {tab === 'system' ? <SystemIcon /> : <FolderIcon />}
-              {tab === 'system' ? 'System' : 'Worktree'}
+              {tab === 'system' ? 'System' : 'Project'}
             </button>
           ))}
         </div>

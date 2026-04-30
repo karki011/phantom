@@ -70,6 +70,36 @@ process.stdin.on('end', async () => {
     }
 
     if (gateEnabled) {
+      // Honour the touch cache: if phantom_before_edit was called for this
+      // path within the TTL, allow the edit through. Means the gate now
+      // does what its description promises ("require dependency analysis
+      // before file modifications") instead of being a binary kill switch.
+      let allowed = false;
+      try {
+        const c = new AbortController();
+        setTimeout(() => c.abort(), 1500);
+        const res = await fetch(
+          `${API}/api/edit-gate/check?path=${encodeURIComponent(filePath)}`,
+          { signal: c.signal },
+        );
+        const data = await res.json();
+        allowed = data?.allowed === true;
+      } catch {
+        // Check endpoint unreachable — fall through to blocking behaviour
+      }
+
+      if (allowed) {
+        process.stdout.write(
+          '<phantom-ai-reminder>Edit gate allowed — phantom_before_edit was recently called for this path.</phantom-ai-reminder>',
+        );
+        fetch(`${API}/api/hook-health/report`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hook: 'edit-gate', status: 'success', action: 'allowed' }),
+        }).catch(() => {});
+        process.exit(0);
+      }
+
       process.stderr.write(
         'BLOCKED: Call phantom_before_edit with the target file paths before editing. This provides dependency context and blast radius analysis.',
       );

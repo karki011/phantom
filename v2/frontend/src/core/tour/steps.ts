@@ -24,7 +24,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     element: '[data-tour="tab-worktree"]',
     requiredTab: 'worktree',
-    title: '[SYSTEM] Worktree View',
+    title: '[SYSTEM] Project View',
     description: 'Your coding workspace — terminals, editors, file explorer in split panes.',
     side: 'bottom',
     align: 'start',

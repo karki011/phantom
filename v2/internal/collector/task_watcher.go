@@ -141,11 +141,21 @@ func (w *TaskWatcher) addSubdirectories(dir string) {
 }
 
 func (w *TaskWatcher) handleEvent(event fsnotify.Event) {
-	// If a new directory appears, add a watcher for it.
+	// If a new directory appears, add a watcher for it AND process any
+	// .json files that landed during the race between dir-create and
+	// watcher-add. fsnotify only emits future events on a freshly-added
+	// dir, so files written before Add() would otherwise be invisible.
 	if event.Has(fsnotify.Create) {
 		info, err := os.Stat(event.Name)
 		if err == nil && info.IsDir() {
 			_ = w.watcher.Add(event.Name)
+			if entries, readErr := os.ReadDir(event.Name); readErr == nil {
+				for _, e := range entries {
+					if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+						w.processTaskFile(filepath.Join(event.Name, e.Name()))
+					}
+				}
+			}
 			return
 		}
 	}

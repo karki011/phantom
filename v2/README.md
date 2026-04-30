@@ -2,6 +2,14 @@
 
 PhantomOS is a Wails-based desktop app for managing AI coding sessions across multiple providers (Claude Code, Codex, etc.) with a config-driven provider architecture.
 
+## How this was built
+
+Fully vibe-coded — built end-to-end through natural-language prompts in Claude Code, no spec-first or TDD-first ceremony.
+The workflow is tuned for Anthropic's Claude (Sonnet/Opus): Claude Code CLI, Claude API integration, MCP servers all assume it as the primary copilot.
+Other models and tools are supported through the same provider abstraction, but Claude is where the rough edges have been sanded down.
+Author: Subash Karki — solo project, hacked together in evenings.
+Trade-off worth naming: rapid iteration and opinionated defaults, with the occasional rough edge you'd expect from one person shipping after dinner.
+
 ## Quick start
 
 ```bash

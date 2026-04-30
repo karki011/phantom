@@ -7,10 +7,13 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"math"
+	"net/http"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -24,6 +27,36 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/ai/strategies"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 )
+
+// editGateClient posts to the local Phantom API so the edit-gate hook can
+// permit subsequent edits to files just analysed. Best-effort, fire-and-
+// forget — if the API is down (Wails app not running) it silently no-ops.
+var editGateClient = &http.Client{Timeout: 750 * time.Millisecond}
+
+func notifyEditGateTouch(paths []string) {
+	if len(paths) == 0 {
+		return
+	}
+	port := os.Getenv("PHANTOM_API_PORT")
+	if port == "" {
+		port = "3849"
+	}
+	body, err := json.Marshal(map[string][]string{"paths": paths})
+	if err != nil {
+		return
+	}
+	go func() {
+		resp, err := editGateClient.Post(
+			"http://localhost:"+port+"/api/edit-gate/touch",
+			"application/json",
+			bytes.NewReader(body),
+		)
+		if err != nil {
+			return
+		}
+		_ = resp.Body.Close()
+	}()
+}
 
 // IndexerProvider returns the indexer backing a given project, or nil when
 // no indexer is running. This decouples the MCP server from app.App so the
@@ -513,6 +546,12 @@ func (d *Deps) HandleBeforeEdit(ctx context.Context, req mcp.CallToolRequest) (*
 	if err != nil {
 		return errorResult(err.Error())
 	}
+
+	// Notify the edit-gate cache that these files have been analysed, so
+	// the hook permits subsequent Edit/Write calls within the TTL window.
+	// Fires before the heavy graph work so the touch lands even if the
+	// caller never reads the response.
+	notifyEditGateTouch(files)
 
 	ix := d.indexerFor(pid)
 	if ix == nil {

@@ -64,6 +64,10 @@ type Server struct {
 
 	errorsMu sync.RWMutex
 	errors   []errorEntry
+
+	// editGate tracks phantom_before_edit "touches" so the edit-gate hook
+	// can permit edits to files that were just analysed.
+	editGate *EditGateStore
 }
 
 // errorEntry is a structured error log entry.
@@ -80,6 +84,7 @@ func NewServer(port int, deps ServerDeps) *Server {
 		mux:        http.NewServeMux(),
 		deps:       deps,
 		hookHealth: make(map[string]hookHealthEntry),
+		editGate:   NewEditGateStore(),
 	}
 	s.registerRoutes()
 	return s
@@ -135,6 +140,9 @@ func (s *Server) registerRoutes() {
 	// Hook health reporting
 	s.mux.HandleFunc("GET /api/hook-health", s.handleGetHookHealth)
 	s.mux.HandleFunc("POST /api/hook-health/report", s.handleReportHookHealth)
+
+	s.mux.HandleFunc("POST /api/edit-gate/touch", s.handleEditGateTouch)
+	s.mux.HandleFunc("GET /api/edit-gate/check", s.handleEditGateCheck)
 
 	// Graph (for prompt-enricher hook)
 	s.mux.HandleFunc("GET /api/graph/auto/context", s.handleGraphAutoContext)

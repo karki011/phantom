@@ -147,7 +147,7 @@ const NAVIGATION_ACTIONS: CommandAction[] = [
   },
   {
     id: 'nav:worktree-tab',
-    label: 'Switch to Worktree Tab',
+    label: 'Switch to Project Tab',
     category: 'Navigation',
     icon: LayoutGrid,
     shortcut: '⌘2',
