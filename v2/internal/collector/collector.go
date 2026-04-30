@@ -1,5 +1,5 @@
 // Package collector provides filesystem collectors that watch Claude Code's
-// artifacts and populate the PhantomOS SQLite database.
+// artifacts and populate the Phantom SQLite database.
 // Author: Subash Karki
 package collector
 

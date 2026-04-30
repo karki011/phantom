@@ -1,4 +1,4 @@
-// PhantomOS v2 — Diff viewer utilities
+// Phantom — Diff viewer utilities
 // Author: Subash Karki
 //
 // Helpers for opening file diffs in dedicated pane tabs.

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Settings > AI Engine section
+// Phantom — Settings > AI Engine section
 // Author: Subash Karki
 
 import { createSignal, For, onMount } from 'solid-js';

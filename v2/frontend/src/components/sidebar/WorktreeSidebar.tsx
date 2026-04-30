@@ -1,4 +1,4 @@
-// PhantomOS v2 — Left sidebar: project/worktree navigation
+// Phantom — Left sidebar: project/worktree navigation
 // Author: Subash Karki
 
 import { For, onMount, createSignal } from 'solid-js';

@@ -1,4 +1,4 @@
-// controller.go is the high-level session lifecycle service for PhantomOS v2.
+// controller.go is the high-level session lifecycle service for Phantom.
 // Author: Subash Karki
 package session
 

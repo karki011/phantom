@@ -1,4 +1,4 @@
-// PhantomOS v2 — Sidebar resize handle
+// Phantom — Sidebar resize handle
 // Author: Subash Karki
 
 import { onCleanup } from 'solid-js';

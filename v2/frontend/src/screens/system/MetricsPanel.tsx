@@ -1,4 +1,4 @@
-// PhantomOS v2 — Live system metrics panel with arc gauges
+// Phantom — Live system metrics panel with arc gauges
 // Author: Subash Karki
 
 import { createSignal, createMemo, onMount, onCleanup, Show } from 'solid-js';

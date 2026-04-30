@@ -1,4 +1,4 @@
-// PhantomOS v2 — Pane resize handle (drag to resize splits)
+// Phantom — Pane resize handle (drag to resize splits)
 // Author: Subash Karki
 
 import { createSignal, onCleanup } from 'solid-js';

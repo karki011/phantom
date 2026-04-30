@@ -1,4 +1,4 @@
-// PhantomOS v2 — System Cockpit with live metrics, analytics, resources, project dashboard, and hunter profile
+// Phantom — System Cockpit with live metrics, analytics, resources, project dashboard, and hunter profile
 // Author: Subash Karki
 
 import { lazy, Show, type JSX } from 'solid-js';

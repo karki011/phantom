@@ -1,4 +1,4 @@
-// Package api provides a lightweight HTTP API server for PhantomOS v2.
+// Package api provides a lightweight HTTP API server for Phantom.
 // It exposes the endpoints that Claude Code hooks (prompt-enricher,
 // outcome-capture, file-changed, feedback-detector, async-analyzer,
 // post-edit-verifier) call at http://localhost:3849/api/...

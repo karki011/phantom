@@ -1,4 +1,4 @@
-// PhantomOS v2 — Terminal SolidJS signals
+// Phantom — Terminal SolidJS signals
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

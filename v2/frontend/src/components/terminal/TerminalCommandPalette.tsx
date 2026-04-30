@@ -1,5 +1,5 @@
 // Author: Subash Karki
-// PhantomOS v2 — Per-pane terminal command palette (Cmd+P).
+// Phantom — Per-pane terminal command palette (Cmd+P).
 //
 // Lists the last 50 OSC 633-tracked commands for a session and lets the
 // user jump the terminal viewport to any of them via keyboard navigation.

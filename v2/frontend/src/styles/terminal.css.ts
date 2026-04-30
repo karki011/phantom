@@ -1,4 +1,4 @@
-// PhantomOS v2 — Terminal pane styles (Vanilla Extract)
+// Phantom — Terminal pane styles (Vanilla Extract)
 // Author: Subash Karki
 
 import { style, keyframes, globalStyle } from '@vanilla-extract/css';

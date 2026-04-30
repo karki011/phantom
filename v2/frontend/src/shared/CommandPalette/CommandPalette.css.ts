@@ -1,4 +1,4 @@
-// PhantomOS v2 — Command palette styles (glass panel + accent glow)
+// Phantom — Command palette styles (glass panel + accent glow)
 // Author: Subash Karki
 
 import { style, keyframes, globalStyle } from '@vanilla-extract/css';

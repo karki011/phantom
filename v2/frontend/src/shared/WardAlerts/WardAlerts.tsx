@@ -1,4 +1,4 @@
-// PhantomOS v2 — Ward alerts panel for RightSidebar
+// Phantom — Ward alerts panel for RightSidebar
 // Author: Subash Karki
 
 import { Show, For } from 'solid-js';

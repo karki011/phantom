@@ -1,4 +1,4 @@
-// Package db provides SQLite persistence for PhantomOS v2.
+// Package db provides SQLite persistence for Phantom.
 // Author: Subash Karki
 package db
 

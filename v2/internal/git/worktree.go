@@ -1,4 +1,4 @@
-// Package git provides worktree management for PhantomOS.
+// Package git provides worktree management for Phantom.
 //
 // Author: Subash Karki
 package git

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Brightness control signals
+// Phantom — Brightness control signals
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

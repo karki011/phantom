@@ -1,4 +1,4 @@
-// PhantomOS v2 — driver.js theme overrides for the guided tour
+// Phantom — driver.js theme overrides for the guided tour
 // Author: Subash Karki
 
 const TOUR_STYLE_ID = '__phantom-tour-theme';

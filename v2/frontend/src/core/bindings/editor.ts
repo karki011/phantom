@@ -1,4 +1,4 @@
-// PhantomOS v2 — Editor file I/O bindings (Go backend wrappers)
+// Phantom — Editor file I/O bindings (Go backend wrappers)
 // Author: Subash Karki
 
 import type { BlameLine } from '../types';

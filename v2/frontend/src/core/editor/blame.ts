@@ -1,4 +1,4 @@
-// PhantomOS v2 -- Git blame decorations for Monaco editor
+// Phantom -- Git blame decorations for Monaco editor
 // Author: Subash Karki
 //
 // Two levels of blame display:

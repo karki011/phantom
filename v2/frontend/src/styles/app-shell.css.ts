@@ -1,4 +1,4 @@
-// PhantomOS v2 — App shell layout styles
+// Phantom — App shell layout styles
 // Author: Subash Karki
 
 import { style, keyframes } from '@vanilla-extract/css';

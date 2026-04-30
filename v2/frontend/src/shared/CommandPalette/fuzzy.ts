@@ -1,4 +1,4 @@
-// PhantomOS v2 — Fuzzy search for command palette
+// Phantom — Fuzzy search for command palette
 // Author: Subash Karki
 
 export interface FuzzyResult<T> {

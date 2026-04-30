@@ -1,4 +1,4 @@
-// PhantomOS v2 — MCP Manager signals (server list + dialog open state).
+// Phantom — MCP Manager signals (server list + dialog open state).
 // Author: Subash Karki
 
 import { createSignal, createResource } from 'solid-js';

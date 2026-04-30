@@ -1,4 +1,4 @@
-// PhantomOS v2 — PR Section component for Activity Panel
+// Phantom — PR Section component for Activity Panel
 // Author: Subash Karki
 
 import { Show, type Component } from 'solid-js';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Monaco Editor web worker configuration
+// Phantom — Monaco Editor web worker configuration
 // Author: Subash Karki
 //
 // Uses Vite's ?worker import pattern (same as v1 — proven to work with Wails CSP).

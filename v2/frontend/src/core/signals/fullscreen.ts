@@ -1,4 +1,4 @@
-// PhantomOS v2 — Fullscreen detection signal for macOS traffic light inset
+// Phantom — Fullscreen detection signal for macOS traffic light inset
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

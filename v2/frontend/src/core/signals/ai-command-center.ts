@@ -1,4 +1,4 @@
-// PhantomOS v2 — AI Command Center modal signals
+// Phantom — AI Command Center modal signals
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

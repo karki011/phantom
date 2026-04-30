@@ -40,7 +40,7 @@ export const AI_FEATURES: AIFeature[] = [
   {
     key: 'ai.mcpTools',
     label: 'MCP Tools',
-    description: 'Register PhantomOS tools for on-demand analysis in Claude',
+    description: 'Register Phantom tools for on-demand analysis in Claude',
     recommended: true,
     default: true,
   },

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Evolution Panel bindings
+// Phantom — Evolution Panel bindings
 // Data source: Wails binding (GetEvolution) with REST fallback
 // REST endpoint: GET /api/orchestrator/:projectId/evolution
 //

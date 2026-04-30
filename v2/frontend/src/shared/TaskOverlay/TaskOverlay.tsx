@@ -1,4 +1,4 @@
-// PhantomOS v2 — Task HUD overlay for terminal panes
+// Phantom — Task HUD overlay for terminal panes
 // Shows live task progress from the linked AI session without leaving the terminal.
 // Author: Subash Karki
 

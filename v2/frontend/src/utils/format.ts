@@ -1,4 +1,4 @@
-// PhantomOS v2 — Shared formatting utilities
+// Phantom — Shared formatting utilities
 // Author: Subash Karki
 
 /** Format token count: 48120 → "48.1K", 1200000 → "1.2M" */

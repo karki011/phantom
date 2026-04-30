@@ -1,4 +1,4 @@
-// PhantomOS v2 — XP Progress Bar component
+// Phantom — XP Progress Bar component
 // Author: Subash Karki
 
 import { createMemo } from 'solid-js';

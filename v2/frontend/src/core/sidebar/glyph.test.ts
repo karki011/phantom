@@ -1,4 +1,4 @@
-// PhantomOS v2 — Identity Rail glyph helper tests
+// Phantom — Identity Rail glyph helper tests
 // Author: Subash Karki
 
 import { describe, it, expect } from 'vitest';

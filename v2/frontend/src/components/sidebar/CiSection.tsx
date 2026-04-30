@@ -1,4 +1,4 @@
-// PhantomOS v2 — CI/CD Runs section for the Activity Panel (Phase 5)
+// Phantom — CI/CD Runs section for the Activity Panel (Phase 5)
 // Author: Subash Karki
 
 import { For, JSX, Show, createSignal } from 'solid-js';

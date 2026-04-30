@@ -1,4 +1,4 @@
-// PhantomOS v2 — Daily Journal signals
+// Phantom — Daily Journal signals
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

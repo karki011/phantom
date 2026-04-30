@@ -1,4 +1,4 @@
-// PhantomOS v2 — Workspace root component (tab bar + active layout)
+// Phantom — Workspace root component (tab bar + active layout)
 // Author: Subash Karki
 
 import { For, createEffect, on } from 'solid-js';

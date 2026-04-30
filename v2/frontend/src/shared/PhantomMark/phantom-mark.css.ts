@@ -33,6 +33,23 @@ export const eye = style({
   fill: vars.color.bgPrimary,
 });
 
+const caretBlink = keyframes({
+  '0%, 55%': { opacity: 1 },
+  '60%, 95%': { opacity: 0 },
+  '100%': { opacity: 1 },
+});
+
+export const cursor = style({
+  fill: vars.color.bgPrimary,
+  animation: `${caretBlink} 1.1s steps(1, end) infinite`,
+});
+
+export const cursorRight = style({
+  fill: vars.color.bgPrimary,
+  animation: `${caretBlink} 1.1s steps(1, end) infinite`,
+  animationDelay: '60ms',
+});
+
 export const body = style({
   fill: 'currentColor',
 });

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Documentation screen visibility signal
+// Phantom — Documentation screen visibility signal
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

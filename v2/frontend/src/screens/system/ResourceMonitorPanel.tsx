@@ -1,4 +1,4 @@
-// PhantomOS v2 — Resource Monitor panel with live sessions, terminals, and process stats
+// Phantom — Resource Monitor panel with live sessions, terminals, and process stats
 // Author: Subash Karki
 
 import {

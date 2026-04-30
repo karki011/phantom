@@ -1,4 +1,4 @@
-// PhantomOS v2 — App-level signals
+// Phantom — App-level signals
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

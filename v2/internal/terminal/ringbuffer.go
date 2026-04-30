@@ -1,4 +1,4 @@
-// Package terminal manages real PTY sessions for PhantomOS terminal panes.
+// Package terminal manages real PTY sessions for Phantom terminal panes.
 // Author: Subash Karki
 package terminal
 

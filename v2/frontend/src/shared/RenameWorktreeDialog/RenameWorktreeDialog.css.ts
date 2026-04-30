@@ -1,4 +1,4 @@
-// PhantomOS v2 — Rename worktree dialog styles
+// Phantom — Rename worktree dialog styles
 // Author: Subash Karki
 
 import { style } from '@vanilla-extract/css';

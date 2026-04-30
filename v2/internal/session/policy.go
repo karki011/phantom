@@ -1,4 +1,4 @@
-// policy.go manages per-session approval policies for PhantomOS tool calls.
+// policy.go manages per-session approval policies for Phantom tool calls.
 // Author: Subash Karki
 package session
 

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Gamification styles (Vanilla Extract)
+// Phantom — Gamification styles (Vanilla Extract)
 // Author: Subash Karki
 
 import { style, keyframes, globalStyle } from '@vanilla-extract/css';

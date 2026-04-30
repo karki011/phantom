@@ -1,4 +1,4 @@
-// PhantomOS v2 — Monaco theme generation from Vanilla Extract tokens
+// Phantom — Monaco theme generation from Vanilla Extract tokens
 // Author: Subash Karki
 //
 // Resolves CSS custom property values at runtime and produces a

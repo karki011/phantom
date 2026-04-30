@@ -1,4 +1,4 @@
-// PhantomOS v2 — Theme bridge for xterm.js
+// Phantom — Theme bridge for xterm.js
 // Author: Subash Karki
 
 import { vars } from '../styles/theme.css';

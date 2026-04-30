@@ -1,4 +1,4 @@
-// PhantomOS v2 — Documentation modal
+// Phantom — Documentation modal
 // Author: Subash Karki
 
 import { createSignal, createMemo, createEffect, onCleanup, For, Show, Switch, Match } from 'solid-js';

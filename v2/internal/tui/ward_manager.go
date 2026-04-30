@@ -1,4 +1,4 @@
-// ward_manager.go is a Bubbletea TUI for managing PhantomOS ward rules.
+// ward_manager.go is a Bubbletea TUI for managing Phantom ward rules.
 // Author: Subash Karki
 package tui
 

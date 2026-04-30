@@ -1,4 +1,4 @@
-// PhantomOS v2 — Worktree signals
+// Phantom — Worktree signals
 // Author: Subash Karki
 
 import { createSignal, createMemo } from 'solid-js';

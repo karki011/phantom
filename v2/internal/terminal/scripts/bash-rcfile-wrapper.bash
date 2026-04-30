@@ -1,5 +1,5 @@
 # Author: Subash Karki
-# PhantomOS bash rcfile wrapper. Sources the user's normal startup files,
+# Phantom bash rcfile wrapper. Sources the user's normal startup files,
 # then our shell integration script. Invoked via `bash --rcfile <thispath>`.
 
 if [ -r /etc/profile ]; then . /etc/profile; fi

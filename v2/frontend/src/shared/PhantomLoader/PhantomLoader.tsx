@@ -1,4 +1,4 @@
-// PhantomOS v2 — Reusable loading screen (onboarding-style glow + scanline)
+// Phantom — Reusable loading screen (onboarding-style glow + scanline)
 // Author: Subash Karki
 
 import * as styles from './PhantomLoader.css';

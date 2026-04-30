@@ -1,6 +1,6 @@
 # AI Graph — Dependency-Aware Code Context
 
-The graph package gives PhantomOS's AI engine awareness of your codebase structure. Instead of blindly stuffing 2000 characters of recent files into prompts, it builds an in-memory dependency graph of your source code and uses it to select *relevant* context.
+The graph package gives Phantom's AI engine awareness of your codebase structure. Instead of blindly stuffing 2000 characters of recent files into prompts, it builds an in-memory dependency graph of your source code and uses it to select *relevant* context.
 
 ## How It Works
 

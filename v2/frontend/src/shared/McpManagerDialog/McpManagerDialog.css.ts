@@ -1,4 +1,4 @@
-// PhantomOS v2 — MCP Manager dialog styles.
+// Phantom — MCP Manager dialog styles.
 // Author: Subash Karki
 
 import { style } from '@vanilla-extract/css';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Settings > Terminal section
+// Phantom — Settings > Terminal section
 // Author: Subash Karki
 
 import { createSignal, onMount, For } from 'solid-js';

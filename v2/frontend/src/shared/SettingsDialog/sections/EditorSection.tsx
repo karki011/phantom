@@ -1,4 +1,4 @@
-// PhantomOS v2 — Settings > Editor section
+// Phantom — Settings > Editor section
 // Author: Subash Karki
 
 import { createSignal, onMount } from 'solid-js';

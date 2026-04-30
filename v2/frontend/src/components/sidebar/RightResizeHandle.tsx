@@ -1,4 +1,4 @@
-// PhantomOS v2 — Right sidebar resize handle (left edge drag)
+// Phantom — Right sidebar resize handle (left edge drag)
 // Author: Subash Karki
 
 import { onCleanup } from 'solid-js';

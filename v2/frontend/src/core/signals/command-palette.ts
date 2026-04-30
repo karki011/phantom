@@ -1,4 +1,4 @@
-// PhantomOS v2 — Command palette visibility signal
+// Phantom — Command palette visibility signal
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

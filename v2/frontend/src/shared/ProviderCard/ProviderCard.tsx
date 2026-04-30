@@ -1,4 +1,4 @@
-// PhantomOS v2 — Provider card component
+// Phantom — Provider card component
 // Author: Subash Karki
 
 import { createSignal, Show, For } from 'solid-js';

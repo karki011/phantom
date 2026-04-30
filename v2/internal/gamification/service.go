@@ -1,5 +1,5 @@
 // Package gamification implements the XP engine, achievement checker,
-// quest generator, and stat system for PhantomOS.
+// quest generator, and stat system for Phantom.
 // Author: Subash Karki
 package gamification
 

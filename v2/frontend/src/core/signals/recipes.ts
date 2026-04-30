@@ -1,4 +1,4 @@
-// PhantomOS v2 — Recipe picker visibility signal
+// Phantom — Recipe picker visibility signal
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Sidebar component barrel
+// Phantom — Sidebar component barrel
 // Author: Subash Karki
 
 export { WorktreeSidebar } from './WorktreeSidebar';

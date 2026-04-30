@@ -1,4 +1,4 @@
-// PhantomOS v2 — Task HUD overlay styles (boot/onboarding aesthetic)
+// Phantom — Task HUD overlay styles (boot/onboarding aesthetic)
 // Author: Subash Karki
 
 import { style, keyframes } from '@vanilla-extract/css';

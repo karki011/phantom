@@ -1,4 +1,4 @@
-// PhantomOS v2 — Daily Digest
+// Phantom — Daily Digest
 // Markdown-based daily digest with Morning Brief, Work Log, End of Day, and Notes.
 // Ported from v1 JournalPane to SolidJS.
 // Author: Subash Karki

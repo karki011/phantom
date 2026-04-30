@@ -1,4 +1,4 @@
-// PhantomOS v2 — Session Analytics panel with cost chart and provider breakdown
+// Phantom — Session Analytics panel with cost chart and provider breakdown
 // Author: Subash Karki
 
 import { createSignal, createMemo, onMount, Show, For } from 'solid-js';

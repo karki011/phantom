@@ -1,4 +1,4 @@
-// PhantomOS v2 — Command palette component (Cmd+K)
+// Phantom — Command palette component (Cmd+K)
 // Author: Subash Karki
 
 import { createSignal, createEffect, createMemo, on, onCleanup, Show, For } from 'solid-js';

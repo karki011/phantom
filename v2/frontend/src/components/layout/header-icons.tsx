@@ -1,4 +1,4 @@
-// PhantomOS v2 — Shared inline SVG icons used by header chrome (drag strip + status bar)
+// Phantom — Shared inline SVG icons used by header chrome (drag strip + status bar)
 // Author: Subash Karki
 
 export function ChevronLeft() {

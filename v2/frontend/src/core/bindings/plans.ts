@@ -1,4 +1,4 @@
-// PhantomOS v2 — Plan file scanner binding
+// Phantom — Plan file scanner binding
 // Calls the Go backend GetPlansForWorktree to discover plan .md files on disk.
 // Author: Subash Karki
 

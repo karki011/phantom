@@ -1,4 +1,4 @@
-// PhantomOS v2 — Settings > System section
+// Phantom — Settings > System section
 // Author: Subash Karki
 
 import { For } from 'solid-js';

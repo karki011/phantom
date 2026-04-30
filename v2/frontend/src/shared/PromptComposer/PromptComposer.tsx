@@ -1,4 +1,4 @@
-// PhantomOS v2 — Floating prompt composer
+// Phantom — Floating prompt composer
 // Author: Subash Karki
 
 import {

@@ -1,4 +1,4 @@
-// PhantomOS v2 — AI Engine Insight Panel
+// Phantom — AI Engine Insight Panel
 // Shows real-time AI engine intelligence: strategy, assessment, context
 // coverage, knowledge stats, and recent decisions.
 //

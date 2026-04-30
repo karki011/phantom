@@ -1,4 +1,4 @@
-// PhantomOS v2 — Session controls for WorktreeHome
+// Phantom — Session controls for WorktreeHome
 // Author: Subash Karki
 
 import { Show, For, createSignal, createEffect, createMemo, on } from 'solid-js';

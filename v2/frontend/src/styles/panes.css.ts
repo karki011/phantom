@@ -1,4 +1,4 @@
-// PhantomOS v2 — Pane system styles
+// Phantom — Pane system styles
 // Author: Subash Karki
 
 import { style, styleVariants, keyframes, globalStyle } from '@vanilla-extract/css';

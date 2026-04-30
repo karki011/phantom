@@ -1,4 +1,4 @@
-// PhantomOS v2 — Commits section with Branch/All toggle
+// Phantom — Commits section with Branch/All toggle
 // Author: Subash Karki
 
 import { For, Show, createEffect, createSignal, on } from 'solid-js';

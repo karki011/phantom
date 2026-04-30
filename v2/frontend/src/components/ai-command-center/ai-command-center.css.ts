@@ -1,4 +1,4 @@
-// PhantomOS v2 — AI Command Center styles
+// Phantom — AI Command Center styles
 // Author: Subash Karki
 
 import { style, keyframes } from '@vanilla-extract/css';

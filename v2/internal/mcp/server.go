@@ -12,7 +12,7 @@ import (
 
 // Instructions are surfaced by the SDK during MCP handshake — Claude Code
 // reads them on connect. Kept identical (in spirit) to v1.
-const Instructions = `## PhantomOS AI Engine — Automatic Codebase Intelligence
+const Instructions = `## Phantom AI Engine — Automatic Codebase Intelligence
 
 You have access to a dependency-graph-backed AI engine that tracks every file relationship,
 predicts blast radius of changes, and learns from past decisions.

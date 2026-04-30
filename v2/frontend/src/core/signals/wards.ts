@@ -1,4 +1,4 @@
-// PhantomOS v2 — Reactive ward alert state (global signals)
+// Phantom — Reactive ward alert state (global signals)
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

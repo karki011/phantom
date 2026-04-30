@@ -1,4 +1,4 @@
-// PhantomOS v2 — Sidebar styles (Vanilla Extract)
+// Phantom — Sidebar styles (Vanilla Extract)
 // Author: Subash Karki
 
 import { globalStyle, style, styleVariants, keyframes } from '@vanilla-extract/css';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Hunter Profile View (full page with tabs)
+// Phantom — Hunter Profile View (full page with tabs)
 // Author: Subash Karki
 
 import { createSignal, onMount, Show, For, type JSX } from 'solid-js';

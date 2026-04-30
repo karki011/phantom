@@ -1,4 +1,4 @@
-// PhantomOS v2 — Achievement unlock toast handler
+// Phantom — Achievement unlock toast handler
 // Author: Subash Karki
 
 import { createEffect, on } from 'solid-js';

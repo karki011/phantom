@@ -1,4 +1,4 @@
-// PhantomOS v2 — Collapsible project section with nested worktrees
+// Phantom — Collapsible project section with nested worktrees
 // Author: Subash Karki
 
 import { For, createSignal, onMount, createEffect } from 'solid-js';

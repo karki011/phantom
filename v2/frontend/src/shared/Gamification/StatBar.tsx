@@ -1,4 +1,4 @@
-// PhantomOS v2 — RPG Stat Bar component
+// Phantom — RPG Stat Bar component
 // Author: Subash Karki
 
 import { createMemo, onMount, createSignal } from 'solid-js';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Identity Rail styles (collapsed sidebar mode)
+// Phantom — Identity Rail styles (collapsed sidebar mode)
 // Author: Subash Karki
 
 import { style } from '@vanilla-extract/css';

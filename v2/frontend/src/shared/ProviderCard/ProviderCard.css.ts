@@ -1,4 +1,4 @@
-// PhantomOS v2 — ProviderCard styles
+// Phantom — ProviderCard styles
 // Author: Subash Karki
 
 import { style, keyframes } from '@vanilla-extract/css';

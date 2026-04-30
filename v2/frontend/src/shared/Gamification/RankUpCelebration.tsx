@@ -1,4 +1,4 @@
-// PhantomOS v2 — Rank Up grand celebration overlay
+// Phantom — Rank Up grand celebration overlay
 // Author: Subash Karki
 
 import { Show } from 'solid-js';

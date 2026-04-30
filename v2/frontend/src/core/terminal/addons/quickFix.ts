@@ -1,4 +1,4 @@
-// PhantomOS v2 — xterm.js Quick-Fix Lightbulb addon
+// Phantom — xterm.js Quick-Fix Lightbulb addon
 // Author: Subash Karki
 //
 // Watches the OSC 633 command timeline for failed commands. When the failed

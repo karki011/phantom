@@ -312,7 +312,7 @@ func (m SetupWizardModel) updateRecipes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m SetupWizardModel) View() string {
 	var b strings.Builder
 
-	b.WriteString(wizardTitleStyle.Render("PhantomOS Project Setup Wizard"))
+	b.WriteString(wizardTitleStyle.Render("Phantom Project Setup Wizard"))
 	b.WriteString("\n")
 	b.WriteString(wizardStepStyle.Render(m.stepIndicator()))
 	b.WriteString("\n\n")

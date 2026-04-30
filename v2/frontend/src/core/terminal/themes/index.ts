@@ -1,4 +1,4 @@
-// PhantomOS v2 — Terminal theme system
+// Phantom — Terminal theme system
 // Author: Subash Karki
 
 import type { ITheme } from '@xterm/xterm';

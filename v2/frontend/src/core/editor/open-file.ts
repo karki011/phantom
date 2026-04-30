@@ -1,4 +1,4 @@
-// PhantomOS v2 — Unified openFileInEditor function (single entry point)
+// Phantom — Unified openFileInEditor function (single entry point)
 // Author: Subash Karki
 //
 // This is the ONLY function that should be used to open files in the editor.

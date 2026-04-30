@@ -1,4 +1,4 @@
-// PhantomOS v2 — Settings > Providers section
+// Phantom — Settings > Providers section
 // Author: Subash Karki
 
 import { createSignal, createResource, For, Show } from 'solid-js';

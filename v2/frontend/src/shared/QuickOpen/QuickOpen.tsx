@@ -1,4 +1,4 @@
-// PhantomOS v2 — Quick Open overlay (Cmd+P file finder)
+// Phantom — Quick Open overlay (Cmd+P file finder)
 // Author: Subash Karki
 
 import { createSignal, createEffect, onCleanup, Show, For, on } from 'solid-js';

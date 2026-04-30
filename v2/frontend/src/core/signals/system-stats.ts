@@ -1,4 +1,4 @@
-// PhantomOS v2 — System resource stats signals
+// Phantom — System resource stats signals
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

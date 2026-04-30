@@ -1,4 +1,4 @@
-// PhantomOS v2 — Project Dashboard panel styles
+// Phantom — Project Dashboard panel styles
 // Author: Subash Karki
 
 import { style, keyframes } from '@vanilla-extract/css';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Shell operation bindings (Finder, default app)
+// Phantom — Shell operation bindings (Finder, default app)
 // Author: Subash Karki
 
 const App = () => (window as any).go?.['app']?.App;

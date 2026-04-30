@@ -1,4 +1,4 @@
-// PhantomOS v2 — ArcGauge SVG arc meter styles
+// Phantom — ArcGauge SVG arc meter styles
 // Author: Subash Karki
 
 import { style } from '@vanilla-extract/css';

@@ -1,5 +1,5 @@
 // Author: Subash Karki
-// PhantomOS v2 — Command palette popover styles.
+// Phantom — Command palette popover styles.
 // Anchored absolutely over the terminal element. Theme tokens only — no
 // raw hex values — so it adapts to every theme in theme.css.ts.
 

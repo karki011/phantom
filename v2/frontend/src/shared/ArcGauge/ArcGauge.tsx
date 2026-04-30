@@ -1,4 +1,4 @@
-// PhantomOS v2 — ArcGauge SVG arc meter component
+// Phantom — ArcGauge SVG arc meter component
 // Author: Subash Karki
 
 import { createMemo, Show } from 'solid-js';

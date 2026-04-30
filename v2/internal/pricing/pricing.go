@@ -1,5 +1,5 @@
 // Package pricing provides shared model pricing tables and cost calculation
-// for the PhantomOS collector and stream packages.
+// for the Phantom collector and stream packages.
 // Author: Subash Karki
 package pricing
 

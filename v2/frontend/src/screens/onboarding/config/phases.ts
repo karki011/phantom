@@ -66,13 +66,13 @@ export function buildBootScript(sessionCount: number, scan?: BootScanData): Boot
     {
       text: isReturning
         ? 'Welcome back.'
-        : 'Welcome to PhantomOS.',
+        : 'Welcome to Phantom.',
       delay: 1000,
       style: 'dramatic',
       sound: 'reveal',
       speech: isReturning
         ? 'Welcome back.'
-        : 'Welcome to PhantomOS.',
+        : 'Welcome to Phantom.',
       speechRate: 0.84,
       waitForSpeech: true,
       charDelay: 40,

@@ -1,4 +1,4 @@
-// PhantomOS v2 — xterm.js OSC 633 shell integration addon
+// Phantom — xterm.js OSC 633 shell integration addon
 // Author: Subash Karki
 //
 // Parses OSC 633 sequences emitted by our injected bash/zsh integration

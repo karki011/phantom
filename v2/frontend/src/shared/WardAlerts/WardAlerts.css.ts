@@ -1,4 +1,4 @@
-// PhantomOS v2 — Ward alerts panel styles
+// Phantom — Ward alerts panel styles
 // Author: Subash Karki
 
 import { style } from '@vanilla-extract/css';

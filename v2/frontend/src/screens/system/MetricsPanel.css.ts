@@ -1,4 +1,4 @@
-// PhantomOS v2 — MetricsPanel live system gauges styles
+// Phantom — MetricsPanel live system gauges styles
 // Author: Subash Karki
 
 import { style, keyframes } from '@vanilla-extract/css';

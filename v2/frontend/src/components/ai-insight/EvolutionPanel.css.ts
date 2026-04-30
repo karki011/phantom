@@ -1,4 +1,4 @@
-// PhantomOS v2 — Evolution Panel styles
+// Phantom — Evolution Panel styles
 // Author: Subash Karki
 
 import { style, keyframes } from '@vanilla-extract/css';

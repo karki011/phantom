@@ -1,17 +1,21 @@
-// PhantomOS v2 — Brand mark used on boot, onboarding, and chrome.
+// Phantom — Brand mark used on boot, onboarding, and chrome.
 // Author: Subash Karki
 
 import * as styles from './phantom-mark.css';
+
+type PhantomMarkMode = 'classic' | 'cursor';
 
 interface PhantomMarkProps {
   size?: number;
   pulse?: boolean;
   active?: boolean;
+  mode?: PhantomMarkMode;
   class?: string;
 }
 
 export function PhantomMark(props: PhantomMarkProps) {
   const size = () => props.size ?? 96;
+  const mode = () => props.mode ?? 'cursor';
 
   const className = () => {
     const parts = [styles.mark];
@@ -28,7 +32,7 @@ export function PhantomMark(props: PhantomMarkProps) {
       width={size()}
       height={size()}
       role="img"
-      aria-label="PhantomOS"
+      aria-label="Phantom"
     >
       <path
         class={styles.body}
@@ -49,8 +53,17 @@ export function PhantomMark(props: PhantomMarkProps) {
            C 774 320, 674 200, 512 200
            Z"
       />
-      <ellipse class={styles.eye} cx="430" cy="460" rx="34" ry="48" />
-      <ellipse class={styles.eye} cx="594" cy="460" rx="34" ry="48" />
+      {mode() === 'cursor' ? (
+        <>
+          <rect class={styles.cursor} x="416" y="424" width="28" height="72" rx="4" />
+          <rect class={styles.cursorRight} x="580" y="424" width="28" height="72" rx="4" />
+        </>
+      ) : (
+        <>
+          <ellipse class={styles.eye} cx="430" cy="460" rx="34" ry="48" />
+          <ellipse class={styles.eye} cx="594" cy="460" rx="34" ry="48" />
+        </>
+      )}
     </svg>
   );
 }

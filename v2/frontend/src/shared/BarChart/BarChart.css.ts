@@ -1,4 +1,4 @@
-// PhantomOS v2 — BarChart SVG bar chart styles
+// Phantom — BarChart SVG bar chart styles
 // Author: Subash Karki
 
 import { style } from '@vanilla-extract/css';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Sticky-scroll overlay for the running terminal command
+// Phantom — Sticky-scroll overlay for the running terminal command
 // Author: Subash Karki
 //
 // While a command is running and the user has scrolled past its prompt, pin

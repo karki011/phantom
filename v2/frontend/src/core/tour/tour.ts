@@ -1,4 +1,4 @@
-// PhantomOS v2 — Guided tour controller (driver.js)
+// Phantom — Guided tour controller (driver.js)
 // Author: Subash Karki
 
 import { driver, type Config, type Driver } from 'driver.js';

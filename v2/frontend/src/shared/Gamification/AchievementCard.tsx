@@ -1,4 +1,4 @@
-// PhantomOS v2 — Premium Achievement Card component
+// Phantom — Premium Achievement Card component
 // Author: Subash Karki
 
 import { Show, createMemo } from 'solid-js';

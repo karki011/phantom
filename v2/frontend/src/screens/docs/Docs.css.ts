@@ -1,4 +1,4 @@
-// PhantomOS v2 — Documentation screen styles (futuristic edition)
+// Phantom — Documentation screen styles (futuristic edition)
 // Author: Subash Karki
 
 import { globalStyle, style, keyframes } from '@vanilla-extract/css';

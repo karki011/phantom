@@ -1,4 +1,4 @@
-// PhantomOS v2 — Right-side drawer component
+// Phantom — Right-side drawer component
 // Author: Subash Karki
 
 import type { Accessor, JSX } from 'solid-js';

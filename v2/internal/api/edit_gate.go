@@ -1,4 +1,4 @@
-// PhantomOS v2 — Edit Gate touch store.
+// Phantom — Edit Gate touch store.
 //
 // Tracks which file paths were recently analysed via phantom_before_edit so
 // the edit-gate hook can permit subsequent edits without unconditionally

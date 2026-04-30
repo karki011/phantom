@@ -1,4 +1,4 @@
-// PhantomOS v2 — AnalyticsPanel session analytics styles
+// Phantom — AnalyticsPanel session analytics styles
 // Author: Subash Karki
 
 import { style, keyframes } from '@vanilla-extract/css';

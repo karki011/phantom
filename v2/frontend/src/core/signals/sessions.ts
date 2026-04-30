@@ -1,4 +1,4 @@
-// PhantomOS v2 — Reactive session state (global signals)
+// Phantom — Reactive session state (global signals)
 // Author: Subash Karki
 
 import { createSignal, createMemo } from 'solid-js';

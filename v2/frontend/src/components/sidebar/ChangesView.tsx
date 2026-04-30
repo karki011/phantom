@@ -1,4 +1,4 @@
-// PhantomOS v2 — Git changes view with staged/unstaged collapsible sections
+// Phantom — Git changes view with staged/unstaged collapsible sections
 // Author: Subash Karki
 
 import { createSignal, createEffect, on, For, Show } from 'solid-js';

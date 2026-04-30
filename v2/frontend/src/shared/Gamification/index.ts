@@ -1,4 +1,4 @@
-// PhantomOS v2 — Gamification shared components barrel export
+// Phantom — Gamification shared components barrel export
 // Author: Subash Karki
 
 export { RankBadge } from './RankBadge';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Editor type definitions
+// Phantom — Editor type definitions
 // Author: Subash Karki
 
 import type * as monaco from 'monaco-editor';

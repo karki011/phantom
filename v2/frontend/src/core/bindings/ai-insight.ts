@@ -1,4 +1,4 @@
-// PhantomOS v2 — AI Insight bindings
+// Phantom — AI Insight bindings
 // Author: Subash Karki
 
 import { normalize } from './_normalize';

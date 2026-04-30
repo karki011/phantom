@@ -1,5 +1,5 @@
 # Author: Subash Karki
-# PhantomOS zsh ZDOTDIR shim. Restores the user's ZDOTDIR, sources their
+# Phantom zsh ZDOTDIR shim. Restores the user's ZDOTDIR, sources their
 # real .zshrc, then loads our shell integration script.
 
 if [[ -n "$USER_ZDOTDIR" ]]; then

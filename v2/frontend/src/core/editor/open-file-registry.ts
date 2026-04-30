@@ -1,4 +1,4 @@
-// PhantomOS v2 — Global registry of open files (single-instance enforcement)
+// Phantom — Global registry of open files (single-instance enforcement)
 // Author: Subash Karki
 //
 // A file may only be open in ONE editor tab across ALL editor panes.

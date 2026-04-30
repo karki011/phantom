@@ -1,4 +1,4 @@
-// PhantomOS v2 — Project Dashboard panel with cross-project health overview
+// Phantom — Project Dashboard panel with cross-project health overview
 // Author: Subash Karki
 
 import { createSignal, createMemo, onMount, Show, For } from 'solid-js';

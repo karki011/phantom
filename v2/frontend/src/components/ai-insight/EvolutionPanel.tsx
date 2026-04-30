@@ -1,4 +1,4 @@
-// PhantomOS v2 — AI Evolution Panel
+// Phantom — AI Evolution Panel
 // Shows the AI engine's learning trajectory: knowledge health, gap alerts,
 // pattern stats, and strategy success-rate trends.
 //

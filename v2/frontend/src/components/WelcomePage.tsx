@@ -1,4 +1,4 @@
-// PhantomOS v2 — Welcome / Standby ceremony (no project selected)
+// Phantom — Welcome / Standby ceremony (no project selected)
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Animated container for sidebar collapse/expand
+// Phantom — Animated container for sidebar collapse/expand
 // Author: Subash Karki
 
 import { style } from '@vanilla-extract/css';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Git activity panel: PR, commits, and CI sections (pure render)
+// Phantom — Git activity panel: PR, commits, and CI sections (pure render)
 // Polling lives in RightSidebar which is always mounted.
 // Author: Subash Karki
 

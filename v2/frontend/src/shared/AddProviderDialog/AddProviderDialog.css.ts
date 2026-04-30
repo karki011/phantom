@@ -1,4 +1,4 @@
-// PhantomOS v2 — AddProviderDialog styles
+// Phantom — AddProviderDialog styles
 // Author: Subash Karki
 
 import { style } from '@vanilla-extract/css';

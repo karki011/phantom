@@ -1,4 +1,4 @@
-// PhantomOS v2 — AI Command Center modal
+// Phantom — AI Command Center modal
 // Consolidates AI Insight, Evolution, and Settings into a single tabbed modal.
 //
 // Author: Subash Karki

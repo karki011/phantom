@@ -1,4 +1,4 @@
-// PhantomOS v2 — Global keyboard shortcuts
+// Phantom — Global keyboard shortcuts
 // Author: Subash Karki
 
 import { setActiveTopTab } from './signals/app';

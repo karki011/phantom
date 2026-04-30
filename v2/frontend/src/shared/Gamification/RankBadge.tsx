@@ -1,4 +1,4 @@
-// PhantomOS v2 — Rank Badge component
+// Phantom — Rank Badge component
 // Author: Subash Karki
 
 import type { HunterRank } from '@/core/types';

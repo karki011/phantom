@@ -1,4 +1,4 @@
-// PhantomOS v2 — Inline worktree creation input
+// Phantom — Inline worktree creation input
 // Author: Subash Karki
 
 import { createSignal, onMount } from 'solid-js';

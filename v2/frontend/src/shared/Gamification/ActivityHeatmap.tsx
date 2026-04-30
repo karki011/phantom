@@ -1,4 +1,4 @@
-// PhantomOS v2 — GitHub-style Activity Heatmap (SVG)
+// Phantom — GitHub-style Activity Heatmap (SVG)
 // Author: Subash Karki
 
 import { createSignal, createMemo, For, Show } from 'solid-js';

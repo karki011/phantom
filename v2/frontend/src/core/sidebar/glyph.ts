@@ -1,4 +1,4 @@
-// PhantomOS v2 — Identity Rail glyph helpers
+// Phantom — Identity Rail glyph helpers
 // Author: Subash Karki
 
 const TOKEN_SPLIT = /[-\s]+/;

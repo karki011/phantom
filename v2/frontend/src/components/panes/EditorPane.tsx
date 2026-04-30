@@ -1,4 +1,4 @@
-// PhantomOS v2 — Monaco Editor pane with multi-file tab support
+// Phantom — Monaco Editor pane with multi-file tab support
 // Author: Subash Karki
 //
 // Integrates with the pane system (PaneRegistry, PaneContainer) and

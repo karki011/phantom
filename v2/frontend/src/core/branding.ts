@@ -3,8 +3,8 @@
 
 import pkg from '../../package.json';
 
-export const APP_NAME = 'PhantomOS';
-export const APP_NAME_SPACED = 'P H A N T O M   O S';
+export const APP_NAME = 'Phantom';
+export const APP_NAME_SPACED = 'P H A N T O M';
 // Single source of truth: package.json version. Rendered with letter-spacing
 // to match the SYSTEM banner (e.g. "0.1.1" -> "v 0 . 1 . 1").
 export const APP_VERSION_RAW = pkg.version;

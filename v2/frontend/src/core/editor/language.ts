@@ -1,4 +1,4 @@
-// PhantomOS v2 — Language detection from file extension
+// Phantom — Language detection from file extension
 // Author: Subash Karki
 
 const EXTENSION_MAP: Record<string, string> = {

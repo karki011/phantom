@@ -1,4 +1,4 @@
-// PhantomOS v2 — Ward Manager styles
+// Phantom — Ward Manager styles
 // Author: Subash Karki
 
 import { style } from '@vanilla-extract/css';

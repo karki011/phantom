@@ -1,4 +1,4 @@
-// PhantomOS v2 — Achievements grid with category filter pills and progress bar
+// Phantom — Achievements grid with category filter pills and progress bar
 // Author: Subash Karki
 
 import { createSignal, createMemo, For, Show } from 'solid-js';

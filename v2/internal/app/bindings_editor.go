@@ -1,4 +1,4 @@
-// PhantomOS v2 — Editor file I/O bindings
+// Phantom — Editor file I/O bindings
 // Author: Subash Karki
 //
 // Provides ReadFileContents and WriteFileContents for the Monaco editor.

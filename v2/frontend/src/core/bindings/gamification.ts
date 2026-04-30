@@ -1,4 +1,4 @@
-// PhantomOS v2 — Gamification bindings (Wails Go backend)
+// Phantom — Gamification bindings (Wails Go backend)
 // Author: Subash Karki
 
 import type {

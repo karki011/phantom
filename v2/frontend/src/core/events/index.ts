@@ -1,4 +1,4 @@
-// PhantomOS v2 — Wails event subscriptions with Solid.js auto-cleanup
+// Phantom — Wails event subscriptions with Solid.js auto-cleanup
 // Author: Subash Karki
 
 import { onCleanup } from 'solid-js';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Recipe picker dialog (Cmd+Shift+R)
+// Phantom — Recipe picker dialog (Cmd+Shift+R)
 // Author: Subash Karki
 
 import { createSignal, createEffect, createMemo, on, onCleanup, Show, For } from 'solid-js';

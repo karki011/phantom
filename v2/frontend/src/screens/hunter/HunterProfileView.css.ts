@@ -1,4 +1,4 @@
-// PhantomOS v2 — Hunter Profile View styles (view-specific overrides)
+// Phantom — Hunter Profile View styles (view-specific overrides)
 // Author: Subash Karki
 
 // All styles are in @/styles/gamification.css.ts

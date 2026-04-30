@@ -1,4 +1,4 @@
-// PhantomOS v2 — Daily Quests panel (compact, for WorktreeHome)
+// Phantom — Daily Quests panel (compact, for WorktreeHome)
 // Author: Subash Karki
 
 import { createMemo, Show, For } from 'solid-js';

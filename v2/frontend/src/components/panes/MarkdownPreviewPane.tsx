@@ -1,4 +1,4 @@
-// PhantomOS v2 — Markdown Preview Pane
+// Phantom — Markdown Preview Pane
 // Author: Subash Karki
 
 import { createSignal, onMount, Show } from 'solid-js';

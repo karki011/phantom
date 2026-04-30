@@ -1,4 +1,4 @@
-// PhantomOS v2 — Pure SVG bar chart component
+// Phantom — Pure SVG bar chart component
 // Author: Subash Karki
 
 import { createSignal, createMemo, For, Show } from 'solid-js';

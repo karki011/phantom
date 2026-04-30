@@ -1,4 +1,4 @@
-// PhantomOS v2 — Provider Wails bindings
+// Phantom — Provider Wails bindings
 // Author: Subash Karki
 
 import type { ProviderInfo, HealthStatus } from '../types/provider';

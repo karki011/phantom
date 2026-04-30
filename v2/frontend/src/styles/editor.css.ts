@@ -1,4 +1,4 @@
-// PhantomOS v2 — Editor pane Vanilla Extract styles
+// Phantom — Editor pane Vanilla Extract styles
 // Author: Subash Karki
 
 import { style, keyframes, globalStyle, globalKeyframes } from '@vanilla-extract/css';

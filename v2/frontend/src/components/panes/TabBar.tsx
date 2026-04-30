@@ -1,4 +1,4 @@
-// PhantomOS v2 — Tab bar strip
+// Phantom — Tab bar strip
 // Author: Subash Karki
 
 import { For } from 'solid-js';

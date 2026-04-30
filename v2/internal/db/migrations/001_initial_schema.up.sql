@@ -1,5 +1,5 @@
 -- 001_initial_schema.up.sql
--- PhantomOS v2 - Initial schema (ported from v1 + new v2 tables)
+-- Phantom - Initial schema (ported from v1 + new v2 tables)
 -- Author: Subash Karki
 
 -- sessions

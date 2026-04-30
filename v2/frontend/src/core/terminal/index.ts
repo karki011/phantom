@@ -1,4 +1,4 @@
-// PhantomOS v2 — Terminal core barrel export
+// Phantom — Terminal core barrel export
 // Author: Subash Karki
 
 export * from './registry';

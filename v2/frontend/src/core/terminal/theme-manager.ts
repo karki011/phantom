@@ -1,4 +1,4 @@
-// PhantomOS v2 — Terminal theme manager
+// Phantom — Terminal theme manager
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

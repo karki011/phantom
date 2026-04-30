@@ -1,4 +1,4 @@
-// PhantomOS v2 — Reusable Kobalte tooltip wrapper
+// Phantom — Reusable Kobalte tooltip wrapper
 // Author: Subash Karki
 
 import { Tooltip } from '@kobalte/core/tooltip';

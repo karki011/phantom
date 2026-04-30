@@ -1,4 +1,4 @@
-// Package mcp implements the PhantomOS Model Context Protocol server.
+// Package mcp implements the Phantom Model Context Protocol server.
 // It exposes the codebase graph, blast-radius, and orchestrator tooling
 // to external AI agents (e.g. Claude Code) via stdio JSON-RPC.
 //

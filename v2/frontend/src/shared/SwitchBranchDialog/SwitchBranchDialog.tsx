@@ -1,4 +1,4 @@
-// PhantomOS v2 — Branch picker dialog for switching branches
+// Phantom — Branch picker dialog for switching branches
 // Author: Subash Karki
 
 import { createSignal, createEffect, For, Show } from 'solid-js';

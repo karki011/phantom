@@ -1,4 +1,4 @@
-// PhantomOS v2 — MCP Manager dialog: list/toggle MCP servers from ~/.mcp.json.
+// Phantom — MCP Manager dialog: list/toggle MCP servers from ~/.mcp.json.
 // Author: Subash Karki
 
 import { createSignal, For, Show } from 'solid-js';

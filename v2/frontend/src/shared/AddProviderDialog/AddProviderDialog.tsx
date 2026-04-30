@@ -1,4 +1,4 @@
-// PhantomOS v2 — Add custom provider dialog
+// Phantom — Add custom provider dialog
 // Author: Subash Karki
 
 import { createSignal, Show, type Accessor } from 'solid-js';

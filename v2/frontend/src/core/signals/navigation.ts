@@ -1,4 +1,4 @@
-// PhantomOS v2 — Navigation history (back/forward)
+// Phantom — Navigation history (back/forward)
 // Author: Subash Karki
 
 import { createMemo, createSignal } from 'solid-js';

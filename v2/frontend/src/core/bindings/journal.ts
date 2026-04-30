@@ -1,4 +1,4 @@
-// PhantomOS v2 — Daily Journal + Session bindings
+// Phantom — Daily Journal + Session bindings
 // Author: Subash Karki
 
 import type { JournalEntry, DailyStats, DailyJournalEntry } from '../types';

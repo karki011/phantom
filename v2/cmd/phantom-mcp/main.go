@@ -1,4 +1,4 @@
-// phantom-mcp is the standalone PhantomOS MCP stdio server.
+// phantom-mcp is the standalone Phantom MCP stdio server.
 //
 // Spawned by Claude Code as a child process, communicates over stdin/stdout
 // using JSON-RPC 2.0 per the MCP spec. Auto-detects the project ID from the

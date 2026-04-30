@@ -1,4 +1,4 @@
-// PhantomOS v2 — Home and Welcome page styles
+// Phantom — Home and Welcome page styles
 // Author: Subash Karki
 
 import { style, keyframes, globalKeyframes } from '@vanilla-extract/css';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Standalone diff viewer pane
+// Phantom — Standalone diff viewer pane
 // Author: Subash Karki
 //
 // Rewritten to follow @monaco-editor/react's DiffEditor lifecycle exactly:

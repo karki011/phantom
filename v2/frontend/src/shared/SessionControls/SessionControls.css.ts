@@ -1,4 +1,4 @@
-// PhantomOS v2 — Session controls styles
+// Phantom — Session controls styles
 // Author: Subash Karki
 
 import { style } from '@vanilla-extract/css';

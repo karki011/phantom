@@ -56,7 +56,7 @@ type Recipe struct {
 	Auto        bool           `json:"auto"`
 }
 
-// Profile is the result of project detection — everything PhantomOS needs to
+// Profile is the result of project detection — everything Phantom needs to
 // present build/test/deploy options for a given repository.
 type Profile struct {
 	Type        ProjectType `json:"type"`

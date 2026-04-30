@@ -1,4 +1,4 @@
-// PhantomOS v2 — Activity panel signals (PR, CI, creating state)
+// Phantom — Activity panel signals (PR, CI, creating state)
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

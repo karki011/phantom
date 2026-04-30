@@ -1,4 +1,4 @@
-// PhantomOS v2 — Terminal pane placeholder (Wave 4 will connect xterm)
+// Phantom — Terminal pane placeholder (Wave 4 will connect xterm)
 // Author: Subash Karki
 
 import * as styles from './TerminalPanePlaceholder.css';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Right sidebar with Files, Changes, and Activity tabs
+// Phantom — Right sidebar with Files, Changes, and Activity tabs
 // Author: Subash Karki
 
 import { Show, createEffect, on, onMount, createSignal } from 'solid-js';

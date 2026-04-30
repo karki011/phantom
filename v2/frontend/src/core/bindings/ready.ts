@@ -1,4 +1,4 @@
-// PhantomOS v2 — Wails runtime readiness gate
+// Phantom — Wails runtime readiness gate
 // Author: Subash Karki
 
 let resolved = false;

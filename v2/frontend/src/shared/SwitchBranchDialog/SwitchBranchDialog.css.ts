@@ -1,4 +1,4 @@
-// PhantomOS v2 — Switch branch dialog styles
+// Phantom — Switch branch dialog styles
 // Author: Subash Karki
 
 import { style } from '@vanilla-extract/css';

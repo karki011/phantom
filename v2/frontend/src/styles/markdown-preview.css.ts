@@ -1,4 +1,4 @@
-// PhantomOS v2 — Markdown Preview pane styles (vanilla-extract)
+// Phantom — Markdown Preview pane styles (vanilla-extract)
 // Author: Subash Karki
 
 import { style, globalStyle } from '@vanilla-extract/css';

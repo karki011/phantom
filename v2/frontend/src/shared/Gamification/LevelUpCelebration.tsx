@@ -1,4 +1,4 @@
-// PhantomOS v2 — Level Up celebration overlay
+// Phantom — Level Up celebration overlay
 // Author: Subash Karki
 
 import { Show } from 'solid-js';

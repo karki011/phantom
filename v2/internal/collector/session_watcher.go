@@ -122,7 +122,7 @@ func (sw *SessionWatcher) Start(ctx context.Context) error {
 	sw.scanExisting(sessDir)
 
 	// Resurrect sessions whose PID is still alive but DB says completed.
-	// This handles app restarts where the Claude process outlived PhantomOS.
+	// This handles app restarts where the Claude process outlived Phantom.
 	sw.resurrectAlive()
 
 	// fsnotify event loop
@@ -687,7 +687,7 @@ func (sw *SessionWatcher) pollContext() {
 }
 
 // resurrectAlive re-checks recently completed sessions whose PIDs are still alive.
-// Handles the case where a Claude process outlives a PhantomOS restart.
+// Handles the case where a Claude process outlives a Phantom restart.
 func (sw *SessionWatcher) resurrectAlive() {
 	completed, err := sw.queries.ListSessionsByStatus(sw.ctx, nullString("completed"))
 	if err != nil {

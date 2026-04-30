@@ -1,4 +1,4 @@
-// PhantomOS v2 — Terminal-facts gatherer for the daily journal.
+// Phantom — Terminal-facts gatherer for the daily journal.
 //
 // Reads a day's worth of per-session transcript files written by
 // terminal.AttachTranscript, strips ANSI control sequences, and extracts

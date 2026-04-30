@@ -1,4 +1,4 @@
-// hooks_config.go — Register/unregister PhantomOS v2 hooks in ~/.claude/settings.json.
+// hooks_config.go — Register/unregister Phantom hooks in ~/.claude/settings.json.
 // Manages hook entries without clobbering non-phantom hooks.
 // Author: Subash Karki
 package integration
@@ -101,7 +101,7 @@ func buildPhantomHooks(hooksDir string, features map[string]bool) map[string][]h
 	return entries
 }
 
-// isPhantomHook checks if a hook command belongs to PhantomOS.
+// isPhantomHook checks if a hook command belongs to Phantom.
 func isPhantomHook(command string) bool {
 	return strings.Contains(command, phantomHookPrefix)
 }

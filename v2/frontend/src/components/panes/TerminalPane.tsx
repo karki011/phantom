@@ -1,4 +1,4 @@
-// PhantomOS v2 — Terminal pane (xterm.js in pane system)
+// Phantom — Terminal pane (xterm.js in pane system)
 // Author: Subash Karki
 //
 // Integrates with the Terminal Runtime Registry so sessions survive

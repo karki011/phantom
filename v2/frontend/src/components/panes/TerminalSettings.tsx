@@ -1,4 +1,4 @@
-// PhantomOS v2 — Terminal display settings floating popover
+// Phantom — Terminal display settings floating popover
 // Author: Subash Karki
 import { createSignal } from 'solid-js';
 import { getSession, getAllSessions, getTerminalUserPrefs } from '@/core/terminal/registry';

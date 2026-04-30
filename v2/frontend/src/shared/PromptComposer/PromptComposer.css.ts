@@ -1,4 +1,4 @@
-// PhantomOS v2 — Floating prompt composer styles
+// Phantom — Floating prompt composer styles
 // Author: Subash Karki
 
 import { style, keyframes, globalStyle } from '@vanilla-extract/css';

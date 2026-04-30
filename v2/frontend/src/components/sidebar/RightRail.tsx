@@ -1,4 +1,4 @@
-// PhantomOS v2 — Right Identity Rail (44px collapsed sidebar)
+// Phantom — Right Identity Rail (44px collapsed sidebar)
 // Author: Subash Karki
 
 import { Show, For } from 'solid-js';

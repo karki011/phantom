@@ -1,4 +1,4 @@
-// PhantomOS v2 — Lazy Monaco loader with workspace-aware configuration
+// Phantom — Lazy Monaco loader with workspace-aware configuration
 // Author: Subash Karki
 //
 // Lazily imports Monaco on first editor mount, configures workers,

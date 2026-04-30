@@ -1,5 +1,5 @@
 // Author: Subash Karki
-// PhantomOS v2 — Cmd+Up / Cmd+Down jump-to-prompt + Cmd+P palette opener
+// Phantom — Cmd+Up / Cmd+Down jump-to-prompt + Cmd+P palette opener
 //
 // Wires keyboard shortcuts on the terminal host element. Reads the per-session
 // command timeline from `shellIntegration` and uses xterm's

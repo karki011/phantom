@@ -1,4 +1,4 @@
-// PhantomOS v2 — Single worktree row with context menu
+// Phantom — Single worktree row with context menu
 // Author: Subash Karki
 
 import { Show, createMemo, createSignal } from 'solid-js';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Floating XP gain animation
+// Phantom — Floating XP gain animation
 // Author: Subash Karki
 
 import { Show } from 'solid-js';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Wails bindings for MCP server list/toggle.
+// Phantom — Wails bindings for MCP server list/toggle.
 // Author: Subash Karki
 
 import { normalize } from './_normalize';

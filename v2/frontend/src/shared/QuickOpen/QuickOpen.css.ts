@@ -1,4 +1,4 @@
-// PhantomOS v2 — Quick Open styles (Cmd+P file finder)
+// Phantom — Quick Open styles (Cmd+P file finder)
 // Author: Subash Karki
 
 import { style, keyframes, globalStyle } from '@vanilla-extract/css';

@@ -1,4 +1,4 @@
-// PhantomOS v2 — File tree view with lazy-loaded directories and git status badges
+// Phantom — File tree view with lazy-loaded directories and git status badges
 // Author: Subash Karki
 
 import { For, Show, createSignal, createEffect, on, onCleanup } from 'solid-js';

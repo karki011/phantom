@@ -1,4 +1,4 @@
-// PhantomOS v2 — Sticky-scroll overlay for the running terminal command
+// Phantom — Sticky-scroll overlay for the running terminal command
 // Author: Subash Karki
 
 import { style } from '@vanilla-extract/css';

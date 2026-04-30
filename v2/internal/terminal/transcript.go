@@ -1,4 +1,4 @@
-// PhantomOS v2 — Async per-session transcript writer.
+// Phantom — Async per-session transcript writer.
 //
 // Subscribes to a Session's PTY output stream and asynchronously writes every
 // chunk to a per-session log file. Designed to be NON-BLOCKING on the PTY

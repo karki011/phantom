@@ -1,4 +1,4 @@
-// PhantomOS v2 — Activity Journal styles
+// Phantom — Activity Journal styles
 // Author: Subash Karki
 
 import { style, keyframes, globalStyle } from '@vanilla-extract/css';

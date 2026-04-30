@@ -1,4 +1,4 @@
-// PhantomOS v2 — Zoom / font size signals
+// Phantom — Zoom / font size signals
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

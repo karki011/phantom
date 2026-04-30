@@ -1,4 +1,4 @@
-// PhantomOS v2 — Quick-Fix lightbulb styles (Vanilla Extract)
+// Phantom — Quick-Fix lightbulb styles (Vanilla Extract)
 // Author: Subash Karki
 
 import { style, keyframes } from '@vanilla-extract/css';

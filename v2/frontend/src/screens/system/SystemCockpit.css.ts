@@ -1,4 +1,4 @@
-// PhantomOS v2 — System Cockpit layout styles
+// Phantom — System Cockpit layout styles
 // Author: Subash Karki
 
 import { style, keyframes } from '@vanilla-extract/css';

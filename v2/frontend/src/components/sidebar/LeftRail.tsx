@@ -1,4 +1,4 @@
-// PhantomOS v2 — Left Identity Rail (44px collapsed sidebar)
+// Phantom — Left Identity Rail (44px collapsed sidebar)
 // Author: Subash Karki
 
 import { Show, For, createMemo, createSignal } from 'solid-js';

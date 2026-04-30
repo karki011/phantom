@@ -1,4 +1,4 @@
-// PhantomOS v2 — Rename worktree dialog
+// Phantom — Rename worktree dialog
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

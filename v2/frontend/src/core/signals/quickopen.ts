@@ -1,4 +1,4 @@
-// PhantomOS v2 — Quick Open signal (Cmd+P file finder)
+// Phantom — Quick Open signal (Cmd+P file finder)
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';

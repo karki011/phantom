@@ -1,4 +1,4 @@
-// PhantomOS v2 — Ward Manager: rule list, creator, presets
+// Phantom — Ward Manager: rule list, creator, presets
 // Author: Subash Karki
 
 import { createSignal, createEffect, Show, For } from 'solid-js';

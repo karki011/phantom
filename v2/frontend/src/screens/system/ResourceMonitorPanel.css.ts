@@ -1,4 +1,4 @@
-// PhantomOS v2 — ResourceMonitorPanel styles
+// Phantom — ResourceMonitorPanel styles
 // Author: Subash Karki
 
 import { style, keyframes } from '@vanilla-extract/css';

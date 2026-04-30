@@ -1,4 +1,4 @@
-// PhantomOS v2 — File explorer and git changes signals
+// Phantom — File explorer and git changes signals
 // Author: Subash Karki
 
 import { createSignal, createMemo } from 'solid-js';

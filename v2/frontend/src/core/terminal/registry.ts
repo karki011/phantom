@@ -1,4 +1,4 @@
-// PhantomOS v2 — Terminal Runtime Registry
+// Phantom — Terminal Runtime Registry
 // Author: Subash Karki
 //
 // Module-level singleton that keeps xterm.js instances alive across

@@ -1,4 +1,4 @@
-// PhantomOS v2 — Recursive layout renderer (leaf → PaneContainer, split → two children + handle)
+// Phantom — Recursive layout renderer (leaf → PaneContainer, split → two children + handle)
 // Author: Subash Karki
 
 import { Switch, Match, createSignal, onMount, onCleanup } from 'solid-js';

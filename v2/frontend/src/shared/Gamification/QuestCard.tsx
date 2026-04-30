@@ -1,4 +1,4 @@
-// PhantomOS v2 — Quest Card component
+// Phantom — Quest Card component
 // Author: Subash Karki
 
 import { createMemo, Show } from 'solid-js';

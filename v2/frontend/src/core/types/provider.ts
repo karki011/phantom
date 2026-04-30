@@ -1,4 +1,4 @@
-// PhantomOS v2 — Provider types matching Go models
+// Phantom — Provider types matching Go models
 // Author: Subash Karki
 
 export interface ProviderInfo {

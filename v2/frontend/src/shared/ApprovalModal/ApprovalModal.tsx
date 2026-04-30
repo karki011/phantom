@@ -1,4 +1,4 @@
-// PhantomOS v2 — Ward confirm-level approval modal
+// Phantom — Ward confirm-level approval modal
 // Author: Subash Karki
 
 import { createMemo } from 'solid-js';

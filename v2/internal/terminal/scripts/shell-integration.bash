@@ -1,6 +1,6 @@
 # Author: Subash Karki
 # ---------------------------------------------------------------------------------------------
-# PhantomOS shell integration for bash. Emits OSC 633 sequences so the
+# Phantom shell integration for bash. Emits OSC 633 sequences so the
 # terminal frontend can detect prompt/command/exit boundaries.
 #
 # Adapted from VS Code (MIT License, (c) Microsoft Corporation).

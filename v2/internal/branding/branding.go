@@ -5,7 +5,7 @@
 package branding
 
 const (
-	AppName      = "PhantomOS"
+	AppName      = "Phantom"
 	AppVersion   = "2.0"
 	AppAuthor    = "Subash Karki"
 	ConfigDirName = ".phantom-os"

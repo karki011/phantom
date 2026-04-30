@@ -1,4 +1,4 @@
-// PhantomOS v2 — Right-side drawer styles
+// Phantom — Right-side drawer styles
 // Author: Subash Karki
 
 import { style, keyframes } from '@vanilla-extract/css';
