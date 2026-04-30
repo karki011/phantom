@@ -20,6 +20,7 @@ interface OnboardingFlowProps {
   onComplete: () => void;
 }
 
+
 export function OnboardingFlow(props: OnboardingFlowProps) {
   const [phase, setPhase] = createSignal<PhaseId>('awakening');
   const [dissolving, setDissolving] = createSignal(false);
