@@ -1,7 +1,7 @@
-// PhantomOS v2 — Worktree home pane (Hunter's Terminal)
+// Phantom — Worktree home pane (Hunter's Terminal)
 // Author: Subash Karki
 
-import { createMemo, createSignal, createEffect, on, onCleanup, Show, For, Index } from 'solid-js';
+import { createMemo, createSignal, createEffect, on, onCleanup, onMount, Show, For, Index } from 'solid-js';
 import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw, Shield, Activity, ChevronDown, GitMerge, Rocket } from 'lucide-solid';
 import { activeWorktreeId } from '@/core/signals/app';
 import { activeProject, activeWorktree } from '@/core/signals/worktrees';
@@ -9,7 +9,7 @@ import { addTabWithData } from '@/core/panes/signals';
 import { sessions } from '@/core/signals/sessions';
 import { cwdMatchesBidirectional } from '@/core/utils/path-match';
 import { activeProviderCommand, activeProviderLabel } from '@/core/signals/active-provider';
-import { getPref } from '@/core/signals/preferences';
+import { getPref, loadPref, setPref } from '@/core/signals/preferences';
 import { prStatus, setPrStatus, isCreatingPr, setIsCreatingPr, ghAvailable, setGhAvailable } from '@/core/signals/activity';
 import { SessionControls } from '@/shared/SessionControls/SessionControls';
 import { NewWorktreeDialog } from '@/shared/NewWorktreeDialog/NewWorktreeDialog';
@@ -352,6 +352,19 @@ export default function WorktreeHome() {
   const [refreshing, setRefreshing] = createSignal(false);
   const [repoMergeCfg, setRepoMergeCfg] = createSignal<RepoMergeConfig | null>(null);
 
+  // Composer "✦ NEW" badge — dismissed after first click, persisted in prefs.
+  const [composerSeen, setComposerSeen] = createSignal(true);
+  onMount(async () => {
+    const seen = await loadPref('seen_composer_tile');
+    setComposerSeen(seen === 'true');
+  });
+  const dismissComposerBadge = () => {
+    if (!composerSeen()) {
+      setComposerSeen(true);
+      void setPref('seen_composer_tile', 'true');
+    }
+  };
+
   const isDefaultBranch = createMemo(() => {
     const wt = activeWorktree();
     const proj = activeProject();
@@ -531,6 +544,48 @@ export default function WorktreeHome() {
           <button
             class={styles.quickLaunchCard}
             type="button"
+            style={{ position: 'relative' }}
+            onClick={() => {
+              dismissComposerBadge();
+              addTabWithData('composer', 'Composer', {
+                cwd: activeWorktree()?.worktree_path ?? '',
+                worktreeId: activeWorktreeId(),
+                workspaceId: activeWorktreeId(),
+              });
+            }}
+          >
+            <Show when={!composerSeen()}>
+              <span
+                style={{
+                  position: 'absolute',
+                  top: '8px',
+                  right: '8px',
+                  padding: '2px 6px',
+                  'border-radius': '4px',
+                  background: vars.color.accentMuted,
+                  color: vars.color.accent,
+                  'font-size': '9px',
+                  'font-weight': '700',
+                  'letter-spacing': '0.08em',
+                  'pointer-events': 'none',
+                }}
+              >
+                ✦ NEW
+              </span>
+            </Show>
+            <div class={styles.quickLaunchShimmer} />
+            <svg class={styles.quickLaunchIcon} viewBox="0 0 32 32" fill="none" aria-hidden="true">
+              <path d="M6 8h14a4 4 0 014 4v12a4 4 0 01-4 4H10a4 4 0 01-4-4V8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+              <path d="M11 14h10M11 19h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              <path d="M22 4l1.5 3.5L27 9l-3.5 1.5L22 14l-1.5-3.5L17 9l3.5-1.5L22 4z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" fill="none" />
+            </svg>
+            <span class={styles.quickLaunchLabel}>Composer</span>
+            <span class={styles.quickLaunchDesc}>Multi-step agentic edits</span>
+          </button>
+
+          <button
+            class={styles.quickLaunchCard}
+            type="button"
             onClick={() => addTabWithData('terminal', 'Terminal', { cwd: activeWorktree()?.worktree_path ?? '' })}
           >
             <div class={styles.quickLaunchShimmer} />
@@ -565,20 +620,6 @@ export default function WorktreeHome() {
             </svg>
             <span class={styles.quickLaunchLabel}>New Session</span>
             <span class={styles.quickLaunchDesc}>AI-powered workspace</span>
-          </button>
-
-          <button
-            class={styles.quickLaunchCard}
-            type="button"
-            onClick={() => addTabWithData('chat', 'Chat', { workspaceId: activeWorktreeId() })}
-          >
-            <div class={styles.quickLaunchShimmer} />
-            <svg class={styles.quickLaunchIcon} viewBox="0 0 32 32" fill="none" aria-hidden="true">
-              <path d="M5 8A3 3 0 018 5h16a3 3 0 013 3v12a3 3 0 01-3 3h-6l-5 4v-4H8a3 3 0 01-3-3V8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-              <path d="M11 11h10M11 16h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-            </svg>
-            <span class={styles.quickLaunchLabel}>Chat</span>
-            <span class={styles.quickLaunchDesc}>Talk with AI</span>
           </button>
         </div>
 

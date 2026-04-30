@@ -1,4 +1,4 @@
-// PhantomOS v2 — Individual pane wrapper with header + content
+// Phantom — Individual pane wrapper with header + content
 // Author: Subash Karki
 
 import { Show, createSignal, lazy } from 'solid-js';
@@ -21,6 +21,7 @@ const PANE_TYPE_LABELS: Record<string, string> = {
   terminal: 'Terminal',
   editor: 'Editor',
   chat: 'Chat',
+  composer: 'Composer',
   diff: 'Diff',
   home: 'Home',
   journal: 'Journal',
@@ -64,7 +65,7 @@ export function PaneContainer(props: PaneContainerProps) {
       onClick={handleClick}
     >
       {/* Floating overlay header — hidden when solo+home, shown on hover otherwise */}
-      <Show when={paneId() && (!props.isSolo || paneType() !== 'home') && paneType() !== 'editor' && paneType() !== 'diff' && paneType() !== 'chat'}>
+      <Show when={paneId() && (!props.isSolo || paneType() !== 'home') && paneType() !== 'editor' && paneType() !== 'diff' && paneType() !== 'chat' && paneType() !== 'composer'}>
         <div class={styles.paneHeaderFloat}>
           <Show when={!props.isSolo}>
             <span class={styles.paneHeaderTitle}>
