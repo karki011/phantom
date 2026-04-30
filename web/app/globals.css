@@ -1,20 +1,104 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: oklch(0.16 0.005 270);
-  --color-bg-elevated: oklch(0.20 0.008 270);
-  --color-fg: oklch(0.96 0.005 270);
-  --color-fg-muted: oklch(0.70 0.01 270);
-  --color-fg-subtle: oklch(0.50 0.01 270);
-  --color-accent: oklch(0.78 0.16 200);
-  --color-border: oklch(0.28 0.008 270);
+  --color-bg: oklch(0.13 0.012 270);
+  --color-bg-elevated: oklch(0.18 0.014 270);
+  --color-bg-glass: oklch(0.22 0.018 270 / 0.5);
+  --color-fg: oklch(0.97 0.005 270);
+  --color-fg-muted: oklch(0.72 0.012 270);
+  --color-fg-subtle: oklch(0.52 0.012 270);
+  --color-accent: oklch(0.78 0.18 200);
+  --color-accent-violet: oklch(0.72 0.22 295);
+  --color-accent-pink: oklch(0.74 0.22 350);
+  --color-border: oklch(0.30 0.012 270);
+  --color-border-subtle: oklch(0.22 0.01 270);
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Monaco, "Cascadia Code", monospace;
 }
 
 html,
 body {
   background: var(--color-bg);
   color: var(--color-fg);
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", system-ui, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   font-feature-settings: "ss01", "cv11";
+  overflow-x: hidden;
+}
+
+/* Aurora / mesh-gradient background */
+.bg-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 0%, oklch(0.35 0.18 295 / 0.35), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 80% 10%, oklch(0.40 0.18 200 / 0.30), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 100%, oklch(0.35 0.18 350 / 0.20), transparent 60%),
+    var(--color-bg);
+  pointer-events: none;
+}
+
+.bg-grid {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(to right, oklch(0.30 0.012 270 / 0.18) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(0.30 0.012 270 / 0.18) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 30%, transparent 80%);
+  pointer-events: none;
+}
+
+.glass {
+  background: oklch(0.22 0.018 270 / 0.4);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid oklch(0.30 0.012 270 / 0.6);
+}
+
+.text-gradient {
+  background: linear-gradient(120deg,
+    oklch(0.98 0.005 270) 0%,
+    oklch(0.85 0.18 200) 35%,
+    oklch(0.78 0.22 295) 70%,
+    oklch(0.85 0.005 270) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.glow-pulse {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.btn-shimmer {
+  background: linear-gradient(110deg,
+    var(--color-fg) 0%,
+    var(--color-fg) 40%,
+    oklch(0.85 0.18 200) 50%,
+    var(--color-fg) 60%,
+    var(--color-fg) 100%);
+  background-size: 200% auto;
+  animation: shimmer 6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow-pulse,
+  .btn-shimmer {
+    animation: none;
+  }
 }
