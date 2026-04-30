@@ -68,6 +68,7 @@ export interface DetectedAgent {
 export interface BootScanData {
   gitInstalled: boolean;
   gitVersion?: string;
+  operator?: string;
   agents: DetectedAgent[];
 }
 

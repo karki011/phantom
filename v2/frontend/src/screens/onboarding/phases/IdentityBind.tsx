@@ -2,7 +2,6 @@
 
 import { createSignal, onMount, onCleanup, Show } from 'solid-js';
 import { TextField } from '@kobalte/core/text-field';
-import { getGitUserName } from '../../../core/bindings';
 import { playSound } from '../../../core/audio/engine';
 import { speakSystem } from '../config/voice';
 import { buttonRecipe } from '../../../styles/recipes.css';
@@ -11,24 +10,21 @@ import { AutoTimer } from '../engine/AutoTimer';
 import * as styles from '../styles/phases.css';
 
 interface IdentityBindProps {
+  detectedName: string;
   onComplete: (data: Record<string, string>) => void;
 }
 
 export function IdentityBind(props: IdentityBindProps) {
-  const [name, setName] = createSignal('');
-  const [detected, setDetected] = createSignal('');
+  const [name, setName] = createSignal(props.detectedName);
   const [paused, setPaused] = createSignal(false);
 
-  onMount(async () => {
+  onMount(() => {
     playSound('whoosh');
-    const speechTimer = setTimeout(() => speakSystem('Identity detected. Locking in.'), 250);
+    const speech = props.detectedName
+      ? 'Identity detected. Locking in.'
+      : 'State your name, Operator.';
+    const speechTimer = setTimeout(() => speakSystem(speech), 250);
     onCleanup(() => clearTimeout(speechTimer));
-
-    const gitName = await getGitUserName();
-    if (gitName) {
-      setDetected(gitName);
-      setName(gitName);
-    }
   });
 
   function handleSubmit() {
@@ -38,7 +34,7 @@ export function IdentityBind(props: IdentityBindProps) {
   }
 
   function handleAutoResolve() {
-    props.onComplete({ operator_name: name().trim() || detected() || '' });
+    props.onComplete({ operator_name: name().trim() || props.detectedName });
   }
 
   function handleInteraction() {
@@ -71,9 +67,9 @@ export function IdentityBind(props: IdentityBindProps) {
           </TextField>
         </div>
 
-        <Show when={detected()}>
+        <Show when={props.detectedName}>
           <div class={`${styles.label} ${styles.labelDetected}`}>
-            Identity detected: {detected()}
+            Identity detected: {props.detectedName}
           </div>
         </Show>
 
@@ -88,12 +84,14 @@ export function IdentityBind(props: IdentityBindProps) {
         </div>
       </div>
 
-      <AutoTimer
-        timeout={10000}
-        onResolve={handleAutoResolve}
-        message="No override detected. Identity locked."
-        paused={paused()}
-      />
+      <Show when={!!props.detectedName}>
+        <AutoTimer
+          timeout={10000}
+          onResolve={handleAutoResolve}
+          message="No override detected. Identity locked."
+          paused={paused()}
+        />
+      </Show>
     </PhasePanel>
   );
 }

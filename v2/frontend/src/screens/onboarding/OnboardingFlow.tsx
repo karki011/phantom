@@ -23,6 +23,7 @@ interface OnboardingFlowProps {
 export function OnboardingFlow(props: OnboardingFlowProps) {
   const [phase, setPhase] = createSignal<PhaseId>('awakening');
   const [dissolving, setDissolving] = createSignal(false);
+  const [bootOperator, setBootOperator] = createSignal<string>('');
   const data: Record<string, string> = {};
 
   const completedPhases = () => Math.max(0, phaseOrder.indexOf(phase()) - 1);
@@ -58,14 +59,14 @@ export function OnboardingFlow(props: OnboardingFlowProps) {
       <div class={styles.scanlines} />
 
       <Show when={phase() === 'awakening'}>
-        <BootTerminal onBootComplete={() => advancePhase()} />
+        <BootTerminal onBootComplete={(op) => { setBootOperator(op ?? ''); advancePhase(); }} />
       </Show>
 
       <Show when={isMiddlePhase()}>
         <div class={styles.phaseContainer}>
           <Switch>
             <Match when={phase() === 'identity-bind'}>
-              <IdentityBind onComplete={handlePhaseComplete} />
+              <IdentityBind detectedName={bootOperator()} onComplete={handlePhaseComplete} />
             </Match>
             <Match when={phase() === 'domain-select'}>
               <DomainSelect onComplete={handlePhaseComplete} />

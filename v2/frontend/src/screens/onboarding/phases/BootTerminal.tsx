@@ -13,7 +13,7 @@ import { PhantomMark } from '../../../shared/PhantomMark/PhantomMark';
 const App = () => (window as any).go?.['app']?.App;
 
 interface BootTerminalProps {
-  onBootComplete: () => void;
+  onBootComplete: (operator?: string) => void;
 }
 
 interface DisplayLine {
@@ -111,6 +111,7 @@ export function BootTerminal(props: BootTerminalProps) {
 
     let sessionCount = 0;
     let scan: BootScanData | undefined;
+    let detectedOperator: string | undefined;
     try {
       const sessions = await getSessions();
       sessionCount = sessions.length;
@@ -120,9 +121,11 @@ export function BootTerminal(props: BootTerminalProps) {
       if (app?.BootScan) {
         const raw = await app.BootScan();
         if (raw) {
+          detectedOperator = raw.operator || undefined;
           scan = {
             gitInstalled: raw.gitInstalled ?? false,
             gitVersion: raw.gitVersion,
+            operator: detectedOperator,
             agents: raw.agents ?? [],
           };
         }
@@ -138,7 +141,7 @@ export function BootTerminal(props: BootTerminalProps) {
     }
 
     await new Promise<void>((r) => setTimeout(r, 600));
-    if (!cancelled) props.onBootComplete();
+    if (!cancelled) props.onBootComplete(detectedOperator);
   });
 
   onCleanup(() => {
