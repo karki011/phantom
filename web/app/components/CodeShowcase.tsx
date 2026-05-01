@@ -1,4 +1,5 @@
 "use client";
+// Author: Subash Karki
 
 import { motion, useScroll, useTransform } from "motion/react";
 import { useRef } from "react";

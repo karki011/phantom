@@ -1,4 +1,5 @@
 "use client";
+// Author: Subash Karki
 
 import { motion } from "motion/react";
 import type { ReactNode } from "react";

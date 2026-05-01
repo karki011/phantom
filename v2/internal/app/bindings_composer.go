@@ -19,7 +19,10 @@ import (
 // noContext, when true, runs the turn with --setting-sources "" inside a
 // fresh temp directory so the agent has zero workspace awareness. Used by
 // the "No project context" toggle in the Composer status strip.
-func (a *App) ComposerSend(paneID, prompt, cwd, model string, mentions []composer.Mention, noContext bool) string {
+//
+// effort controls the reasoning effort level ("low", "medium", "high", "max").
+// Empty string means "don't pass the flag" (auto/default).
+func (a *App) ComposerSend(paneID, prompt, cwd, model string, mentions []composer.Mention, noContext bool, effort string) string {
 	if a.Composer == nil {
 		slog.Warn("ComposerSend: composer service not initialised")
 		return ""
@@ -31,6 +34,7 @@ func (a *App) ComposerSend(paneID, prompt, cwd, model string, mentions []compose
 		Model:     model,
 		Mentions:  mentions,
 		NoContext: noContext,
+		Effort:   effort,
 	})
 	if err != nil {
 		slog.Error("ComposerSend failed", "pane", paneID, "err", err)
@@ -166,6 +170,68 @@ func (a *App) ComposerDeleteSession(sessionID string) error {
 		return err
 	}
 	return nil
+}
+
+// ComposerGetMemoryContext reads CLAUDE.md files and .claude/rules/ from
+// the project (and the global ~/.claude/CLAUDE.md), returning them as a
+// list of {level, path, content, size} maps. Drives the Memory Viewer
+// panel in the Composer toolbar.
+func (a *App) ComposerGetMemoryContext(cwd string) []map[string]interface{} {
+	var result []map[string]interface{}
+
+	// Global CLAUDE.md
+	globalPath := filepath.Join(os.Getenv("HOME"), ".claude", "CLAUDE.md")
+	if content, err := os.ReadFile(globalPath); err == nil {
+		result = append(result, map[string]interface{}{
+			"level":   "global",
+			"path":    globalPath,
+			"content": string(content),
+			"size":    len(content),
+		})
+	}
+
+	// Project CLAUDE.md
+	projectPath := filepath.Join(cwd, "CLAUDE.md")
+	if content, err := os.ReadFile(projectPath); err == nil {
+		result = append(result, map[string]interface{}{
+			"level":   "project",
+			"path":    projectPath,
+			"content": string(content),
+			"size":    len(content),
+		})
+	}
+
+	// .claude/CLAUDE.md
+	dotClaudePath := filepath.Join(cwd, ".claude", "CLAUDE.md")
+	if content, err := os.ReadFile(dotClaudePath); err == nil {
+		result = append(result, map[string]interface{}{
+			"level":   "project",
+			"path":    dotClaudePath,
+			"content": string(content),
+			"size":    len(content),
+		})
+	}
+
+	// Rules directory
+	rulesDir := filepath.Join(cwd, ".claude", "rules")
+	if entries, err := os.ReadDir(rulesDir); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+				continue
+			}
+			rulePath := filepath.Join(rulesDir, entry.Name())
+			if content, err := os.ReadFile(rulePath); err == nil {
+				result = append(result, map[string]interface{}{
+					"level":   "rule",
+					"path":    rulePath,
+					"content": string(content),
+					"size":    len(content),
+				})
+			}
+		}
+	}
+
+	return result
 }
 
 // ComposerListPending returns all pending edit cards for a pane (used on

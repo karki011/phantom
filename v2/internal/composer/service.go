@@ -197,6 +197,19 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 			if directive := strings.TrimSpace(result.Output.Text); directive != "" && directive != strings.TrimSpace(args.Prompt) {
 				prompt = directive + "\n\n" + prompt
 			}
+			// Emit strategy metadata so the frontend can render it as a
+			// collapsible chip in the turn. Fires once per turn, before
+			// the CLI run starts.
+			s.emit("composer:event", Event{
+				PaneID:             args.PaneID,
+				TurnID:             turnID,
+				Type:               "strategy",
+				StrategyName:       result.Strategy.Name,
+				StrategyConfidence: result.Confidence,
+				TaskComplexity:     result.TaskContext.Complexity,
+				TaskRisk:           result.TaskContext.Risk,
+				BlastRadius:        result.Context.BlastRadius,
+			})
 		} else if err != nil {
 			// Surface but don't bypass — KISS, fail loud.
 			log.Warn("composer: orchestrator process failed", "err", err)
@@ -427,9 +440,14 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		"--output-format", "stream-json",
 		"--verbose",
 		"--include-partial-messages",
+		"--include-hook-events",
 		"--permission-mode", "acceptEdits",
 		sessionFlag, sessionID,
 		"--model", args.Model,
+	}
+	// Effort level — "auto" or empty means "don't pass the flag" (default).
+	if args.Effort != "" && args.Effort != "auto" {
+		cliArgs = append(cliArgs, "--effort", args.Effort)
 	}
 	// "No project context" mode — strip every source of workspace awareness
 	// so the agent answers from its own knowledge only. Mirrors the legacy
@@ -652,22 +670,31 @@ func (s *Service) maybeRecordEdit(ctx context.Context, paneID, turnID, cwd, tool
 		if json.Unmarshal(input, &e) != nil || e.FilePath == "" {
 			return
 		}
-		old, _ := readFileSafe(e.FilePath)
-		// "new" content reconstruction is best-effort — for simple Edits we
-		// have the post-write file already on disk via fsnotify-style polling.
-		// v0: emit the file's *current* state as the new content.
+		// The CLI writes edits to disk before emitting tool_use, so the file
+		// already contains NewString. Reconstruct the pre-edit content by
+		// reversing the substitution.
 		newContent, _ := readFileSafe(e.FilePath)
+		old := strings.Replace(newContent, e.NewString, e.OldString, 1)
 		s.emitEdit(ctx, paneID, turnID, cwd, e.FilePath, old, newContent)
 
 	case "MultiEdit":
 		var m struct {
 			FilePath string `json:"file_path"`
+			Edits    []struct {
+				OldString string `json:"old_string"`
+				NewString string `json:"new_string"`
+			} `json:"edits"`
 		}
 		if json.Unmarshal(input, &m) != nil || m.FilePath == "" {
 			return
 		}
-		old, _ := readFileSafe(m.FilePath)
+		// File already has all edits applied. Reverse them in reverse order
+		// to reconstruct the original content.
 		newContent, _ := readFileSafe(m.FilePath)
+		old := newContent
+		for i := len(m.Edits) - 1; i >= 0; i-- {
+			old = strings.Replace(old, m.Edits[i].NewString, m.Edits[i].OldString, 1)
+		}
 		s.emitEdit(ctx, paneID, turnID, cwd, m.FilePath, old, newContent)
 	}
 }

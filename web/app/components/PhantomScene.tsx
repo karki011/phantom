@@ -1,4 +1,5 @@
 "use client";
+// Author: Subash Karki
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Float, MeshDistortMaterial, RoundedBox, Stars } from "@react-three/drei";

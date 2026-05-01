@@ -26,13 +26,19 @@ export interface ComposerEditCard {
 export interface ComposerEvent {
   pane_id: string;
   turn_id?: string;
-  type: 'delta' | 'thinking' | 'tool_use' | 'result' | 'done' | 'error';
+  type: 'delta' | 'thinking' | 'tool_use' | 'result' | 'done' | 'error' | 'strategy';
   content?: string;
   tool_name?: string;
   tool_input?: string;
   input_tokens?: number;
   output_tokens?: number;
   cost_usd?: number;
+  // Strategy-specific fields, populated on type=="strategy".
+  strategy_name?: string;
+  strategy_confidence?: number;
+  task_complexity?: string;
+  task_risk?: string;
+  blast_radius?: number;
 }
 
 /**
@@ -42,6 +48,8 @@ export interface ComposerEvent {
  *   --setting-sources "" so it has zero awareness of the user's project
  *   (no CLAUDE.md, .claude/, hooks, settings, skills). Defaults to false —
  *   existing callers see no behaviour change.
+ * @param effort Reasoning effort level ('low' | 'medium' | 'high' | 'max').
+ *   Empty string means "don't pass the flag" (auto/default).
  */
 export async function composerSend(
   paneId: string,
@@ -50,9 +58,10 @@ export async function composerSend(
   model: string,
   mentions: ComposerMention[],
   noContext = false,
+  effort = '',
 ): Promise<string> {
   try {
-    const id = await App()?.ComposerSend(paneId, prompt, cwd, model, mentions, noContext);
+    const id = await App()?.ComposerSend(paneId, prompt, cwd, model, mentions, noContext, effort);
     return typeof id === 'string' ? id : '';
   } catch {
     return '';
@@ -188,5 +197,50 @@ export async function composerDeleteSession(sessionId: string): Promise<boolean>
     return true;
   } catch {
     return false;
+  }
+}
+
+// ── Memory context ────────────────────────────────────────────────────
+
+export interface MemoryContextItem {
+  level: 'global' | 'project' | 'rule';
+  path: string;
+  content: string;
+  size: number;
+}
+
+/**
+ * Read CLAUDE.md files and .claude/rules/ from the project (and global
+ * ~/.claude/CLAUDE.md). Returns an empty array if the binding is missing
+ * (e.g. running outside Wails).
+ */
+export async function composerGetMemoryContext(cwd: string): Promise<MemoryContextItem[]> {
+  try {
+    const raw = (await App()?.ComposerGetMemoryContext(cwd)) ?? [];
+    return normalize<MemoryContextItem[]>(raw);
+  } catch {
+    return [];
+  }
+}
+
+// ── Skill browser ─────────────────────────────────────────────────────
+
+export interface ComposerSkill {
+  id: string;
+  name: string;
+  description: string;
+  path: string;
+}
+
+/**
+ * List available skills from <cwd>/.claude/skills/. Each skill directory
+ * must contain a SKILL.md with optional YAML frontmatter (name, description).
+ */
+export async function composerListSkills(cwd: string): Promise<ComposerSkill[]> {
+  try {
+    const raw = (await App()?.ComposerListSkills(cwd)) ?? [];
+    return normalize<ComposerSkill[]>(raw);
+  } catch {
+    return [];
   }
 }

@@ -1,4 +1,5 @@
 "use client";
+// Author: Subash Karki
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";

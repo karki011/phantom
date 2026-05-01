@@ -28,7 +28,7 @@ export const statusStrip = style({
   display: 'flex',
   alignItems: 'center',
   gap: vars.space.sm,
-  padding: `${vars.space.sm} ${vars.space.lg}`,
+  padding: `${vars.space.sm} ${vars.space.xxl}`,
   borderBottom: `1px solid ${vars.color.divider}`,
   background: vars.color.bgSecondary,
   fontSize: vars.fontSize.xs,
@@ -67,7 +67,7 @@ export const cancelBtn = style({
 export const feed = style({
   flex: 1,
   overflowY: 'auto',
-  padding: `${vars.space.lg} ${vars.space.xl}`,
+  padding: `${vars.space.lg} ${vars.space.xxl}`,
   display: 'flex',
   flexDirection: 'column',
   gap: vars.space.lg,
@@ -95,8 +95,8 @@ export const userTurn = style({
 export const assistantText = style({
   fontSize: vars.fontSize.sm,
   color: vars.color.textPrimary,
-  whiteSpace: 'pre-wrap',
   wordBreak: 'break-word',
+  lineHeight: 1.6,
 });
 
 export const editCard = style({
@@ -132,24 +132,42 @@ export const editBtn = style({
   background: 'transparent',
   border: `1px solid ${vars.color.border}`,
   color: vars.color.textSecondary,
-  padding: '2px 8px',
+  padding: '3px 10px',
   borderRadius: vars.radius.sm,
   cursor: 'pointer',
   fontSize: vars.fontSize.xs,
-  ':hover': { borderColor: vars.color.borderHover, color: vars.color.textPrimary },
+  fontWeight: 500,
+  transition: `all 150ms ease`,
+  ':hover': {
+    borderColor: vars.color.borderHover,
+    color: vars.color.textPrimary,
+    background: `color-mix(in srgb, ${vars.color.textPrimary} 5%, transparent)`,
+  },
 });
 
 export const editAccept = style({
   borderColor: vars.color.successMuted,
   color: vars.color.success,
+  background: `color-mix(in srgb, ${vars.color.success} 10%, transparent)`,
+  ':hover': {
+    background: `color-mix(in srgb, ${vars.color.success} 20%, transparent)`,
+    borderColor: vars.color.success,
+    color: vars.color.success,
+  },
 });
 
 export const editDiscard = style({
   borderColor: vars.color.dangerMuted,
   color: vars.color.danger,
+  background: `color-mix(in srgb, ${vars.color.danger} 8%, transparent)`,
+  ':hover': {
+    background: `color-mix(in srgb, ${vars.color.danger} 18%, transparent)`,
+    borderColor: vars.color.danger,
+    color: vars.color.danger,
+  },
 });
 
-export const editDecidedAccepted = style({ opacity: 0.5 });
+export const editDecidedAccepted = style({ opacity: 0.5, borderColor: vars.color.successMuted });
 export const editDecidedDiscarded = style({ opacity: 0.4, textDecoration: 'line-through' });
 
 export const toolBlock = style({
@@ -198,7 +216,7 @@ export const thinkingBlock = style({
 
 export const composerArea = style({
   borderTop: `1px solid ${vars.color.divider}`,
-  padding: `${vars.space.md} ${vars.space.xl} ${vars.space.lg}`,
+  padding: `${vars.space.md} ${vars.space.xxl} ${vars.space.lg}`,
   background: vars.color.bgSecondary,
   display: 'flex',
   flexDirection: 'column',
@@ -395,6 +413,16 @@ export const composerAreaDragOver = style({
 // these styles in chat.css.ts).
 globalStyle(`.${assistantText} pre`, {
   position: 'relative',
+  background: vars.color.bgTertiary,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+  padding: vars.space.md,
+  marginTop: vars.space.sm,
+  marginBottom: vars.space.sm,
+  overflowX: 'auto',
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  lineHeight: '1.6',
 });
 
 globalStyle(`.${assistantText} .copy-btn`, {
@@ -416,6 +444,108 @@ globalStyle(`.${assistantText} .copy-btn`, {
 globalStyle(`.${assistantText} .copy-btn:hover`, {
   color: vars.color.textPrimary,
   borderColor: vars.color.borderHover,
+});
+
+// ── Markdown element styles for assistantText innerHTML ──────────────
+
+globalStyle(`.${assistantText} p`, {
+  marginBottom: vars.space.sm,
+});
+globalStyle(`.${assistantText} p:last-child`, {
+  marginBottom: 0,
+});
+
+globalStyle(`.${assistantText} h1`, {
+  fontSize: vars.fontSize.xl,
+  fontWeight: 600,
+  marginTop: vars.space.lg,
+  marginBottom: vars.space.sm,
+});
+globalStyle(`.${assistantText} h2`, {
+  fontSize: vars.fontSize.lg,
+  fontWeight: 600,
+  marginTop: vars.space.lg,
+  marginBottom: vars.space.sm,
+});
+globalStyle(`.${assistantText} h3`, {
+  fontSize: vars.fontSize.md,
+  fontWeight: 600,
+  marginTop: vars.space.md,
+  marginBottom: vars.space.xs,
+});
+globalStyle(`.${assistantText} h4, .${assistantText} h5, .${assistantText} h6`, {
+  fontSize: vars.fontSize.sm,
+  fontWeight: 600,
+  marginTop: vars.space.md,
+  marginBottom: vars.space.xs,
+});
+
+globalStyle(`.${assistantText} :not(pre) > code`, {
+  background: vars.color.bgTertiary,
+  padding: '1px 5px',
+  borderRadius: vars.radius.sm,
+  fontFamily: vars.font.mono,
+  fontSize: '0.9em',
+});
+
+globalStyle(`.${assistantText} ul, .${assistantText} ol`, {
+  paddingLeft: vars.space.xl,
+  marginTop: vars.space.xs,
+  marginBottom: vars.space.sm,
+});
+globalStyle(`.${assistantText} ul`, {
+  listStyleType: 'disc',
+});
+globalStyle(`.${assistantText} ol`, {
+  listStyleType: 'decimal',
+});
+globalStyle(`.${assistantText} li`, {
+  marginBottom: vars.space.xs,
+});
+globalStyle(`.${assistantText} li:last-child`, {
+  marginBottom: 0,
+});
+
+globalStyle(`.${assistantText} a`, {
+  color: vars.color.textLink,
+  textDecoration: 'underline',
+  textUnderlineOffset: '2px',
+});
+globalStyle(`.${assistantText} a:hover`, {
+  color: vars.color.accentHover,
+});
+
+globalStyle(`.${assistantText} blockquote`, {
+  borderLeft: `2px solid ${vars.color.accent}`,
+  paddingLeft: vars.space.md,
+  marginTop: vars.space.sm,
+  marginBottom: vars.space.sm,
+  color: vars.color.textSecondary,
+  fontStyle: 'italic',
+});
+
+globalStyle(`.${assistantText} table`, {
+  width: '100%',
+  borderCollapse: 'collapse',
+  marginTop: vars.space.sm,
+  marginBottom: vars.space.sm,
+  fontSize: vars.fontSize.xs,
+});
+globalStyle(`.${assistantText} th, .${assistantText} td`, {
+  border: `1px solid ${vars.color.border}`,
+  padding: `${vars.space.xs} ${vars.space.sm}`,
+  textAlign: 'left',
+});
+globalStyle(`.${assistantText} th`, {
+  background: vars.color.bgTertiary,
+  fontWeight: 600,
+});
+
+globalStyle(`.${assistantText} hr`, {
+  border: 'none',
+  borderTop: `1px solid ${vars.color.divider}`,
+  marginTop: vars.space.md,
+  marginBottom: vars.space.md,
 });
 
 // ── Past Sessions sidebar (lives inside the Composer pane root) ──────
@@ -628,9 +758,8 @@ export const sidebarToggle = style({
 // the left edge of the main column, so the user always has a way back in.
 export const sidebarExpandFloating = style({
   position: 'absolute',
-  top: '50%',
+  bottom: vars.space.xs,
   left: 0,
-  transform: 'translateY(-50%)',
   background: vars.color.bgSecondary,
   border: `1px solid ${vars.color.border}`,
   borderLeft: 0,
