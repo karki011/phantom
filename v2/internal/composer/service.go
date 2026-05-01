@@ -29,6 +29,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
 
+	"github.com/subashkarki/phantom-os-v2/internal/ai/evaluator"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/orchestrator"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/verifier"
@@ -402,6 +403,17 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 	// Async + best-effort — must never block the next user prompt.
 	defer s.recordVerifierOutcome(decisionID, args.CWD)
 
+	// Capture the response text via pointer so the evaluator defer (registered
+	// before the run-loop builds responseText) sees the final accumulated
+	// string. Diagnostic-only — runs alongside the verifier, never gates it.
+	var responseTextRef *strings.Builder
+	defer func() {
+		if responseTextRef == nil {
+			return
+		}
+		s.recordEvaluatorOutcome(decisionID, args.CWD, responseTextRef.String())
+	}()
+
 	// First turn: --session-id <id> creates the session.
 	// Subsequent turns: --resume <id> attaches to the existing one.
 	// claude rejects --session-id reuse with "Session ID is already in use".
@@ -486,6 +498,11 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 	// composer_turns row at done/error/cancelled. Capped by maxResponseText
 	// so a runaway agent can't balloon the row past SQLite's friendly size.
 	var responseText strings.Builder
+	// Expose responseText to the evaluator defer registered above. The defer
+	// reads via pointer after the run loop completes so it sees the final
+	// accumulated text regardless of which exit path (done / error / cancel)
+	// run() takes.
+	responseTextRef = &responseText
 
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -729,6 +746,66 @@ func (s *Service) recordVerifierOutcome(decisionID, projectRoot string) {
 			log.Warn("composer: record verifier outcome", "decision_id", decisionID, "err", err)
 		}
 	}()
+}
+
+// recordEvaluatorOutcome scans the assistant's accumulated response text for
+// hallucinated file paths (paths that look like real file references but
+// don't exist on disk) and writes a diagnostic outcome to ai_outcomes
+// keyed by the orchestrator's decision ID. Spawned in a goroutine so the
+// user's next prompt never blocks on the scan.
+//
+// Runs alongside (not instead of) the verifier: the verifier produces the
+// ground-truth pass/fail signal that drives the learning loop; the evaluator
+// is observability-only — its outcomes carry phase='evaluator' and are
+// excluded from GetSuccessRate by design.
+//
+// No-ops cleanly when:
+//   - the engine isn't wired (DecisionStore == nil)
+//   - the orchestrator never recorded a decision (decisionID == "")
+//   - the turn had no project root (path-existence checks need a base dir)
+//   - the response text is empty (turn errored before producing output —
+//     skipping keeps evaluator-phase counts honest).
+func (s *Service) recordEvaluatorOutcome(decisionID, projectRoot, responseText string) {
+	if s.engineDeps.Decisions == nil || decisionID == "" || strings.TrimSpace(projectRoot) == "" {
+		return
+	}
+	if strings.TrimSpace(responseText) == "" {
+		return
+	}
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Warn("composer: evaluator panic", "decision_id", decisionID, "panic", r)
+				_ = s.engineDeps.Decisions.RecordEvaluatorOutcome(
+					decisionID, false, fmt.Sprintf("evaluator_error: %v", r),
+				)
+			}
+		}()
+
+		check := evaluator.CheckResponse(responseText, projectRoot)
+		success := !check.HasIssues
+		reason := summariseEvaluator(check)
+		if err := s.engineDeps.Decisions.RecordEvaluatorOutcome(decisionID, success, reason); err != nil {
+			log.Warn("composer: record evaluator outcome", "decision_id", decisionID, "err", err)
+		}
+	}()
+}
+
+// summariseEvaluator collapses an evaluator.ResponseCheck into a short reason
+// string. Returns empty when the response is clean (success rows don't need a
+// reason). On hallucinations, extracts the path tails from the canonical
+// "Referenced file may not exist: <path>" warning shape and joins them, so a
+// later operator can grep `failure_reason LIKE 'hallucinated:%'` to find them.
+func summariseEvaluator(check evaluator.ResponseCheck) string {
+	if !check.HasIssues || len(check.Warnings) == 0 {
+		return ""
+	}
+	const prefix = "Referenced file may not exist: "
+	paths := make([]string, 0, len(check.Warnings))
+	for _, w := range check.Warnings {
+		paths = append(paths, strings.TrimPrefix(w, prefix))
+	}
+	return "hallucinated: " + strings.Join(paths, ", ")
 }
 
 // summariseVerifier flattens the per-command verifier results into a single

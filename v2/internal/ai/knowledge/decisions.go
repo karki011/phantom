@@ -49,6 +49,14 @@ const PhaseOrchestrator = "orchestrator"
 // and GetFailedApproaches by default.
 const PhaseVerifier = "verifier"
 
+// PhaseEvaluator marks rows written by the response evaluator — a diagnostic
+// check that scans the assistant's text for hallucinated file paths. Kept for
+// observability and future analysis but DELIBERATELY excluded from
+// GetSuccessRate / GetFailedApproaches: a clean response (no hallucinations)
+// doesn't mean the strategy succeeded, only that the LLM didn't fabricate
+// paths. Mixing it into the verifier-driven learning signal would add noise.
+const PhaseEvaluator = "evaluator"
+
 // DecisionStore provides CRUD access to AI decisions and outcomes.
 type DecisionStore struct {
 	db *sql.DB
@@ -117,6 +125,13 @@ func (ds *DecisionStore) RecordOutcome(decisionID string, success bool, failureR
 // default — they don't represent real success, only that the picker ran.
 func (ds *DecisionStore) RecordOrchestratorOutcome(decisionID string, success bool, failureReason string) error {
 	return ds.recordOutcomeWithPhase(decisionID, success, failureReason, PhaseOrchestrator)
+}
+
+// RecordEvaluatorOutcome persists a diagnostic outcome from the response
+// evaluator (hallucinated-path scan). These rows are queryable for analysis
+// but DO NOT feed GetSuccessRate / GetFailedApproaches — see PhaseEvaluator.
+func (ds *DecisionStore) RecordEvaluatorOutcome(decisionID string, success bool, failureReason string) error {
+	return ds.recordOutcomeWithPhase(decisionID, success, failureReason, PhaseEvaluator)
 }
 
 // recordOutcomeWithPhase is the single INSERT path. Both public Record* methods
