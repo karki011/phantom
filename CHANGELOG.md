@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/karki011/phantom/compare/v0.1.3...v0.1.4) (2026-05-01)
+
+
+### Bug Fixes
+
+* handle empty repos (no commits) across git operations ([273f9f2](https://github.com/karki011/phantom/commit/273f9f251b925ac466df6d3b90c3c74cf0fbd69d)), closes [#2](https://github.com/karki011/phantom/issues/2)
+
 ## [0.1.3](https://github.com/karki011/phantom/compare/v0.1.2...v0.1.3) (2026-05-01)
 
 
