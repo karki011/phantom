@@ -29,9 +29,18 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
 
+	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/orchestrator"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/verifier"
 )
+
+// IndexerResolver resolves a turn's CWD to the file-graph indexer for the
+// project that owns it. Returns nil when no project matches the cwd — the
+// orchestrator handles a nil Indexer by skipping graph-derived signals.
+//
+// Called per-turn (not cached) because the user can switch active worktrees
+// mid-session. Implementations should be cheap and non-blocking.
+type IndexerResolver func(cwd string) *filegraph.Indexer
 
 const (
 	defaultModel = "opus"
@@ -65,6 +74,14 @@ type Service struct {
 	// back to the raw user prompt with no strategy enrichment and no
 	// outcome recording — same behaviour as before this connection landed.
 	engineDeps orchestrator.Dependencies
+
+	// indexerResolver resolves a turn's CWD to the project's file-graph
+	// indexer. When set, Send overlays the resolved Indexer onto a copy of
+	// engineDeps before each orchestrator.Process call so graph-derived
+	// signals (blast radius, related files) reach strategy selection.
+	// nil resolver or nil result both leave Indexer unset — orchestrator
+	// degrades gracefully.
+	indexerResolver IndexerResolver
 }
 
 // NewService constructs a Composer service. emit should be wired to
@@ -86,6 +103,13 @@ func NewService(writer *sql.DB, emit func(string, interface{})) *Service {
 // nil so partial wiring is safe.
 func (s *Service) SetEngineDeps(deps orchestrator.Dependencies) {
 	s.engineDeps = deps
+}
+
+// SetIndexerResolver registers a per-turn lookup that maps the turn's CWD to
+// a file-graph indexer. Pass nil to clear. The resolver runs on every Send
+// call (the active worktree can change mid-session), so it must be cheap.
+func (s *Service) SetIndexerResolver(resolve IndexerResolver) {
+	s.indexerResolver = resolve
 }
 
 // ---------------------------------------------------------------------------
@@ -152,7 +176,17 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 	// CLI sees strategy guidance before the user's raw goal.
 	var decisionID string
 	if !args.NoContext {
-		if result, err := orchestrator.Process(ctx, s.engineDeps, orchestrator.ProcessInput{
+		// Resolve the per-turn file-graph indexer from cwd. The base deps
+		// are immutable across turns; we only overlay Indexer here so each
+		// Send sees the correct project graph (the user can switch active
+		// worktrees mid-session).
+		turnDeps := s.engineDeps
+		if s.indexerResolver != nil && args.CWD != "" {
+			if ix := s.indexerResolver(args.CWD); ix != nil {
+				turnDeps.Indexer = ix
+			}
+		}
+		if result, err := orchestrator.Process(ctx, turnDeps, orchestrator.ProcessInput{
 			Goal:        args.Prompt,
 			ActiveFiles: mentionPaths(args.Mentions, args.CWD),
 		}); err == nil && result != nil {
