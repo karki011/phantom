@@ -28,6 +28,8 @@ import (
 
 	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
+
+	"github.com/subashkarki/phantom-os-v2/internal/ai/orchestrator"
 )
 
 const (
@@ -56,6 +58,12 @@ type Service struct {
 	// once. First turn uses `--session-id <uuid>` to create. Subsequent
 	// turns use `--resume <uuid>` because claude rejects --session-id reuse.
 	sessionStarted map[string]bool
+
+	// engineDeps wires Phantom's AI engine (orchestrator + knowledge stores
+	// + verifier) into every Composer turn. When zero-valued, Send falls
+	// back to the raw user prompt with no strategy enrichment and no
+	// outcome recording — same behaviour as before this connection landed.
+	engineDeps orchestrator.Dependencies
 }
 
 // NewService constructs a Composer service. emit should be wired to
@@ -68,6 +76,15 @@ func NewService(writer *sql.DB, emit func(string, interface{})) *Service {
 		sessions:       make(map[string]string),
 		sessionStarted: make(map[string]bool),
 	}
+}
+
+// SetEngineDeps wires Phantom's AI engine into the Composer service. Call
+// this after construction, before Wails Startup completes. Passing a
+// zero-valued Dependencies disables engine enrichment; orchestrator.Process
+// degrades gracefully when individual fields (Decisions, Indexer, etc.) are
+// nil so partial wiring is safe.
+func (s *Service) SetEngineDeps(deps orchestrator.Dependencies) {
+	s.engineDeps = deps
 }
 
 // ---------------------------------------------------------------------------
@@ -126,13 +143,58 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 	// Build the prompt with @file mentions inlined as <file> tags.
 	prompt := buildPromptWithMentions(args.Prompt, args.Mentions, args.CWD)
 
+	// Route through Phantom's AI engine: pick a strategy, gather graph
+	// context, record a decision. Skipped entirely in NoContext mode (the
+	// user explicitly asked for no workspace awareness) or when the engine
+	// isn't wired. The orchestrator returns a deterministic enriched prompt
+	// in result.Output.Text — we prepend it as a directive prelude so the
+	// CLI sees strategy guidance before the user's raw goal.
+	var decisionID string
+	if !args.NoContext {
+		if result, err := orchestrator.Process(ctx, s.engineDeps, orchestrator.ProcessInput{
+			Goal:        args.Prompt,
+			ActiveFiles: mentionPaths(args.Mentions, args.CWD),
+		}); err == nil && result != nil {
+			if result.Learning != nil {
+				decisionID = result.Learning.DecisionID
+			}
+			if directive := strings.TrimSpace(result.Output.Text); directive != "" && directive != strings.TrimSpace(args.Prompt) {
+				prompt = directive + "\n\n" + prompt
+			}
+		} else if err != nil {
+			// Surface but don't bypass — KISS, fail loud.
+			log.Warn("composer: orchestrator process failed", "err", err)
+		}
+	}
+
 	runCtx, cancel := context.WithCancel(ctx)
 	s.mu.Lock()
 	s.runs[args.PaneID] = cancel
 	s.mu.Unlock()
 
-	go s.run(runCtx, cliPath, args, sessionID, isResume, turnID, prompt)
+	go s.run(runCtx, cliPath, args, sessionID, isResume, turnID, prompt, decisionID)
 	return turnID, nil
+}
+
+// mentionPaths flattens Mentions into absolute paths for the orchestrator.
+// Empty / unresolved entries are dropped — empty input is fine, the
+// orchestrator handles it.
+func mentionPaths(mentions []Mention, cwd string) []string {
+	if len(mentions) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(mentions))
+	for _, m := range mentions {
+		p := m.Path
+		if p == "" {
+			continue
+		}
+		if !filepath.IsAbs(p) && cwd != "" {
+			p = filepath.Join(cwd, p)
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // NewConversation drops the cached session for a pane so the next Send
@@ -294,12 +356,15 @@ func (s *Service) DeleteSession(ctx context.Context, sessionID string) error {
 // Internal — run loop
 // ---------------------------------------------------------------------------
 
-func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessionID string, isResume bool, turnID, prompt string) {
+func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessionID string, isResume bool, turnID, prompt, decisionID string) {
 	defer func() {
 		s.mu.Lock()
 		delete(s.runs, args.PaneID)
 		s.mu.Unlock()
 	}()
+	// Decision-keyed verifier outcome runs in Connection #2; threaded through
+	// the run goroutine so the close-the-loop call has the same lifecycle.
+	_ = decisionID
 
 	// First turn: --session-id <id> creates the session.
 	// Subsequent turns: --resume <id> attaches to the existing one.

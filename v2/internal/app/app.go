@@ -21,6 +21,7 @@ import (
 	graphctx "github.com/subashkarki/phantom-os-v2/internal/ai/graph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/knowledge"
+	"github.com/subashkarki/phantom-os-v2/internal/ai/orchestrator"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/strategies"
 	"github.com/subashkarki/phantom-os-v2/internal/api"
 	"github.com/subashkarki/phantom-os-v2/internal/branding"
@@ -218,6 +219,11 @@ func (a *App) Startup(ctx context.Context) {
 		a.initFileGraph()
 	}
 
+	// Wire the AI engine into the Composer service so desktop turns get the
+	// same strategy selection + decision recording the MCP server already
+	// gives external Claude Code users. Mirrors cmd/phantom-mcp/main.go.
+	a.wireComposerEngine()
+
 	// Start lightweight HTTP API server for Claude Code hook communication.
 	a.startAPIServer()
 
@@ -353,6 +359,50 @@ func (a *App) initFileGraph() {
 		})
 		log.Info("app: file graph lookup wired (lazy mode)")
 	}
+}
+
+// wireComposerEngine assembles orchestrator.Dependencies from the same
+// knowledge stack the MCP server uses (cmd/phantom-mcp/main.go) and hands
+// it to the Composer service. Each component is best-effort: a nil store
+// degrades gracefully inside orchestrator.Process. The Indexer field is
+// left nil here — the Composer turn supplies its CWD, but the file-graph
+// pool is keyed by project ID, not path. Resolving a project from CWD on
+// every turn is its own concern; YAGNI for v0.
+func (a *App) wireComposerEngine() {
+	if a.Composer == nil || a.DB == nil {
+		return
+	}
+
+	deps := orchestrator.Dependencies{}
+
+	if ds, err := knowledge.NewDecisionStore(a.DB.Writer); err == nil {
+		deps.Decisions = ds
+	} else {
+		log.Warn("app: composer engine — decision store init failed", "err", err)
+	}
+
+	if comp, err := knowledge.NewCompactor(a.DB.Writer); err == nil {
+		deps.Compactor = comp
+	} else {
+		log.Warn("app: composer engine — compactor init failed", "err", err)
+	}
+
+	perf := strategies.NewPerformanceStore()
+	if err := perf.Load(a.DB.Reader); err != nil {
+		log.Warn("app: composer engine — performance load failed (starting empty)", "err", err)
+	}
+	deps.Performance = perf
+
+	autoTune := strategies.NewThresholdTracker()
+	if err := autoTune.LoadThresholds(a.DB.Reader); err != nil {
+		log.Warn("app: composer engine — auto-tune load failed (using defaults)", "err", err)
+	}
+	deps.AutoTune = autoTune
+
+	deps.GapDetector = strategies.NewGapDetector()
+
+	a.Composer.SetEngineDeps(deps)
+	log.Info("app: composer engine wired")
 }
 
 // startAPIServer creates and starts the HTTP API server that Claude Code hooks
