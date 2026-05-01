@@ -30,6 +30,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/subashkarki/phantom-os-v2/internal/ai/orchestrator"
+	"github.com/subashkarki/phantom-os-v2/internal/ai/verifier"
 )
 
 const (
@@ -362,9 +363,10 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		delete(s.runs, args.PaneID)
 		s.mu.Unlock()
 	}()
-	// Decision-keyed verifier outcome runs in Connection #2; threaded through
-	// the run goroutine so the close-the-loop call has the same lifecycle.
-	_ = decisionID
+	// Close the learning loop: after every Composer turn (success, error, or
+	// cancel) run the project verifier and write the outcome to ai_outcomes.
+	// Async + best-effort — must never block the next user prompt.
+	defer s.recordVerifierOutcome(decisionID, args.CWD)
 
 	// First turn: --session-id <id> creates the session.
 	// Subsequent turns: --resume <id> attaches to the existing one.
@@ -656,6 +658,61 @@ func (s *Service) cancelExisting(paneID string) {
 	if ok {
 		cancel()
 	}
+}
+
+// recordVerifierOutcome runs the project verifier (typecheck + tests) against
+// the worktree the turn ran in and writes the result to ai_outcomes keyed
+// by the orchestrator's decision ID. Spawned in a goroutine so the user's
+// next prompt never blocks on test runs. No-ops cleanly when:
+//   - the engine isn't wired (DecisionStore == nil)
+//   - the orchestrator never recorded a decision (decisionID == "")
+//   - the turn had no project root (NoContext mode, fresh temp dir, etc.)
+//
+// When the project type isn't recognised we still record an outcome so the
+// learning loop sees signal — flagged via reason="verifier_unavailable".
+func (s *Service) recordVerifierOutcome(decisionID, projectRoot string) {
+	if s.engineDeps.Decisions == nil || decisionID == "" || strings.TrimSpace(projectRoot) == "" {
+		return
+	}
+	go func() {
+		// 5 minute ceiling: typecheck + tests should finish well under
+		// this; the cap protects against a pathological project hanging
+		// the verifier goroutine forever.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		if verifier.DetectProjectType(projectRoot) == "" {
+			_ = s.engineDeps.Decisions.RecordOutcome(decisionID, false, "verifier_unavailable")
+			return
+		}
+
+		result := verifier.Verify(ctx, projectRoot)
+		reason := summariseVerifier(result)
+		if err := s.engineDeps.Decisions.RecordOutcome(decisionID, result.AllPassed, reason); err != nil {
+			log.Warn("composer: record verifier outcome", "decision_id", decisionID, "err", err)
+		}
+	}()
+}
+
+// summariseVerifier flattens the per-command verifier results into a single
+// short reason string. On success returns "verifier_passed"; on failure
+// returns the first failing command + its truncated output (the verifier
+// already caps Output at 500 chars).
+func summariseVerifier(v verifier.ProjectVerification) string {
+	if v.AllPassed {
+		return "verifier_passed"
+	}
+	for _, r := range v.Results {
+		if !r.Passed {
+			out := strings.TrimSpace(r.Output)
+			if out == "" {
+				return fmt.Sprintf("verifier_failed:%s exit=%d", r.Command, r.ExitCode)
+			}
+			return fmt.Sprintf("verifier_failed:%s exit=%d %s", r.Command, r.ExitCode, out)
+		}
+	}
+	// No commands ran but AllPassed=false (shouldn't happen, but stay safe).
+	return "verifier_failed:no_results"
 }
 
 func parseResult(raw map[string]json.RawMessage) (int64, int64, float64) {
