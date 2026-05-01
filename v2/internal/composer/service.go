@@ -715,7 +715,10 @@ func (s *Service) recordVerifierOutcome(decisionID, projectRoot string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 
-		if verifier.DetectProjectType(projectRoot) == "" {
+		// Multi-module monorepos (e.g. ai-collector with proxy/, tap/) have no
+		// marker at root; ResolveVerifyRoot scans one level deep so we don't
+		// flag those as verifier_unavailable on every turn.
+		if _, projectType := verifier.ResolveVerifyRoot(projectRoot); projectType == "" {
 			_ = s.engineDeps.Decisions.RecordOutcome(decisionID, false, "verifier_unavailable")
 			return
 		}

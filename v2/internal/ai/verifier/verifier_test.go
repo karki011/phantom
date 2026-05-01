@@ -81,6 +81,70 @@ func TestFindProjectRoot_NotFound(t *testing.T) {
 	}
 }
 
+func TestResolveVerifyRoot_RootMarker(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte("{}"), 0644); err != nil {
+		t.Fatalf("write marker: %v", err)
+	}
+
+	gotDir, gotType := ResolveVerifyRoot(dir)
+	if gotDir != dir {
+		t.Errorf("dir = %q, want %q", gotDir, dir)
+	}
+	if gotType != "typescript" {
+		t.Errorf("type = %q, want %q", gotType, "typescript")
+	}
+}
+
+func TestResolveVerifyRoot_MonorepoChildMarker(t *testing.T) {
+	// Mirrors the ai-collector layout: no marker at root, but proxy/go.mod
+	// and tap/go.mod live one level down. The verifier must find one of them
+	// rather than reporting verifier_unavailable.
+	root := t.TempDir()
+	proxy := filepath.Join(root, "proxy")
+	if err := os.MkdirAll(proxy, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(proxy, "go.mod"), []byte("module x\n"), 0644); err != nil {
+		t.Fatalf("write marker: %v", err)
+	}
+
+	gotDir, gotType := ResolveVerifyRoot(root)
+	if gotDir != proxy {
+		t.Errorf("dir = %q, want %q", gotDir, proxy)
+	}
+	if gotType != "go" {
+		t.Errorf("type = %q, want %q", gotType, "go")
+	}
+}
+
+func TestResolveVerifyRoot_SkipsHiddenDirs(t *testing.T) {
+	// `.git/` and similar should never be picked as a verify root, even if
+	// they happened to contain a marker file (defensive — keeps behaviour
+	// predictable).
+	root := t.TempDir()
+	hidden := filepath.Join(root, ".git")
+	if err := os.MkdirAll(hidden, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hidden, "go.mod"), []byte("module x\n"), 0644); err != nil {
+		t.Fatalf("write marker: %v", err)
+	}
+
+	gotDir, gotType := ResolveVerifyRoot(root)
+	if gotDir != "" || gotType != "" {
+		t.Errorf("expected no resolution, got dir=%q type=%q", gotDir, gotType)
+	}
+}
+
+func TestResolveVerifyRoot_UnknownReturnsEmpty(t *testing.T) {
+	root := t.TempDir()
+	gotDir, gotType := ResolveVerifyRoot(root)
+	if gotDir != "" || gotType != "" {
+		t.Errorf("expected empty, got dir=%q type=%q", gotDir, gotType)
+	}
+}
+
 func TestVerify_UnknownProject(t *testing.T) {
 	dir := t.TempDir()
 	result := Verify(context.Background(), dir)
