@@ -85,6 +85,12 @@ func IsGitRepo(ctx context.Context, path string) bool {
 	return err == nil
 }
 
+// HasCommits returns true if the repo has at least one commit.
+func HasCommits(ctx context.Context, repoPath string) bool {
+	_, err := runGit(ctx, repoPath, "rev-parse", "HEAD")
+	return err == nil
+}
+
 // GetRepoName returns the base directory name of the repository path.
 func GetRepoName(repoPath string) string {
 	return filepath.Base(repoPath)
@@ -113,7 +119,10 @@ func GetDefaultBranch(ctx context.Context, repoPath string) string {
 		return "master"
 	}
 
-	// Ultimate fallback
+	// No default branch found — if repo has no commits, signal empty repo
+	if !HasCommits(ctx, repoPath) {
+		return ""
+	}
 	return "main"
 }
 
@@ -143,6 +152,11 @@ func CreateAndCheckoutBranch(ctx context.Context, repoPath, branch, baseBranch s
 func GetCurrentBranch(ctx context.Context, repoPath string) string {
 	out, err := runGit(ctx, repoPath, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
+		// Fallback for unborn branches (no commits yet)
+		out, err2 := runGit(ctx, repoPath, "symbolic-ref", "--short", "HEAD")
+		if err2 == nil {
+			return out
+		}
 		return ""
 	}
 	return out

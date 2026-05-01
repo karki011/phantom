@@ -83,12 +83,20 @@ func Create(ctx context.Context, repoPath, branch, targetDir, baseBranch string)
 		return err
 	}
 
-	// Branch does not exist -- create it
-	args := []string{"worktree", "add", "-b", branch, targetDir}
-	if baseBranch != "" {
-		args = append(args, baseBranch)
+	// Branch does not exist -- create it.
+	// If baseBranch is empty or unresolvable (e.g. empty repo with no commits),
+	// create an orphan worktree instead of failing with "invalid reference".
+	if baseBranch == "" {
+		_, err = runGit(ctx, repoPath, "worktree", "add", "--orphan", "-b", branch, targetDir)
+		return err
 	}
-	_, err = runGit(ctx, repoPath, args...)
+	if _, verifyErr := runGit(ctx, repoPath, "rev-parse", "--verify", baseBranch); verifyErr != nil {
+		_, err = runGit(ctx, repoPath, "worktree", "add", "--orphan", "-b", branch, targetDir)
+		return err
+	}
+
+	// Normal case: baseBranch is a valid ref
+	_, err = runGit(ctx, repoPath, "worktree", "add", "-b", branch, targetDir, baseBranch)
 	return err
 }
 

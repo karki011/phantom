@@ -271,6 +271,16 @@ func (a *App) GetProjectBranches(projectId string) []string {
 	if err != nil {
 		log.Error("app/GetProjectBranches: ListBranches error", "err", err)
 	}
+
+	// Unborn branch: repo has been `git init`-ed but has no commits yet.
+	// git branch -vv returns nothing, so synthesize an entry from HEAD.
+	if len(local) == 0 && !git.HasCommits(a.ctx, proj.RepoPath) {
+		unbornName := git.GetCurrentBranch(a.ctx, proj.RepoPath)
+		if unbornName != "" {
+			local = []git.BranchInfo{{Name: unbornName, IsCurrent: true}}
+		}
+	}
+
 	log.Info("app/GetProjectBranches: local branches", "count", len(local))
 	for _, b := range local {
 		if !seen[b.Name] {
