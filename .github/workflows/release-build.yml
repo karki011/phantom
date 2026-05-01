@@ -1,0 +1,166 @@
+# Author: Subash Karki
+# Builds the macOS Phantom app, code-signs with the Developer ID cert,
+# notarizes via Apple notarytool, then uploads the signed+notarized .zip
+# as a release asset.
+#
+# Triggers:
+#   - release.published    — fires automatically after release-please publishes a tag
+#   - workflow_dispatch    — manual run, used to back-fill releases (e.g. v0.1.9)
+#
+# Required repo secrets (already configured on karki011/phantom):
+#   APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+#   APPLE_DEVELOPER_CERTIFICATE_P12_BASE64, APPLE_DEVELOPER_CERTIFICATE_PASSWORD
+
+name: Release Build
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to build and attach asset to (e.g. v0.1.9)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build, sign, notarize, upload
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+    steps:
+      - name: Resolve tag
+        run: |
+          if [ -z "$TAG" ]; then
+            echo "::error::No tag resolved. Provide 'tag' input for workflow_dispatch."
+            exit 1
+          fi
+          # Strip leading 'v' for VERSION (Makefile expects bare semver, e.g. 0.1.9).
+          VERSION="${TAG#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Building $TAG (VERSION=$VERSION)"
+
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '25'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install Wails CLI
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install frontend deps
+        working-directory: v2/frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Import code-signing certificate
+        env:
+          APPLE_DEVELOPER_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 }}
+          APPLE_DEVELOPER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/phantom-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+
+          echo "$APPLE_DEVELOPER_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" \
+            -P "$APPLE_DEVELOPER_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH" >/dev/null
+
+          # Prepend the new keychain so codesign finds the identity.
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+
+          rm -f "$CERT_PATH"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+          # Sanity check: the expected identity is present.
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      - name: Write notarization credentials
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          # Makefile expects ../.env.notarize relative to v2/ — i.e. repo root.
+          {
+            echo "APPLE_ID=$APPLE_ID"
+            echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
+          } > .env.notarize
+          chmod 600 .env.notarize
+
+      - name: Build, sign, notarize, package
+        working-directory: v2
+        # Override VERSION so the artifact name matches the release tag — the
+        # Makefile reads v2/VERSION which can lag the release-please bump.
+        run: make release-zip VERSION="${VERSION}"
+
+      - name: Locate built artifact
+        id: artifact
+        working-directory: v2
+        run: |
+          set -euo pipefail
+          # Expected: build/dist/Phantom-<version>.zip — fall back to glob.
+          ZIP_PATH="$(ls build/dist/Phantom-*.zip 2>/dev/null | head -n1 || true)"
+          if [ -z "$ZIP_PATH" ]; then
+            echo "::error::No release zip found in v2/build/dist/"
+            ls -la build/dist || true
+            exit 1
+          fi
+          # Rename to include tag prefix for clarity, e.g. Phantom-v0.1.9.zip.
+          FINAL_NAME="Phantom-${TAG}.zip"
+          FINAL_PATH="build/dist/${FINAL_NAME}"
+          if [ "$ZIP_PATH" != "$FINAL_PATH" ]; then
+            mv "$ZIP_PATH" "$FINAL_PATH"
+          fi
+          echo "asset_path=v2/${FINAL_PATH}" >> "$GITHUB_OUTPUT"
+          echo "asset_name=${FINAL_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload asset to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: ${{ steps.artifact.outputs.asset_path }}
+          fail_on_unmatched_files: true
+
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          if [ -n "${KEYCHAIN_PATH:-}" ] && [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+          rm -f .env.notarize || true
