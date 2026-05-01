@@ -1,10 +1,9 @@
 // Author: Subash Karki
 
-import { createSignal, onMount, onCleanup, Show } from 'solid-js';
+import { createSignal, onMount, Show } from 'solid-js';
 import { TextField } from '@kobalte/core/text-field';
 import { getGitUserName } from '../../../core/bindings';
 import { playSound } from '../../../core/audio/engine';
-import { speakSystem } from '../config/voice';
 import { buttonRecipe } from '../../../styles/recipes.css';
 import { PhasePanel } from '../PhasePanel';
 import { AutoTimer } from '../engine/AutoTimer';
@@ -21,8 +20,6 @@ export function IdentityBind(props: IdentityBindProps) {
 
   onMount(async () => {
     playSound('whoosh');
-    const speechTimer = setTimeout(() => speakSystem('Identity detected. Locking in.'), 250);
-    onCleanup(() => clearTimeout(speechTimer));
 
     const gitName = await getGitUserName();
     if (gitName) {

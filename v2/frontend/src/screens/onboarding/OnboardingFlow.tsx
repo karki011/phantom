@@ -1,13 +1,14 @@
 // Author: Subash Karki
 
-import { createSignal, Show, Switch, Match } from 'solid-js';
-import { playSound } from '../../core/audio/engine';
-import { speakSystem } from './config/voice';
+import { createSignal, Show, Switch, Match, onMount, onCleanup } from 'solid-js';
+import { playSound, getAudioContext, getVolume } from '../../core/audio/engine';
+import { createAtmosphere } from '../../core/audio/atmosphere';
 import { phaseOrder } from './config/phases';
-import type { PhaseId } from './config/types';
+import type { PhaseId, BootScanData } from './config/types';
 import { setPref } from '../../core/signals/preferences';
 import { HexProgress } from '../../shared/HexProgress/HexProgress';
 import { BootTerminal } from './phases/BootTerminal';
+import { DepsCheck } from './phases/DepsCheck';
 import { IdentityBind } from './phases/IdentityBind';
 import { DomainSelect } from './phases/DomainSelect';
 import { DomainLink } from './phases/DomainLink';
@@ -24,7 +25,22 @@ interface OnboardingFlowProps {
 export function OnboardingFlow(props: OnboardingFlowProps) {
   const [phase, setPhase] = createSignal<PhaseId>('awakening');
   const [dissolving, setDissolving] = createSignal(false);
+  const [bootScan, setBootScan] = createSignal<BootScanData | undefined>();
   const data: Record<string, string> = {};
+
+  let atmosphere: ReturnType<typeof createAtmosphere> | null = null;
+
+  onMount(() => {
+    try {
+      atmosphere = createAtmosphere(getAudioContext(), getVolume);
+      atmosphere.start();
+    } catch {}
+  });
+
+  onCleanup(() => {
+    atmosphere?.stop();
+    atmosphere = null;
+  });
 
   const completedPhases = () => Math.max(0, phaseOrder.indexOf(phase()) - 1);
   const isMiddlePhase = () => phase() !== 'awakening' && phase() !== 'complete';
@@ -34,6 +50,7 @@ export function OnboardingFlow(props: OnboardingFlowProps) {
     if (current < phaseOrder.length - 1) {
       const next = phaseOrder[current + 1];
       setPhase(next);
+      atmosphere?.setPhase(next);
       setTimeout(() => { try { playSound('reveal'); } catch {} }, 50);
     }
   }
@@ -59,12 +76,20 @@ export function OnboardingFlow(props: OnboardingFlowProps) {
       <div class={styles.scanlines} />
 
       <Show when={phase() === 'awakening'}>
-        <BootTerminal onBootComplete={() => advancePhase()} />
+        <BootTerminal
+          onBootComplete={(scan) => {
+            if (scan) setBootScan(scan);
+            advancePhase();
+          }}
+        />
       </Show>
 
       <Show when={isMiddlePhase()}>
         <div class={styles.phaseContainer}>
           <Switch>
+            <Match when={phase() === 'deps-check'}>
+              <DepsCheck scan={bootScan()} onComplete={handlePhaseComplete} />
+            </Match>
             <Match when={phase() === 'identity-bind'}>
               <IdentityBind onComplete={handlePhaseComplete} />
             </Match>
@@ -90,7 +115,7 @@ export function OnboardingFlow(props: OnboardingFlowProps) {
 
       <Show when={isMiddlePhase()}>
         <div class={styles.progressBar}>
-          <HexProgress total={5} current={completedPhases()} />
+          <HexProgress total={6} current={completedPhases()} />
         </div>
       </Show>
     </div>

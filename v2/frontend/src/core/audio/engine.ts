@@ -83,18 +83,6 @@ const cues: Record<SoundCue, () => void> = {
   droplet: () => {
     playTone(500, 350, 0.15, 'sine', 0.1);
   },
-  ceremony: () => {
-    // Grand ascending fanfare for rank-up celebrations
-    playTone(330, 330, 0.2, 'sine', 0.12);
-    playTone(392, 392, 0.2, 'sine', 0.12, 0.15);
-    playTone(494, 494, 0.2, 'sine', 0.12, 0.3);
-    playTone(659, 659, 0.4, 'sine', 0.15, 0.45);
-    playChord([
-      { freq: 330, endFreq: 330, type: 'sine' },
-      { freq: 494, endFreq: 494, type: 'sine' },
-      { freq: 659, endFreq: 659, type: 'sine' },
-    ], 0.6, 0.1);
-  },
   hum_start: () => {
     if (humOsc) return;
     const c = getCtx();
@@ -114,6 +102,18 @@ const cues: Record<SoundCue, () => void> = {
     humOsc.stop(c.currentTime + 1.1);
     humOsc = null;
     humGain = null;
+  },
+  ceremony: () => {
+    // Grand ascending fanfare for rank-up celebrations
+    playTone(330, 330, 0.2, 'sine', 0.12);
+    playTone(392, 392, 0.2, 'sine', 0.12, 0.15);
+    playTone(494, 494, 0.2, 'sine', 0.12, 0.3);
+    playTone(659, 659, 0.4, 'sine', 0.15, 0.45);
+    playChord([
+      { freq: 330, endFreq: 330, type: 'sine' },
+      { freq: 494, endFreq: 494, type: 'sine' },
+      { freq: 659, endFreq: 659, type: 'sine' },
+    ], 0.6, 0.1);
   },
 };
 
@@ -136,6 +136,14 @@ export function setAudioVolume(v: number): void {
 
 export function isAudioEnabled(): boolean {
   return enabled;
+}
+
+export function getAudioContext(): AudioContext {
+  return getCtx();
+}
+
+export function getVolume(): number {
+  return volume;
 }
 
 // ── Speech synthesis ─────────────────────────────────────────────────────────

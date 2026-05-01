@@ -1,6 +1,6 @@
 // Author: Subash Karki
 
-import { createSignal, onMount, onCleanup, For } from 'solid-js';
+import { createSignal, onMount, For } from 'solid-js';
 import { ToggleGroup } from '@kobalte/core/toggle-group';
 import {
   applyTheme,
@@ -11,7 +11,6 @@ import {
   type FontStyleId,
 } from '../../../core/signals/theme';
 import { playSound } from '../../../core/audio/engine';
-import { speakSystem } from '../config/voice';
 import { buttonRecipe } from '../../../styles/recipes.css';
 import { PhasePanel } from '../PhasePanel';
 import { AutoTimer } from '../engine/AutoTimer';
@@ -41,8 +40,6 @@ export function DomainSelect(props: DomainSelectProps) {
 
   onMount(() => {
     playSound('reveal');
-    const speechTimer = setTimeout(() => speakSystem('Select your domain.'), 250);
-    onCleanup(() => clearTimeout(speechTimer));
   });
 
   function handleConfirm() {

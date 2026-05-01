@@ -5,6 +5,7 @@ import { APP_VERSION, APP_NAME_SPACED } from '../../../core/branding';
 
 export const phaseOrder: PhaseId[] = [
   'awakening',
+  'deps-check',
   'identity-bind',
   'domain-select',
   'domain-link',
@@ -13,42 +14,7 @@ export const phaseOrder: PhaseId[] = [
   'complete',
 ];
 
-function buildAgentLines(scan?: BootScanData): BootLine[] {
-  const installed = scan?.agents.filter((a) => a.installed) ?? [];
-  if (installed.length === 0) {
-    return [{
-      text: 'AI agents ............... none detected',
-      delay: 400,
-      prompt: '$',
-      sound: 'scan',
-      charDelay: 18,
-    }];
-  }
-
-  const lines: BootLine[] = [{
-    text: `AI agents ............... ${installed.length} detected`,
-    delay: 400,
-    prompt: '$',
-    sound: 'scan',
-    speech: `${installed.length} AI agent${installed.length === 1 ? '' : 's'} found.`,
-    waitForSpeech: true,
-    charDelay: 18,
-  }];
-
-  for (const agent of installed) {
-    const ver = agent.version ? ` ${agent.version}` : '';
-    lines.push({
-      text: `  · ${agent.name}${ver}`,
-      delay: 150,
-      style: 'dim',
-      charDelay: 12,
-    });
-  }
-
-  return lines;
-}
-
-export function buildBootScript(sessionCount: number, scan?: BootScanData): BootLine[] {
+export function buildBootScript(sessionCount: number, _scan?: BootScanData): BootLine[] {
   const isReturning = sessionCount > 0;
   return [
     {
@@ -56,70 +22,38 @@ export function buildBootScript(sessionCount: number, scan?: BootScanData): Boot
       delay: 1200,
       style: 'title',
       sound: 'bass',
-      speech: 'System reactivating.',
-      speechRate: 0.84,
+      speech: isReturning ? 'Phantom reawakening.' : 'Phantom awakening.',
+      speechRate: 0.82,
       waitForSpeech: true,
       charDelay: 100,
     },
-    { text: APP_VERSION, delay: 600, style: 'subtitle', charDelay: 70 },
-    { text: '', delay: 800, style: 'separator' },
+    { text: APP_VERSION, delay: 500, style: 'subtitle', charDelay: 70 },
+    { text: '', delay: 700, style: 'separator' },
     {
-      text: isReturning
-        ? 'Welcome back.'
-        : 'Welcome to Phantom.',
-      delay: 1000,
+      text: 'Awakening from the depths of the abyss...',
+      delay: 1100,
       style: 'dramatic',
       sound: 'reveal',
-      speech: isReturning
-        ? 'Welcome back.'
-        : 'Welcome to Phantom.',
-      speechRate: 0.84,
-      waitForSpeech: true,
-      charDelay: 40,
+      charDelay: 38,
     },
-    { text: '', delay: 600, style: 'separator' },
+    { text: '', delay: 700, style: 'separator' },
     {
-      text: sessionCount === 0
-        ? 'Recent sessions ......... first run'
-        : `Recent sessions ......... ${sessionCount} found`,
+      text: isReturning ? 'Good to see you again.' : 'Glad you made it.',
       delay: 800,
-      sound: 'scan',
-      prompt: '$',
-      speech: sessionCount === 0
-        ? 'First time here. Welcome.'
-        : `Found ${sessionCount} of your past session${sessionCount === 1 ? '' : 's'}.`,
-      waitForSpeech: true,
-      charDelay: 18,
-    },
-    {
-      text: scan?.gitInstalled
-        ? `git ..................... ${scan.gitVersion ?? 'ready'}`
-        : 'git ..................... not found',
-      delay: 400,
-      prompt: '$',
-      sound: 'scan',
-      charDelay: 18,
-    },
-    ...buildAgentLines(scan),
-    { text: '', delay: 600, style: 'separator' },
-    {
-      text: 'All set.',
-      delay: 800,
-      style: 'success',
-      sound: 'ok',
-      speech: 'All set.',
-      waitForSpeech: true,
-    },
-    { text: '', delay: 800, style: 'separator' },
-    {
-      text: "Let's get you set up.",
-      delay: 1000,
       style: 'accent',
-      sound: 'whoosh',
-      speech: "Let's get you set up.",
+      sound: 'scan',
+      speech: isReturning ? 'Good to see you again.' : 'Glad you made it.',
       speechRate: 0.88,
       waitForSpeech: true,
-      charDelay: 40,
+      charDelay: 32,
+    },
+    { text: '', delay: 700, style: 'separator' },
+    {
+      text: 'Calibrating...',
+      delay: 700,
+      style: 'dim',
+      sound: 'whoosh',
+      charDelay: 30,
     },
   ];
 }
@@ -129,7 +63,17 @@ export const phaseConfigs: Record<PhaseId, PhaseConfig> = {
     id: 'awakening',
     title: '',
     subtitle: '',
-    announcement: { text: '', speech: '', sound: 'hum_start' },
+    announcement: { text: '' },
+    persistKeys: [],
+  },
+  'deps-check': {
+    id: 'deps-check',
+    title: 'System Dependencies',
+    subtitle: 'Verifying the tools Phantom needs to operate.',
+    announcement: {
+      text: 'Verifying system dependencies...',
+      sound: 'scan',
+    },
     persistKeys: [],
   },
   'identity-bind': {
@@ -138,7 +82,6 @@ export const phaseConfigs: Record<PhaseId, PhaseConfig> = {
     subtitle: 'The System requires a name to establish a link.',
     announcement: {
       text: 'Locking operator identity...',
-      speech: 'Identity detected. Locking in.',
       sound: 'whoosh',
     },
     autoResolve: {
@@ -155,7 +98,6 @@ export const phaseConfigs: Record<PhaseId, PhaseConfig> = {
     subtitle: 'The System adapts to your will.',
     announcement: {
       text: 'Configuring visual interface...',
-      speech: 'Select your domain.',
       sound: 'reveal',
     },
     autoResolve: {
@@ -172,7 +114,6 @@ export const phaseConfigs: Record<PhaseId, PhaseConfig> = {
     subtitle: 'The System requires a workspace to bind to.',
     announcement: {
       text: 'Scanning for project domains...',
-      speech: 'A workspace is required for full synchronization.',
       sound: 'scan',
     },
     autoResolve: {
@@ -189,7 +130,6 @@ export const phaseConfigs: Record<PhaseId, PhaseConfig> = {
     subtitle: 'Select which capabilities the AI engine should activate.',
     announcement: {
       text: 'Calibrating AI engine...',
-      speech: 'Configure your AI engine capabilities.',
       sound: 'reveal',
     },
     autoResolve: {
@@ -206,7 +146,6 @@ export const phaseConfigs: Record<PhaseId, PhaseConfig> = {
     subtitle: 'Final calibration in progress.',
     announcement: {
       text: 'Manifesting abilities...',
-      speech: 'Your abilities are being prepared.',
       sound: 'bass',
     },
     persistKeys: [],
@@ -217,7 +156,6 @@ export const phaseConfigs: Record<PhaseId, PhaseConfig> = {
     subtitle: '',
     announcement: {
       text: 'System bind successful.',
-      speech: 'The System is now bound to you.',
       sound: 'bass',
     },
     persistKeys: ['onboarding_completed'],
@@ -231,7 +169,6 @@ export const abilities: Ability[] = [
     desc: 'Direct neural link to any AI agent.',
     icon: '>_',
     sound: 'scan',
-    speech: 'Terminal Interface.',
     revealDelay: 0,
   },
   {
@@ -240,7 +177,6 @@ export const abilities: Ability[] = [
     desc: 'Every session traced. Every token counted.',
     icon: '#',
     sound: 'scan',
-    speech: 'Session Tracking.',
     revealDelay: 800,
   },
   {
@@ -249,7 +185,6 @@ export const abilities: Ability[] = [
     desc: 'Live system telemetry. See everything.',
     icon: '~',
     sound: 'ok',
-    speech: 'Event Stream.',
     revealDelay: 800,
   },
 ];

@@ -1,9 +1,8 @@
 // Author: Subash Karki
 
-import { createSignal, For, onMount, onCleanup } from 'solid-js';
+import { createSignal, For, onMount } from 'solid-js';
 import { Switch as KobalteSwitch } from '@kobalte/core/switch';
 import { playSound } from '../../../core/audio/engine';
-import { speakSystem } from '../config/voice';
 import { AI_FEATURES, buildAIPrefs, defaultAIState } from '../config/ai-features';
 import { buttonRecipe } from '../../../styles/recipes.css';
 import { PhasePanel } from '../PhasePanel';
@@ -21,8 +20,6 @@ export function AIEngineConsent(props: AIEngineConsentProps) {
 
   onMount(() => {
     playSound('reveal');
-    const timer = setTimeout(() => speakSystem('Configure your AI engine capabilities.'), 250);
-    onCleanup(() => clearTimeout(timer));
   });
 
   function toggle(key: string, checked: boolean) {

@@ -2,7 +2,6 @@
 
 import { createSignal, For, onMount, onCleanup } from 'solid-js';
 import { playSound } from '../../../core/audio/engine';
-import { speakSystem } from '../config/voice';
 import type { Ability } from '../config/types';
 import * as styles from '../styles/ability.css';
 
@@ -34,7 +33,6 @@ export function AbilityReveal(props: AbilityRevealProps) {
 
         setRevealedCount(i + 1);
         playSound(ability.sound);
-        await speakSystem(ability.speech);
         if (cancelled) return;
       }
 

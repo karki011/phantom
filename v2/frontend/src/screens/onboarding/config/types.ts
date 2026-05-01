@@ -4,6 +4,7 @@ export type SoundCue = 'typing' | 'scan' | 'ok' | 'reveal' | 'whoosh' | 'bass' |
 
 export type PhaseId =
   | 'awakening'
+  | 'deps-check'
   | 'identity-bind'
   | 'domain-select'
   | 'domain-link'
@@ -29,7 +30,7 @@ export interface BootLine {
 
 export interface PhaseAnnouncement {
   text: string;
-  speech: string;
+  speech?: string;
   sound?: SoundCue;
 }
 
@@ -46,7 +47,7 @@ export interface Ability {
   desc: string;
   icon: string;
   sound: SoundCue;
-  speech: string;
+  speech?: string;
   revealDelay: number;
 }
 
@@ -68,6 +69,10 @@ export interface DetectedAgent {
 export interface BootScanData {
   gitInstalled: boolean;
   gitVersion?: string;
+  ghInstalled?: boolean;
+  ghVersion?: string;
+  ghPath?: string;
+  operator?: string;
   agents: DetectedAgent[];
 }
 

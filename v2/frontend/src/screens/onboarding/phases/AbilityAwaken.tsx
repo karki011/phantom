@@ -13,15 +13,14 @@ export function AbilityAwaken(props: { onComplete: (data: Record<string, string>
   const [allRevealed, setAllRevealed] = createSignal(false);
   const [revealReady, setRevealReady] = createSignal(false);
 
-  onMount(async () => {
+  onMount(() => {
     playSound('bass');
-    await speakSystem('Your abilities are being prepared.');
     setRevealReady(true);
   });
 
   function handleAllRevealed() {
     setAllRevealed(true);
-    setTimeout(() => speakSystem('Core functions unlocked.'), 500);
+    speakSystem('Core functions unlocked.');
   }
 
   return (

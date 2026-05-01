@@ -1,8 +1,7 @@
 // Author: Subash Karki
 
-import { createSignal, onMount, onCleanup, Show, type JSX } from 'solid-js';
+import { createSignal, onMount, Show, type JSX } from 'solid-js';
 import { playSound } from '../../../core/audio/engine';
-import { speakSystem, VOICE_TIMING } from '../config/voice';
 import type { PhaseConfig, PhaseContext } from '../config/types';
 import { PhasePanel } from '../PhasePanel';
 import { AutoTimer } from './AutoTimer';
@@ -20,12 +19,6 @@ export function PhaseRunner(props: PhaseRunnerProps) {
   onMount(() => {
     if (props.config.announcement.sound) {
       playSound(props.config.announcement.sound);
-    }
-    if (props.config.announcement.speech) {
-      const speechTimer = setTimeout(() => {
-        speakSystem(props.config.announcement.speech!);
-      }, VOICE_TIMING.preSpeechDelay);
-      onCleanup(() => clearTimeout(speechTimer));
     }
   });
 

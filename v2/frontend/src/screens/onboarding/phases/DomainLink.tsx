@@ -4,7 +4,6 @@ import { createSignal, onMount, Show } from 'solid-js';
 import { TextField } from '@kobalte/core/text-field';
 import { detectProject, addProject } from '../../../core/bindings';
 import { playSound } from '../../../core/audio/engine';
-import { speakSystem } from '../config/voice';
 import { buttonRecipe } from '../../../styles/recipes.css';
 import { PhasePanel } from '../PhasePanel';
 import { AutoTimer } from '../engine/AutoTimer';
@@ -29,7 +28,6 @@ export function DomainLink(props: DomainLinkProps) {
 
   onMount(() => {
     playSound('scan');
-    speakSystem('A workspace is required for full synchronization.');
   });
 
   function pause() {

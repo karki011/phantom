@@ -2,7 +2,7 @@
 
 import { createSignal, onMount, onCleanup, Show, For } from 'solid-js';
 import { playSound } from '../../../core/audio/engine';
-import { speakSystem, VOICE_TIMING } from '../config/voice';
+import { speakSystem } from '../config/voice';
 import { setPref } from '../../../core/signals/preferences';
 import { GlassPanel } from '../../../shared/GlassPanel/GlassPanel';
 import { PhantomMark } from '../../../shared/PhantomMark/PhantomMark';
@@ -64,7 +64,7 @@ export function Awakening(props: AwakeningProps) {
       schedule(() => {
         setAuthorityPhase('granted');
         playSound('bass');
-        speakSystem('Neural link. Synchronized.');
+        speakSystem('The System is now bound to you.');
 
         schedule(() => {
           setShowHunterCard(true);
@@ -79,7 +79,6 @@ export function Awakening(props: AwakeningProps) {
   function handleEnter() {
     void setPref('onboarding_completed', 'true');
     playSound('ok');
-    speakSystem('Your progression begins now.');
     const t = setTimeout(() => { if (!cancelled) props.onComplete(); }, 800);
     timers.push(t);
   }
