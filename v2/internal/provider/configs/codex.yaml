@@ -13,6 +13,11 @@ enabled: true
 # ── Detection ─────────────────────────────────────────────────────────
 detection:
   binary: "codex"
+  binary_paths:
+    - "/opt/homebrew/bin/codex"
+    - "/usr/local/bin/codex"
+    - "~/.local/bin/codex"
+    - "~/.codex/bin/codex"
   paths:
     - "~/.codex/"
     - "~/.codex/sessions/"

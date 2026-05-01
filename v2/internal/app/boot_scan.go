@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -16,6 +17,26 @@ import (
 
 	"github.com/subashkarki/phantom-os-v2/internal/provider"
 )
+
+// semverPattern extracts a semantic version (e.g. 2.92.0) from a tool's
+// --version output. Used to normalize multi-line / branded version strings
+// like "gh version 2.92.0 (2026-04-28)\nhttps://github.com/..." into "2.92.0".
+var semverPattern = regexp.MustCompile(`(\d+\.\d+\.\d+)`)
+
+// extractSemver returns the first semantic version found in the input,
+// or the trimmed first line if no semver matches.
+func extractSemver(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	if m := semverPattern.FindString(raw); m != "" {
+		return m
+	}
+	if i := strings.IndexByte(raw, '\n'); i >= 0 {
+		return strings.TrimSpace(raw[:i])
+	}
+	return strings.TrimSpace(raw)
+}
 
 // AgentStatus holds detection results for a single AI coding agent.
 type AgentStatus struct {
@@ -39,6 +60,9 @@ type BootScanResult struct {
 	GCPConfigured  bool          `json:"gcpConfigured"`
 	GitInstalled   bool          `json:"gitInstalled"`
 	GitVersion     string        `json:"gitVersion,omitempty"`
+	GhInstalled    bool          `json:"ghInstalled"`
+	GhVersion      string        `json:"ghVersion,omitempty"`
+	GhPath         string        `json:"ghPath,omitempty"`
 	Agents         []AgentStatus `json:"agents"`
 }
 
@@ -51,6 +75,10 @@ func versionWithTimeout(name string, args ...string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+func lookBin(name string, candidates ...string) (string, bool) {
+	return provider.ResolveBin(name, candidates)
 }
 
 // countDirs returns the number of subdirectories inside dir (0 on error).
@@ -94,10 +122,15 @@ func detectAgents(home string, provReg *provider.Registry) []AgentStatus {
 				return
 			}
 		}
-		// Fallback: direct binary probe
-		if _, err := exec.LookPath("claude"); err == nil {
+		// Fallback: direct binary probe with PATH + common install locations
+		if bin, ok := lookBin("claude",
+			"~/.local/bin/claude",
+			"~/.claude/local/claude",
+			"/opt/homebrew/bin/claude",
+			"/usr/local/bin/claude",
+		); ok {
 			a.Installed = true
-			a.Version = versionWithTimeout("claude", "--version")
+			a.Version = versionWithTimeout(bin, "--version")
 			n := countDirs(filepath.Join(home, ".claude", "projects"))
 			a.SessionCount = n
 			a.Detail = fmt.Sprintf("%d projects", n)
@@ -109,8 +142,13 @@ func detectAgents(home string, provReg *provider.Registry) []AgentStatus {
 	go func() {
 		defer wg.Done()
 		a := AgentStatus{Name: "Codex CLI"}
-		if _, err := exec.LookPath("codex"); err == nil {
+		if bin, ok := lookBin("codex",
+			"/opt/homebrew/bin/codex",
+			"/usr/local/bin/codex",
+			"~/.local/bin/codex",
+		); ok {
 			a.Installed = true
+			a.Version = versionWithTimeout(bin, "--version")
 			a.Detail = "installed"
 		} else if _, err := os.Stat(filepath.Join(home, ".codex")); err == nil {
 			a.Installed = true
@@ -151,8 +189,13 @@ func detectAgents(home string, provReg *provider.Registry) []AgentStatus {
 	go func() {
 		defer wg.Done()
 		a := AgentStatus{Name: "Gemini CLI"}
-		if _, err := exec.LookPath("gemini"); err == nil {
+		if bin, ok := lookBin("gemini",
+			"/opt/homebrew/bin/gemini",
+			"/usr/local/bin/gemini",
+			"~/.local/bin/gemini",
+		); ok {
 			a.Installed = true
+			a.Version = versionWithTimeout(bin, "--version")
 			a.Detail = "installed"
 		} else if _, err := os.Stat(filepath.Join(home, ".gemini")); err == nil {
 			a.Installed = true
@@ -165,8 +208,11 @@ func detectAgents(home string, provReg *provider.Registry) []AgentStatus {
 	go func() {
 		defer wg.Done()
 		a := AgentStatus{Name: "GitHub Copilot"}
-		if _, err := exec.LookPath("gh"); err == nil {
-			ver := versionWithTimeout("gh", "copilot", "--version")
+		if bin, ok := lookBin("gh",
+			"/opt/homebrew/bin/gh",
+			"/usr/local/bin/gh",
+		); ok {
+			ver := versionWithTimeout(bin, "copilot", "--version")
 			if ver != "" {
 				a.Installed = true
 				a.Version = ver
@@ -247,21 +293,45 @@ func (a *App) BootScan() (*BootScanResult, error) {
 	home, _ := os.UserHomeDir()
 	r := &BootScanResult{}
 
-	if _, err := exec.LookPath("git"); err == nil {
+	gitBin, gitOK := lookBin("git",
+		"/opt/homebrew/bin/git",
+		"/usr/local/bin/git",
+		"/usr/bin/git",
+	)
+	if gitOK {
 		r.GitInstalled = true
-		r.GitVersion = versionWithTimeout("git", "--version")
+		r.GitVersion = extractSemver(versionWithTimeout(gitBin, "--version"))
+		if out, err := exec.Command(gitBin, "config", "--global", "user.name").Output(); err == nil {
+			r.Operator = strings.TrimSpace(string(out))
+		}
 	}
 
-	if out, err := exec.Command("git", "config", "--global", "user.name").Output(); err == nil {
-		r.Operator = strings.TrimSpace(string(out))
+	if bin, ok := lookBin("gh",
+		"/opt/homebrew/bin/gh",
+		"/usr/local/bin/gh",
+	); ok {
+		r.GhInstalled = true
+		r.GhPath = bin
+		r.GhVersion = extractSemver(versionWithTimeout(bin, "--version"))
 	}
 
-	if out, err := exec.Command("node", "--version").Output(); err == nil {
-		r.NodeVersion = strings.TrimSpace(strings.TrimPrefix(string(out), "v"))
+	if bin, ok := lookBin("node",
+		"/opt/homebrew/bin/node",
+		"/usr/local/bin/node",
+	); ok {
+		if out, err := exec.Command(bin, "--version").Output(); err == nil {
+			r.NodeVersion = strings.TrimSpace(strings.TrimPrefix(string(out), "v"))
+		}
 	}
 
-	if out, err := exec.Command("bun", "--version").Output(); err == nil {
-		r.BunVersion = strings.TrimSpace(string(out))
+	if bin, ok := lookBin("bun",
+		"/opt/homebrew/bin/bun",
+		"/usr/local/bin/bun",
+		"~/.bun/bin/bun",
+	); ok {
+		if out, err := exec.Command(bin, "--version").Output(); err == nil {
+			r.BunVersion = strings.TrimSpace(string(out))
+		}
 	}
 
 	r.Agents = detectAgents(home, a.provRegistry)

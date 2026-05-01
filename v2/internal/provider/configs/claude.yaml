@@ -13,6 +13,11 @@ enabled: true
 # ── Detection ─────────────────────────────────────────────────────────
 detection:
   binary: "claude"
+  binary_paths:
+    - "~/.local/bin/claude"
+    - "~/.claude/local/claude"
+    - "/opt/homebrew/bin/claude"
+    - "/usr/local/bin/claude"
   paths:
     - "~/.claude/sessions/"
     - "~/.claude/projects/"

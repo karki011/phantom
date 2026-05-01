@@ -93,40 +93,44 @@ func (p *ConfigProvider) Enabled() bool {
 	return p.Cfg.Enabled_
 }
 
-// ExecutablePath resolves the absolute path to the configured CLI binary
-// on the current PATH.
+// ResolveBinary returns the absolute path to the configured CLI binary,
+// checking PATH first then the binary_paths fallback list from the YAML.
+func (p *ConfigProvider) ResolveBinary() (string, bool) {
+	return ResolveBin(p.Cfg.Detection.Binary, p.Cfg.Detection.BinaryPaths)
+}
+
+// ExecutablePath resolves the absolute path to the configured CLI binary,
+// checking PATH first then falling back to binary_paths.
 func (p *ConfigProvider) ExecutablePath() (string, error) {
-	binary := p.Cfg.Detection.Binary
-	if binary == "" {
+	if p.Cfg.Detection.Binary == "" {
 		return "", fmt.Errorf("provider %q: no binary configured", p.Cfg.Provider)
 	}
-	path, err := exec.LookPath(binary)
-	if err != nil {
-		return "", fmt.Errorf("provider %q: %s CLI not found in PATH: %w", p.Cfg.Provider, binary, err)
+	path, ok := p.ResolveBinary()
+	if !ok {
+		return "", fmt.Errorf("provider %q: %s CLI not found in PATH or fallback paths", p.Cfg.Provider, p.Cfg.Detection.Binary)
 	}
 	return path, nil
 }
 
-// IsInstalled checks if the provider binary exists on PATH and if
-// at least one of the configured artifact paths exists.
+// IsInstalled checks if the provider binary can be resolved. Artifact
+// paths (~/.claude, ~/.codex, etc.) are not required — a fresh install
+// hasn't created those yet, but the binary alone is enough to run.
 func (p *ConfigProvider) IsInstalled() bool {
-	_, err := exec.LookPath(p.Cfg.Detection.Binary)
-	if err != nil {
-		return false
-	}
-	// Check at least one artifact path exists
-	for _, raw := range p.Cfg.Detection.Paths {
-		resolved := ExpandPath(raw)
-		if _, err := os.Stat(resolved); err == nil {
-			return true
-		}
-	}
-	return false
+	_, ok := p.ResolveBinary()
+	return ok
 }
 
-// DetectedVersion runs the configured version command and extracts the
-// version string using the configured regex pattern.
+// DetectedVersion runs the configured version command and returns the
+// extracted version string, or "" if the binary can't be resolved.
 func (p *ConfigProvider) DetectedVersion() string {
+	binPath, ok := p.ResolveBinary()
+	if !ok {
+		return ""
+	}
+	return p.detectedVersionAt(binPath)
+}
+
+func (p *ConfigProvider) detectedVersionAt(binPath string) string {
 	cmd := p.Cfg.Detection.VersionCommand
 	if len(cmd) == 0 {
 		return ""
@@ -135,7 +139,7 @@ func (p *ConfigProvider) DetectedVersion() string {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	out, err := exec.CommandContext(ctx, cmd[0], cmd[1:]...).CombinedOutput()
+	out, err := exec.CommandContext(ctx, binPath, cmd[1:]...).CombinedOutput()
 	if err != nil {
 		return ""
 	}
@@ -614,21 +618,19 @@ func (p *ConfigProvider) ForkConversation(_, _, _ string) (string, error) {
 // ---------------------------------------------------------------------------
 
 // HealthCheck performs a full liveness probe combining installation check,
-// version detection, and basic credential verification.
+// version detection, and basic credential verification. Falls back to
+// configured binary_paths if the binary isn't on PATH (macOS GUI apps).
 func (p *ConfigProvider) HealthCheck(_ context.Context) HealthStatus {
 	status := HealthStatus{}
 
-	// Check binary exists
-	_, err := exec.LookPath(p.Cfg.Detection.Binary)
-	if err != nil {
-		status.Error = fmt.Sprintf("binary %q not found on PATH", p.Cfg.Detection.Binary)
+	binPath, ok := p.ResolveBinary()
+	if !ok {
+		status.Error = fmt.Sprintf("binary %q not found on PATH or in fallback paths", p.Cfg.Detection.Binary)
 		return status
 	}
 	status.Installed = true
 
-	// Check version
-	version := p.DetectedVersion()
-	if version != "" {
+	if version := p.detectedVersionAt(binPath); version != "" {
 		status.Reachable = true
 		status.Version = version
 	}

@@ -17,3 +17,15 @@ func (a *App) BrowseDirectory(title string) string {
 	}
 	return dir
 }
+
+// BrowseFile opens a native file picker dialog and returns the selected path,
+// or empty string if cancelled.
+func (a *App) BrowseFile(title string) string {
+	path, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title: title,
+	})
+	if err != nil {
+		return ""
+	}
+	return path
+}

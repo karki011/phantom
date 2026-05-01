@@ -429,10 +429,11 @@ export function ChangesView() {
   }
 
   const hasFiles = () => stagedFiles().length > 0 || unstagedFiles().length > 0;
+  const hasWorktree = () => !!activeWorktreeId();
 
   return (
     <Show
-      when={hasFiles()}
+      when={hasWorktree()}
       fallback={
         <div class={styles.emptyState}>
           <GitCommit size={24} />
@@ -445,7 +446,7 @@ export function ChangesView() {
     >
       <div class={styles.fileListContainer}>
 
-        {/* ── Header bar ── */}
+        {/* ── Header bar ── always visible so pull/push stays available after commit */}
         <div class={styles.changesHeader}>
           <Show when={branchName()}>
             <Tip label={branchName()} placement="bottom">
@@ -495,6 +496,18 @@ export function ChangesView() {
         </div>
 
         {/* ── Scrollable file list ── */}
+        <Show
+          when={hasFiles()}
+          fallback={
+            <div class={styles.emptyState}>
+              <GitCommit size={24} />
+              <span>No changes detected</span>
+              <span class={styles.emptyStateHint}>
+                Modified files will appear here
+              </span>
+            </div>
+          }
+        >
         <div class={styles.scrollArea}>
 
           {/* Staged section */}
@@ -612,6 +625,7 @@ export function ChangesView() {
             </button>
           </div>
         </div>
+        </Show>
 
       </div>
     </Show>

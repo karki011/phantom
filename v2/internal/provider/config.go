@@ -44,6 +44,7 @@ type ProviderConfig struct {
 // DetectionConfig describes how to find and verify a provider binary.
 type DetectionConfig struct {
 	Binary         string   `yaml:"binary"`
+	BinaryPaths    []string `yaml:"binary_paths"`
 	Paths          []string `yaml:"paths"`
 	VersionCommand []string `yaml:"version_command"`
 	VersionPattern string   `yaml:"version_pattern"`
@@ -306,6 +307,9 @@ func mergeDetection(base, over DetectionConfig) DetectionConfig {
 	merged := base
 	if over.Binary != "" {
 		merged.Binary = over.Binary
+	}
+	if len(over.BinaryPaths) > 0 {
+		merged.BinaryPaths = over.BinaryPaths
 	}
 	if len(over.Paths) > 0 {
 		merged.Paths = over.Paths

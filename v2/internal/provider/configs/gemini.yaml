@@ -13,6 +13,10 @@ enabled: true
 # ── Detection ─────────────────────────────────────────────────────────
 detection:
   binary: "gemini"
+  binary_paths:
+    - "/opt/homebrew/bin/gemini"
+    - "/usr/local/bin/gemini"
+    - "~/.local/bin/gemini"
   paths:
     - "~/.gemini/"
     - "~/.gemini/tmp/"

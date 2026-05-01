@@ -547,6 +547,17 @@ func applyPatch(cfg *provider.ProviderConfig, patch map[string]any) {
 					cfg.Detection.Binary = s
 				}
 			}
+			if v, ok := m["binary_paths"]; ok {
+				if arr, ok := v.([]any); ok {
+					paths := make([]string, 0, len(arr))
+					for _, item := range arr {
+						if s, ok := item.(string); ok && s != "" {
+							paths = append(paths, s)
+						}
+					}
+					cfg.Detection.BinaryPaths = paths
+				}
+			}
 		}
 	}
 

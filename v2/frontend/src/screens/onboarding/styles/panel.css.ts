@@ -5,7 +5,7 @@ import { vars } from '../../../styles/theme.css';
 
 export const wrapper = style({
   pointerEvents: 'auto',
-  maxWidth: '680px',
+  maxWidth: '880px',
   width: '100%',
   padding: `0 ${vars.space.xl}`,
   opacity: 0,
