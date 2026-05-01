@@ -27,6 +27,7 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/gamification"
 	"github.com/subashkarki/phantom-os-v2/internal/git"
+	"github.com/subashkarki/phantom-os-v2/internal/integration"
 	"github.com/subashkarki/phantom-os-v2/internal/linker"
 	"github.com/subashkarki/phantom-os-v2/internal/provider"
 	"github.com/subashkarki/phantom-os-v2/internal/safety"
@@ -218,6 +219,12 @@ func (a *App) Startup(ctx context.Context) {
 	// Start lightweight HTTP API server for Claude Code hook communication.
 	a.startAPIServer()
 
+	// Self-heal MCP registration on every boot. Cheap (single ~/.mcp.json
+	// read), idempotent, and rewrites stale v1 entries left over from
+	// pre-v2 installs without waiting for the user to flip a settings
+	// toggle. Failures are logged, not fatal.
+	go a.selfHealMCPRegistration()
+
 	// Mark orphaned terminals (active in DB but no live PTY) as ended.
 	// Handles crash recovery: terminals that were active when the app last exited.
 	if a.DB != nil {
@@ -377,10 +384,31 @@ func (a *App) startAPIServer() {
 		dbWriter = a.DB.Writer
 	}
 
+	listWorkspacesFn := func() []api.Workspace {
+		if a.DB == nil {
+			return nil
+		}
+		q := db.New(a.DB.Reader)
+		projects, err := q.ListProjects(a.ctx)
+		if err != nil {
+			log.Warn("app: list workspaces for api failed", "err", err)
+			return nil
+		}
+		out := make([]api.Workspace, 0, len(projects))
+		for _, p := range projects {
+			if p.RepoPath == "" {
+				continue
+			}
+			out = append(out, api.Workspace{Name: p.Name, Path: p.RepoPath})
+		}
+		return out
+	}
+
 	a.apiServer = api.NewServer(api.DefaultPort, api.ServerDeps{
-		FileIndexers:  indexersFn,
-		DecisionStore: decisionStore,
-		DB:            dbWriter,
+		FileIndexers:   indexersFn,
+		DecisionStore:  decisionStore,
+		DB:             dbWriter,
+		ListWorkspaces: listWorkspacesFn,
 	})
 
 	go func() {
@@ -388,6 +416,37 @@ func (a *App) startAPIServer() {
 			log.Error("app: api server failed", "err", err)
 		}
 	}()
+}
+
+// selfHealMCPRegistration ensures phantom-ai is registered in ~/.mcp.json
+// with the current binary path on every boot, and that all linked Phantom
+// workspaces have the server enabled in their ~/.claude.json project entry.
+// All failures are logged but never propagated — MCP registration is an
+// enhancement, not critical.
+func (a *App) selfHealMCPRegistration() {
+	if err := integration.RegisterPhantomMCP(); err != nil {
+		log.Error("app: mcp self-heal failed", "err", err)
+		return
+	}
+	log.Info("app: mcp self-heal complete")
+
+	if a.DB == nil {
+		return
+	}
+	q := db.New(a.DB.Reader)
+	projects, err := q.ListProjects(a.ctx)
+	if err != nil {
+		log.Warn("app: mcp self-heal — list projects failed", "err", err)
+		return
+	}
+	paths := make([]string, 0, len(projects))
+	for _, p := range projects {
+		if p.RepoPath != "" {
+			paths = append(paths, p.RepoPath)
+		}
+	}
+	updated, failed := integration.EnsureProjectsHaveMCP(paths)
+	log.Info("app: mcp project enablement", "updated", updated, "failed", failed, "total", len(paths))
 }
 
 // StartFileGraph starts (or restarts) the file graph indexer for a project.

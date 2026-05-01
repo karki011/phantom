@@ -1,6 +1,6 @@
 // Author: Subash Karki
 
-import { createSignal, For, onMount } from 'solid-js';
+import { createSignal, For, onMount, Show } from 'solid-js';
 import { Switch as KobalteSwitch } from '@kobalte/core/switch';
 import { playSound } from '../../../core/audio/engine';
 import { AI_FEATURES, buildAIPrefs, defaultAIState } from '../config/ai-features';
@@ -14,13 +14,64 @@ interface AIEngineConsentProps {
   onComplete: (data: Record<string, string>) => void;
 }
 
+interface MCPStatus {
+  registered: boolean;
+  binaryPath: string;
+  stale: boolean;
+  error?: string;
+}
+
+const App = () => (window as any).go?.['app']?.App;
+
+async function getMCPStatus(): Promise<MCPStatus> {
+  try {
+    const raw = await App()?.GetMCPRegistrationStatus?.();
+    if (!raw) return { registered: false, binaryPath: '', stale: false };
+    return raw as MCPStatus;
+  } catch (err) {
+    return {
+      registered: false,
+      binaryPath: '',
+      stale: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+async function repairMCP(): Promise<string> {
+  try {
+    return (await App()?.RepairMCPRegistration?.()) ?? '';
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
+
 export function AIEngineConsent(props: AIEngineConsentProps) {
   const [states, setStates] = createSignal<Record<string, boolean>>(defaultAIState());
   const [paused, setPaused] = createSignal(false);
+  const [mcpStatus, setMcpStatus] = createSignal<MCPStatus | null>(null);
+  const [repairing, setRepairing] = createSignal(false);
 
   onMount(() => {
     playSound('reveal');
+    void refreshStatus();
   });
+
+  async function refreshStatus() {
+    setMcpStatus(await getMCPStatus());
+  }
+
+  async function handleRepair() {
+    setPaused(true);
+    setRepairing(true);
+    const err = await repairMCP();
+    setRepairing(false);
+    if (err) {
+      setMcpStatus({ registered: false, binaryPath: '', stale: false, error: err });
+      return;
+    }
+    await refreshStatus();
+  }
 
   function toggle(key: string, checked: boolean) {
     setPaused(true);
@@ -37,12 +88,10 @@ export function AIEngineConsent(props: AIEngineConsentProps) {
   }
 
   function handleSkip() {
-    // Skip persists nothing — defaults remain unset
     props.onComplete({});
   }
 
   function handleAutoResolve() {
-    // Auto-resolve uses defaults
     props.onComplete(buildAIPrefs(states()));
   }
 
@@ -80,6 +129,29 @@ export function AIEngineConsent(props: AIEngineConsentProps) {
             )}
           </For>
         </div>
+
+        <Show when={mcpStatus()}>
+          {(status) => {
+            const ok = status().registered && !status().stale && !status().error;
+            return (
+              <div class={styles.mcpStatusRow}>
+                <span class={ok ? styles.mcpStatusOk : styles.mcpStatusBad}>
+                  Phantom MCP server: {ok ? 'registered' : 'not registered'}
+                  {status().stale ? ' (stale v1 entry)' : ''}
+                </span>
+                <Show when={!ok}>
+                  <button
+                    class={buttonRecipe({ variant: 'outline', size: 'sm' })}
+                    onClick={() => void handleRepair()}
+                    disabled={repairing()}
+                  >
+                    {repairing() ? 'Repairing…' : 'Repair'}
+                  </button>
+                </Show>
+              </div>
+            );
+          }}
+        </Show>
 
         <div class={styles.actionRow}>
           <button

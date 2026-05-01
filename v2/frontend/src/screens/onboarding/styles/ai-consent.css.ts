@@ -42,3 +42,24 @@ export const skipRow = style({
   paddingTop: vars.space.sm,
   opacity: 0.7,
 });
+
+export const mcpStatusRow = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: vars.space.md,
+  padding: `${vars.space.sm} 0`,
+  borderTop: `1px solid ${vars.color.border}`,
+  marginTop: vars.space.sm,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textSecondary,
+});
+
+export const mcpStatusOk = style({
+  color: vars.color.success,
+});
+
+export const mcpStatusBad = style({
+  color: vars.color.warning,
+});

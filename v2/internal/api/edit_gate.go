@@ -135,3 +135,19 @@ func (s *Server) handleEditGateCheck(w http.ResponseWriter, r *http.Request) {
 		"ttlSec":  int(EditGateTTL.Seconds()),
 	})
 }
+
+// handleListWorkspaces returns the currently linked Phantom workspaces so
+// the edit-gate hook can scope blocking to those paths only. Empty list is
+// returned (not 503) when the dep is unconfigured — the hook treats empty
+// as "no linked workspaces, fail open".
+func (s *Server) handleListWorkspaces(w http.ResponseWriter, _ *http.Request) {
+	if s.deps.ListWorkspaces == nil {
+		writeJSON(w, http.StatusOK, []Workspace{})
+		return
+	}
+	workspaces := s.deps.ListWorkspaces()
+	if workspaces == nil {
+		workspaces = []Workspace{}
+	}
+	writeJSON(w, http.StatusOK, workspaces)
+}

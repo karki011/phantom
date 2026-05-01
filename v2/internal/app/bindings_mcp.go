@@ -7,6 +7,7 @@ package app
 import (
 	"github.com/charmbracelet/log"
 
+	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/integration"
 )
 
@@ -42,6 +43,40 @@ func (a *App) RegisterPhantomMCPBinding() string {
 	if err := integration.RegisterPhantomMCP(); err != nil {
 		log.Error("app: register phantom-ai mcp failed", "err", err)
 		return err.Error()
+	}
+	return ""
+}
+
+// GetMCPRegistrationStatus reports whether the phantom-ai MCP entry is
+// present in ~/.mcp.json and points at the correct binary. Used by the
+// onboarding consent screen to surface a "Repair" CTA when the registration
+// is missing or stale.
+func (a *App) GetMCPRegistrationStatus() integration.MCPRegistrationStatus {
+	return integration.GetMCPRegistrationStatus()
+}
+
+// RepairMCPRegistration re-runs registration (writes ~/.mcp.json + enables
+// in ~/.claude/settings.json) and re-applies per-project enablement for
+// every linked workspace. Returns "" on success, an error string otherwise.
+func (a *App) RepairMCPRegistration() string {
+	if err := integration.RegisterPhantomMCP(); err != nil {
+		log.Error("app: repair mcp registration failed", "err", err)
+		return err.Error()
+	}
+	if a.DB != nil {
+		q := db.New(a.DB.Reader)
+		projects, err := q.ListProjects(a.ctx)
+		if err != nil {
+			log.Warn("app: repair mcp — list projects failed", "err", err)
+			return ""
+		}
+		paths := make([]string, 0, len(projects))
+		for _, p := range projects {
+			if p.RepoPath != "" {
+				paths = append(paths, p.RepoPath)
+			}
+		}
+		integration.EnsureProjectsHaveMCP(paths)
 	}
 	return ""
 }
