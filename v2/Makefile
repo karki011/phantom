@@ -1,4 +1,4 @@
-.PHONY: dev build clean test lint sqlc frontend-install frontend-build frontend-typecheck go-build go-test go-lint ci mcp-build docs-llm release release-build release-sign release-notarize release-zip release-dmg
+.PHONY: dev build clean test lint sqlc frontend-install frontend-build frontend-typecheck go-build go-test go-lint ci mcp-build mcp-bundle docs-llm release release-build release-sign release-notarize release-zip release-dmg
 
 # --- Release config ---
 # Auto-load Apple notarization credentials from parent dir (sibling of v2/).
@@ -8,6 +8,7 @@ export APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
 
 APP_NAME      := Phantom
 APP_BUNDLE    := build/bin/$(APP_NAME).app
+APP_MACOS     := $(APP_BUNDLE)/Contents/MacOS
 SIGN_IDENTITY := Developer ID Application: Subash Karki (Z825V2BBX9)
 TEAM_ID       := Z825V2BBX9
 ENTITLEMENTS  := build/darwin/entitlements.plist
@@ -15,12 +16,13 @@ DIST_DIR      := build/dist
 VERSION       := $(shell cat VERSION 2>/dev/null || echo dev)
 
 # Development
-dev:
+dev: mcp-build
 	wails dev
 
-# Production build
-build:
+# Production build — also bundles the phantom-mcp child binary into the .app.
+build: mcp-build
 	wails build -clean
+	$(MAKE) mcp-bundle
 
 # Frontend
 frontend-install:
@@ -88,6 +90,23 @@ go-build:
 mcp-build:
 	go build -o build/bin/phantom-mcp ./cmd/phantom-mcp
 
+# Universal MCP binary used for release builds (matches darwin/universal target).
+mcp-build-universal:
+	GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o build/bin/phantom-mcp-arm64 ./cmd/phantom-mcp
+	GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o build/bin/phantom-mcp-amd64 ./cmd/phantom-mcp
+	lipo -create -output build/bin/phantom-mcp build/bin/phantom-mcp-arm64 build/bin/phantom-mcp-amd64
+	rm -f build/bin/phantom-mcp-arm64 build/bin/phantom-mcp-amd64
+
+# Copy the compiled phantom-mcp binary next to the main app executable inside
+# the .app bundle so MCP registration can resolve it via os.Executable() at
+# runtime. Idempotent — overwrites any previous copy.
+mcp-bundle:
+	@test -f build/bin/phantom-mcp || (echo "missing build/bin/phantom-mcp — run 'make mcp-build' first"; exit 1)
+	@test -d "$(APP_MACOS)" || (echo "missing $(APP_MACOS) — run 'make build' first"; exit 1)
+	cp build/bin/phantom-mcp "$(APP_MACOS)/phantom-mcp"
+	chmod +x "$(APP_MACOS)/phantom-mcp"
+	@echo "✓ phantom-mcp bundled at $(APP_MACOS)/phantom-mcp"
+
 go-test:
 	go test ./... -v -race
 
@@ -123,9 +142,11 @@ ci: frontend-install frontend-build go-build
 
 release: release-dmg
 
-release-build:
+release-build: mcp-build-universal
 	@echo "==> wails build (universal, trimmed)"
 	wails build -clean -trimpath -platform darwin/universal -ldflags "-s -w"
+	@echo "==> bundling phantom-mcp into .app"
+	$(MAKE) mcp-bundle
 
 release-sign: release-build
 	@echo "==> codesign with hardened runtime"

@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/git"
+	"github.com/subashkarki/phantom-os-v2/internal/integration"
 	"github.com/subashkarki/phantom-os-v2/internal/project"
 )
 
@@ -36,6 +37,11 @@ func (a *App) AddProject(repoPath string) (*db.Project, error) {
 	// Return existing project if already registered.
 	rq := db.New(a.DB.Reader)
 	if existing, err := rq.FindProjectByRepoPath(a.ctx, repoPath); err == nil {
+		// Still ensure MCP is enabled for already-linked workspaces in case
+		// the project was added before the per-project enablement existed.
+		if err := integration.EnsureProjectHasMCP(repoPath); err != nil {
+			slog.Warn("AddProject: ensure mcp for existing project failed", "err", err)
+		}
 		return &existing, nil
 	}
 
@@ -88,6 +94,10 @@ func (a *App) AddProject(repoPath string) (*db.Project, error) {
 	}
 	if err := q.CreateWorkspace(a.ctx, wsParams); err != nil {
 		slog.Warn("AddProject: auto-create workspace failed", "err", err)
+	}
+
+	if err := integration.EnsureProjectHasMCP(repoPath); err != nil {
+		slog.Warn("AddProject: ensure mcp project enablement failed", "err", err)
 	}
 
 	return &proj, nil

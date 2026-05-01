@@ -30,6 +30,13 @@ const DefaultPort = 3849
 // FallbackPort is tried when DefaultPort is busy (e.g. v1 server running).
 const FallbackPort = 3850
 
+// Workspace is the wire shape for /api/workspaces — what the edit-gate hook
+// uses to scope the gate to linked Phantom workspaces only.
+type Workspace struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
 // ServerDeps holds external dependencies injected at construction time.
 type ServerDeps struct {
 	// FileIndexers provides graph queries per project. The map key is the
@@ -42,6 +49,11 @@ type ServerDeps struct {
 
 	// DB is the SQLite writer connection for preferences.
 	DB *sql.DB
+
+	// ListWorkspaces returns the currently linked Phantom workspaces. The
+	// edit-gate hook calls /api/workspaces to scope the gate to these paths
+	// only — edits outside any linked workspace pass through untouched.
+	ListWorkspaces func() []Workspace
 }
 
 // hookHealthEntry records the last health report from a hook.
@@ -143,6 +155,9 @@ func (s *Server) registerRoutes() {
 
 	s.mux.HandleFunc("POST /api/edit-gate/touch", s.handleEditGateTouch)
 	s.mux.HandleFunc("GET /api/edit-gate/check", s.handleEditGateCheck)
+
+	// Linked Phantom workspaces — edit-gate hook scopes the gate to these.
+	s.mux.HandleFunc("GET /api/workspaces", s.handleListWorkspaces)
 
 	// Graph (for prompt-enricher hook)
 	s.mux.HandleFunc("GET /api/graph/auto/context", s.handleGraphAutoContext)
