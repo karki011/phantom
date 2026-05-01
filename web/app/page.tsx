@@ -32,14 +32,15 @@ const RELEASES_URL = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases
 const fetchLatestRelease = async (): Promise<LatestRelease | null> => {
   try {
     const res = await fetch(
-      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`,
+      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases`,
       {
         next: { revalidate: 3600 },
         headers: { Accept: "application/vnd.github+json" },
       },
     );
     if (!res.ok) return null;
-    return (await res.json()) as LatestRelease;
+    const releases = (await res.json()) as LatestRelease[];
+    return releases.find((r) => r.assets.length > 0) ?? releases[0] ?? null;
   } catch {
     return null;
   }
