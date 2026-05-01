@@ -202,11 +202,13 @@ func Process(ctx context.Context, deps Dependencies, in ProcessInput) (*ProcessR
 		if id, err := deps.Decisions.Record(in.Goal, winner.Strategy.ID(), winner.Score,
 			string(assessment.Complexity), string(assessment.Risk)); err == nil {
 			learning.DecisionID = id
-			// Treat the deterministic enrichment as a successful run for
-			// performance/auto-tune signal purposes. Downstream callers can
-			// later override via knowledge.DecisionStore.RecordOutcome when
-			// they have ground-truth feedback.
-			_ = deps.Decisions.RecordOutcome(id, true, "")
+			// Tag this as orchestrator-phase: strategy selection completed
+			// without crashing, but the LLM hasn't run yet. Composer's
+			// post-turn verifier (or the MCP feedback API) writes a separate
+			// verifier-phase row when ground-truth pass/fail is known.
+			// GetSuccessRate / GetFailedApproaches ignore orchestrator-phase
+			// rows so the learning loop isn't biased toward over-optimism.
+			_ = deps.Decisions.RecordOrchestratorOutcome(id, true, "")
 		}
 	}
 	if deps.Performance != nil {
