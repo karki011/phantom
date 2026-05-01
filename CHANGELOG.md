@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.9](https://github.com/karki011/phantom/compare/v0.1.8...v0.1.9) (2026-05-01)
+
+
+### Features
+
+* **composer:** record evaluator outcomes alongside verifier ([49d26a6](https://github.com/karki011/phantom/commit/49d26a6cd9227af9952e45643487cf235d2e791f))
+* **composer:** record evaluator outcomes alongside verifier ([1220e1c](https://github.com/karki011/phantom/commit/1220e1cbcbe2a3b3975949de81470d4113641fe6))
+
+
+### Bug Fixes
+
+* **verifier:** resolve project root in monorepos with no top-level marker ([dd4a5df](https://github.com/karki011/phantom/commit/dd4a5dfed2ba35c29af69943136c49c65ccfe64c))
+* **verifier:** resolve project root in monorepos with no top-level marker ([3d83307](https://github.com/karki011/phantom/commit/3d83307ef255a507bac53ca4dffb1ebcb26a7cf1))
+
 ## [0.1.8](https://github.com/karki011/phantom/compare/v0.1.7...v0.1.8) (2026-05-01)
 
 
