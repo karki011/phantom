@@ -12,10 +12,38 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
 const defaultTimeout = 30 * time.Second
+
+var (
+	ghOnce sync.Once
+	ghPath string
+)
+
+// ghBin returns the absolute path to the gh binary.
+// macOS GUI apps don't inherit the shell PATH, so Homebrew paths are checked explicitly.
+func ghBin() string {
+	ghOnce.Do(func() {
+		if p, err := exec.LookPath("gh"); err == nil {
+			ghPath = p
+			return
+		}
+		for _, candidate := range []string{
+			"/opt/homebrew/bin/gh", // Apple Silicon
+			"/usr/local/bin/gh",    // Intel
+		} {
+			if _, err := os.Stat(candidate); err == nil {
+				ghPath = candidate
+				return
+			}
+		}
+		ghPath = "gh" // last resort: let the OS error surface naturally
+	})
+	return ghPath
+}
 
 // runGit executes a git command in the given repo path with context-based timeout.
 // It returns trimmed stdout on success, or an error containing stderr context.

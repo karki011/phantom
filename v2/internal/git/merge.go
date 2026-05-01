@@ -53,7 +53,7 @@ func MergePr(ctx context.Context, repoPath, branch, method string, autoMerge, de
 		args = append(args, "-d")
 	}
 
-	cmd := exec.CommandContext(ctx, "gh", args...)
+	cmd := exec.CommandContext(ctx, ghBin(), args...)
 	cmd.Dir = repoPath
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -78,7 +78,7 @@ func MergePr(ctx context.Context, repoPath, branch, method string, autoMerge, de
 // DisableAutoMerge cancels a pending --auto merge.
 func DisableAutoMerge(ctx context.Context, repoPath, branch string) error {
 	log.Info("git/DisableAutoMerge: called", "branch", branch)
-	cmd := exec.CommandContext(ctx, "gh", "pr", "merge", branch, "--disable-auto")
+	cmd := exec.CommandContext(ctx, ghBin(), "pr", "merge", branch, "--disable-auto")
 	cmd.Dir = repoPath
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

@@ -18,7 +18,7 @@ import (
 // IsGhAvailable returns true if the gh CLI is authenticated and available.
 func IsGhAvailable(ctx context.Context) bool {
 	log.Info("git/IsGhAvailable: called")
-	cmd := exec.CommandContext(ctx, "gh", "auth", "status")
+	cmd := exec.CommandContext(ctx, ghBin(), "auth", "status")
 	err := cmd.Run()
 	if err != nil {
 		log.Info("git/IsGhAvailable: gh not available", "err", err)
@@ -112,7 +112,7 @@ func computeCheckSummary(checks []ghCheckRunJSON) (passed, failed, pending int) 
 func GetPrStatus(ctx context.Context, repoPath, branch string) (*PrStatus, error) {
 	log.Info("git/GetPrStatus: called", "repoPath", repoPath, "branch", branch)
 
-	cmd := exec.CommandContext(ctx, "gh", "pr", "view", branch,
+	cmd := exec.CommandContext(ctx, ghBin(), "pr", "view", branch,
 		"--json", "number,title,state,url,headRefName,baseRefName,isDraft,author,createdAt,mergedAt,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision,autoMergeRequest,latestReviews,reviewRequests",
 	)
 	cmd.Dir = repoPath
@@ -228,7 +228,7 @@ func getMergeQueueEntry(ctx context.Context, repoPath string, prNumber int) (sta
 
 	query := `query($owner:String!,$name:String!,$num:Int!){repository(owner:$owner,name:$name){pullRequest(number:$num){mergeQueueEntry{state position estimatedTimeToMerge}}}}`
 
-	cmd := exec.CommandContext(ctx, "gh", "api", "graphql",
+	cmd := exec.CommandContext(ctx, ghBin(), "api", "graphql",
 		"-f", "query="+query,
 		"-F", "owner="+owner,
 		"-F", "name="+name,
@@ -267,7 +267,7 @@ func getMergeQueueEntry(ctx context.Context, repoPath string, prNumber int) (sta
 func ListOpenPrsForBase(ctx context.Context, repoPath, baseBranch string, limit int) ([]PrStatus, error) {
 	log.Info("git/ListOpenPrsForBase: called", "repoPath", repoPath, "base", baseBranch, "limit", limit)
 
-	cmd := exec.CommandContext(ctx, "gh", "pr", "list",
+	cmd := exec.CommandContext(ctx, ghBin(), "pr", "list",
 		"--base", baseBranch,
 		"--state", "open",
 		"--limit", fmt.Sprintf("%d", limit),
@@ -342,7 +342,7 @@ type ghCheckJSON struct {
 func GetCiRuns(ctx context.Context, repoPath, branch string) ([]CiRun, error) {
 	log.Info("git/GetCiRuns: called", "repoPath", repoPath, "branch", branch)
 
-	cmd := exec.CommandContext(ctx, "gh", "pr", "checks", branch,
+	cmd := exec.CommandContext(ctx, ghBin(), "pr", "checks", branch,
 		"--json", "name,state,bucket,link,workflow,description",
 	)
 	cmd.Dir = repoPath
@@ -402,7 +402,7 @@ func GetCheckAnnotations(ctx context.Context, repoPath, branch, checkName string
 	}
 
 	apiPath := fmt.Sprintf("repos/%s/commits/%s/check-runs", ownerRepo, sha)
-	cmd := exec.CommandContext(ctx, "gh", "api", apiPath, "--jq",
+	cmd := exec.CommandContext(ctx, ghBin(), "api", apiPath, "--jq",
 		fmt.Sprintf(".check_runs[] | select(.name == \"%s\") | .id", checkName))
 	cmd.Dir = repoPath
 	var stdout bytes.Buffer
@@ -417,7 +417,7 @@ func GetCheckAnnotations(ctx context.Context, repoPath, branch, checkName string
 	}
 
 	annotationsPath := fmt.Sprintf("repos/%s/check-runs/%s/annotations", ownerRepo, checkRunID)
-	annoCmd := exec.CommandContext(ctx, "gh", "api", annotationsPath)
+	annoCmd := exec.CommandContext(ctx, ghBin(), "api", annotationsPath)
 	annoCmd.Dir = repoPath
 	var annoOut bytes.Buffer
 	annoCmd.Stdout = &annoOut
@@ -456,7 +456,7 @@ func GetFailedSteps(ctx context.Context, repoPath, checkURL string) ([]FailedSte
 	}
 
 	apiPath := fmt.Sprintf("repos/%s/actions/runs/%s/jobs?per_page=100&filter=latest", ownerRepo, runID)
-	cmd := exec.CommandContext(ctx, "gh", "api", apiPath)
+	cmd := exec.CommandContext(ctx, ghBin(), "api", apiPath)
 	cmd.Dir = repoPath
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
@@ -511,7 +511,7 @@ func GetFailedSteps(ctx context.Context, repoPath, checkURL string) ([]FailedSte
 
 func fetchJobErrors(ctx context.Context, repoPath, ownerRepo string, jobID int64) []string {
 	logsPath := fmt.Sprintf("repos/%s/actions/jobs/%d/logs", ownerRepo, jobID)
-	cmd := exec.CommandContext(ctx, "gh", "api", logsPath)
+	cmd := exec.CommandContext(ctx, ghBin(), "api", logsPath)
 	cmd.Dir = repoPath
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
@@ -636,7 +636,7 @@ func CreatePrWithAI(ctx context.Context, repoPath, branch, baseBranch string) (*
 
 	// Step 5: Create the PR.
 	log.Info("git/CreatePrWithAI: creating PR", "title", title, "baseBranch", baseBranch)
-	createCmd := exec.CommandContext(ctx, "gh", "pr", "create",
+	createCmd := exec.CommandContext(ctx, ghBin(), "pr", "create",
 		"--title", title,
 		"--body", body,
 		"--base", baseBranch,
