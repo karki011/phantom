@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/karki011/phantom/compare/v0.1.2...v0.1.3) (2026-05-01)
+
+
+### Bug Fixes
+
+* resolve gh CLI path for macOS GUI apps ([273093e](https://github.com/karki011/phantom/commit/273093ecdf601f1b34623f1a9cd366f192bae7d4))
+* resolve gh CLI path for macOS GUI apps ([5f6b291](https://github.com/karki011/phantom/commit/5f6b2917793b57ff254c5f7e98b3de68ed33906c))
+
 ## [0.1.2](https://github.com/karki011/phantom/compare/v0.1.1...v0.1.2) (2026-04-30)
 
 
