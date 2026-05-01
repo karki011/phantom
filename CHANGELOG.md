@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.5](https://github.com/karki011/phantom/compare/v0.1.4...v0.1.5) (2026-05-01)
+
+
+### Features
+
+* user-level Phantom MCP + project-scoped edit gate ([1814c8f](https://github.com/karki011/phantom/commit/1814c8fbd57df25e9c3c8f01181bca34edfc0447))
+* user-level Phantom MCP + project-scoped edit gate ([d6ed7cf](https://github.com/karki011/phantom/commit/d6ed7cf985f24eff6e4c80762e0dd743dcd43a0d))
+
+
+### Bug Fixes
+
+* instant worktree load on add/clone + expand/collapse-all toggle ([6f47264](https://github.com/karki011/phantom/commit/6f47264b2329561f6c1a82ed19d866b69c4411e0))
+* instant worktree load on add/clone, add expand/collapse-all toggle ([f95c4af](https://github.com/karki011/phantom/commit/f95c4afc78310699344781f7d8a0ae76728efe25))
+
 ## [0.1.4](https://github.com/karki011/phantom/compare/v0.1.3...v0.1.4) (2026-05-01)
 
 
