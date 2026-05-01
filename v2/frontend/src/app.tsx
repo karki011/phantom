@@ -45,6 +45,7 @@ import { DocsScreen } from './screens/docs';
 import { SystemCockpit } from './screens/system/SystemCockpit';
 import { XPGainFloat, LevelUpCelebration, RankUpCelebration, AchievementToastWatcher } from './shared/Gamification';
 import { bootstrapGamification } from './core/signals/gamification';
+import { bootstrapMCPRegistrationListener } from './core/signals/mcp';
 import { AICommandCenter } from './components/ai-command-center/AICommandCenter';
 
 export function App() {
@@ -81,6 +82,13 @@ export function App() {
     bootstrapApp();
     bootstrapSessions();
     bootstrapProjects();
+
+    // Toast surfaces for MCP self-heal failures (issue #10). Listener stays
+    // active for the life of the app — registered before self-heal can fire
+    // since the Go side's selfHealMCPRegistration runs in a goroutine kicked
+    // off at Startup. Any race here is benign: the toast is informational and
+    // self-heal also runs on every subsequent boot.
+    bootstrapMCPRegistrationListener();
 
     // Restore the last-active worktree BEFORE flipping ready=true so the
     // initial render lands on the workspace instead of flashing WelcomePage.
