@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/karki011/phantom/compare/v0.1.10...v0.1.11) (2026-05-01)
+
+
+### Bug Fixes
+
+* fetch first release with assets, reduce revalidate to 5min ([#29](https://github.com/karki011/phantom/issues/29)) ([4e2bbbd](https://github.com/karki011/phantom/commit/4e2bbbd731f8dd0ab0a9178256e55134f4ba5929))
+
 ## [0.1.10](https://github.com/karki011/phantom/compare/v0.1.9...v0.1.10) (2026-05-01)
 
 
