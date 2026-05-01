@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.6](https://github.com/karki011/phantom/compare/v0.1.5...v0.1.6) (2026-05-01)
+
+
+### Bug Fixes
+
+* extract repo name from URL for clone destination ([03a6c3f](https://github.com/karki011/phantom/commit/03a6c3f8e68f1c61e3bab735afc237c936f52334))
+* extract repo name from URL for clone destination ([6f5119f](https://github.com/karki011/phantom/commit/6f5119f289190b0ef38db63c29010863b6644f0e)), closes [#13](https://github.com/karki011/phantom/issues/13)
+* **mcp:** drop hardcoded fallback path on binary resolution failure ([ae55a30](https://github.com/karki011/phantom/commit/ae55a30839bf4de88f1bfdd6f164d1c8e13e8429)), closes [#11](https://github.com/karki011/phantom/issues/11)
+* **mcp:** surface registration failures + drop hardcoded fallback path ([4926116](https://github.com/karki011/phantom/commit/492611655fa2a69ed64112d96a785fbd09de04be))
+* **mcp:** surface registration failures via toast instead of silent log ([b9b72fe](https://github.com/karki011/phantom/commit/b9b72feb75c2ef2cae38bd8d8da839e4e03dc930)), closes [#10](https://github.com/karki011/phantom/issues/10)
+* surface clone errors to user with toast feedback ([b959bab](https://github.com/karki011/phantom/commit/b959babac466f6add82d1bc33b56ac4b9ce1de6e)), closes [#12](https://github.com/karki011/phantom/issues/12)
+
 ## [0.1.5](https://github.com/karki011/phantom/compare/v0.1.4...v0.1.5) (2026-05-01)
 
 
