@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.10](https://github.com/karki011/phantom/compare/v0.1.9...v0.1.10) (2026-05-01)
+
+
+### Features
+
+* Composer UX overhaul — metrics, strategy viz, panels, GTM site ([9642ee5](https://github.com/karki011/phantom/commit/9642ee55cf6f92adf869b41c29086b8f1491fb38))
+* Composer UX overhaul — metrics, strategy viz, panels, GTM site ([8bacc87](https://github.com/karki011/phantom/commit/8bacc872c2587a53fea98297bd3e049627aae52a))
+
+
+### Documentation
+
+* update v2 README and fix Electron references in docs/index.html ([38822ff](https://github.com/karki011/phantom/commit/38822ff5091d6f726a2d2894f96d2f00927a4d78))
+
 ## [0.1.9](https://github.com/karki011/phantom/compare/v0.1.8...v0.1.9) (2026-05-01)
 
 
