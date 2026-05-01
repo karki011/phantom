@@ -86,7 +86,9 @@ func (c *Compactor) Run() error {
 }
 
 // synthesizePatterns groups decisions by (strategy_id, complexity, risk) and
-// creates or updates patterns for groups with enough samples.
+// creates or updates patterns for groups with enough samples. Only verifier-
+// phase outcomes feed pattern math — orchestrator-phase auto-records would
+// inflate sample size with optimistic always-success rows.
 func (c *Compactor) synthesizePatterns() error {
 	rows, err := c.db.Query(`
 		SELECT d.strategy_id, d.complexity, d.risk,
@@ -94,9 +96,10 @@ func (c *Compactor) synthesizePatterns() error {
 			   COALESCE(SUM(CASE WHEN o.success = 1 THEN 1 ELSE 0 END), 0) AS successes
 		FROM ai_decisions d
 		JOIN ai_outcomes o ON o.decision_id = d.id
+		WHERE o.phase = ?
 		GROUP BY d.strategy_id, d.complexity, d.risk
 		HAVING COUNT(*) >= ?
-	`, PatternMinSamples)
+	`, PhaseVerifier, PatternMinSamples)
 	if err != nil {
 		return err
 	}
@@ -151,8 +154,11 @@ func (c *Compactor) synthesizePatterns() error {
 	return nil
 }
 
-// pruneStale deletes outcomes and then decisions older than PruneTTL
-// that have no successful outcome. Successful decisions are kept regardless of age.
+// pruneStale deletes outcomes and then decisions older than PruneTTL that
+// have no successful verifier-phase outcome. Successful decisions are kept
+// regardless of age. Orchestrator-phase auto-records don't count as success
+// here — every decision has one (always written as `true`), so a non-phase-
+// aware check would never prune anything.
 func (c *Compactor) pruneStale() error {
 	cutoff := time.Now().Add(-PruneTTL)
 
@@ -162,10 +168,10 @@ func (c *Compactor) pruneStale() error {
 			SELECT d.id FROM ai_decisions d
 			WHERE d.created_at < ?
 			AND d.id NOT IN (
-				SELECT o.decision_id FROM ai_outcomes o WHERE o.success = 1
+				SELECT o.decision_id FROM ai_outcomes o WHERE o.success = 1 AND o.phase = ?
 			)
 		)
-	`, cutoff)
+	`, cutoff, PhaseVerifier)
 	if err != nil {
 		return err
 	}
@@ -175,9 +181,9 @@ func (c *Compactor) pruneStale() error {
 		DELETE FROM ai_decisions
 		WHERE created_at < ?
 		AND id NOT IN (
-			SELECT decision_id FROM ai_outcomes WHERE success = 1
+			SELECT decision_id FROM ai_outcomes WHERE success = 1 AND phase = ?
 		)
-	`, cutoff)
+	`, cutoff, PhaseVerifier)
 	return err
 }
 
@@ -206,8 +212,14 @@ func (c *Compactor) Health() (KnowledgeHealth, error) {
 		return h, err
 	}
 
+	// Average only over verifier-phase rows. Orchestrator-phase rows are
+	// always success=1 by design, so blending them would push AvgSuccessRate
+	// toward 1.0 regardless of real-world signal.
 	var avgRate sql.NullFloat64
-	if err := c.db.QueryRow("SELECT AVG(CAST(success AS REAL)) FROM ai_outcomes").Scan(&avgRate); err != nil {
+	if err := c.db.QueryRow(
+		"SELECT AVG(CAST(success AS REAL)) FROM ai_outcomes WHERE phase = ?",
+		PhaseVerifier,
+	).Scan(&avgRate); err != nil {
 		return h, err
 	}
 	if avgRate.Valid {

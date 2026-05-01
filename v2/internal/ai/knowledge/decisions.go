@@ -33,7 +33,21 @@ type Outcome struct {
 	DecisionID    string
 	Success       bool
 	FailureReason string
+	// Phase identifies which writer produced the row. See PhaseOrchestrator /
+	// PhaseVerifier — used by GetSuccessRate / GetFailedApproaches to ignore
+	// optimistic auto-records when ground-truth verifier rows exist.
+	Phase string
 }
+
+// PhaseOrchestrator marks rows written by the orchestrator's optimistic
+// auto-record (strategy selection didn't crash) — kept for observability but
+// excluded from learning-loop math when verifier rows are available.
+const PhaseOrchestrator = "orchestrator"
+
+// PhaseVerifier marks rows written by a real pass/fail signal (Composer's
+// post-turn typecheck/test verifier, MCP feedback API). Drives GetSuccessRate
+// and GetFailedApproaches by default.
+const PhaseVerifier = "verifier"
 
 // DecisionStore provides CRUD access to AI decisions and outcomes.
 type DecisionStore struct {
@@ -41,6 +55,9 @@ type DecisionStore struct {
 }
 
 // NewDecisionStore creates a DecisionStore and ensures the schema exists.
+// The `phase` column is NOT NULL DEFAULT 'orchestrator' so existing rows from
+// pre-phase installs backfill correctly (every row before this column landed
+// was orchestrator-written).
 func NewDecisionStore(db *sql.DB) (*DecisionStore, error) {
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS ai_decisions (
@@ -57,10 +74,12 @@ func NewDecisionStore(db *sql.DB) (*DecisionStore, error) {
 			decision_id TEXT REFERENCES ai_decisions(id),
 			success INTEGER NOT NULL DEFAULT 0,
 			failure_reason TEXT DEFAULT '',
+			phase TEXT NOT NULL DEFAULT 'orchestrator',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE INDEX IF NOT EXISTS idx_decisions_goal ON ai_decisions(goal);
 		CREATE INDEX IF NOT EXISTS idx_outcomes_decision ON ai_outcomes(decision_id);
+		CREATE INDEX IF NOT EXISTS idx_outcomes_phase ON ai_outcomes(phase);
 	`)
 	if err != nil {
 		return nil, err
@@ -84,12 +103,30 @@ func (ds *DecisionStore) Record(goal, strategyID string, confidence float64, com
 	return id, err
 }
 
-// RecordOutcome persists the outcome of a previous decision.
+// RecordOutcome persists a verifier-phase outcome (ground-truth pass/fail
+// from the project verifier or an explicit feedback API call). Most callers
+// want this — see RecordOrchestratorOutcome for the optimistic auto-record
+// path used inside the orchestrator's selection pipeline.
 func (ds *DecisionStore) RecordOutcome(decisionID string, success bool, failureReason string) error {
+	return ds.recordOutcomeWithPhase(decisionID, success, failureReason, PhaseVerifier)
+}
+
+// RecordOrchestratorOutcome persists the orchestrator's optimistic auto-record
+// (strategy selection completed without crashing). These rows are kept for
+// observability but excluded from GetSuccessRate / GetFailedApproaches by
+// default — they don't represent real success, only that the picker ran.
+func (ds *DecisionStore) RecordOrchestratorOutcome(decisionID string, success bool, failureReason string) error {
+	return ds.recordOutcomeWithPhase(decisionID, success, failureReason, PhaseOrchestrator)
+}
+
+// recordOutcomeWithPhase is the single INSERT path. Both public Record* methods
+// delegate here so the wire shape stays consistent and writers can't forget
+// the phase tag.
+func (ds *DecisionStore) recordOutcomeWithPhase(decisionID string, success bool, failureReason, phase string) error {
 	id := uuid.New().String()
 	_, err := ds.db.Exec(
-		"INSERT INTO ai_outcomes (id, decision_id, success, failure_reason) VALUES (?, ?, ?, ?)",
-		id, decisionID, boolToInt(success), failureReason,
+		"INSERT INTO ai_outcomes (id, decision_id, success, failure_reason, phase) VALUES (?, ?, ?, ?, ?)",
+		id, decisionID, boolToInt(success), failureReason, phase,
 	)
 	return err
 }
@@ -170,7 +207,9 @@ type FailedApproach struct {
 	CreatedAt  time.Time
 }
 
-// GetFailedApproaches finds strategies that failed on goals similar to the given one.
+// GetFailedApproaches finds strategies that failed on goals similar to the
+// given one. Only verifier-phase outcomes count — orchestrator-phase rows are
+// optimistic auto-records and don't represent real failures.
 func (ds *DecisionStore) GetFailedApproaches(goal string) ([]FailedApproach, error) {
 	similar, err := ds.FindSimilar(goal, 0.3)
 	if err != nil {
@@ -180,7 +219,10 @@ func (ds *DecisionStore) GetFailedApproaches(goal string) ([]FailedApproach, err
 	var failures []FailedApproach
 	for _, d := range similar {
 		var success int
-		err := ds.db.QueryRow("SELECT success FROM ai_outcomes WHERE decision_id = ? LIMIT 1", d.ID).Scan(&success)
+		err := ds.db.QueryRow(
+			"SELECT success FROM ai_outcomes WHERE decision_id = ? AND phase = ? LIMIT 1",
+			d.ID, PhaseVerifier,
+		).Scan(&success)
 		if err == nil && success == 0 {
 			failures = append(failures, FailedApproach{StrategyID: d.StrategyID, CreatedAt: d.CreatedAt})
 		}
@@ -188,14 +230,22 @@ func (ds *DecisionStore) GetFailedApproaches(goal string) ([]FailedApproach, err
 	return failures, nil
 }
 
-// GetSuccessRate returns the success rate and total count for a strategy at a complexity.
+// GetSuccessRate returns the success rate and total count for a strategy at a
+// complexity. Only verifier-phase outcomes feed the rate — orchestrator-phase
+// rows would skew it toward 100% (they're auto-recorded as success the moment
+// strategy selection completes, before the LLM has done anything).
+//
+// Cold-start behaviour: when no verifier-phase rows exist for the strategy +
+// complexity pair, returns (0, 0, nil). Callers (PerformanceStore weighting,
+// etc.) treat zero-sample as "no signal" and fall back to neutral defaults
+// rather than penalising untried strategies.
 func (ds *DecisionStore) GetSuccessRate(strategyID string, complexity string) (float64, int, error) {
 	var total, successes int
 	err := ds.db.QueryRow(`
 		SELECT COUNT(*), COALESCE(SUM(CASE WHEN o.success = 1 THEN 1 ELSE 0 END), 0)
 		FROM ai_decisions d JOIN ai_outcomes o ON o.decision_id = d.id
-		WHERE d.strategy_id = ? AND d.complexity = ?
-	`, strategyID, complexity).Scan(&total, &successes)
+		WHERE d.strategy_id = ? AND d.complexity = ? AND o.phase = ?
+	`, strategyID, complexity, PhaseVerifier).Scan(&total, &successes)
 	if err != nil || total == 0 {
 		return 0, 0, err
 	}
