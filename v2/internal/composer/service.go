@@ -28,6 +28,9 @@ import (
 
 	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
+
+	"github.com/subashkarki/phantom-os-v2/internal/ai/orchestrator"
+	"github.com/subashkarki/phantom-os-v2/internal/ai/verifier"
 )
 
 const (
@@ -56,6 +59,12 @@ type Service struct {
 	// once. First turn uses `--session-id <uuid>` to create. Subsequent
 	// turns use `--resume <uuid>` because claude rejects --session-id reuse.
 	sessionStarted map[string]bool
+
+	// engineDeps wires Phantom's AI engine (orchestrator + knowledge stores
+	// + verifier) into every Composer turn. When zero-valued, Send falls
+	// back to the raw user prompt with no strategy enrichment and no
+	// outcome recording — same behaviour as before this connection landed.
+	engineDeps orchestrator.Dependencies
 }
 
 // NewService constructs a Composer service. emit should be wired to
@@ -68,6 +77,15 @@ func NewService(writer *sql.DB, emit func(string, interface{})) *Service {
 		sessions:       make(map[string]string),
 		sessionStarted: make(map[string]bool),
 	}
+}
+
+// SetEngineDeps wires Phantom's AI engine into the Composer service. Call
+// this after construction, before Wails Startup completes. Passing a
+// zero-valued Dependencies disables engine enrichment; orchestrator.Process
+// degrades gracefully when individual fields (Decisions, Indexer, etc.) are
+// nil so partial wiring is safe.
+func (s *Service) SetEngineDeps(deps orchestrator.Dependencies) {
+	s.engineDeps = deps
 }
 
 // ---------------------------------------------------------------------------
@@ -126,13 +144,58 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 	// Build the prompt with @file mentions inlined as <file> tags.
 	prompt := buildPromptWithMentions(args.Prompt, args.Mentions, args.CWD)
 
+	// Route through Phantom's AI engine: pick a strategy, gather graph
+	// context, record a decision. Skipped entirely in NoContext mode (the
+	// user explicitly asked for no workspace awareness) or when the engine
+	// isn't wired. The orchestrator returns a deterministic enriched prompt
+	// in result.Output.Text — we prepend it as a directive prelude so the
+	// CLI sees strategy guidance before the user's raw goal.
+	var decisionID string
+	if !args.NoContext {
+		if result, err := orchestrator.Process(ctx, s.engineDeps, orchestrator.ProcessInput{
+			Goal:        args.Prompt,
+			ActiveFiles: mentionPaths(args.Mentions, args.CWD),
+		}); err == nil && result != nil {
+			if result.Learning != nil {
+				decisionID = result.Learning.DecisionID
+			}
+			if directive := strings.TrimSpace(result.Output.Text); directive != "" && directive != strings.TrimSpace(args.Prompt) {
+				prompt = directive + "\n\n" + prompt
+			}
+		} else if err != nil {
+			// Surface but don't bypass — KISS, fail loud.
+			log.Warn("composer: orchestrator process failed", "err", err)
+		}
+	}
+
 	runCtx, cancel := context.WithCancel(ctx)
 	s.mu.Lock()
 	s.runs[args.PaneID] = cancel
 	s.mu.Unlock()
 
-	go s.run(runCtx, cliPath, args, sessionID, isResume, turnID, prompt)
+	go s.run(runCtx, cliPath, args, sessionID, isResume, turnID, prompt, decisionID)
 	return turnID, nil
+}
+
+// mentionPaths flattens Mentions into absolute paths for the orchestrator.
+// Empty / unresolved entries are dropped — empty input is fine, the
+// orchestrator handles it.
+func mentionPaths(mentions []Mention, cwd string) []string {
+	if len(mentions) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(mentions))
+	for _, m := range mentions {
+		p := m.Path
+		if p == "" {
+			continue
+		}
+		if !filepath.IsAbs(p) && cwd != "" {
+			p = filepath.Join(cwd, p)
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // NewConversation drops the cached session for a pane so the next Send
@@ -294,12 +357,16 @@ func (s *Service) DeleteSession(ctx context.Context, sessionID string) error {
 // Internal — run loop
 // ---------------------------------------------------------------------------
 
-func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessionID string, isResume bool, turnID, prompt string) {
+func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessionID string, isResume bool, turnID, prompt, decisionID string) {
 	defer func() {
 		s.mu.Lock()
 		delete(s.runs, args.PaneID)
 		s.mu.Unlock()
 	}()
+	// Close the learning loop: after every Composer turn (success, error, or
+	// cancel) run the project verifier and write the outcome to ai_outcomes.
+	// Async + best-effort — must never block the next user prompt.
+	defer s.recordVerifierOutcome(decisionID, args.CWD)
 
 	// First turn: --session-id <id> creates the session.
 	// Subsequent turns: --resume <id> attaches to the existing one.
@@ -591,6 +658,61 @@ func (s *Service) cancelExisting(paneID string) {
 	if ok {
 		cancel()
 	}
+}
+
+// recordVerifierOutcome runs the project verifier (typecheck + tests) against
+// the worktree the turn ran in and writes the result to ai_outcomes keyed
+// by the orchestrator's decision ID. Spawned in a goroutine so the user's
+// next prompt never blocks on test runs. No-ops cleanly when:
+//   - the engine isn't wired (DecisionStore == nil)
+//   - the orchestrator never recorded a decision (decisionID == "")
+//   - the turn had no project root (NoContext mode, fresh temp dir, etc.)
+//
+// When the project type isn't recognised we still record an outcome so the
+// learning loop sees signal — flagged via reason="verifier_unavailable".
+func (s *Service) recordVerifierOutcome(decisionID, projectRoot string) {
+	if s.engineDeps.Decisions == nil || decisionID == "" || strings.TrimSpace(projectRoot) == "" {
+		return
+	}
+	go func() {
+		// 5 minute ceiling: typecheck + tests should finish well under
+		// this; the cap protects against a pathological project hanging
+		// the verifier goroutine forever.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		if verifier.DetectProjectType(projectRoot) == "" {
+			_ = s.engineDeps.Decisions.RecordOutcome(decisionID, false, "verifier_unavailable")
+			return
+		}
+
+		result := verifier.Verify(ctx, projectRoot)
+		reason := summariseVerifier(result)
+		if err := s.engineDeps.Decisions.RecordOutcome(decisionID, result.AllPassed, reason); err != nil {
+			log.Warn("composer: record verifier outcome", "decision_id", decisionID, "err", err)
+		}
+	}()
+}
+
+// summariseVerifier flattens the per-command verifier results into a single
+// short reason string. On success returns "verifier_passed"; on failure
+// returns the first failing command + its truncated output (the verifier
+// already caps Output at 500 chars).
+func summariseVerifier(v verifier.ProjectVerification) string {
+	if v.AllPassed {
+		return "verifier_passed"
+	}
+	for _, r := range v.Results {
+		if !r.Passed {
+			out := strings.TrimSpace(r.Output)
+			if out == "" {
+				return fmt.Sprintf("verifier_failed:%s exit=%d", r.Command, r.ExitCode)
+			}
+			return fmt.Sprintf("verifier_failed:%s exit=%d %s", r.Command, r.ExitCode, out)
+		}
+	}
+	// No commands ran but AllPassed=false (shouldn't happen, but stay safe).
+	return "verifier_failed:no_results"
 }
 
 func parseResult(raw map[string]json.RawMessage) (int64, int64, float64) {
