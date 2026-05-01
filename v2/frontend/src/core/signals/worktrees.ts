@@ -58,7 +58,7 @@ export const activeProject = createMemo(() => {
 });
 
 // Load worktrees for a single project
-async function loadProjectWorktrees(projectId: string): Promise<void> {
+export async function loadProjectWorktrees(projectId: string): Promise<void> {
   try {
     const wts = await listWorktrees(projectId);
     console.log('[worktrees] loaded for project', projectId, wts);
@@ -224,6 +224,20 @@ export function toggleProject(projectId: string): void {
     setPref('expanded_projects', JSON.stringify([...next]));
     return next;
   });
+}
+
+// Expand or collapse every project at once. On collapse, the active worktree's
+// parent project stays expanded so the user keeps sight of what they're working on.
+export function setAllProjectsExpanded(shouldExpand: boolean): void {
+  const next = new Set<string>();
+  if (shouldExpand) {
+    for (const p of projects()) next.add(p.id);
+  } else {
+    const wt = activeWorktree();
+    if (wt) next.add(wt.project_id);
+  }
+  setExpandedProjects(next);
+  setPref('expanded_projects', JSON.stringify([...next]));
 }
 
 // Select the active worktree, persist, and auto-expand its parent project

@@ -1,9 +1,9 @@
 // Phantom — Left sidebar: project/worktree navigation
 // Author: Subash Karki
 
-import { For, onMount, createSignal } from 'solid-js';
+import { For, Show, onMount, createSignal } from 'solid-js';
 import { LeftRail } from './LeftRail';
-import { ChevronsLeft, FolderPlus, GitBranch, HardDriveDownload, Settings2 } from 'lucide-solid';
+import { ChevronsLeft, ChevronsDownUp, ChevronsUpDown, FolderPlus, GitBranch, HardDriveDownload, Settings2 } from 'lucide-solid';
 import { TextField } from '@kobalte/core/text-field';
 import { Tip } from '@/shared/Tip/Tip';
 import { PhantomModal, phantomModalStyles } from '@/shared/PhantomModal/PhantomModal';
@@ -22,7 +22,11 @@ import {
   setLeftSidebarCollapsed,
   isLeftResizing,
   bootstrapWorktrees,
+  loadProjectWorktrees,
+  expandedProjects,
+  setAllProjectsExpanded,
 } from '@/core/signals/worktrees';
+import { projects } from '@/core/signals/projects';
 import { addProject, browseDirectory, cloneRepository, isGitRepo, initGitRepo } from '@/core/bindings';
 import { showWarningToast } from '@/shared/Toast/Toast';
 import { refreshProjects } from '@/core/signals/projects';
@@ -38,6 +42,7 @@ export function WorktreeSidebar() {
     requestAnimationFrame(() => setMounted(true));
   });
 
+  const allProjectsExpanded = () => expandedProjects().size >= projects().length;
 
   const [gitInitPath, setGitInitPath] = createSignal('');
   const gitInitOpen = () => gitInitPath() !== '';
@@ -55,18 +60,18 @@ export function WorktreeSidebar() {
       setGitInitPath(path);
       return;
     }
-    await addProject(path);
+    const project = await addProject(path);
     await refreshProjects();
-    await bootstrapWorktrees();
+    if (project) await loadProjectWorktrees(project.id);
   }
 
   async function handleConfirmGitInit() {
     const path = gitInitPath();
     setGitInitPath('');
     await initGitRepo(path);
-    await addProject(path);
+    const project = await addProject(path);
     await refreshProjects();
-    await bootstrapWorktrees();
+    if (project) await loadProjectWorktrees(project.id);
   }
 
   const [scanOpen, setScanOpen] = createSignal(false);
@@ -85,9 +90,9 @@ export function WorktreeSidebar() {
   async function handleCloneSubmit(url: string) {
     const dest = await browseDirectory('Select destination directory');
     if (!dest) return;
-    await cloneRepository(url, dest);
+    const project = await cloneRepository(url, dest);
     await refreshProjects();
-    await bootstrapWorktrees();
+    if (project) await loadProjectWorktrees(project.id);
   }
 
   const collapsed = () => leftSidebarCollapsed();
@@ -169,6 +174,18 @@ export function WorktreeSidebar() {
               <HardDriveDownload size={14} />
             </button>
           </Tip>
+          <Show when={projects().length >= 2}>
+            <Tip label={allProjectsExpanded() ? 'Collapse all' : 'Expand all'}>
+              <button
+                class={`${styles.actionButton} ${styles.actionButtonCompact}`}
+                type="button"
+                onClick={() => setAllProjectsExpanded(!allProjectsExpanded())}
+                aria-label={allProjectsExpanded() ? 'Collapse all projects' : 'Expand all projects'}
+              >
+                {allProjectsExpanded() ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
+              </button>
+            </Tip>
+          </Show>
           <Tip label="Manage projects">
             <button
               class={`${styles.actionButton} ${styles.actionButtonCompact}`}
