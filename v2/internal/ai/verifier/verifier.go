@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -93,6 +94,35 @@ func DetectProjectType(projectRoot string) string {
 	return ""
 }
 
+// ResolveVerifyRoot returns the directory where verification should run.
+// If projectRoot itself contains a known marker, it's returned unchanged.
+// Otherwise we scan one level of immediate children — common monorepo
+// layout (e.g. proxy/go.mod, app/package.json) — and return the first
+// child whose marker matches. Returns ("", "") if nothing is found.
+//
+// Stays one level deep on purpose: KISS, predictable, no surprises from
+// vendored test fixtures buried five levels in.
+func ResolveVerifyRoot(projectRoot string) (dir string, projectType string) {
+	if t := DetectProjectType(projectRoot); t != "" {
+		return projectRoot, t
+	}
+
+	entries, err := os.ReadDir(projectRoot)
+	if err != nil {
+		return "", ""
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		child := filepath.Join(projectRoot, entry.Name())
+		if t := DetectProjectType(child); t != "" {
+			return child, t
+		}
+	}
+	return "", ""
+}
+
 // FindProjectRoot walks up from filePath looking for known project markers.
 // Returns the first directory containing a marker, or empty string if none found.
 func FindProjectRoot(filePath string) string {
@@ -118,11 +148,15 @@ func FindProjectRoot(filePath string) string {
 
 // Verify runs verification commands for the detected project type at projectRoot.
 // It bails on the first failure to avoid wasting time.
+//
+// For multi-module monorepos where projectRoot itself has no marker but its
+// immediate children do (e.g. proxy/go.mod, app/package.json), verification
+// runs against the first matching child.
 func Verify(ctx context.Context, projectRoot string) ProjectVerification {
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	projectID := filepath.Base(projectRoot)
 
-	projectType := DetectProjectType(projectRoot)
+	verifyRoot, projectType := ResolveVerifyRoot(projectRoot)
 	if projectType == "" {
 		return ProjectVerification{
 			ProjectID: projectID,
@@ -136,7 +170,7 @@ func Verify(ctx context.Context, projectRoot string) ProjectVerification {
 	var results []Result
 
 	for _, cmdDef := range def.Commands {
-		result := runCommand(ctx, cmdDef, projectRoot)
+		result := runCommand(ctx, cmdDef, verifyRoot)
 		results = append(results, result)
 
 		if !result.Passed {
