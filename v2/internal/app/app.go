@@ -365,9 +365,9 @@ func (a *App) initFileGraph() {
 // knowledge stack the MCP server uses (cmd/phantom-mcp/main.go) and hands
 // it to the Composer service. Each component is best-effort: a nil store
 // degrades gracefully inside orchestrator.Process. The Indexer field is
-// left nil here — the Composer turn supplies its CWD, but the file-graph
-// pool is keyed by project ID, not path. Resolving a project from CWD on
-// every turn is its own concern; YAGNI for v0.
+// resolved per-turn from the turn's CWD via SetIndexerResolver, so the
+// orchestrator sees graph context for whichever project the user is
+// currently working in.
 func (a *App) wireComposerEngine() {
 	if a.Composer == nil || a.DB == nil {
 		return
@@ -402,7 +402,83 @@ func (a *App) wireComposerEngine() {
 	deps.GapDetector = strategies.NewGapDetector()
 
 	a.Composer.SetEngineDeps(deps)
+	a.Composer.SetIndexerResolver(a.resolveIndexerForCwd)
 	log.Info("app: composer engine wired")
+}
+
+// resolveIndexerForCwd maps a turn's CWD to the file-graph indexer of the
+// project that owns it. Walks up the directory tree, matching each ancestor
+// against project repo paths and workspace worktree paths. Returns nil when
+// no project matches — orchestrator.Process handles a nil Indexer by
+// skipping graph-derived signals.
+//
+// Called per-turn (cheap: handful of point lookups), never cached, so the
+// user can switch active worktrees mid-session and pick up the right graph.
+func (a *App) resolveIndexerForCwd(cwd string) *filegraph.Indexer {
+	if a.DB == nil || cwd == "" {
+		return nil
+	}
+	projectID := a.projectIDForCwd(cwd)
+	if projectID == "" {
+		log.Debug("app: composer indexer resolve — no project for cwd", "cwd", cwd)
+		return nil
+	}
+	a.fileIndexersMu.RLock()
+	ix := a.fileIndexers[projectID]
+	a.fileIndexersMu.RUnlock()
+	if ix == nil {
+		log.Debug("app: composer indexer resolve — project has no indexer", "project", projectID)
+	}
+	return ix
+}
+
+// projectIDForCwd walks up from cwd looking for a project whose repo_path
+// or workspace worktree_path equals the current ancestor. Returns "" when
+// the path doesn't belong to any known project (e.g. the user is chatting
+// from a directory outside their workspaces).
+func (a *App) projectIDForCwd(cwd string) string {
+	dir := linker.NormalizeCWD(cwd)
+	if dir == "" {
+		return ""
+	}
+	q := db.New(a.DB.Reader)
+	for {
+		if p, err := q.FindProjectByRepoPath(a.ctx, dir); err == nil {
+			return p.ID
+		}
+		if id := a.matchWorkspaceWorktree(q, dir); id != "" {
+			return id
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+}
+
+// matchWorkspaceWorktree scans every project's workspaces for a worktree
+// whose path equals dir. Mirrors internal/mcp/project.go.matchWorkspace —
+// there's no global ListWorkspaces query and adding one would require a
+// new schema migration. For typical Phantom installs (handful of projects,
+// few workspaces each) the per-turn cost is negligible.
+func (a *App) matchWorkspaceWorktree(q *db.Queries, dir string) string {
+	projects, err := q.ListProjects(a.ctx)
+	if err != nil {
+		return ""
+	}
+	for _, p := range projects {
+		wss, err := q.ListWorkspacesByProject(a.ctx, p.ID)
+		if err != nil {
+			continue
+		}
+		for _, w := range wss {
+			if w.WorktreePath.Valid && w.WorktreePath.String == dir {
+				return w.ProjectID
+			}
+		}
+	}
+	return ""
 }
 
 // startAPIServer creates and starts the HTTP API server that Claude Code hooks
