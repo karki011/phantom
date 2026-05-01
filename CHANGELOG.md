@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.7](https://github.com/karki011/phantom/compare/v0.1.6...v0.1.7) (2026-05-01)
+
+
+### Features
+
+* **composer:** record verifier outcomes to close the learning loop ([b4f8c3d](https://github.com/karki011/phantom/commit/b4f8c3d8dd3e511049553a7ea243f39ed970df3a))
+* **composer:** wire orchestrator into Send for desktop-side strategy selection ([42d668a](https://github.com/karki011/phantom/commit/42d668adca4f5051553fa6c8e087726727474554))
+* **composer:** wire Phantom UI through the AI engine ([1acbdcd](https://github.com/karki011/phantom/commit/1acbdcd795ada0f06c86b53e7028013b2b6766be))
+
 ## [0.1.6](https://github.com/karki011/phantom/compare/v0.1.5...v0.1.6) (2026-05-01)
 
 
