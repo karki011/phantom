@@ -245,9 +245,41 @@ func (a *App) ScanDirectory(parentPath string) []string {
 }
 
 // CloneRepository clones a git repo from url into destPath, then registers it as a project.
+// The repo name is extracted from the URL and appended to destPath so that
+// cloning into an existing non-empty directory (e.g. ~/Code) works correctly.
 func (a *App) CloneRepository(url, destPath string) (*db.Project, error) {
-	if err := git.Clone(a.ctx, url, destPath); err != nil {
+	repoName := repoNameFromURL(url)
+	if repoName == "" {
+		return nil, fmt.Errorf("CloneRepository: cannot extract repo name from URL %q", url)
+	}
+	target := filepath.Join(destPath, repoName)
+	if err := git.Clone(a.ctx, url, target); err != nil {
 		return nil, fmt.Errorf("CloneRepository: %w", err)
 	}
-	return a.AddProject(destPath)
+	return a.AddProject(target)
+}
+
+// repoNameFromURL extracts the repository name from a git URL.
+// Examples:
+//
+//	"https://github.com/user/repo.git" → "repo"
+//	"git@github.com:user/repo.git"     → "repo"
+//	"https://github.com/user/repo"     → "repo"
+func repoNameFromURL(rawURL string) string {
+	u := strings.TrimRight(rawURL, "/")
+	u = strings.TrimSuffix(u, ".git")
+
+	// HTTPS / path-based URLs: last segment after "/"
+	if idx := strings.LastIndex(u, "/"); idx >= 0 {
+		return u[idx+1:]
+	}
+	// SSH format: git@host:user/repo
+	if idx := strings.LastIndex(u, ":"); idx >= 0 {
+		part := u[idx+1:]
+		if slashIdx := strings.LastIndex(part, "/"); slashIdx >= 0 {
+			return part[slashIdx+1:]
+		}
+		return part
+	}
+	return ""
 }
