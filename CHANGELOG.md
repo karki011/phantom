@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.8](https://github.com/karki011/phantom/compare/v0.1.7...v0.1.8) (2026-05-01)
+
+
+### Features
+
+* **db:** add phase column to ai_outcomes via migration 011 ([abc3c8d](https://github.com/karki011/phantom/commit/abc3c8d7f6f82023fc9447dbfe297761c0a3b082))
+
+
+### Bug Fixes
+
+* **composer:** resolve cwd→project indexer for orchestrator graph context ([641c1e9](https://github.com/karki011/phantom/commit/641c1e90d6044292198c3a427a7c3e2b194d7dc8))
+* **composer:** resolve cwd→project indexer for orchestrator graph context ([1410fe1](https://github.com/karki011/phantom/commit/1410fe1e7b92f939ffd1432fe90433e315ee4635))
+* **decisions:** tag outcomes by phase to fix learning loop skew ([dd7c45e](https://github.com/karki011/phantom/commit/dd7c45e468196ce2fd7015745b1fb1f752c10486))
+* **decisions:** tag outcomes by phase to fix learning loop skew ([cbac3f3](https://github.com/karki011/phantom/commit/cbac3f3ba9be7e13eedf345fd001e89c3fde8b48))
+
 ## [0.1.7](https://github.com/karki011/phantom/compare/v0.1.6...v0.1.7) (2026-05-01)
 
 
