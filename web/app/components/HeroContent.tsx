@@ -1,4 +1,5 @@
 "use client";
+// Author: Subash Karki
 
 import { motion } from "motion/react";
 
@@ -9,6 +10,8 @@ type Props = {
   downloadSize?: string;
   hasRelease: boolean;
 };
+
+const GITHUB_URL = "https://github.com/karki011/phantom";
 
 const HeroContent = ({ releaseTag, releaseDate, downloadUrl, downloadSize, hasRelease }: Props) => {
   return (
@@ -39,18 +42,27 @@ const HeroContent = ({ releaseTag, releaseDate, downloadUrl, downloadSize, hasRe
       <motion.p
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, delay: 0.25 }}
-        className="mt-7 max-w-xl text-lg text-[var(--color-fg-muted)] md:text-xl"
+        transition={{ duration: 0.7, delay: 0.2 }}
+        className="mt-5 text-xl font-medium text-[var(--color-fg)] sm:text-2xl"
       >
-        A native desktop workspace for developers. Terminal, editor, AI chat, git diff, and journal
-        — collapsed into one tabbed pane system.
+        The AI-native developer workspace.
+      </motion.p>
+
+      <motion.p
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7, delay: 0.3 }}
+        className="mt-4 max-w-xl text-base text-[var(--color-fg-muted)] md:text-lg"
+      >
+        Terminal, editor, and AI composer in one window. Your code graph guides the model.
+        8 reasoning strategies. Built-in safety.
       </motion.p>
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, delay: 0.4 }}
-        className="mt-10 flex flex-col items-center gap-3"
+        transition={{ duration: 0.7, delay: 0.45 }}
+        className="mt-10 flex flex-col items-center gap-3 sm:flex-row"
       >
         {hasRelease ? (
           <a
@@ -74,11 +86,17 @@ const HeroContent = ({ releaseTag, releaseDate, downloadUrl, downloadSize, hasRe
           </div>
         )}
 
-        <p className="font-mono text-xs text-[var(--color-fg-subtle)]">
-          Universal binary — works on Apple Silicon and Intel
-          {releaseDate ? ` · released ${releaseDate}` : ""}
-        </p>
       </motion.div>
+
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, delay: 0.6 }}
+        className="mt-4 font-mono text-xs text-[var(--color-fg-subtle)]"
+      >
+        Universal binary — works on Apple Silicon and Intel
+        {releaseDate ? ` · released ${releaseDate}` : ""}
+      </motion.p>
     </div>
   );
 };

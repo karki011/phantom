@@ -60,7 +60,7 @@ type Edit struct {
 type Event struct {
 	PaneID    string `json:"pane_id"`
 	TurnID    string `json:"turn_id,omitempty"`
-	Type      string `json:"type"` // "delta" | "thinking" | "tool_use" | "result" | "done" | "error"
+	Type      string `json:"type"` // "delta" | "thinking" | "tool_use" | "result" | "done" | "error" | "strategy"
 	Content   string `json:"content,omitempty"`
 	ToolName  string `json:"tool_name,omitempty"`
 	ToolInput string `json:"tool_input,omitempty"`
@@ -69,6 +69,15 @@ type Event struct {
 	InputTokens  int64   `json:"input_tokens,omitempty"`
 	OutputTokens int64   `json:"output_tokens,omitempty"`
 	CostUSD      float64 `json:"cost_usd,omitempty"`
+
+	// Strategy-specific fields, populated on type=="strategy".
+	// Emitted once per turn after the orchestrator selects a strategy,
+	// before the CLI run starts.
+	StrategyName       string  `json:"strategy_name,omitempty"`
+	StrategyConfidence float64 `json:"strategy_confidence,omitempty"`
+	TaskComplexity     string  `json:"task_complexity,omitempty"`
+	TaskRisk           string  `json:"task_risk,omitempty"`
+	BlastRadius        int     `json:"blast_radius,omitempty"`
 }
 
 // Mention is an `@file` reference passed alongside a prompt.
@@ -104,4 +113,7 @@ type SendArgs struct {
 	Model     string    `json:"model"`
 	Mentions  []Mention `json:"mentions"`
 	NoContext bool      `json:"no_context,omitempty"`
+	// Effort controls the reasoning effort level passed to the CLI via
+	// --effort <level>. Empty string means "don't pass the flag" (auto).
+	Effort    string    `json:"effort,omitempty"`
 }

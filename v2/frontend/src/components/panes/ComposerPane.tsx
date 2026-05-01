@@ -2,7 +2,7 @@
 // Author: Subash Karki
 
 import { createSignal, createEffect, onMount, For, Show, batch } from 'solid-js';
-import { Paperclip, X, FileEdit, Wrench, Brain, ChevronRight, ChevronDown, ChevronLeft, History, Plus, Trash2 } from 'lucide-solid';
+import { Paperclip, X, FileEdit, Wrench, Brain, ChevronRight, ChevronDown, ChevronLeft, History, Plus, Trash2, BookOpen, Zap } from 'lucide-solid';
 import { Select } from '@kobalte/core/select';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import * as sidebarStyles from '@/styles/sidebar.css';
@@ -71,7 +71,14 @@ import {
 import { addTabWithData } from '@/core/panes/signals';
 import { showToast, showWarningToast } from '@/shared/Toast/Toast';
 import { loadPref, setPref } from '@/core/signals/preferences';
+import { Tip } from '@/shared/Tip/Tip';
 import * as styles from './ComposerPane.css';
+import * as metricsStyles from './ComposerMetrics.css';
+import * as turnStyles from './ComposerTurnStyles.css';
+import * as toolStatusStyles from './ComposerToolStatus.css';
+import ComposerMemoryPanel from './ComposerMemoryPanel';
+import ComposerSkillBrowser from './ComposerSkillBrowser';
+import * as strategyStyles from './ComposerStrategy.css';
 
 interface ComposerPaneProps {
   paneId?: string;
@@ -97,7 +104,7 @@ interface TurnView {
   prompt: string;
   text: string;
   thinking: string;
-  toolUses: { name: string; input: string }[];
+  toolUses: { name: string; input: string; status: 'running' | 'done' | 'error' }[];
   editIds: string[];
   status: 'running' | 'done' | 'error' | 'cancelled';
   error?: string;
@@ -105,6 +112,13 @@ interface TurnView {
   outputTokens: number;
   costUSD: number;
   startedAt: number;
+  completedAt: number; // timestamp ms, 0 until done
+  // Strategy metadata — populated once per turn when the orchestrator selects a strategy.
+  strategyName: string;
+  strategyConfidence: number;
+  taskComplexity: string;
+  taskRisk: string;
+  blastRadius: number;
 }
 
 const MODELS = [
@@ -112,6 +126,26 @@ const MODELS = [
   { value: 'opus', label: 'Opus' },
   { value: 'haiku', label: 'Haiku' },
 ];
+
+const EFFORTS = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'max', label: 'Max' },
+];
+
+const MODEL_CONTEXT_LIMITS: Record<string, number> = {
+  sonnet: 200_000,
+  opus: 200_000,
+  haiku: 200_000,
+};
+
+const formatTokenCount = (n: number): string => {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return `${n}`;
+};
 
 export default function ComposerPane(props: ComposerPaneProps) {
   const paneId = () => props.paneId ?? '';
@@ -121,6 +155,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
   const [edits, setEdits] = createSignal<Record<string, ComposerEditCard>>({});
   const [input, setInput] = createSignal('');
   const [model, setModel] = createSignal<string>('opus');
+  const [effort, setEffort] = createSignal<string>('auto');
   const [running, setRunning] = createSignal(false);
   const [activeTurnId, setActiveTurnId] = createSignal<string | null>(null);
   const [mentions, setMentions] = createSignal<ComposerMention[]>([]);
@@ -130,7 +165,10 @@ export default function ComposerPane(props: ComposerPaneProps) {
   // per-user default so power users who always want clean answers don't
   // have to flip it every time.
   const [noContext, setNoContext] = createSignal(false);
+  const [autoAccept, setAutoAccept] = createSignal(false);
   const [dragOver, setDragOver] = createSignal(false);
+  const [showMemory, setShowMemory] = createSignal(false);
+  const [showSkills, setShowSkills] = createSignal(false);
 
   // Past Sessions sidebar — list, collapsed-state, and the currently
   // active claude session_id. activeSessionId tracks the live session this
@@ -176,6 +214,13 @@ export default function ComposerPane(props: ComposerPaneProps) {
       outputTokens: h.turn.output_tokens,
       costUSD: h.turn.cost_usd,
       startedAt: h.turn.started_at * 1000,
+      completedAt: h.turn.completed_at ? h.turn.completed_at * 1000 : h.turn.started_at * 1000,
+      // Strategy metadata is not persisted — only available during live streaming.
+      strategyName: '',
+      strategyConfidence: 0,
+      taskComplexity: '',
+      taskRisk: '',
+      blastRadius: 0,
     }));
     const editsById: Record<string, ComposerEditCard> = {};
     for (const h of history) for (const e of (h.edits ?? [])) editsById[e.id] = e;
@@ -229,6 +274,11 @@ export default function ComposerPane(props: ComposerPaneProps) {
       if (val === 'true') setSidebarCollapsed(true);
     });
 
+    // Auto-accept edits toggle — when on, edit cards are accepted as they arrive.
+    void loadPref('composer_auto_accept_edits').then((val) => {
+      if (val === 'true') setAutoAccept(true);
+    });
+
     // Kick off the sessions list in parallel — doesn't block history load.
     void refreshSessions();
 
@@ -268,7 +318,10 @@ export default function ComposerPane(props: ComposerPaneProps) {
           case 'tool_use':
             return {
               ...t,
-              toolUses: [...t.toolUses, { name: ev.tool_name ?? 'tool', input: ev.tool_input ?? '' }],
+              toolUses: [
+                ...t.toolUses.map(tu => tu.status === 'running' ? { ...tu, status: 'done' as const } : tu),
+                { name: ev.tool_name ?? 'tool', input: ev.tool_input ?? '', status: 'running' as const },
+              ],
             };
           case 'result':
             return {
@@ -284,9 +337,25 @@ export default function ComposerPane(props: ComposerPaneProps) {
               inputTokens: ev.input_tokens ?? t.inputTokens,
               outputTokens: ev.output_tokens ?? t.outputTokens,
               costUSD: ev.cost_usd ?? t.costUSD,
+              completedAt: Date.now(),
+              toolUses: t.toolUses.map(tu => tu.status === 'running' ? { ...tu, status: 'done' as const } : tu),
             };
           case 'error':
-            return { ...t, status: 'error', error: ev.content ?? 'Unknown error' };
+            return {
+              ...t,
+              status: 'error',
+              error: ev.content ?? 'Unknown error',
+              toolUses: t.toolUses.map(tu => tu.status === 'running' ? { ...tu, status: 'error' as const } : tu),
+            };
+          case 'strategy':
+            return {
+              ...t,
+              strategyName: ev.strategy_name ?? t.strategyName,
+              strategyConfidence: ev.strategy_confidence ?? t.strategyConfidence,
+              taskComplexity: ev.task_complexity ?? t.taskComplexity,
+              taskRisk: ev.task_risk ?? t.taskRisk,
+              blastRadius: ev.blast_radius ?? t.blastRadius,
+            };
           default:
             return t;
         }
@@ -312,6 +381,9 @@ export default function ComposerPane(props: ComposerPaneProps) {
       );
     });
     scrollToBottom();
+    if (autoAccept()) {
+      void composerDecideEdit(card.id, true);
+    }
   });
 
   onWailsEvent<{ id: string; status: 'accepted' | 'discarded' }>('composer:edit-decided', (msg) => {
@@ -341,13 +413,19 @@ export default function ComposerPane(props: ComposerPaneProps) {
       outputTokens: 0,
       costUSD: 0,
       startedAt: Date.now(),
+      completedAt: 0,
+      strategyName: '',
+      strategyConfidence: 0,
+      taskComplexity: '',
+      taskRisk: '',
+      blastRadius: 0,
     };
     setTurns((prev) => [...prev, turn]);
     setRunning(true);
     setInput('');
     scrollToBottom();
 
-    const newId = await composerSend(paneId(), prompt, cwd(), model(), mentions(), noContext());
+    const newId = await composerSend(paneId(), prompt, cwd(), model(), mentions(), noContext(), effort());
     if (!newId) {
       setTurns((prev) =>
         prev.map((t) => (t.id === turnId ? { ...t, status: 'error', error: 'Failed to send' } : t)),
@@ -547,6 +625,18 @@ export default function ComposerPane(props: ComposerPaneProps) {
     void setPref('composer_no_context_default', next ? 'true' : 'false');
   };
 
+  const toggleAutoAccept = () => {
+    const next = !autoAccept();
+    setAutoAccept(next);
+    void setPref('composer_auto_accept_edits', next ? 'true' : 'false');
+  };
+
+  const handleSkillInvoke = (skillName: string) => {
+    setInput(skillName + ' ');
+    setShowSkills(false);
+    textareaRef?.focus();
+  };
+
   const handleAcceptEdit = async (id: string) => {
     await composerDecideEdit(id, true);
   };
@@ -594,6 +684,26 @@ export default function ComposerPane(props: ComposerPaneProps) {
   const totalCostThisTurn = () => {
     const last = turns()[turns().length - 1];
     return last && last.costUSD > 0 ? `$${last.costUSD.toFixed(4)}` : '';
+  };
+
+  // ── Session-level computed metrics ─────────────────────────────────────
+  const sessionTotalCost = () => turns().reduce((sum, t) => sum + t.costUSD, 0);
+  const sessionTotalTokens = () => turns().reduce((sum, t) => sum + t.inputTokens + t.outputTokens, 0);
+  const sessionTurnCount = () => turns().length;
+
+  // ── Context window gauge ───────────────────────────────────────────────
+  const contextUsed = () => {
+    const t = turns();
+    if (t.length === 0) return 0;
+    return t[t.length - 1].inputTokens;
+  };
+  const contextMax = () => MODEL_CONTEXT_LIMITS[model()] ?? 200_000;
+  const contextPercent = () => Math.min(100, (contextUsed() / contextMax()) * 100);
+  const contextColor = () => {
+    const pct = contextPercent();
+    if (pct >= 80) return 'danger';
+    if (pct >= 60) return 'warning';
+    return 'accent';
   };
 
   // Format a "Xm/Xh/Xd" relative timestamp for sidebar rows.
@@ -657,7 +767,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
                       <ContextMenu.Content class={sidebarStyles.contextMenuContent}>
                         <ContextMenu.Item
                           class={sidebarStyles.contextMenuItem}
-                          onSelect={() => addTabWithData('composer', { cwd: s.cwd, sessionId: s.session_id })}
+                          onSelect={() => addTabWithData('composer', `Composer · ${basename(s.cwd) || 'session'}`, { cwd: s.cwd, sessionId: s.session_id })}
                         >
                           <Plus size={13} />
                           Open in new tab
@@ -725,12 +835,37 @@ export default function ComposerPane(props: ComposerPaneProps) {
         >
           {noContext() ? '🌐 No project context' : '📁 Project context on'}
         </button>
+        <button
+          class={`${styles.contextPill} ${autoAccept() ? styles.contextPillActive : ''}`}
+          type="button"
+          onClick={toggleAutoAccept}
+          disabled={running()}
+          title={
+            autoAccept()
+              ? 'Edits are auto-accepted as they arrive (files already written to disk).'
+              : 'Edit cards require manual accept/discard.'
+          }
+        >
+          {autoAccept() ? '⚡ Auto-accept on' : '✋ Manual review'}
+        </button>
         <span class={styles.statusGrow} />
-        <Show when={totalTokensThisTurn()}>
-          <span>{totalTokensThisTurn()}</span>
-        </Show>
-        <Show when={totalCostThisTurn()}>
-          <span>· {totalCostThisTurn()}</span>
+        <Show when={turns().length > 0}>
+          <span class={metricsStyles.metricsSeparator}>|</span>
+          <span class={metricsStyles.metricsGroup}>
+            <span>Turn {sessionTurnCount()}</span>
+            <span class={metricsStyles.metricsDot}>&middot;</span>
+            <span>{totalTokensThisTurn()}</span>
+            <Show when={totalCostThisTurn()}>
+              <span class={metricsStyles.metricsDot}>&middot;</span>
+              <span>{totalCostThisTurn()}</span>
+            </Show>
+          </span>
+          <span class={metricsStyles.metricsSeparator}>|</span>
+          <span class={metricsStyles.sessionTotal}>
+            Session: ${sessionTotalCost().toFixed(4)}
+            <span class={metricsStyles.metricsDot}>&middot;</span>
+            {formatTokenCount(sessionTotalTokens())} tok
+          </span>
         </Show>
         <Show when={running()}>
           <button class={styles.cancelBtn} type="button" onClick={handleCancel}>
@@ -752,6 +887,22 @@ export default function ComposerPane(props: ComposerPaneProps) {
         </Show>
       </div>
 
+      {/* Context window gauge */}
+      <Show when={contextUsed() > 0}>
+        <div class={metricsStyles.contextGauge} title={`Context: ${formatTokenCount(contextUsed())} / ${formatTokenCount(contextMax())} tokens (${contextPercent().toFixed(0)}%)`}>
+          <div
+            class={metricsStyles.contextGaugeFill}
+            style={{
+              width: `${contextPercent()}%`,
+              background: `var(--gauge-color-${contextColor()})`,
+            }}
+          />
+          <span class={metricsStyles.contextGaugeLabel}>
+            {formatTokenCount(contextUsed())} / {formatTokenCount(contextMax())} ({contextPercent().toFixed(0)}%)
+          </span>
+        </div>
+      </Show>
+
       {/* Conversation feed */}
       <div class={styles.feed} ref={feedRef}>
         <Show when={turns().length === 0}>
@@ -763,11 +914,20 @@ export default function ComposerPane(props: ComposerPaneProps) {
 
         <For each={turns()}>
           {(turn) => (
-            <div style={{ display: 'flex', 'flex-direction': 'column', gap: '8px' }}>
+            <div class={turnStyles.turnGroup}>
               <Show when={turn.prompt}>
                 <div class={styles.userTurn}>{turn.prompt}</div>
               </Show>
 
+              <Show when={turn.strategyName}>
+                <StrategyChip
+                  name={turn.strategyName}
+                  confidence={turn.strategyConfidence}
+                  complexity={turn.taskComplexity}
+                  risk={turn.taskRisk}
+                  blastRadius={turn.blastRadius}
+                />
+              </Show>
               {/* Pre-stream "thinking" pulse — shows the moment user sends,
                   hides as soon as ANY content arrives (thinking/tool/text/edit)
                   or the turn settles (done/error). */}
@@ -793,7 +953,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
               </Show>
 
               <For each={turn.toolUses}>
-                {(t) => <ToolUseChip name={t.name} input={t.input} />}
+                {(t) => <ToolUseChip name={t.name} input={t.input} status={t.status} />}
               </For>
 
               <For each={turn.editIds}>
@@ -815,7 +975,10 @@ export default function ComposerPane(props: ComposerPaneProps) {
               </For>
 
               <Show when={turn.text}>
-                <ComposerMarkdown text={turn.text} />
+                <div>
+                  <span class={turnStyles.assistantBadge}>ASSISTANT</span>
+                  <ComposerMarkdown text={turn.text} />
+                </div>
               </Show>
 
               <Show when={turn.status === 'error' && turn.error}>
@@ -824,10 +987,14 @@ export default function ComposerPane(props: ComposerPaneProps) {
                 </div>
               </Show>
 
-              <Show when={turn.status === 'done' && turn.editIds.length > 0}>
+              <Show when={turn.status === 'done' || turn.status === 'error'}>
+                <TurnMetrics turn={turn} turnIndex={turns().indexOf(turn)} edits={edits()} />
+              </Show>
+
+              <Show when={turn.status === 'done' && turn.editIds.length > 0 && !autoAccept() && pendingEditCards().length > 0}>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button class={`${styles.editBtn} ${styles.editAccept}`} type="button" onClick={acceptAll}>
-                    Accept all
+                    Accept all ({pendingEditCards().length})
                   </button>
                   <button
                     class={`${styles.editBtn} ${styles.editDiscard}`}
@@ -880,14 +1047,35 @@ export default function ComposerPane(props: ComposerPaneProps) {
         />
 
         <div class={styles.composerToolbar}>
-          <button
-            class={styles.editBtn}
-            type="button"
-            onClick={handleAttachClick}
-            title="Attach a file (or paste an image into the textarea)"
-          >
-            <Paperclip size={12} />
-          </button>
+          <Tip label="Attach file or paste image" placement="top">
+            <button
+              class={styles.editBtn}
+              type="button"
+              onClick={handleAttachClick}
+            >
+              <Paperclip size={12} />
+            </button>
+          </Tip>
+
+          <Tip label="Memory context" placement="top">
+            <button
+              class={styles.editBtn}
+              type="button"
+              onClick={() => setShowMemory(!showMemory())}
+            >
+              <BookOpen size={12} />
+            </button>
+          </Tip>
+
+          <Tip label="Skills browser" placement="top">
+            <button
+              class={styles.editBtn}
+              type="button"
+              onClick={() => setShowSkills(!showSkills())}
+            >
+              <Zap size={12} />
+            </button>
+          </Tip>
 
           <Select<string>
             value={model()}
@@ -901,9 +1089,39 @@ export default function ComposerPane(props: ComposerPaneProps) {
               </Select.Item>
             )}
           >
-            <Select.Trigger class={styles.modelSelectTrigger}>
+            <Select.Trigger class={styles.modelSelectTrigger} title="Select Claude model">
               <Select.Value<string> class={styles.modelSelectValue}>
                 {(state) => MODELS.find((m) => m.value === state.selectedOption())?.label ?? state.selectedOption()}
+              </Select.Value>
+              <Select.Icon class={styles.modelSelectIcon}>
+                <ChevronDown size={12} />
+              </Select.Icon>
+            </Select.Trigger>
+            <Select.Portal>
+              <Select.Content class={styles.modelSelectContent}>
+                <Select.Listbox class={styles.modelSelectListbox} />
+              </Select.Content>
+            </Select.Portal>
+          </Select>
+
+          <Select<string>
+            value={effort()}
+            onChange={(val) => { if (val !== null) setEffort(val); }}
+            options={EFFORTS.map((e) => e.value)}
+            itemComponent={(itemProps) => (
+              <Select.Item item={itemProps.item} class={styles.modelSelectItem}>
+                <Select.ItemLabel class={styles.modelSelectItemLabel}>
+                  {EFFORTS.find((e) => e.value === itemProps.item.rawValue)?.label ?? itemProps.item.rawValue}
+                </Select.ItemLabel>
+              </Select.Item>
+            )}
+          >
+            <Select.Trigger class={styles.modelSelectTrigger} title="Reasoning effort level">
+              <Select.Value<string> class={styles.modelSelectValue}>
+                {(state) => {
+                  const label = EFFORTS.find((e) => e.value === state.selectedOption())?.label ?? state.selectedOption();
+                  return `Effort: ${label}`;
+                }}
               </Select.Value>
               <Select.Icon class={styles.modelSelectIcon}>
                 <ChevronDown size={12} />
@@ -921,32 +1139,81 @@ export default function ComposerPane(props: ComposerPaneProps) {
         </div>
       </div>
       </div>{/* /main */}
+
+      {/* Memory context right rail — toggled from composer toolbar. */}
+      <Show when={showMemory()}>
+        <ComposerMemoryPanel cwd={cwd()} onClose={() => setShowMemory(false)} />
+      </Show>
+
+      {/* Skill browser right rail — toggled from composer toolbar. */}
+      <Show when={showSkills()}>
+        <ComposerSkillBrowser
+          cwd={cwd()}
+          onInvoke={handleSkillInvoke}
+          onClose={() => setShowSkills(false)}
+        />
+      </Show>
     </div>
   );
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────
 
+function StrategyChip(props: { name: string; confidence: number; complexity: string; risk: string; blastRadius: number }) {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <div class={strategyStyles.strategyBlock} onClick={() => setOpen(!open())}>
+      <div class={strategyStyles.strategyHeader}>
+        <Brain size={11} />
+        <Show when={open()} fallback={<ChevronRight size={11} />}>
+          <ChevronDown size={11} />
+        </Show>
+        <span>Strategy: </span>
+        <span class={strategyStyles.strategyName}>{props.name}</span>
+        <span class={strategyStyles.strategyConfidence}>({(props.confidence * 100).toFixed(0)}%)</span>
+      </div>
+      <Show when={open()}>
+        <div class={strategyStyles.strategyDetails}>
+          <span class={strategyStyles.strategyTag}>Complexity: {props.complexity}</span>
+          <span class={strategyStyles.strategyTag}>Risk: {props.risk}</span>
+          <span class={strategyStyles.strategyTag}>Blast radius: {props.blastRadius} files</span>
+        </div>
+      </Show>
+    </div>
+  );
+}
+
 function ThinkingChip(props: { content: string }) {
   const [open, setOpen] = createSignal(false);
   return (
-    <div class={styles.thinkingBlock} onClick={() => setOpen(!open())} style={{ cursor: 'pointer' }}>
+    <div
+      class={open() ? toolStatusStyles.thinkingExpanded : toolStatusStyles.thinkingCollapsed}
+      onClick={() => setOpen(!open())}
+    >
       <Brain size={11} style={{ 'vertical-align': 'middle', 'margin-right': '4px' }} />
       <Show when={open()} fallback={<ChevronRight size={11} style={{ 'vertical-align': 'middle' }} />}>
         <ChevronDown size={11} style={{ 'vertical-align': 'middle' }} />
       </Show>
       <span style={{ 'margin-left': '4px' }}>Thinking…</span>
       <Show when={open()}>
-        <div style={{ 'margin-top': '4px' }}>{props.content}</div>
+        <div class={toolStatusStyles.thinkingContent}>{props.content}</div>
       </Show>
     </div>
   );
 }
 
-function ToolUseChip(props: { name: string; input: string }) {
+function ToolUseChip(props: { name: string; input: string; status: 'running' | 'done' | 'error' }) {
   const [open, setOpen] = createSignal(false);
+  const dotClass = () => {
+    switch (props.status) {
+      case 'running': return toolStatusStyles.statusDotRunning;
+      case 'error': return toolStatusStyles.statusDotError;
+      default: return toolStatusStyles.statusDotSuccess;
+    }
+  };
   return (
     <div class={styles.toolBlock} onClick={() => setOpen(!open())} style={{ cursor: 'pointer' }}>
+      <span class={dotClass()} />
       <Wrench size={11} style={{ 'vertical-align': 'middle', 'margin-right': '4px' }} />
       <Show when={open()} fallback={<ChevronRight size={11} style={{ 'vertical-align': 'middle' }} />}>
         <ChevronDown size={11} style={{ 'vertical-align': 'middle' }} />
@@ -956,6 +1223,47 @@ function ToolUseChip(props: { name: string; input: string }) {
         <pre style={{ 'margin-top': '4px', 'white-space': 'pre-wrap', 'word-break': 'break-all' }}>
           {props.input}
         </pre>
+      </Show>
+    </div>
+  );
+}
+
+function TurnMetrics(props: { turn: TurnView; turnIndex: number; edits: Record<string, ComposerEditCard> }) {
+  const duration = () => {
+    if (!props.turn.completedAt || !props.turn.startedAt) return '';
+    const sec = Math.round((props.turn.completedAt - props.turn.startedAt) / 1000);
+    if (sec < 60) return `${sec}s`;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}m ${s}s`;
+  };
+
+  const filesEdited = () => props.turn.editIds.length;
+  const linesChanged = () => {
+    let added = 0, removed = 0;
+    for (const id of props.turn.editIds) {
+      const card = props.edits[id];
+      if (card) { added += card.lines_added; removed += card.lines_removed; }
+    }
+    return { added, removed };
+  };
+
+  return (
+    <div class={metricsStyles.turnMetrics}>
+      <span>Turn {props.turnIndex + 1}</span>
+      <Show when={duration()}>
+        <span class={metricsStyles.metricsDot}>&middot;</span>
+        <span>{duration()}</span>
+      </Show>
+      <span class={metricsStyles.metricsDot}>&middot;</span>
+      <span>{formatTokenCount(props.turn.inputTokens)} in / {formatTokenCount(props.turn.outputTokens)} out</span>
+      <span class={metricsStyles.metricsDot}>&middot;</span>
+      <span>${props.turn.costUSD.toFixed(4)}</span>
+      <Show when={filesEdited() > 0}>
+        <span class={metricsStyles.metricsDot}>&middot;</span>
+        <span>{filesEdited()} file{filesEdited() > 1 ? 's' : ''}</span>
+        <span class={metricsStyles.turnLinesAdded}>+{linesChanged().added}</span>
+        <span class={metricsStyles.turnLinesRemoved}>-{linesChanged().removed}</span>
       </Show>
     </div>
   );
