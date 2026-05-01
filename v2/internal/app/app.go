@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -421,11 +423,13 @@ func (a *App) startAPIServer() {
 // selfHealMCPRegistration ensures phantom-ai is registered in ~/.mcp.json
 // with the current binary path on every boot, and that all linked Phantom
 // workspaces have the server enabled in their ~/.claude.json project entry.
-// All failures are logged but never propagated — MCP registration is an
-// enhancement, not critical.
+// Failures are logged AND surfaced to the frontend via mcp:registration-failed
+// so the user gets a toast pointing them at the Repair button instead of a
+// silent "not registered" status.
 func (a *App) selfHealMCPRegistration() {
 	if err := integration.RegisterPhantomMCP(); err != nil {
 		log.Error("app: mcp self-heal failed", "err", err)
+		a.emitMCPFailure("register", err)
 		return
 	}
 	log.Info("app: mcp self-heal complete")
@@ -447,6 +451,43 @@ func (a *App) selfHealMCPRegistration() {
 	}
 	updated, failed := integration.EnsureProjectsHaveMCP(paths)
 	log.Info("app: mcp project enablement", "updated", updated, "failed", failed, "total", len(paths))
+	if failed > 0 {
+		a.emitMCPFailure("enable-projects", fmt.Errorf("%d of %d project(s) failed to enable phantom-ai (see logs)", failed, len(paths)))
+	}
+}
+
+// emitMCPFailure surfaces an MCP registration error to the frontend via the
+// mcp:registration-failed event. The frontend listener turns it into a toast
+// pointing the user at the Repair button. Permission errors get an extra
+// hint mentioning the offending file path so the user knows what to chown.
+func (a *App) emitMCPFailure(phase string, err error) {
+	if err == nil || a.ctx == nil {
+		return
+	}
+	payload := map[string]any{
+		"phase": phase,
+		"error": err.Error(),
+	}
+	if hint := mcpErrorHint(err); hint != "" {
+		payload["hint"] = hint
+	}
+	wailsRuntime.EventsEmit(a.ctx, EventMCPRegistrationFailed, payload)
+}
+
+// mcpErrorHint returns a user-friendly remediation hint for known error
+// shapes — primarily permission failures writing to ~/.mcp.json or
+// ~/.claude/settings.json.
+func mcpErrorHint(err error) string {
+	if err == nil {
+		return ""
+	}
+	if errors.Is(err, fs.ErrPermission) || strings.Contains(err.Error(), "permission denied") {
+		return "Permission denied writing config. Check ownership of ~/.mcp.json and ~/.claude/settings.json, then click Repair."
+	}
+	if strings.Contains(err.Error(), "phantom-mcp binary not found") {
+		return "Phantom couldn't locate the phantom-mcp helper binary. Reinstall Phantom or rebuild the helper, then click Repair."
+	}
+	return ""
 }
 
 // StartFileGraph starts (or restarts) the file graph indexer for a project.

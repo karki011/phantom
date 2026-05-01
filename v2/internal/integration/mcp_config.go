@@ -5,6 +5,7 @@
 package integration
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -24,15 +25,18 @@ const (
 //  2. Walk up from the executable looking for build/bin layouts (wails dev).
 //  3. Well-known v2 source roots under $HOME (developer machines).
 //  4. PATH lookup.
-//  5. Fallback: best-guess path under ~/phantom-os/v2/build/bin.
-func findMCPBinaryPath() string {
+//
+// Returns an error if every strategy misses. Callers MUST treat that as a
+// hard failure and skip writing the MCP entry — a broken path in ~/.mcp.json
+// is worse than no entry at all (Claude Code spawns and immediately fails).
+func findMCPBinaryPath() (string, error) {
 	if exe, err := os.Executable(); err == nil {
 		// Strategy 1: Sibling next to the running binary. This is the
 		// canonical location inside a packaged Phantom.app — both the GUI
 		// binary and phantom-mcp live in Contents/MacOS/.
 		sibling := filepath.Join(filepath.Dir(exe), mcpBinaryName)
 		if _, err := os.Stat(sibling); err == nil {
-			return sibling
+			return sibling, nil
 		}
 
 		// Strategy 2: Walk up from the running binary, checking common output dirs.
@@ -45,7 +49,7 @@ func findMCPBinaryPath() string {
 			}
 			for _, c := range candidates {
 				if _, err := os.Stat(c); err == nil {
-					return c
+					return c, nil
 				}
 			}
 			parent := filepath.Dir(dir)
@@ -67,18 +71,17 @@ func findMCPBinaryPath() string {
 		for _, sub := range []string{"build/bin", "bin"} {
 			candidate := filepath.Join(root, sub, mcpBinaryName)
 			if _, err := os.Stat(candidate); err == nil {
-				return candidate
+				return candidate, nil
 			}
 		}
 	}
 
 	// Strategy 4: PATH lookup.
 	if p, err := exec.LookPath(mcpBinaryName); err == nil {
-		return p
+		return p, nil
 	}
 
-	// Fallback: best-guess path under v2 build dir.
-	return filepath.Join(home, "phantom-os", "v2", "build", "bin", mcpBinaryName)
+	return "", fmt.Errorf("phantom-mcp binary not found (checked sibling of executable, walked-up build dirs, common $HOME source roots, and $PATH)")
 }
 
 // isStaleV1Entry reports whether the given server definition is the legacy v1
@@ -117,7 +120,10 @@ func RegisterPhantomMCP() error {
 		return err
 	}
 
-	binaryPath := findMCPBinaryPath()
+	binaryPath, err := findMCPBinaryPath()
+	if err != nil {
+		return fmt.Errorf("resolve phantom-mcp binary: %w", err)
+	}
 
 	serverDef := map[string]any{
 		"command": binaryPath,
@@ -257,9 +263,23 @@ func GetMCPRegistrationStatus() MCPRegistrationStatus {
 	mcpPath := filepath.Join(home, ".mcp.json")
 	cfg := readJSONFile(mcpPath)
 
-	expected := findMCPBinaryPath()
+	expected, resolveErr := findMCPBinaryPath()
 	servers, _ := cfg["mcpServers"].(map[string]any)
 	entry, _ := servers[serverName].(map[string]any)
+
+	// If we can't resolve the expected binary, surface that as an error in
+	// the status so the UI can prompt the user. The recorded entry (if any)
+	// might still be valid, so we report what's on disk rather than overwriting.
+	if resolveErr != nil {
+		cmd, _ := entry["command"].(string)
+		return MCPRegistrationStatus{
+			Registered: entry != nil,
+			BinaryPath: cmd,
+			Stale:      entry != nil && isStaleV1Entry(entry),
+			Error:      resolveErr.Error(),
+		}
+	}
+
 	if entry == nil {
 		return MCPRegistrationStatus{Registered: false, BinaryPath: expected}
 	}

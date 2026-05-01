@@ -46,6 +46,10 @@ const (
 	EventPrMerged     = "pr:merged"      // payload: { worktreeId, prNumber }
 	EventMergeFailed  = "pr:merge-failed" // payload: { worktreeId, prNumber, message }
 
+	// MCP self-heal / repair failure surfacing.
+	// payload: { phase: "register" | "enable-projects", error: string, hint?: string }
+	EventMCPRegistrationFailed = "mcp:registration-failed"
+
 	EventGamificationXPGained           = "gamification:xp_gained"            // payload: {amount, total, trigger}
 	EventGamificationLevelUp            = "gamification:level_up"             // payload: {level, xpToNext}
 	EventGamificationRankUp             = "gamification:rank_up"              // payload: {rank, title}

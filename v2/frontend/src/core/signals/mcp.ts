@@ -3,6 +3,7 @@
 
 import { createSignal, createResource } from 'solid-js';
 import { listMCPServers, toggleMCPServer as toggleBinding, type MCPServer } from '@/core/bindings/mcp';
+import { showWarningToast } from '@/shared/Toast/Toast';
 
 const [mcpManagerOpen, setMcpManagerOpen] = createSignal(false);
 
@@ -30,6 +31,42 @@ export async function toggleMcpServer(name: string, enabled: boolean): Promise<s
     mutateMcpServers((prev) => (prev ?? []).map((s) => (s.name === name ? { ...s, enabled: !enabled } : s)));
   }
   return err;
+}
+
+/**
+ * Backend payload for `mcp:registration-failed`. Emitted by the Go layer
+ * when self-heal or manual Repair fails to write ~/.mcp.json or enable
+ * phantom-ai for a linked project.
+ */
+interface MCPRegistrationFailedPayload {
+  phase: 'register' | 'enable-projects';
+  error: string;
+  hint?: string;
+}
+
+/**
+ * Bootstrap the toast listener for MCP registration failures.
+ *
+ * Issue #10: registration errors used to be silently swallowed in a
+ * background goroutine, leaving users staring at "not registered" with
+ * no explanation. We surface them as a warning toast that points the
+ * user at the Repair button in the AI Engine settings.
+ *
+ * Idempotent — call once at app boot. Uses the global runtime listener
+ * (no Solid `onCleanup` because this never unmounts).
+ */
+export function bootstrapMCPRegistrationListener(): void {
+  if (!window.runtime?.EventsOn) return;
+  window.runtime.EventsOn('mcp:registration-failed', (...args: unknown[]) => {
+    const payload = args[0] as MCPRegistrationFailedPayload | undefined;
+    if (!payload) return;
+    const title =
+      payload.phase === 'enable-projects'
+        ? 'Phantom MCP: project enablement failed'
+        : 'Phantom MCP registration failed';
+    const detail = payload.hint ? `${payload.hint}\n\n${payload.error}` : payload.error;
+    showWarningToast(title, detail);
+  });
 }
 
 export { mcpServers, mcpManagerOpen, refreshMcpServers };
