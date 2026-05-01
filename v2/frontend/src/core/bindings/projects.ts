@@ -111,12 +111,8 @@ export async function scanDirectory(parentPath: string): Promise<string[]> {
 }
 
 export async function cloneRepository(url: string, destPath: string): Promise<Project | null> {
-  try {
-    const raw = (await App()?.CloneRepository(url, destPath)) ?? null;
-    return raw ? normalize<Project>(raw) : null;
-  } catch {
-    return null;
-  }
+  const raw = (await App()?.CloneRepository(url, destPath)) ?? null;
+  return raw ? normalize<Project>(raw) : null;
 }
 
 export async function toggleStarProject(id: string): Promise<boolean> {
