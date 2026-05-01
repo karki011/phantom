@@ -90,9 +90,13 @@ export function WorktreeSidebar() {
   async function handleCloneSubmit(url: string) {
     const dest = await browseDirectory('Select destination directory');
     if (!dest) return;
-    const project = await cloneRepository(url, dest);
-    await refreshProjects();
-    if (project) await loadProjectWorktrees(project.id);
+    try {
+      const project = await cloneRepository(url, dest);
+      await refreshProjects();
+      if (project) await loadProjectWorktrees(project.id);
+    } catch (err) {
+      showWarningToast('Clone failed', String(err));
+    }
   }
 
   const collapsed = () => leftSidebarCollapsed();

@@ -9,6 +9,7 @@ import { addProject, browseDirectory, cloneRepository, scanDirectory } from '@/c
 import { refreshProjects } from '@/core/signals/projects';
 import { bootstrapWorktrees } from '@/core/signals/worktrees';
 import { CloneDialog } from '@/shared/CloneDialog/CloneDialog';
+import { showWarningToast } from '@/shared/Toast/Toast';
 import { BootRings } from '@/screens/boot/BootRings';
 
 interface ActionTile {
@@ -33,9 +34,13 @@ export function WelcomePage() {
   async function handleCloneSubmit(url: string) {
     const dest = await browseDirectory('Select destination directory');
     if (!dest) return;
-    await cloneRepository(url, dest);
-    await refreshProjects();
-    await bootstrapWorktrees();
+    try {
+      await cloneRepository(url, dest);
+      await refreshProjects();
+      await bootstrapWorktrees();
+    } catch (err) {
+      showWarningToast('Clone failed', String(err));
+    }
   }
 
   async function handleScan() {
