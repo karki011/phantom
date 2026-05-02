@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.16](https://github.com/karki011/phantom/compare/v0.1.15...v0.1.16) (2026-05-02)
+
+
+### Features
+
+* **v2:** implement factory reset functionality and UI integration ([#43](https://github.com/karki011/phantom/issues/43)) ([7703cc9](https://github.com/karki011/phantom/commit/7703cc96920a34f57f283d8aca1ba4ddbcf41bd7))
+* **v2:** server log ring, header drawer, and pin mode ([#45](https://github.com/karki011/phantom/issues/45)) ([5b7381f](https://github.com/karki011/phantom/commit/5b7381f2ac1c9ea53f951a5278f76c991dc51beb))
+
 ## [0.1.15](https://github.com/karki011/phantom/compare/v0.1.14...v0.1.15) (2026-05-02)
 
 
