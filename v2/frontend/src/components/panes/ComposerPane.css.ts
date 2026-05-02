@@ -366,6 +366,24 @@ export const sendHint = style({
   fontSize: vars.fontSize.xs,
 });
 
+export const stopBtn = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '3px 10px',
+  borderRadius: vars.radius.sm,
+  border: `1px solid ${vars.color.danger}`,
+  background: 'transparent',
+  color: vars.color.danger,
+  fontSize: vars.fontSize.xs,
+  fontWeight: 500,
+  cursor: 'pointer',
+  transition: 'background 150ms ease',
+  ':hover': {
+    background: 'rgba(255, 98, 126, 0.12)',
+  },
+});
+
 export const emptyState = style({
   margin: 'auto',
   textAlign: 'center',

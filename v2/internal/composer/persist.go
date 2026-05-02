@@ -43,11 +43,46 @@ func (s *Service) markTurnError(ctx context.Context, id string) {
 	s.markTurnStatus(ctx, id, "error", 0, 0, 0)
 }
 
-// deleteSession hard-deletes every edit + turn for a session in a single
-// transaction. Edits must go first because the FK has ON DELETE CASCADE on
-// turn_id but we don't rely on it (foreign_keys pragma is on, but explicit
-// is safer and survives PRAGMA flips). Returns sql.ErrNoRows-style nil on
-// missing session — caller treats "delete nothing" as success.
+// insertEvent persists a single streaming event for later replay.
+// Best-effort — errors are logged but don't interrupt the stream.
+func (s *Service) insertEvent(ctx context.Context, e *EventRecord) error {
+	const q = `INSERT INTO composer_events
+		(turn_id, session_id, seq, type, subtype, tool_name, tool_use_id, content, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	_, err := s.writer.ExecContext(ctx, q,
+		e.TurnID, e.SessionID, e.Seq, e.Type, e.Subtype, e.ToolName, e.ToolUseID, e.Content, e.CreatedAt,
+	)
+	return err
+}
+
+// queryEventsForTurn returns all persisted events for a turn in sequence order.
+func (s *Service) queryEventsForTurn(ctx context.Context, turnID string) ([]EventRecord, error) {
+	const q = `SELECT id, turn_id, session_id, seq, type, subtype,
+		COALESCE(tool_name, ''), COALESCE(tool_use_id, ''), COALESCE(content, ''), created_at
+		FROM composer_events WHERE turn_id = ? ORDER BY seq ASC`
+	rows, err := s.writer.QueryContext(ctx, q, turnID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []EventRecord
+	for rows.Next() {
+		var e EventRecord
+		if err := rows.Scan(&e.ID, &e.TurnID, &e.SessionID, &e.Seq, &e.Type, &e.Subtype,
+			&e.ToolName, &e.ToolUseID, &e.Content, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// deleteSession hard-deletes every event + edit + turn for a session in a
+// single transaction. Events and edits must go first because the FK has
+// ON DELETE CASCADE on turn_id but we don't rely on it (foreign_keys pragma
+// is on, but explicit is safer and survives PRAGMA flips). Returns
+// sql.ErrNoRows-style nil on missing session — caller treats "delete nothing"
+// as success.
 func (s *Service) deleteSession(ctx context.Context, sessionID string) error {
 	tx, err := s.writer.BeginTx(ctx, nil)
 	if err != nil {
@@ -55,6 +90,12 @@ func (s *Service) deleteSession(ctx context.Context, sessionID string) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM composer_events WHERE turn_id IN (SELECT id FROM composer_turns WHERE session_id = ?)`,
+		sessionID,
+	); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx,
 		`DELETE FROM composer_edits WHERE turn_id IN (SELECT id FROM composer_turns WHERE session_id = ?)`,
 		sessionID,

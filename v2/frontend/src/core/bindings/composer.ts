@@ -26,7 +26,7 @@ export interface ComposerEditCard {
 export interface ComposerEvent {
   pane_id: string;
   turn_id?: string;
-  type: 'delta' | 'thinking' | 'tool_use' | 'tool_result' | 'result' | 'done' | 'error' | 'strategy' | 'session_started';
+  type: 'delta' | 'thinking' | 'tool_use' | 'tool_result' | 'input_json' | 'result' | 'done' | 'error' | 'strategy' | 'session_started';
   content?: string;
   tool_name?: string;
   tool_input?: string;
@@ -122,6 +122,19 @@ export async function composerListPending(paneId: string): Promise<ComposerEditC
   }
 }
 
+export interface ComposerEventRecord {
+  id: number;
+  turn_id: string;
+  session_id: string;
+  seq: number;
+  type: string;
+  subtype: string;
+  tool_name: string;
+  tool_use_id: string;
+  content: string;
+  created_at: number;
+}
+
 export interface ComposerHistoryTurn {
   turn: {
     id: string;
@@ -144,6 +157,7 @@ export interface ComposerHistoryTurn {
     response_text: string;
   };
   edits: ComposerEditCard[];
+  events: ComposerEventRecord[];
 }
 
 export async function composerHistory(paneId: string): Promise<ComposerHistoryTurn[]> {
