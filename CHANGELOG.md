@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13](https://github.com/karki011/phantom/compare/v0.1.12...v0.1.13) (2026-05-02)
+
+
+### Features
+
+* add support for creating draft pull requests with AI ([#36](https://github.com/karki011/phantom/issues/36)) ([0626777](https://github.com/karki011/phantom/commit/0626777b3ffafa564124de68acd6648ca7ba3098))
+
 ## [0.1.12](https://github.com/karki011/phantom/compare/v0.1.11...v0.1.12) (2026-05-02)
 
 
