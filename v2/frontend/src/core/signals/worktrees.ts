@@ -3,7 +3,7 @@
 
 import { createSignal, createMemo } from 'solid-js';
 import { onWailsEvent } from '../events';
-import { projects, bootstrapProjects } from './projects';
+import { projects, bootstrapProjects, refreshProjects } from './projects';
 import { activeWorktreeId, setActiveWorktreeId } from './app';
 import { listWorktrees, createWorktree, removeWorktree, getAllWorktreeStatus } from '../bindings';
 import { setPref, loadPref } from './preferences';
@@ -208,6 +208,10 @@ export async function bootstrapWorktrees(): Promise<void> {
   onWailsEvent('git:branch-changed', () => {
     refreshAllWorktrees();
     refreshAllWorktreeStatuses();
+  });
+  onWailsEvent('project:created', async () => {
+    await refreshProjects();
+    await refreshAllWorktrees();
   });
 }
 

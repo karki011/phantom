@@ -22,10 +22,10 @@ import (
 //
 // effort controls the reasoning effort level ("low", "medium", "high", "max").
 // Empty string means "don't pass the flag" (auto/default).
-func (a *App) ComposerSend(paneID, prompt, cwd, model string, mentions []composer.Mention, noContext bool, effort string) string {
+func (a *App) ComposerSend(paneID, prompt, cwd, model string, mentions []composer.Mention, noContext bool, effort string) (string, error) {
 	if a.Composer == nil {
 		slog.Warn("ComposerSend: composer service not initialised")
-		return ""
+		return "", fmt.Errorf("Composer service is not available")
 	}
 	id, err := a.Composer.Send(a.ctx, composer.SendArgs{
 		PaneID:    paneID,
@@ -34,13 +34,13 @@ func (a *App) ComposerSend(paneID, prompt, cwd, model string, mentions []compose
 		Model:     model,
 		Mentions:  mentions,
 		NoContext: noContext,
-		Effort:   effort,
+		Effort:    effort,
 	})
 	if err != nil {
 		slog.Error("ComposerSend failed", "pane", paneID, "err", err)
-		return ""
+		return "", err
 	}
-	return id
+	return id, nil
 }
 
 // ComposerCancel stops the active run on a pane (no-op if nothing running).
