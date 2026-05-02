@@ -878,6 +878,34 @@ export const createPrButton = style({
   },
 });
 
+export const createPrButtonDraft = style({
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '6px',
+  width: '100%',
+  padding: '5px 0',
+  borderRadius: vars.radius.md,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 55%, ${vars.color.border})`,
+  backgroundColor: 'transparent',
+  color: vars.color.accent,
+  fontSize: '0.73rem',
+  fontWeight: 600,
+  cursor: 'pointer',
+  transition: `all ${vars.animation.fast} ease`,
+  ':hover': {
+    backgroundColor: `color-mix(in srgb, ${vars.color.accent} 10%, transparent)`,
+  },
+});
+
+export const createPrButtonStack = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  width: '100%',
+});
+
 export const prCreatingRow = style({
   display: 'flex',
   flexDirection: 'row',

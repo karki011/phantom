@@ -37,10 +37,10 @@ function stateLabel(pr: PrStatus): string {
   return pr.state.toUpperCase();
 }
 
-async function handleCreatePr(worktreeId: string) {
+async function handleCreatePr(worktreeId: string, draft: boolean) {
   setIsCreatingPr(true);
   try {
-    const result = await createPrWithAI(worktreeId);
+    const result = await createPrWithAI(worktreeId, draft);
     setPrStatus(result);
   } finally {
     setIsCreatingPr(false);
@@ -115,14 +115,24 @@ const PrSection: Component<PrSectionProps> = (props) => {
           <div class={s.prEmptyText}>
             No pull request
           </div>
-          <button
-            class={s.createPrButton}
-            type="button"
-            onClick={() => handleCreatePr(props.worktreeId)}
-          >
-            <GitPullRequest size={12} />
-            Create PR with {activeProviderLabel()}
-          </button>
+          <div class={s.createPrButtonStack}>
+            <button
+              class={s.createPrButton}
+              type="button"
+              onClick={() => handleCreatePr(props.worktreeId, false)}
+            >
+              <GitPullRequest size={12} />
+              Create PR with {activeProviderLabel()}
+            </button>
+            <button
+              class={s.createPrButtonDraft}
+              type="button"
+              onClick={() => handleCreatePr(props.worktreeId, true)}
+            >
+              <GitPullRequest size={12} />
+              Draft PR with {activeProviderLabel()}
+            </button>
+          </div>
         </Show>
       </div>
     </Show>

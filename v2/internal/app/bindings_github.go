@@ -129,16 +129,18 @@ func (a *App) GetFailedSteps(worktreeId string, checkURL string) []git.FailedSte
 // CreatePrWithAIForWorkspace creates a GitHub PR for the workspace branch using AI-generated content.
 // On success, emits EventPrCreated and returns the new PrStatus.
 // Returns nil on error.
-func (a *App) CreatePrWithAIForWorkspace(worktreeId string) *git.PrStatus {
-	log.Info("app/CreatePrWithAIForWorkspace: called", "worktreeId", worktreeId)
+// When draft is true, creates a draft PR (`gh pr create --draft`) and guides Claude toward WIP-style title/body.
+func (a *App) CreatePrWithAIForWorkspace(worktreeId string, draft bool) *git.PrStatus {
+	log.Info("app/CreatePrWithAIForWorkspace: called", "worktreeId", worktreeId, "draft", draft)
 	repoPath, branch, err := a.resolveRepoBranch(worktreeId)
 	if err != nil {
 		log.Error("app/CreatePrWithAIForWorkspace: resolve failed", "err", err)
 		return nil
 	}
-	baseBranch := resolveBaseBranch(a, worktreeId, repoPath)
+	preferred := resolveBaseBranch(a, worktreeId, repoPath)
+	baseBranch := git.ResolvePrMergeBase(a.ctx, repoPath, preferred)
 
-	pr, err := git.CreatePrWithAI(a.ctx, repoPath, branch, baseBranch)
+	pr, err := git.CreatePrWithAI(a.ctx, repoPath, branch, baseBranch, draft)
 	if err != nil {
 		log.Error("app/CreatePrWithAIForWorkspace: CreatePrWithAI failed", "worktreeId", worktreeId, "err", err)
 		return nil

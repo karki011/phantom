@@ -344,6 +344,7 @@ function RecipesCard(props: { projectId: string | null; repoPath: string | null 
 
 export default function WorktreeHome() {
   const [worktreeOpen, setWorktreeOpen] = createSignal(false);
+  const [creatingPrAsDraft, setCreatingPrAsDraft] = createSignal(false);
   const [repoStatus, setRepoStatus] = createSignal<RepoStatus | null>(null);
   const [openPrs, setOpenPrs] = createSignal<PrStatusType[]>([]);
   const [ciSummary, setCiSummary] = createSignal<CiRun[] | null>(null);
@@ -397,6 +398,9 @@ export default function WorktreeHome() {
     const statusPromise = getWorkspaceStatus(wtId).then(setRepoStatus);
 
     const activityPromise = (async () => {
+      const ghOk = await isGhCliAvailable();
+      setGhAvailable(ghOk);
+      if (!ghOk) return;
       if (isDefaultBranch()) {
         const prs = await listOpenPrs(wtId, 20);
         setOpenPrs(prs);
@@ -621,6 +625,24 @@ export default function WorktreeHome() {
             <span class={styles.quickLaunchLabel}>New Session</span>
             <span class={styles.quickLaunchDesc}>AI-powered workspace</span>
           </button>
+
+          <Show when={activeProject()}>
+            <button
+              class={styles.quickLaunchCard}
+              type="button"
+              onClick={() => setWorktreeOpen(true)}
+            >
+              <div class={styles.quickLaunchShimmer} />
+              <svg class={styles.quickLaunchIcon} viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                <circle cx="22" cy="10" r="5" stroke="currentColor" stroke-width="1.6" fill="none" />
+                <path d="M22 15v6M19 21h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+                <path d="M8 10c0-3 2.5-5.5 6-5.5s6 2.5 6 5.5-2.5 5.5-6 5.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" />
+                <path d="M8 10v11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              </svg>
+              <span class={styles.quickLaunchLabel}>New Worktree</span>
+              <span class={styles.quickLaunchDesc}>Same flow as sidebar · New in project</span>
+            </button>
+          </Show>
         </div>
 
         {/* Right: Recipes */}
@@ -763,8 +785,7 @@ export default function WorktreeHome() {
           <span>{activeWorktree()?.worktree_path ?? '—'}</span>
         </div>
 
-        <Show when={ghAvailable()}>
-          <div class={styles.activityDividerHome} />
+        <div class={styles.activityDividerHome} />
 
           <div class={styles.activityCardHeader}>
             <span class={styles.activityCardIcon}><GitPullRequest size={14} /></span>
@@ -777,7 +798,15 @@ export default function WorktreeHome() {
             <span class={styles.activityEmpty}>Loading...</span>
           </Show>
 
-          <Show when={!activityLoading() && isDefaultBranch()}>
+          <Show when={!activityLoading() && !ghAvailable()}>
+            <span class={styles.activityHint}>
+              Install and authenticate GitHub CLI to enable Create PR with Claude and Draft PR with Claude: run{' '}
+              <code class={styles.activityHintCode}>gh auth login</code>
+              {' '}then Refresh.
+            </span>
+          </Show>
+
+          <Show when={!activityLoading() && ghAvailable() && isDefaultBranch()}>
             <Show
               when={openPrs().length > 0}
               fallback={<span class={styles.activityEmpty}>No open PRs targeting {activeWorktree()?.branch}</span>}
@@ -788,14 +817,18 @@ export default function WorktreeHome() {
                 </For>
               </div>
             </Show>
+            <span class={styles.activityHint}>
+              Create PR with Claude and Draft PR with Claude appear when you select a worktree on a branch other than{' '}
+              {activeProject()?.default_branch ?? 'main'}.
+            </span>
           </Show>
 
           {/* Feature branch: single PR or create button */}
-          <Show when={!activityLoading() && !isDefaultBranch()}>
+          <Show when={!activityLoading() && ghAvailable() && !isDefaultBranch()}>
             <Show when={isCreatingPr()}>
               <div class={styles.aiCreatingPr}>
                 <span class={styles.aiCreatingPrIcon}>⚡</span>
-                <span class={styles.aiCreatingPrText}>Claude is preparing your PR</span>
+                <span class={styles.aiCreatingPrText}>{creatingPrAsDraft() ? 'Claude is preparing your draft PR' : 'Claude is preparing your PR'}</span>
                 <span class={styles.aiCreatingPrDots} />
               </div>
             </Show>
@@ -864,23 +897,48 @@ export default function WorktreeHome() {
               <Show when={!prStatus()}>
                 <span class={styles.activityEmpty}>No pull request for this branch</span>
               </Show>
-              <button
-                type="button"
-                class={styles.createPrButtonCompact}
-                onClick={async () => {
-                  const wtId = activeWorktreeId();
-                  if (!wtId) return;
-                  setIsCreatingPr(true);
-                  try { const pr = await createPrWithAI(wtId); setPrStatus(pr); }
-                  finally { setIsCreatingPr(false); }
-                }}
-              >
-                <GitPullRequest size={12} />
-                {prStatus()?.state === 'MERGED' || prStatus()?.state === 'CLOSED' ? 'Create New PR with Claude' : 'Create PR with Claude'}
-              </button>
+              <div class={styles.createPrActionsRow}>
+                <button
+                  type="button"
+                  class={styles.createPrButtonCompact}
+                  onClick={async () => {
+                    const wtId = activeWorktreeId();
+                    if (!wtId) return;
+                    setCreatingPrAsDraft(false);
+                    setIsCreatingPr(true);
+                    try {
+                      const pr = await createPrWithAI(wtId, false);
+                      setPrStatus(pr);
+                    } finally {
+                      setIsCreatingPr(false);
+                    }
+                  }}
+                >
+                  <GitPullRequest size={12} />
+                  {prStatus()?.state === 'MERGED' || prStatus()?.state === 'CLOSED' ? 'Create New PR with Claude' : 'Create PR with Claude'}
+                </button>
+                <button
+                  type="button"
+                  class={styles.createPrButtonDraftCompact}
+                  onClick={async () => {
+                    const wtId = activeWorktreeId();
+                    if (!wtId) return;
+                    setCreatingPrAsDraft(true);
+                    setIsCreatingPr(true);
+                    try {
+                      const pr = await createPrWithAI(wtId, true);
+                      setPrStatus(pr);
+                    } finally {
+                      setIsCreatingPr(false);
+                    }
+                  }}
+                >
+                  <GitPullRequest size={12} />
+                  Draft PR with Claude
+                </button>
+              </div>
             </Show>
           </Show>
-        </Show>
       </div>
 
       {/* Active Sessions — one card, sessions as rows inside */}

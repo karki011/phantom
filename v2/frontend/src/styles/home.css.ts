@@ -674,6 +674,23 @@ export const activityEmpty = style({
   fontFamily: vars.font.mono,
 });
 
+export const activityHint = style({
+  display: 'block',
+  fontSize: '0.65rem',
+  color: vars.color.textSecondary,
+  fontFamily: vars.font.mono,
+  lineHeight: 1.5,
+  marginTop: vars.space.xs,
+});
+
+export const activityHintCode = style({
+  fontSize: '0.65rem',
+  padding: '1px 5px',
+  borderRadius: vars.radius.sm,
+  background: `color-mix(in srgb, ${vars.color.accent} 10%, transparent)`,
+  color: vars.color.accent,
+});
+
 export const createPrButtonCompact = style({
   display: 'inline-flex',
   alignItems: 'center',
@@ -692,6 +709,34 @@ export const createPrButtonCompact = style({
   ':hover': {
     opacity: '0.9',
     boxShadow: `0 0 12px color-mix(in srgb, ${vars.color.accent} 30%, transparent)`,
+  },
+});
+
+export const createPrActionsRow = style({
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: vars.space.sm,
+  alignItems: 'center',
+});
+
+export const createPrButtonDraftCompact = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `${vars.space.sm} ${vars.space.lg}`,
+  borderRadius: vars.radius.md,
+  background: 'transparent',
+  color: vars.color.accent,
+  border: `1px solid color-mix(in srgb, ${vars.color.accent} 55%, ${vars.color.border})`,
+  cursor: 'pointer',
+  fontFamily: vars.font.body,
+  fontSize: '0.73rem',
+  fontWeight: 600,
+  width: 'fit-content',
+  transition: `all ${vars.animation.fast} ease`,
+  ':hover': {
+    background: `color-mix(in srgb, ${vars.color.accent} 12%, transparent)`,
+    boxShadow: `0 0 10px color-mix(in srgb, ${vars.color.accent} 20%, transparent)`,
   },
 });
 

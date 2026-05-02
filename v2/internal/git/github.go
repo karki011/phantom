@@ -595,8 +595,9 @@ func mapBucketToStatus(bucket string) string {
 
 // CreatePrWithAI stages uncommitted changes, commits with an AI message,
 // pushes to remote, and creates a GitHub PR with AI-generated title and body.
-func CreatePrWithAI(ctx context.Context, repoPath, branch, baseBranch string) (*PrStatus, error) {
-	log.Info("git/CreatePrWithAI: called", "repoPath", repoPath, "branch", branch, "baseBranch", baseBranch)
+// When draft is true, runs `gh pr create --draft` and guides Claude toward WIP-style content.
+func CreatePrWithAI(ctx context.Context, repoPath, branch, baseBranch string, draft bool) (*PrStatus, error) {
+	log.Info("git/CreatePrWithAI: called", "repoPath", repoPath, "branch", branch, "baseBranch", baseBranch, "draft", draft)
 
 	// Step 1: Stage and commit any uncommitted changes.
 	status, _ := runGit(ctx, repoPath, "status", "--porcelain")
@@ -632,15 +633,19 @@ func CreatePrWithAI(ctx context.Context, repoPath, branch, baseBranch string) (*
 	commitsOut, _ := runGit(ctx, repoPath, "log", baseBranch+"..HEAD", "--oneline")
 
 	// Step 4: Generate PR content via Claude.
-	title, body := generatePRContent(ctx, commitsOut, diffOut)
+	title, body := generatePRContent(ctx, commitsOut, diffOut, draft)
 
 	// Step 5: Create the PR.
-	log.Info("git/CreatePrWithAI: creating PR", "title", title, "baseBranch", baseBranch)
-	createCmd := exec.CommandContext(ctx, ghBin(), "pr", "create",
+	log.Info("git/CreatePrWithAI: creating PR", "title", title, "baseBranch", baseBranch, "draft", draft)
+	createArgs := []string{"pr", "create",
 		"--title", title,
 		"--body", body,
 		"--base", baseBranch,
-	)
+	}
+	if draft {
+		createArgs = append(createArgs, "--draft")
+	}
+	createCmd := exec.CommandContext(ctx, ghBin(), createArgs...)
 	createCmd.Dir = repoPath
 	var createStdout, createStderr bytes.Buffer
 	createCmd.Stdout = &createStdout
@@ -712,19 +717,28 @@ Changes:
 
 // generatePRContent generates PR title and body using the hardcoded
 // `claude --print -p` invocation. Kept for backward compatibility.
-func generatePRContent(ctx context.Context, commits, diff string) (title, body string) {
-	return generatePRContentWithRunner(ctx, commits, diff, nil)
+func generatePRContent(ctx context.Context, commits, diff string, draft bool) (title, body string) {
+	return generatePRContentWithRunner(ctx, commits, diff, draft, nil)
 }
 
 // generatePRContentWithRunner generates PR title and body using the provided
 // CommandRunner when non-nil, falling back to the hardcoded `claude --print -p`
 // invocation when cmdRunner is nil.
-func generatePRContentWithRunner(ctx context.Context, commits, diff string, cmdRunner provider.CommandRunner) (title, body string) {
+func generatePRContentWithRunner(ctx context.Context, commits, diff string, draft bool, cmdRunner provider.CommandRunner) (title, body string) {
+	draftNote := ""
+	if draft {
+		draftNote = `
+
+This PR will be opened on GitHub as a DRAFT (not ready for review/merge). Reflect that in tone:
+- Title may use a "WIP:" or similar prefix if helpful, or stay conventional but imply incomplete work.
+- Body must explicitly note it is a draft, what's done vs pending, and what reviewers should ignore for now.
+`
+	}
 	prompt := `Output a GitHub PR title on line 1 and a markdown body starting on line 3. No preamble, no "Here's", no explanation — just the title and body directly.
 
 Title rules: under 70 chars, conventional format (feat/fix/chore: description), no quotes.
 Body rules: 2-5 bullet points summarizing what changed and why.
-
+` + draftNote + `
 Commits:
 ` + commits + `
 
