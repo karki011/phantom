@@ -59,12 +59,12 @@ export async function composerSend(
   mentions: ComposerMention[],
   noContext = false,
   effort = '',
-): Promise<string> {
+): Promise<{ id: string; error?: string }> {
   try {
     const id = await App()?.ComposerSend(paneId, prompt, cwd, model, mentions, noContext, effort);
-    return typeof id === 'string' ? id : '';
-  } catch {
-    return '';
+    return { id: typeof id === 'string' ? id : '' };
+  } catch (e) {
+    return { id: '', error: e instanceof Error ? e.message : String(e) };
   }
 }
 

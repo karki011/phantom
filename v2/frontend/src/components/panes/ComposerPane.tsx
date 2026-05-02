@@ -425,17 +425,18 @@ export default function ComposerPane(props: ComposerPaneProps) {
     setInput('');
     scrollToBottom();
 
-    const newId = await composerSend(paneId(), prompt, cwd(), model(), mentions(), noContext(), effort());
-    if (!newId) {
+    const result = await composerSend(paneId(), prompt, cwd(), model(), mentions(), noContext(), effort());
+    if (!result.id) {
+      const errMsg = result.error ?? 'Failed to start. Make sure the Claude CLI is installed and accessible.';
       setTurns((prev) =>
-        prev.map((t) => (t.id === turnId ? { ...t, status: 'error', error: 'Failed to send' } : t)),
+        prev.map((t) => (t.id === turnId ? { ...t, status: 'error', error: errMsg } : t)),
       );
       setRunning(false);
       return;
     }
     // Re-key the turn to the server-assigned ID so stream events route correctly.
-    setTurns((prev) => prev.map((t) => (t.id === turnId ? { ...t, id: newId } : t)));
-    setActiveTurnId(newId);
+    setTurns((prev) => prev.map((t) => (t.id === turnId ? { ...t, id: result.id } : t)));
+    setActiveTurnId(result.id);
     setMentions([]);
   };
 

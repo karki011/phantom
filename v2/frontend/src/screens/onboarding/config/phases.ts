@@ -8,7 +8,6 @@ export const phaseOrder: PhaseId[] = [
   'deps-check',
   'identity-bind',
   'domain-select',
-  'domain-link',
   'ai-engine',
   'ability-awaken',
   'complete',

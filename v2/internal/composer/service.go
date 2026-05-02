@@ -561,12 +561,12 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 	}
 
 	if err := cmd.Wait(); err != nil && ctx.Err() == nil {
-		errMsg := stderrBuf.String()
+		errMsg := strings.TrimSpace(stderrBuf.String())
 		if errMsg == "" {
 			errMsg = err.Error()
 		}
 		log.Warn("composer: cli wait", "err", err)
-		s.emit("composer:event", Event{PaneID: args.PaneID, TurnID: turnID, Type: "error", Content: errMsg})
+		s.emit("composer:event", Event{PaneID: args.PaneID, TurnID: turnID, Type: "error", Content: friendlyComposerError(errMsg)})
 		s.markTurnError(ctx, turnID)
 		return
 	}
@@ -593,6 +593,24 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		OutputTokens: totalOut,
 		CostUSD:      totalCost,
 	})
+}
+
+// friendlyComposerError translates raw claude CLI error output into
+// user-readable messages for common failure modes.
+func friendlyComposerError(raw string) string {
+	lower := strings.ToLower(raw)
+	switch {
+	case strings.Contains(lower, "connectionrefused") || strings.Contains(lower, "connection refused"):
+		return "Unable to connect to the Anthropic API. Check your internet connection and API key, then try again."
+	case strings.Contains(lower, "401") || strings.Contains(lower, "unauthorized") || strings.Contains(lower, "authentication"):
+		return "Authentication failed. Check your ANTHROPIC_API_KEY or run `claude login`."
+	case strings.Contains(lower, "429") || strings.Contains(lower, "rate limit"):
+		return "Rate limit reached. Please wait a moment before trying again."
+	case strings.Contains(lower, "context deadline exceeded") || strings.Contains(lower, "timeout"):
+		return "The request timed out. Try again in a moment."
+	default:
+		return raw
+	}
 }
 
 // handleAssistant unpacks an "assistant" event's content blocks into stream
