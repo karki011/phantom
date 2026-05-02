@@ -209,9 +209,15 @@ export async function bootstrapWorktrees(): Promise<void> {
     refreshAllWorktrees();
     refreshAllWorktreeStatuses();
   });
-  onWailsEvent('project:created', async () => {
+  // Incremental load: AddProject emits once per repo — a full refreshAllWorktrees
+  // here is O(n²) during bulk scan (each event re-lists every project).
+  onWailsEvent<string>('project:created', async (projectId) => {
     await refreshProjects();
-    await refreshAllWorktrees();
+    if (typeof projectId === 'string' && projectId.length > 0) {
+      await loadProjectWorktrees(projectId);
+    } else {
+      await refreshAllWorktrees();
+    }
   });
 }
 

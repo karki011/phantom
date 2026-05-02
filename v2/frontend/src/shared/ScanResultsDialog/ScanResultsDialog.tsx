@@ -20,6 +20,7 @@ interface ScanResultsDialogProps {
 export function ScanResultsDialog(props: ScanResultsDialogProps) {
   const [scanning, setScanning] = createSignal(false);
   const [adding, setAdding] = createSignal(false);
+  const [addProgress, setAddProgress] = createSignal<{ cur: number; total: number } | null>(null);
   const [paths, setPaths] = createSignal<string[]>([]);
   const [selected, setSelected] = createSignal<Set<string>>(new Set());
 
@@ -68,15 +69,18 @@ export function ScanResultsDialog(props: ScanResultsDialogProps) {
     const toAdd = [...selected()];
     const count = toAdd.length;
     setAdding(true);
-    const addAll = async () => {
-      for (const p of toAdd) {
-        await addProject(p);
+    setAddProgress({ cur: 0, total: count });
+    try {
+      for (let i = 0; i < toAdd.length; i++) {
+        await addProject(toAdd[i]!);
+        setAddProgress({ cur: i + 1, total: count });
       }
-    };
-    await Promise.all([addAll(), new Promise<void>((r) => setTimeout(r, 800))]);
-    await refreshProjects();
-    await bootstrapWorktrees();
-    setAdding(false);
+      await refreshProjects();
+      await bootstrapWorktrees();
+    } finally {
+      setAddProgress(null);
+      setAdding(false);
+    }
     props.onOpenChange(false);
   }
 
@@ -104,7 +108,17 @@ export function ScanResultsDialog(props: ScanResultsDialogProps) {
         fallback={
           <div class={styles.loaderWrapper}>
             <PhantomLoader
-              message={adding() ? `Adding ${selected().size} ${selected().size === 1 ? 'project' : 'projects'}...` : 'Scanning for repositories...'}
+              message={
+                adding()
+                  ? (() => {
+                      const prog = addProgress();
+                      if (prog && prog.total > 0) {
+                        return `${prog.cur} of ${prog.total} added`;
+                      }
+                      return `Adding ${selected().size} ${selected().size === 1 ? 'project' : 'projects'}…`;
+                    })()
+                  : 'Scanning for repositories...'
+              }
             />
           </div>
         }
