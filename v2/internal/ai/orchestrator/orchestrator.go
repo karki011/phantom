@@ -14,19 +14,24 @@ package orchestrator
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/knowledge"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/strategies"
+	"github.com/subashkarki/phantom-os-v2/internal/conflict"
 )
 
 // ProcessInput is the goal-shaped request the orchestrator consumes.
 type ProcessInput struct {
 	ProjectID   string
 	Goal        string
+	CWD         string // repo working directory — used for conflict detection
 	ActiveFiles []string
 	Hints       Hints
 }
@@ -87,6 +92,10 @@ type LearningSummary struct {
 	GlobalPatternBoost    float64 `json:"globalPatternBoost,omitempty"`
 	GapDetectorWarning    string  `json:"gapDetectorWarning,omitempty"`
 	AutoTuneThresholdsKey string  `json:"autoTuneApplied,omitempty"`
+	ConflictSessionCount  int     `json:"conflictSessions,omitempty"`
+	ConflictRiskBoost     float64 `json:"conflictRiskBoost,omitempty"`
+	SemanticMatchCount    int     `json:"semanticMatches,omitempty"`
+	TopSemanticScore      float64 `json:"topSemanticScore,omitempty"`
 }
 
 // ProcessResult is the wire-shape compatible with v1 orchestrator handlers.
@@ -109,15 +118,17 @@ type ProcessResult struct {
 //   GapDetector, Compactor) are all optional. When provided they enable the
 //   learning loop; when absent Process degrades gracefully to a stateless run.
 type Dependencies struct {
-	Indexer        *filegraph.Indexer
-	Registry       *strategies.Registry
-	Assessor       *strategies.Assessor
-	Decisions      *knowledge.DecisionStore
-	Performance    *strategies.PerformanceStore
-	AutoTune       *strategies.ThresholdTracker
-	GlobalPatterns *knowledge.GlobalPatternStore
-	GapDetector    *strategies.GapDetector
-	Compactor      *knowledge.Compactor
+	Indexer         *filegraph.Indexer
+	Registry        *strategies.Registry
+	Assessor        *strategies.Assessor
+	Decisions       *knowledge.DecisionStore
+	Performance     *strategies.PerformanceStore
+	AutoTune        *strategies.ThresholdTracker
+	GlobalPatterns  *knowledge.GlobalPatternStore
+	GapDetector     *strategies.GapDetector
+	Compactor       *knowledge.Compactor
+	ConflictTracker *conflict.Tracker      // optional — enables multi-session awareness
+	VectorStore     *embedding.VectorStore // optional — enables semantic memory retrieval
 }
 
 // ErrNoStrategies is returned when the registry can't pick any strategy.
@@ -172,10 +183,88 @@ func Process(ctx context.Context, deps Dependencies, in ProcessInput) (*ProcessR
 	patternBias := loadPatternBias(deps.GlobalPatterns)
 	gapWarning := detectGapWarning(deps.GapDetector, deps.Decisions)
 
+	// 3b. Check for active conflicts in this repo. When multiple sessions
+	// target the same repository, we boost risk to bias strategy selection
+	// toward more conservative approaches (fewer concurrent edits = fewer
+	// merge conflicts downstream).
+	var conflictSessionCount int
+	var conflictRiskBoost float64
+	if deps.ConflictTracker != nil && in.CWD != "" {
+		conflictSessionCount = deps.ConflictTracker.ActiveSessionCount(in.CWD)
+		if conflictSessionCount > 1 { // more than just this session
+			conflictRiskBoost = 0.15 * float64(conflictSessionCount-1)
+			// Cap at 0.6 so even heavy contention can't zero-out scores.
+			if conflictRiskBoost > 0.6 {
+				conflictRiskBoost = 0.6
+			}
+		}
+	}
+
+	// 3c. Semantic memory retrieval — find decisions/patterns similar to this goal.
+	var semanticMatchCount int
+	var topSemanticScore float64
+	if deps.VectorStore != nil && in.Goal != "" {
+		matches, err := deps.VectorStore.FindSimilar(in.Goal, 5, "decision", "pattern")
+		if err == nil && len(matches) > 0 {
+			semanticMatchCount = len(matches)
+			topSemanticScore = matches[0].Score
+			slog.Info("semantic memory retrieval",
+				"goal", in.Goal,
+				"matches", semanticMatchCount,
+				"topScore", topSemanticScore,
+			)
+			// Augment prior data from semantic matches.
+			for _, m := range matches {
+				if m.MemoryType == "decision" && m.Score > 0.5 {
+					// Check if this decision was a failure.
+					if deps.Decisions != nil {
+						var success int
+						lookupErr := deps.Decisions.DB().QueryRow(
+							"SELECT success FROM ai_outcomes WHERE decision_id = ? AND phase = ? LIMIT 1",
+							m.SourceID, knowledge.PhaseVerifier,
+						).Scan(&success)
+						if lookupErr == nil && success == 0 {
+							// Retrieve the strategy ID from the decision.
+							var strategyID string
+							var createdAt time.Time
+							scanErr := deps.Decisions.DB().QueryRow(
+								"SELECT strategy_id, created_at FROM ai_decisions WHERE id = ?",
+								m.SourceID,
+							).Scan(&strategyID, &createdAt)
+							if scanErr == nil {
+								priorFailures = append(priorFailures, strategies.Failure{
+									StrategyID: strategyID,
+									CreatedAt:  createdAt,
+								})
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// 4. Score every strategy with priors applied.
 	all := scoreAll(registry, assessment, priorFailures, patternBias, deps.Performance)
 	if len(all) == 0 {
 		return nil, ErrNoStrategies
+	}
+
+	// 4b. Apply conflict-risk penalty — reduce all strategy scores uniformly.
+	// This makes the orchestrator prefer conservative strategies (like Direct)
+	// when other sessions are actively editing the same repo.
+	if conflictRiskBoost > 0 {
+		penalty := 1.0 - conflictRiskBoost
+		for i := range all {
+			all[i].Score *= penalty
+			if conflictSessionCount > 1 {
+				all[i].Reason += " [conflict-risk: " +
+					strconv.Itoa(conflictSessionCount-1) + " other session(s)]"
+			}
+		}
+		// Re-sort after penalty — Direct (which was already high) may now rank
+		// higher relative to riskier strategies that had small activation margins.
+		sort.SliceStable(all, func(i, j int) bool { return all[i].Score > all[j].Score })
 	}
 
 	// 5. Pick the winner — fall back to Direct when nothing clears the threshold.
@@ -192,10 +281,14 @@ func Process(ctx context.Context, deps Dependencies, in ProcessInput) (*ProcessR
 
 	// --- Post-execution: persist + update performance ---
 	learning := &LearningSummary{
-		PriorFailures:      len(priorFailures),
-		PerformanceWeight:  performanceWeightFor(deps.Performance, winner.Strategy.ID(), assessment.Complexity),
-		GlobalPatternBoost: patternBias[bias{strategyID: winner.Strategy.ID(), complexity: string(assessment.Complexity), risk: string(assessment.Risk)}],
-		GapDetectorWarning: gapWarning,
+		PriorFailures:        len(priorFailures),
+		PerformanceWeight:    performanceWeightFor(deps.Performance, winner.Strategy.ID(), assessment.Complexity),
+		GlobalPatternBoost:   patternBias[bias{strategyID: winner.Strategy.ID(), complexity: string(assessment.Complexity), risk: string(assessment.Risk)}],
+		GapDetectorWarning:   gapWarning,
+		ConflictSessionCount: conflictSessionCount,
+		ConflictRiskBoost:    conflictRiskBoost,
+		SemanticMatchCount:   semanticMatchCount,
+		TopSemanticScore:     topSemanticScore,
 	}
 
 	if deps.Decisions != nil {

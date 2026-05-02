@@ -2,10 +2,16 @@
 //
 // Package composer — agentic edit pane backed by the `claude` CLI.
 //
-// The service spawns `claude -p` per turn with --output-format=stream-json,
-// streams tool_use / thinking / text / result blocks back to the frontend on
-// the "composer:event" channel, and persists Turn + Edit rows so a paused
-// pane can resume via `claude --resume <session_id>`.
+// The service uses an optimised resume model: every pane gets a session ID
+// allocated on first Send. The first turn spawns `claude -p` with
+// `--session-id <uuid>` + `--input-format stream-json` (prompt sent as
+// structured JSON on stdin). Subsequent turns use `--resume <uuid>` so the
+// Anthropic API prompt cache is warm, giving 2-5x faster first-token.
+//
+// Streaming uses `--output-format stream-json --verbose` which produces a
+// richer event protocol including `content_block_delta`, `message_start`,
+// `message_stop`, and hook events alongside the existing `assistant`,
+// `tool_result`, and `result` types.
 //
 // Edit detection (v0): every Write/Edit/MultiEdit tool_use produced by the
 // agent yields a composer:edit-pending event. The user accepts a card to
@@ -19,6 +25,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,6 +40,8 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/orchestrator"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/verifier"
+	"github.com/subashkarki/phantom-os-v2/internal/conflict"
+	"github.com/subashkarki/phantom-os-v2/internal/namegen"
 )
 
 // IndexerResolver resolves a turn's CWD to the file-graph indexer for the
@@ -83,6 +92,11 @@ type Service struct {
 	// nil resolver or nil result both leave Indexer unset — orchestrator
 	// degrades gracefully.
 	indexerResolver IndexerResolver
+
+	// conflicts tracks active editing sessions and detects when multiple
+	// Composer panes (or other sources) target the same repo or edit the
+	// same files. Optional — nil means conflict detection is disabled.
+	conflicts *conflict.Tracker
 }
 
 // NewService constructs a Composer service. emit should be wired to
@@ -113,6 +127,27 @@ func (s *Service) SetIndexerResolver(resolve IndexerResolver) {
 	s.indexerResolver = resolve
 }
 
+// SetConflictTracker wires the session conflict tracker into the Composer
+// service. When set, Send registers each pane as an active session and
+// maybeRecordEdit tracks file-level overlaps. Passing nil disables conflict
+// detection.
+func (s *Service) SetConflictTracker(t *conflict.Tracker) {
+	s.conflicts = t
+	if t == nil {
+		return
+	}
+	t.OnConflict(func(c conflict.Conflict) {
+		s.emit("composer:conflict", map[string]interface{}{
+			"pane_id":  c.SessionA.ID,
+			"conflict": c,
+		})
+		s.emit("composer:conflict", map[string]interface{}{
+			"pane_id":  c.SessionB.ID,
+			"conflict": c,
+		})
+	})
+}
+
 // ---------------------------------------------------------------------------
 // Public API (called from Wails bindings)
 // ---------------------------------------------------------------------------
@@ -134,6 +169,7 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 	}
 
 	// Cancel any in-flight run for this pane (one run per pane).
+	log.Info("composer: Send called", "pane_id", args.PaneID, "prompt_len", len(args.Prompt))
 	s.cancelExisting(args.PaneID)
 
 	turnID := uuid.New().String()
@@ -151,6 +187,26 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 	// Mark started before spawn so a fast re-send on the same pane uses --resume.
 	s.sessionStarted[args.PaneID] = true
 	s.mu.Unlock()
+
+	// When starting a brand-new session, eagerly insert a row into the
+	// `sessions` table with a generated Pokémon name so the sidebar picks
+	// it up immediately (before the session watcher sees the JSONL file).
+	// Uses INSERT OR IGNORE so it's idempotent if the watcher beats us.
+	if !isResume {
+		existing := s.queryExistingSessionNames(ctx)
+		sessionName := namegen.GenerateUnique(existing)
+		if err := s.ensureSessionRow(ctx, sessionID, sessionName, args.CWD, args.Model, args.Prompt); err != nil {
+			log.Warn("composer: ensureSessionRow failed", "err", err)
+		}
+		// Notify the frontend immediately so the sidebar shows the session
+		// name before any AI response arrives.
+		s.emit("composer:event", Event{
+			PaneID:      args.PaneID,
+			Type:        "session_started",
+			SessionID:   sessionID,
+			SessionName: sessionName,
+		})
+	}
 
 	// Persist the turn row up front.
 	if err := s.insertTurn(ctx, &Turn{
@@ -216,6 +272,20 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 		}
 	}
 
+	// Register this pane as an active conflict-tracking session. The tracker
+	// fires repo-level conflict callbacks synchronously inside Register,
+	// which in turn emits "composer:conflict" events to both panes.
+	if s.conflicts != nil && args.CWD != "" {
+		s.conflicts.Register(conflict.Session{
+			ID:        args.PaneID,
+			SessionID: sessionID,
+			Name:      "",
+			Source:    "composer",
+			RepoCWD:   args.CWD,
+			StartedAt: time.Now(),
+		})
+	}
+
 	runCtx, cancel := context.WithCancel(ctx)
 	s.mu.Lock()
 	s.runs[args.PaneID] = cancel
@@ -246,19 +316,37 @@ func mentionPaths(mentions []Mention, cwd string) []string {
 	return out
 }
 
+// IsRunning returns true when the pane has an in-flight run (a context
+// cancel func registered in the runs map). Used by the frontend on pane
+// remount so it can re-subscribe to events and keep the "running" indicator
+// alive instead of treating the session as dead.
+func (s *Service) IsRunning(paneID string) bool {
+	s.mu.Lock()
+	_, ok := s.runs[paneID]
+	s.mu.Unlock()
+	return ok
+}
+
 // NewConversation drops the cached session for a pane so the next Send
 // starts a fresh claude conversation (next call uses --session-id again).
 // Cancels any in-flight run first.
 func (s *Service) NewConversation(paneID string) {
+	log.Info("composer: NewConversation called", "pane_id", paneID)
 	s.cancelExisting(paneID)
 	s.mu.Lock()
 	delete(s.sessions, paneID)
 	delete(s.sessionStarted, paneID)
 	s.mu.Unlock()
+	// Clear conflict state for the old session.
+	if s.conflicts != nil {
+		s.conflicts.UnregisterFiles(paneID)
+		s.conflicts.Unregister(paneID)
+	}
 }
 
 // Cancel kills the active run on a pane (if any).
 func (s *Service) Cancel(paneID string) {
+	log.Info("composer: Cancel called", "pane_id", paneID)
 	s.cancelExisting(paneID)
 }
 
@@ -435,6 +523,10 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		sessionFlag = "--resume"
 	}
 
+	// Prompt is passed as a CLI argument to -p. The --resume flag on
+	// subsequent turns keeps the Anthropic API prompt cache warm (2-5x
+	// faster first-token). --output-format stream-json gives us the rich
+	// event protocol for tool calls, thinking, and content deltas.
 	cliArgs := []string{
 		"-p", prompt,
 		"--output-format", "stream-json",
@@ -482,6 +574,12 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		cmd.Env = append(cmd.Env, "ANTHROPIC_API_KEY="+key)
 	}
 
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		s.emit("composer:event", Event{PaneID: args.PaneID, Type: "error", Content: fmt.Sprintf("stdin pipe: %v", err)})
+		s.markTurnError(ctx, turnID)
+		return
+	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		s.emit("composer:event", Event{PaneID: args.PaneID, Type: "error", Content: fmt.Sprintf("stdout pipe: %v", err)})
@@ -500,6 +598,9 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		s.markTurnError(ctx, turnID)
 		return
 	}
+
+	// Close stdin immediately — prompt was passed as CLI arg to -p.
+	_ = stdin.Close()
 
 	var stderrBuf strings.Builder
 	go func() {
@@ -536,9 +637,23 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		var typ string
 		_ = json.Unmarshal(raw["type"], &typ)
 
+		// stream_event is an envelope — unwrap the inner event object.
+		if typ == "stream_event" {
+			if innerRaw, ok := raw["event"]; ok {
+				var inner map[string]json.RawMessage
+				if json.Unmarshal(innerRaw, &inner) == nil {
+					raw = inner
+					_ = json.Unmarshal(inner["type"], &typ)
+				}
+			}
+		}
+
 		switch typ {
+		// ---- Legacy / primary event types (always present) ----
 		case "assistant":
 			s.handleAssistant(ctx, args.PaneID, turnID, args.CWD, raw["message"], &responseText)
+		case "tool_result":
+			s.handleToolResult(args.PaneID, turnID, raw)
 		case "result":
 			in, out, cost := parseResult(raw)
 			totalIn, totalOut, totalCost = in, out, cost
@@ -557,6 +672,34 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 			var msg string
 			_ = json.Unmarshal(raw["error"], &msg)
 			s.emit("composer:event", Event{PaneID: args.PaneID, TurnID: turnID, Type: "error", Content: msg})
+
+		// ---- Richer stream-json events (from --input-format stream-json) ----
+		// content_block_delta carries incremental text/thinking chunks that
+		// supplement (or in some CLI versions replace) the batched "assistant"
+		// events. We handle them so streaming feels instant.
+		case "content_block_delta":
+			s.handleContentBlockDelta(args.PaneID, turnID, raw, &responseText)
+
+		// content_block_start can carry tool_use blocks; handle the same way
+		// as the assistant-level tool_use for edit tracking.
+		case "content_block_start":
+			s.handleContentBlockStart(ctx, args.PaneID, turnID, args.CWD, raw)
+
+		// message_start / message_stop / content_block_stop are structural
+		// markers — pass through as typed events so the frontend can use
+		// them for lifecycle UI (typing indicator, etc.) if it wants.
+		case "message_start", "message_stop", "content_block_stop":
+			s.emit("composer:event", Event{PaneID: args.PaneID, TurnID: turnID, Type: typ})
+
+		// system events carry hook lifecycle info — already handled by
+		// --include-hook-events, just forward for observability.
+		case "system":
+			// No-op: hook events are informational, don't surface to user.
+
+		// Unknown types: silently drop. The CLI may add new event types in
+		// future versions; crashing on them would be worse than ignoring.
+		default:
+			log.Debug("composer: unknown stream event type", "type", typ)
 		}
 	}
 
@@ -565,7 +708,7 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		if errMsg == "" {
 			errMsg = err.Error()
 		}
-		log.Warn("composer: cli wait", "err", err)
+		log.Warn("composer: cli wait", "err", err, "stderr", strings.TrimSpace(stderrBuf.String()))
 		s.emit("composer:event", Event{PaneID: args.PaneID, TurnID: turnID, Type: "error", Content: friendlyComposerError(errMsg)})
 		s.markTurnError(ctx, turnID)
 		return
@@ -610,6 +753,99 @@ func friendlyComposerError(raw string) string {
 		return "The request timed out. Try again in a moment."
 	default:
 		return raw
+	}
+}
+
+// writeStreamJSONPrompt sends a user_message as stream-json on stdin, then
+// closes the writer so the CLI knows the message is complete. The message
+// format matches the official Claude Code extension protocol:
+//
+//	{"type":"user_message","content":"<prompt>"}
+func writeStreamJSONPrompt(stdin io.WriteCloser, prompt string) error {
+	msg := struct {
+		Type    string `json:"type"`
+		Content string `json:"content"`
+	}{
+		Type:    "user_message",
+		Content: prompt,
+	}
+	data, err := json.Marshal(msg)
+	if err != nil {
+		_ = stdin.Close()
+		return fmt.Errorf("marshal prompt: %w", err)
+	}
+	// Write the JSON line + newline, then close stdin.
+	data = append(data, '\n')
+	if _, err := stdin.Write(data); err != nil {
+		_ = stdin.Close()
+		return fmt.Errorf("write stdin: %w", err)
+	}
+	return stdin.Close()
+}
+
+// handleContentBlockDelta processes incremental text/thinking chunks from the
+// richer stream-json protocol. These arrive more frequently than batched
+// "assistant" events, providing sub-second streaming granularity.
+func (s *Service) handleContentBlockDelta(paneID, turnID string, raw map[string]json.RawMessage, responseText *strings.Builder) {
+	var delta struct {
+		Delta struct {
+			Type     string `json:"type"`
+			Text     string `json:"text,omitempty"`
+			Thinking string `json:"thinking,omitempty"`
+		} `json:"delta"`
+	}
+	line, _ := json.Marshal(raw)
+	if json.Unmarshal(line, &delta) != nil {
+		return
+	}
+
+	switch delta.Delta.Type {
+	case "text_delta":
+		if delta.Delta.Text != "" {
+			s.emit("composer:event", Event{PaneID: paneID, TurnID: turnID, Type: "delta", Content: delta.Delta.Text})
+			if responseText != nil && responseText.Len() < maxResponseText {
+				remain := maxResponseText - responseText.Len()
+				if len(delta.Delta.Text) <= remain {
+					responseText.WriteString(delta.Delta.Text)
+				} else {
+					responseText.WriteString(delta.Delta.Text[:remain])
+				}
+			}
+		}
+	case "thinking_delta":
+		if delta.Delta.Thinking != "" {
+			s.emit("composer:event", Event{PaneID: paneID, TurnID: turnID, Type: "thinking", Content: delta.Delta.Thinking})
+		}
+	}
+}
+
+// handleContentBlockStart processes the start of a new content block. When
+// the block is a tool_use, it fires the same tool_use event + edit tracking
+// that handleAssistant does, ensuring Write/Edit/MultiEdit detection works
+// regardless of which event path the CLI version uses.
+func (s *Service) handleContentBlockStart(ctx context.Context, paneID, turnID, cwd string, raw map[string]json.RawMessage) {
+	var block struct {
+		ContentBlock struct {
+			Type  string          `json:"type"`
+			Name  string          `json:"name,omitempty"`
+			ID    string          `json:"id,omitempty"`
+			Input json.RawMessage `json:"input,omitempty"`
+		} `json:"content_block"`
+	}
+	line, _ := json.Marshal(raw)
+	if json.Unmarshal(line, &block) != nil {
+		return
+	}
+	if block.ContentBlock.Type == "tool_use" && block.ContentBlock.Name != "" {
+		s.emit("composer:event", Event{
+			PaneID:    paneID,
+			TurnID:    turnID,
+			Type:      "tool_use",
+			ToolName:  block.ContentBlock.Name,
+			ToolInput: string(block.ContentBlock.Input),
+			ToolUseID: block.ContentBlock.ID,
+		})
+		s.maybeRecordEdit(ctx, paneID, turnID, cwd, block.ContentBlock.Name, block.ContentBlock.Input)
 	}
 }
 
@@ -664,6 +900,55 @@ func (s *Service) handleAssistant(ctx context.Context, paneID, turnID, cwd strin
 	}
 }
 
+// handleToolResult unpacks a top-level "tool_result" JSONL line from the CLI
+// and emits a "composer:event" with type "tool_result" so the frontend can
+// update the matching tool_use chip with the result content and status. This
+// is the missing link that lets Agent responses, Bash output, and other tool
+// results surface in the Composer UI.
+func (s *Service) handleToolResult(paneID, turnID string, raw map[string]json.RawMessage) {
+	var msg struct {
+		Content   json.RawMessage `json:"content"`
+		ToolUseID string          `json:"tool_use_id"`
+		IsError   bool            `json:"is_error"`
+	}
+	line, _ := json.Marshal(raw)
+	if json.Unmarshal(line, &msg) != nil {
+		return
+	}
+
+	// Content can be a string or an array of content blocks.
+	var contentStr string
+	if json.Unmarshal(msg.Content, &contentStr) != nil {
+		var blocks []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		}
+		if json.Unmarshal(msg.Content, &blocks) == nil {
+			var parts []string
+			for _, b := range blocks {
+				if b.Type == "text" {
+					parts = append(parts, b.Text)
+				}
+			}
+			contentStr = strings.Join(parts, "\n")
+		}
+	}
+
+	// Truncate very large results (agent responses can be huge).
+	if len(contentStr) > 50000 {
+		contentStr = contentStr[:50000] + "\n... (truncated)"
+	}
+
+	s.emit("composer:event", Event{
+		PaneID:    paneID,
+		TurnID:    turnID,
+		Type:      "tool_result",
+		Content:   contentStr,
+		ToolUseID: msg.ToolUseID,
+		IsError:   msg.IsError,
+	})
+}
+
 // maybeRecordEdit inspects a tool_use input and, if it represents a file
 // edit, persists an Edit row + emits "composer:edit-pending".
 func (s *Service) maybeRecordEdit(ctx context.Context, paneID, turnID, cwd, toolName string, input json.RawMessage) {
@@ -678,6 +963,7 @@ func (s *Service) maybeRecordEdit(ctx context.Context, paneID, turnID, cwd, tool
 		}
 		old, _ := readFileSafe(w.FilePath)
 		s.emitEdit(ctx, paneID, turnID, cwd, w.FilePath, old, w.Content)
+		s.trackConflictFile(paneID, cwd, w.FilePath)
 
 	case "Edit":
 		var e struct {
@@ -694,6 +980,7 @@ func (s *Service) maybeRecordEdit(ctx context.Context, paneID, turnID, cwd, tool
 		newContent, _ := readFileSafe(e.FilePath)
 		old := strings.Replace(newContent, e.NewString, e.OldString, 1)
 		s.emitEdit(ctx, paneID, turnID, cwd, e.FilePath, old, newContent)
+		s.trackConflictFile(paneID, cwd, e.FilePath)
 
 	case "MultiEdit":
 		var m struct {
@@ -714,7 +1001,21 @@ func (s *Service) maybeRecordEdit(ctx context.Context, paneID, turnID, cwd, tool
 			old = strings.Replace(old, m.Edits[i].NewString, m.Edits[i].OldString, 1)
 		}
 		s.emitEdit(ctx, paneID, turnID, cwd, m.FilePath, old, newContent)
+		s.trackConflictFile(paneID, cwd, m.FilePath)
 	}
+}
+
+// trackConflictFile registers a file edit with the conflict tracker. Resolves
+// relative paths against cwd before registering. The tracker's OnConflict
+// handler fires synchronously when a file-level conflict is detected.
+func (s *Service) trackConflictFile(paneID, cwd, filePath string) {
+	if s.conflicts == nil || filePath == "" {
+		return
+	}
+	if !filepath.IsAbs(filePath) && cwd != "" {
+		filePath = filepath.Join(cwd, filePath)
+	}
+	s.conflicts.RegisterFile(paneID, filePath)
 }
 
 func (s *Service) emitEdit(ctx context.Context, paneID, turnID, cwd, path, oldContent, newContent string) {
@@ -752,7 +1053,13 @@ func (s *Service) cancelExisting(paneID string) {
 	}
 	s.mu.Unlock()
 	if ok {
+		log.Warn("composer: cancelling existing run", "pane_id", paneID)
 		cancel()
+	}
+	// Clean up conflict tracking for the cancelled session.
+	if s.conflicts != nil {
+		s.conflicts.UnregisterFiles(paneID)
+		s.conflicts.Unregister(paneID)
 	}
 }
 

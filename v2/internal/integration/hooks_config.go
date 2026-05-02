@@ -98,6 +98,24 @@ func buildPhantomHooks(hooksDir string, features map[string]bool) map[string][]h
 		})
 	}
 
+	// PostToolUse + Stop — phantom-relay (real-time tool event capture)
+	// Always registered when any AI feature is enabled. Empty matcher = all tools.
+	if features["ai.autoContext"] || features["ai.editGate"] || features["ai.outcomeCapture"] || features["ai.fileSync"] {
+		relayHook := hookDef{
+			Type:    "command",
+			Command: "node " + filepath.Join(hooksDir, "phantom-relay.js"),
+			Timeout: 3,
+		}
+		entries["PostToolUse"] = append(entries["PostToolUse"], hookEntry{
+			Matcher: "",
+			Hooks:   []hookDef{relayHook},
+		})
+		entries["Stop"] = append(entries["Stop"], hookEntry{
+			Matcher: "",
+			Hooks:   []hookDef{relayHook},
+		})
+	}
+
 	return entries
 }
 

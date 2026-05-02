@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/subashkarki/phantom-os-v2/internal/db"
+	"github.com/subashkarki/phantom-os-v2/internal/namegen"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -72,9 +73,13 @@ func (a *App) ForkSession(sessionID, name string) (string, error) {
 	// counters. The session watcher will reconcile token counts and message
 	// counts once it observes the new transcript.
 	now := time.Now().Unix()
-	newName := src.Name
+	newName := sql.NullString{}
 	if name != "" {
+		// Explicit name provided by caller — use it.
 		newName = sql.NullString{String: name, Valid: true}
+	} else {
+		// Generate a fresh Pokémon name instead of inheriting parent's.
+		newName = sql.NullString{String: namegen.Generate(), Valid: true}
 	}
 
 	writer := db.New(a.DB.Writer)

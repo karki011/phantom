@@ -8,11 +8,15 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/log v1.0.0
 	github.com/creack/pty v1.1.24
+	github.com/daulet/tokenizers v1.27.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/google/uuid v1.6.0
 	github.com/keybase/go-keychain v0.0.1
+	github.com/lmittmann/tint v1.1.3
 	github.com/mark3labs/mcp-go v0.49.0
+	github.com/muesli/termenv v0.16.0
 	github.com/wailsapp/wails/v2 v2.12.0
+	github.com/yalue/onnxruntime_go v1.30.0
 	golang.org/x/sys v0.42.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.49.1
@@ -52,7 +56,6 @@ require (
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
-	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect

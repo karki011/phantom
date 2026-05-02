@@ -2,7 +2,8 @@
 // Author: Subash Karki
 
 import { createSignal, createEffect, onMount, For, Show, batch } from 'solid-js';
-import { Paperclip, X, FileEdit, Wrench, Brain, ChevronRight, ChevronDown, ChevronLeft, History, Plus, Trash2, BookOpen, Zap } from 'lucide-solid';
+import { createStore, produce, reconcile } from 'solid-js/store';
+import { Paperclip, X, Wrench, Brain, ChevronRight, ChevronDown, ChevronLeft, History, Plus, Trash2, BookOpen, Zap, AlertTriangle, Terminal, Bot, Eye, Search, Pencil, FilePlus, FolderSearch, Globe, ListTodo, FileCode } from 'lucide-solid';
 import { Select } from '@kobalte/core/select';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import * as sidebarStyles from '@/styles/sidebar.css';
@@ -55,6 +56,7 @@ import { onWailsEvent } from '@/core/events';
 import {
   composerSend,
   composerCancel,
+  composerIsRunning,
   composerNewConversation,
   composerDecideEdit,
   composerDeleteSession,
@@ -68,7 +70,7 @@ import {
   type ComposerMention,
   type ComposerSessionSummary,
 } from '@/core/bindings/composer';
-import { addTabWithData } from '@/core/panes/signals';
+import { addTabWithData, renameTabByPane } from '@/core/panes/signals';
 import { showToast, showWarningToast } from '@/shared/Toast/Toast';
 import { loadPref, setPref } from '@/core/signals/preferences';
 import { Tip } from '@/shared/Tip/Tip';
@@ -78,7 +80,9 @@ import * as turnStyles from './ComposerTurnStyles.css';
 import * as toolStatusStyles from './ComposerToolStatus.css';
 import ComposerMemoryPanel from './ComposerMemoryPanel';
 import ComposerSkillBrowser from './ComposerSkillBrowser';
+import ComposerDiffCard from './ComposerDiffCard';
 import * as strategyStyles from './ComposerStrategy.css';
+import { extractToolSummary, groupToolCalls, type ToolGroup, type ToolUseEntry } from './ComposerToolSummary';
 
 interface ComposerPaneProps {
   paneId?: string;
@@ -104,7 +108,7 @@ interface TurnView {
   prompt: string;
   text: string;
   thinking: string;
-  toolUses: { name: string; input: string; status: 'running' | 'done' | 'error' }[];
+  toolUses: { name: string; input: string; status: 'running' | 'done' | 'error'; result?: string; resultIsError?: boolean }[];
   editIds: string[];
   status: 'running' | 'done' | 'error' | 'cancelled';
   error?: string;
@@ -119,6 +123,22 @@ interface TurnView {
   taskComplexity: string;
   taskRisk: string;
   blastRadius: number;
+}
+
+// Conflict info emitted by the Go backend via "composer:conflict".
+interface ConflictSessionInfo {
+  id: string;
+  name: string;
+  repo_cwd: string;
+  source: string;
+}
+
+interface ConflictInfo {
+  session_a: ConflictSessionInfo;
+  session_b: ConflictSessionInfo;
+  type: string; // "repo" or "file"
+  file_path?: string;
+  detected_at: string;
 }
 
 const MODELS = [
@@ -151,8 +171,8 @@ export default function ComposerPane(props: ComposerPaneProps) {
   const paneId = () => props.paneId ?? '';
   const cwd = () => props.cwd ?? '';
 
-  const [turns, setTurns] = createSignal<TurnView[]>([]);
-  const [edits, setEdits] = createSignal<Record<string, ComposerEditCard>>({});
+  const [turns, setTurns] = createStore<TurnView[]>([]);
+  const [edits, setEdits] = createStore<Record<string, ComposerEditCard>>({});
   const [input, setInput] = createSignal('');
   const [model, setModel] = createSignal<string>('opus');
   const [effort, setEffort] = createSignal<string>('auto');
@@ -178,6 +198,14 @@ export default function ComposerPane(props: ComposerPaneProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
   const [activeSessionId, setActiveSessionId] = createSignal<string>(props.sessionId ?? '');
 
+  // Conflict detection — tracks repo/file overlaps with other Composer panes.
+  const [conflicts, setConflicts] = createSignal<ConflictInfo[]>([]);
+  const [conflictDismissed, setConflictDismissed] = createSignal(false);
+
+  const getOtherSession = (c: ConflictInfo): ConflictSessionInfo => {
+    return c.session_a.id === paneId() ? c.session_b : c.session_a;
+  };
+
   const refreshSessions = async () => {
     const list = await composerListSessions();
     setSessions(list);
@@ -196,38 +224,71 @@ export default function ComposerPane(props: ComposerPaneProps) {
   // Shared between onMount and the in-place session swap so the two paths
   // can never drift. Caller is responsible for binding (composerResumeSession)
   // and for fetching the history list.
+  //
+  // `backendRunning` — when true, the backend still has an active run for
+  // this pane. We preserve the last turn's "running" status and set the
+  // component-level `running` signal so the thinking indicator and event
+  // handlers stay alive after a remount (e.g. tab switch that caused
+  // SolidJS to dispose/recreate the component).
   type HistoryRow = Awaited<ReturnType<typeof composerHistory>>[number];
-  const applyHistory = (history: HistoryRow[], pending: ComposerEditCard[]) => {
-    const restored: TurnView[] = history.map((h) => ({
-      id: h.turn.id,
-      // Persisted assistant text (migration 010+). Empty for older turns —
-      // the prompt + edit cards still convey the gist of what happened.
-      // Thinking blocks + tool_use timeline are intentionally NOT
-      // rehydrated — text alone is the highest-signal slice.
-      prompt: h.turn.prompt,
-      text: h.turn.response_text ?? '',
-      thinking: '',
-      toolUses: [],
-      editIds: (h.edits ?? []).map((e) => e.id),
-      status: (h.turn.status === 'running' ? 'done' : h.turn.status) as TurnView['status'],
-      inputTokens: h.turn.input_tokens,
-      outputTokens: h.turn.output_tokens,
-      costUSD: h.turn.cost_usd,
-      startedAt: h.turn.started_at * 1000,
-      completedAt: h.turn.completed_at ? h.turn.completed_at * 1000 : h.turn.started_at * 1000,
-      // Strategy metadata is not persisted — only available during live streaming.
-      strategyName: '',
-      strategyConfidence: 0,
-      taskComplexity: '',
-      taskRisk: '',
-      blastRadius: 0,
-    }));
+  const applyHistory = (history: HistoryRow[], pending: ComposerEditCard[], backendRunning = false) => {
+    const restored: TurnView[] = history.map((h, idx) => {
+      const isLast = idx === history.length - 1;
+      // If the backend is still running AND this is the last turn AND the
+      // DB says "running", keep it as "running" so the UI stays live.
+      // Otherwise, coerce stale "running" rows to "done" (old behaviour
+      // for turns that crashed without a proper status write).
+      let status: TurnView['status'];
+      if (h.turn.status === 'running' && isLast && backendRunning) {
+        status = 'running';
+      } else if (h.turn.status === 'running') {
+        status = 'done';
+      } else {
+        status = h.turn.status as TurnView['status'];
+      }
+      return {
+        id: h.turn.id,
+        // Persisted assistant text (migration 010+). Empty for older turns —
+        // the prompt + edit cards still convey the gist of what happened.
+        // Thinking blocks + tool_use timeline are intentionally NOT
+        // rehydrated — text alone is the highest-signal slice.
+        prompt: h.turn.prompt,
+        text: h.turn.response_text ?? '',
+        thinking: '',
+        toolUses: [],
+        editIds: (h.edits ?? []).map((e) => e.id),
+        status,
+        inputTokens: h.turn.input_tokens,
+        outputTokens: h.turn.output_tokens,
+        costUSD: h.turn.cost_usd,
+        startedAt: h.turn.started_at * 1000,
+        completedAt: h.turn.completed_at ? h.turn.completed_at * 1000 : h.turn.started_at * 1000,
+        // Strategy metadata is not persisted — only available during live streaming.
+        strategyName: '',
+        strategyConfidence: 0,
+        taskComplexity: '',
+        taskRisk: '',
+        blastRadius: 0,
+      };
+    });
     const editsById: Record<string, ComposerEditCard> = {};
     for (const h of history) for (const e of (h.edits ?? [])) editsById[e.id] = e;
     for (const e of pending) editsById[e.id] = e;
     batch(() => {
-      setTurns(restored);
-      setEdits(editsById);
+      setTurns(reconcile(restored));
+      setEdits(reconcile(editsById));
+      // Restore the running indicator and active turn when the backend
+      // confirms a run is still in flight. Without this, remounted panes
+      // would show an idle status bar even though the CLI is still
+      // streaming — the user would see "Idle" and a missing thinking
+      // indicator.
+      if (backendRunning && restored.length > 0) {
+        const last = restored[restored.length - 1];
+        if (last.status === 'running') {
+          setRunning(true);
+          setActiveTurnId(last.id);
+        }
+      }
     });
     const lastSession = history[history.length - 1]?.turn.session_id;
     if (lastSession) setActiveSessionId(lastSession);
@@ -244,13 +305,15 @@ export default function ComposerPane(props: ComposerPaneProps) {
     await composerCancel(paneId());
     await composerResumeSession(paneId(), sessionId);
     batch(() => {
-      setTurns([]);
-      setEdits({});
+      setTurns(reconcile([]));
+      setEdits(reconcile({}));
       setRunning(false);
       setActiveTurnId(null);
       setMentions([]);
       setInput('');
       setActiveSessionId(sessionId);
+      setConflicts([]);
+      setConflictDismissed(false);
     });
     const [history, pending] = await Promise.all([
       composerHistoryBySession(sessionId),
@@ -291,76 +354,119 @@ export default function ComposerPane(props: ComposerPaneProps) {
       await composerResumeSession(paneId(), resumingSessionId);
     }
 
-    const [history, pending] = await Promise.all([
+    const [history, pending, backendRunning] = await Promise.all([
       resumingSessionId
         ? composerHistoryBySession(resumingSessionId)
         : composerHistory(paneId()),
       composerListPending(paneId()),
+      // Ask the backend whether this pane has an active run. On first
+      // mount this is always false. On remount (tab switch that caused
+      // SolidJS to dispose/recreate this component) it can be true — in
+      // which case applyHistory preserves the last turn's "running"
+      // status so streaming events continue to land in the right turn
+      // and the thinking indicator stays visible.
+      composerIsRunning(paneId()),
     ]);
 
-    applyHistory(history, pending);
+    applyHistory(history, pending, backendRunning);
   });
 
   // ── Stream events ────────────────────────────────────────────────────
   onWailsEvent<ComposerEvent>('composer:event', (ev) => {
     if (ev.pane_id !== paneId()) return;
+
+    // Handle session_started before the turn-id gate — this event fires
+    // before any turn exists and carries the session ID + Pokémon name so
+    // the sidebar can show the session immediately on Send.
+    if (ev.type === 'session_started') {
+      if (ev.session_id) {
+        setActiveSessionId(ev.session_id);
+        void refreshSessions();
+        const name = ev.session_name || ev.content || '';
+        if (name) {
+          renameTabByPane(paneId(), `Composer · ${name}`);
+        }
+      }
+      return;
+    }
+
     const turnId = ev.turn_id ?? activeTurnId();
     if (!turnId) return;
 
-    setTurns((prev) =>
-      prev.map((t) => {
-        if (t.id !== turnId) return t;
-        switch (ev.type) {
-          case 'delta':
-            return { ...t, text: t.text + (ev.content ?? '') };
-          case 'thinking':
-            return { ...t, thinking: t.thinking + (ev.content ?? '') };
-          case 'tool_use':
-            return {
-              ...t,
-              toolUses: [
-                ...t.toolUses.map(tu => tu.status === 'running' ? { ...tu, status: 'done' as const } : tu),
-                { name: ev.tool_name ?? 'tool', input: ev.tool_input ?? '', status: 'running' as const },
-              ],
-            };
-          case 'result':
-            return {
-              ...t,
-              inputTokens: ev.input_tokens ?? t.inputTokens,
-              outputTokens: ev.output_tokens ?? t.outputTokens,
-              costUSD: ev.cost_usd ?? t.costUSD,
-            };
-          case 'done':
-            return {
-              ...t,
-              status: 'done',
-              inputTokens: ev.input_tokens ?? t.inputTokens,
-              outputTokens: ev.output_tokens ?? t.outputTokens,
-              costUSD: ev.cost_usd ?? t.costUSD,
-              completedAt: Date.now(),
-              toolUses: t.toolUses.map(tu => tu.status === 'running' ? { ...tu, status: 'done' as const } : tu),
-            };
-          case 'error':
-            return {
-              ...t,
-              status: 'error',
-              error: ev.content ?? 'Unknown error',
-              toolUses: t.toolUses.map(tu => tu.status === 'running' ? { ...tu, status: 'error' as const } : tu),
-            };
-          case 'strategy':
-            return {
-              ...t,
-              strategyName: ev.strategy_name ?? t.strategyName,
-              strategyConfidence: ev.strategy_confidence ?? t.strategyConfidence,
-              taskComplexity: ev.task_complexity ?? t.taskComplexity,
-              taskRisk: ev.task_risk ?? t.taskRisk,
-              blastRadius: ev.blast_radius ?? t.blastRadius,
-            };
-          default:
-            return t;
+    const idx = turns.findIndex(t => t.id === turnId);
+    if (idx < 0) return; // turn not found — nothing to update
+
+    switch (ev.type) {
+      case 'delta':
+        setTurns(idx, 'text', prev => prev + (ev.content ?? ''));
+        break;
+      case 'thinking':
+        setTurns(idx, 'thinking', prev => prev + (ev.content ?? ''));
+        break;
+      case 'tool_use':
+        setTurns(idx, produce(turn => {
+          // Mark all previously running tool uses as done.
+          for (const tu of turn.toolUses) {
+            if (tu.status === 'running') tu.status = 'done';
+          }
+          // Append the new tool use.
+          turn.toolUses.push({
+            name: ev.tool_name ?? 'tool',
+            input: ev.tool_input ?? '',
+            status: 'running',
+          });
+        }));
+        break;
+      case 'tool_result': {
+        // Find the last running tool use entry.
+        const tuIdx = turns[idx].toolUses.findLastIndex(u => u.status === 'running');
+        if (tuIdx >= 0) {
+          setTurns(idx, 'toolUses', tuIdx, produce(tu => {
+            tu.result = ev.content ?? '';
+            tu.resultIsError = ev.is_error ?? false;
+            tu.status = ev.is_error ? 'error' : 'done';
+          }));
         }
-      }),
-    );
+        break;
+      }
+      case 'result':
+        setTurns(idx, produce(turn => {
+          if (ev.input_tokens != null) turn.inputTokens = ev.input_tokens;
+          if (ev.output_tokens != null) turn.outputTokens = ev.output_tokens;
+          if (ev.cost_usd != null) turn.costUSD = ev.cost_usd;
+        }));
+        break;
+      case 'done':
+        setTurns(idx, produce(turn => {
+          turn.status = 'done';
+          if (ev.input_tokens != null) turn.inputTokens = ev.input_tokens;
+          if (ev.output_tokens != null) turn.outputTokens = ev.output_tokens;
+          if (ev.cost_usd != null) turn.costUSD = ev.cost_usd;
+          turn.completedAt = Date.now();
+          for (const tu of turn.toolUses) {
+            if (tu.status === 'running') tu.status = 'done';
+          }
+        }));
+        break;
+      case 'error':
+        setTurns(idx, produce(turn => {
+          turn.status = 'error';
+          turn.error = ev.content ?? 'Unknown error';
+          for (const tu of turn.toolUses) {
+            if (tu.status === 'running') tu.status = 'error';
+          }
+        }));
+        break;
+      case 'strategy':
+        setTurns(idx, produce(turn => {
+          if (ev.strategy_name != null) turn.strategyName = ev.strategy_name;
+          if (ev.strategy_confidence != null) turn.strategyConfidence = ev.strategy_confidence;
+          if (ev.task_complexity != null) turn.taskComplexity = ev.task_complexity;
+          if (ev.task_risk != null) turn.taskRisk = ev.task_risk;
+          if (ev.blast_radius != null) turn.blastRadius = ev.blast_radius;
+        }));
+        break;
+    }
 
     if (ev.type === 'done' || ev.type === 'error') {
       setRunning(false);
@@ -375,10 +481,11 @@ export default function ComposerPane(props: ComposerPaneProps) {
   onWailsEvent<ComposerEditCard>('composer:edit-pending', (card) => {
     if (card.pane_id !== paneId()) return;
     batch(() => {
-      setEdits((prev) => ({ ...prev, [card.id]: card }));
-      setTurns((prev) =>
-        prev.map((t) => (t.id === card.turn_id ? { ...t, editIds: [...t.editIds, card.id] } : t)),
-      );
+      setEdits(card.id, card);
+      const tidx = turns.findIndex(t => t.id === card.turn_id);
+      if (tidx >= 0) {
+        setTurns(tidx, 'editIds', prev => [...prev, card.id]);
+      }
     });
     scrollToBottom();
     if (autoAccept()) {
@@ -387,11 +494,36 @@ export default function ComposerPane(props: ComposerPaneProps) {
   });
 
   onWailsEvent<{ id: string; status: 'accepted' | 'discarded' }>('composer:edit-decided', (msg) => {
-    setEdits((prev) => {
-      const card = prev[msg.id];
-      if (!card) return prev;
-      return { ...prev, [msg.id]: { ...card, status: msg.status } };
+    if (edits[msg.id]) {
+      setEdits(msg.id, 'status', msg.status);
+    }
+  });
+
+  // Conflict detection — listen for repo/file overlap events from the backend.
+  onWailsEvent<{ pane_id: string; conflict: ConflictInfo }>('composer:conflict', (data) => {
+    if (data.pane_id !== paneId()) return;
+    setConflicts((prev) => {
+      // Deduplicate by session pair + type.
+      const exists = prev.some(
+        (c) =>
+          c.session_a.id === data.conflict.session_a.id &&
+          c.session_b.id === data.conflict.session_b.id &&
+          c.type === data.conflict.type &&
+          c.file_path === data.conflict.file_path,
+      );
+      if (exists) return prev;
+      return [...prev, data.conflict];
     });
+    setConflictDismissed(false);
+
+    // File-level conflicts surface as a toast rather than a persistent banner.
+    if (data.conflict.type === 'file' && data.conflict.file_path) {
+      const other = data.conflict.session_a.id === paneId() ? data.conflict.session_b : data.conflict.session_a;
+      showWarningToast(
+        'File conflict',
+        `"${basename(data.conflict.file_path)}" is being edited by ${other.name || 'another session'}`,
+      );
+    }
   });
 
   // ── Actions ──────────────────────────────────────────────────────────
@@ -420,7 +552,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
       taskRisk: '',
       blastRadius: 0,
     };
-    setTurns((prev) => [...prev, turn]);
+    setTurns(turns.length, turn);
     setRunning(true);
     setInput('');
     scrollToBottom();
@@ -428,14 +560,16 @@ export default function ComposerPane(props: ComposerPaneProps) {
     const result = await composerSend(paneId(), prompt, cwd(), model(), mentions(), noContext(), effort());
     if (!result.id) {
       const errMsg = result.error ?? 'Failed to start. Make sure the Claude CLI is installed and accessible.';
-      setTurns((prev) =>
-        prev.map((t) => (t.id === turnId ? { ...t, status: 'error', error: errMsg } : t)),
-      );
+      const errIdx = turns.findIndex(t => t.id === turnId);
+      if (errIdx >= 0) {
+        setTurns(errIdx, produce(t => { t.status = 'error'; t.error = errMsg; }));
+      }
       setRunning(false);
       return;
     }
     // Re-key the turn to the server-assigned ID so stream events route correctly.
-    setTurns((prev) => prev.map((t) => (t.id === turnId ? { ...t, id: result.id } : t)));
+    const rekeyIdx = turns.findIndex(t => t.id === turnId);
+    if (rekeyIdx >= 0) setTurns(rekeyIdx, 'id', result.id);
     setActiveTurnId(result.id);
     setMentions([]);
   };
@@ -446,14 +580,20 @@ export default function ComposerPane(props: ComposerPaneProps) {
   };
 
   const handleNewConversation = async () => {
+    if (running() || turns.length > 0) {
+      addTabWithData('composer', `Composer · ${cwd() ? cwd().split('/').pop() : 'new'}`, { cwd: cwd() });
+      return;
+    }
     await composerNewConversation(paneId());
     batch(() => {
-      setTurns([]);
-      setEdits({});
+      setTurns(reconcile([]));
+      setEdits(reconcile({}));
       setActiveTurnId(null);
       setMentions([]);
       setRunning(false);
       setActiveSessionId('');
+      setConflicts([]);
+      setConflictDismissed(false);
     });
   };
 
@@ -469,7 +609,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
   //                    so users can compare two conversations side-by-side.
   const handleSessionRowClick = (s: ComposerSessionSummary, e: MouseEvent) => {
     if (e.metaKey || e.ctrlKey) {
-      addTabWithData('composer', `Composer · ${basename(s.cwd) || 'session'}`, {
+      addTabWithData('composer', `Composer · ${s.name || basename(s.cwd) || 'session'}`, {
         cwd: s.cwd,
         sessionId: s.session_id,
       });
@@ -490,16 +630,20 @@ export default function ComposerPane(props: ComposerPaneProps) {
       showWarningToast('Delete failed', 'Could not delete session — see console.');
       return;
     }
+    const wasActive = activeSessionId() === s.session_id;
     setSessions((prev) => prev.filter((row) => row.session_id !== s.session_id));
-    if (activeSessionId() === s.session_id) {
+    if (wasActive) {
       await composerNewConversation(paneId());
       batch(() => {
-        setTurns([]);
-        setEdits({});
+        setTurns(reconcile([]));
+        setEdits(reconcile({}));
         setActiveTurnId(null);
         setMentions([]);
         setRunning(false);
         setActiveSessionId('');
+        setInput('');
+        setConflicts([]);
+        setConflictDismissed(false);
       });
     }
     showToast('Deleted', 'Session removed.');
@@ -674,29 +818,28 @@ export default function ComposerPane(props: ComposerPaneProps) {
   };
 
   const pendingEditCards = (): ComposerEditCard[] =>
-    Object.values(edits()).filter((e) => e.status === 'pending');
+    Object.values(edits).filter((e) => e.status === 'pending');
 
   // ── Status strip values ─────────────────────────────────────────────
   const totalTokensThisTurn = () => {
-    const last = turns()[turns().length - 1];
+    const last = turns[turns.length - 1];
     return last ? `${last.inputTokens} in / ${last.outputTokens} out` : '';
   };
 
   const totalCostThisTurn = () => {
-    const last = turns()[turns().length - 1];
+    const last = turns[turns.length - 1];
     return last && last.costUSD > 0 ? `$${last.costUSD.toFixed(4)}` : '';
   };
 
   // ── Session-level computed metrics ─────────────────────────────────────
-  const sessionTotalCost = () => turns().reduce((sum, t) => sum + t.costUSD, 0);
-  const sessionTotalTokens = () => turns().reduce((sum, t) => sum + t.inputTokens + t.outputTokens, 0);
-  const sessionTurnCount = () => turns().length;
+  const sessionTotalCost = () => turns.reduce((sum, t) => sum + t.costUSD, 0);
+  const sessionTotalTokens = () => turns.reduce((sum, t) => sum + t.inputTokens + t.outputTokens, 0);
+  const sessionTurnCount = () => turns.length;
 
   // ── Context window gauge ───────────────────────────────────────────────
   const contextUsed = () => {
-    const t = turns();
-    if (t.length === 0) return 0;
-    return t[t.length - 1].inputTokens;
+    if (turns.length === 0) return 0;
+    return turns[turns.length - 1].inputTokens;
   };
   const contextMax = () => MODEL_CONTEXT_LIMITS[model()] ?? 200_000;
   const contextPercent = () => Math.min(100, (contextUsed() / contextMax()) * 100);
@@ -747,28 +890,32 @@ export default function ComposerPane(props: ComposerPaneProps) {
             <For each={sessions()}>
               {(s) => {
                 const isActive = () => s.session_id === activeSessionId();
-                const promptText = () => s.first_prompt.trim() || 'Untitled';
-                const promptEmpty = () => s.first_prompt.trim() === '';
+                const displayName = () => s.name || s.first_prompt.trim() || 'Untitled';
+                const subtitle = () => s.name && s.first_prompt.trim() ? s.first_prompt.trim() : '';
+                const hasName = () => !!s.name;
                 return (
                   <ContextMenu>
                     <ContextMenu.Trigger
                       as="div"
                       class={`${styles.sidebarRow} ${isActive() ? styles.sidebarRowActive : ''}`}
                       onClick={(e) => handleSessionRowClick(s, e)}
-                      title={`${s.first_prompt || s.session_id}\n\nClick to open · Cmd+Click for new tab · Right-click for actions`}
+                      title={`${s.name ? s.name + '\n' : ''}${s.first_prompt || s.session_id}\n\nClick to open · Cmd+Click for new tab · Right-click for actions`}
                     >
-                      <span
-                        class={`${styles.sidebarRowPrompt} ${promptEmpty() ? styles.sidebarRowPromptEmpty : ''}`}
-                      >
-                        {promptText()}
+                      <span class={styles.sidebarRowPrompt}>
+                        {displayName()}
                       </span>
+                      <Show when={subtitle()}>
+                        <span class={styles.sidebarRowPromptEmpty} style={{ 'font-size': '10px', 'margin-left': '4px', 'flex-shrink': '1', overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap' }}>
+                          {subtitle()}
+                        </span>
+                      </Show>
                       <span class={styles.sidebarRowTime}>{relTime(s.last_activity)}</span>
                     </ContextMenu.Trigger>
                     <ContextMenu.Portal>
                       <ContextMenu.Content class={sidebarStyles.contextMenuContent}>
                         <ContextMenu.Item
                           class={sidebarStyles.contextMenuItem}
-                          onSelect={() => addTabWithData('composer', `Composer · ${basename(s.cwd) || 'session'}`, { cwd: s.cwd, sessionId: s.session_id })}
+                          onSelect={() => addTabWithData('composer', `Composer · ${s.name || basename(s.cwd) || 'session'}`, { cwd: s.cwd, sessionId: s.session_id })}
                         >
                           <Plus size={13} />
                           Open in new tab
@@ -850,7 +997,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
           {autoAccept() ? '⚡ Auto-accept on' : '✋ Manual review'}
         </button>
         <span class={styles.statusGrow} />
-        <Show when={turns().length > 0}>
+        <Show when={turns.length > 0}>
           <span class={metricsStyles.metricsSeparator}>|</span>
           <span class={metricsStyles.metricsGroup}>
             <span>Turn {sessionTurnCount()}</span>
@@ -876,7 +1023,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
         {/* "New" is always available once there's at least one turn —
             even mid-stream, so the user can abort + start fresh in one click.
             handleNewConversation cancels any active run before resetting. */}
-        <Show when={turns().length > 0}>
+        <Show when={turns.length > 0}>
           <button
             class={styles.cancelBtn}
             type="button"
@@ -904,16 +1051,45 @@ export default function ComposerPane(props: ComposerPaneProps) {
         </div>
       </Show>
 
+      {/* Conflict banner — shown when another Composer pane targets the same repo. */}
+      <Show when={conflicts().length > 0 && !conflictDismissed()}>
+        <div class={styles.conflictBanner}>
+          <AlertTriangle size={14} />
+          <span class={styles.conflictBannerText}>
+            {conflicts().length === 1
+              ? `Another session is editing this repo: "${getOtherSession(conflicts()[0]).name || 'Unknown'}"`
+              : `${conflicts().length} other sessions are editing this repo`}
+          </span>
+          <button
+            class={styles.conflictAction}
+            type="button"
+            onClick={() => {
+              const other = getOtherSession(conflicts()[0]);
+              if (other?.id) void loadSessionInPlace(other.id);
+            }}
+          >
+            Switch
+          </button>
+          <button
+            class={styles.conflictDismiss}
+            type="button"
+            onClick={() => setConflictDismissed(true)}
+          >
+            Dismiss
+          </button>
+        </div>
+      </Show>
+
       {/* Conversation feed */}
       <div class={styles.feed} ref={feedRef}>
-        <Show when={turns().length === 0}>
+        <Show when={turns.length === 0}>
           <div class={styles.emptyState}>
             Ask Composer to make changes across files. Try{' '}
             <em>"Add a logger to the user service"</em>.
           </div>
         </Show>
 
-        <For each={turns()}>
+        <For each={turns}>
           {(turn) => (
             <div class={turnStyles.turnGroup}>
               <Show when={turn.prompt}>
@@ -953,21 +1129,20 @@ export default function ComposerPane(props: ComposerPaneProps) {
                 <ThinkingChip content={turn.thinking} />
               </Show>
 
-              <For each={turn.toolUses}>
-                {(t) => <ToolUseChip name={t.name} input={t.input} status={t.status} />}
-              </For>
+              <ToolCallsSection toolUses={turn.toolUses} />
 
               <For each={turn.editIds}>
                 {(id) => {
-                  const card = () => edits()[id];
+                  const card = () => edits[id];
                   return (
                     <Show when={card()}>
                       {(c) => (
-                        <EditCardRow
+                        <ComposerDiffCard
                           card={c()}
-                          onDiff={() => openDiff(c())}
+                          autoAccept={autoAccept()}
                           onAccept={() => handleAcceptEdit(c().id)}
                           onDiscard={() => handleDiscardEdit(c().id)}
+                          onOpenDiff={() => openDiff(c())}
                         />
                       )}
                     </Show>
@@ -989,7 +1164,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
               </Show>
 
               <Show when={turn.status === 'done' || turn.status === 'error'}>
-                <TurnMetrics turn={turn} turnIndex={turns().indexOf(turn)} edits={edits()} />
+                <TurnMetrics turn={turn} turnIndex={turns.indexOf(turn)} edits={edits} />
               </Show>
 
               <Show when={turn.status === 'done' && turn.editIds.length > 0 && !autoAccept() && pendingEditCards().length > 0}>
@@ -1186,25 +1361,166 @@ function StrategyChip(props: { name: string; confidence: number; complexity: str
 
 function ThinkingChip(props: { content: string }) {
   const [open, setOpen] = createSignal(false);
+  const preview = () => {
+    const text = props.content.trim();
+    if (!text) return 'Reasoning...';
+    const firstLine = text.split('\n')[0];
+    return firstLine.length > 80 ? firstLine.slice(0, 80) + '…' : firstLine;
+  };
+  const lineCount = () => props.content.split('\n').filter(l => l.trim()).length;
   return (
     <div
       class={open() ? toolStatusStyles.thinkingExpanded : toolStatusStyles.thinkingCollapsed}
       onClick={() => setOpen(!open())}
+      style={{ cursor: 'pointer' }}
     >
-      <Brain size={11} style={{ 'vertical-align': 'middle', 'margin-right': '4px' }} />
-      <Show when={open()} fallback={<ChevronRight size={11} style={{ 'vertical-align': 'middle' }} />}>
-        <ChevronDown size={11} style={{ 'vertical-align': 'middle' }} />
-      </Show>
-      <span style={{ 'margin-left': '4px' }}>Thinking…</span>
+      <div style={{ display: 'flex', 'align-items': 'center', gap: '4px', 'min-width': '0' }}>
+        <Brain size={11} style={{ 'flex-shrink': '0' }} />
+        <Show when={open()} fallback={<ChevronRight size={11} style={{ 'flex-shrink': '0' }} />}>
+          <ChevronDown size={11} style={{ 'flex-shrink': '0' }} />
+        </Show>
+        <span style={{ 'font-weight': '500' }}>Thinking</span>
+        <Show when={!open() && props.content}>
+          <span style={{
+            color: 'var(--text-muted, #888)',
+            'font-size': '0.85em',
+            overflow: 'hidden',
+            'text-overflow': 'ellipsis',
+            'white-space': 'nowrap',
+            'min-width': '0',
+          }}>
+            — {preview()}
+          </span>
+        </Show>
+        <Show when={lineCount() > 1}>
+          <span style={{
+            color: 'var(--text-muted, #666)',
+            'font-size': '0.75em',
+            'flex-shrink': '0',
+          }}>
+            ({lineCount()} lines)
+          </span>
+        </Show>
+      </div>
       <Show when={open()}>
-        <div class={toolStatusStyles.thinkingContent}>{props.content}</div>
+        <pre style={{
+          'margin-top': '6px',
+          'white-space': 'pre-wrap',
+          'word-break': 'break-word',
+          'width': '100%',
+          'padding': '8px 10px',
+          'border-radius': '6px',
+          'background': 'rgba(255, 255, 255, 0.03)',
+          'border': '1px solid rgba(255, 255, 255, 0.06)',
+          'font-size': '11px',
+          'line-height': '1.5',
+          'max-height': '300px',
+          'overflow-y': 'auto',
+        }}>
+          {props.content}
+        </pre>
       </Show>
     </div>
   );
 }
 
-function ToolUseChip(props: { name: string; input: string; status: 'running' | 'done' | 'error' }) {
-  const [open, setOpen] = createSignal(false);
+/** Section wrapper for tool calls with expand-all / collapse-all toggle + grouping. */
+function ToolCallsSection(props: {
+  toolUses: { name: string; input: string; status: 'running' | 'done' | 'error'; result?: string; resultIsError?: boolean }[];
+}) {
+  const [expandMode, setExpandMode] = createSignal<'all' | 'none' | 'individual'>('individual');
+
+  const groups = () => groupToolCalls(props.toolUses as ToolUseEntry[]);
+
+  const toggleExpandAll = () => {
+    setExpandMode((prev) => (prev === 'all' ? 'none' : 'all'));
+  };
+
+  return (
+    <>
+      <Show when={props.toolUses.length > 1}>
+        <div class={toolStatusStyles.expandToggleRow}>
+          <button
+            class={toolStatusStyles.expandToggleBtn}
+            type="button"
+            onClick={toggleExpandAll}
+          >
+            {expandMode() === 'all' ? 'Collapse All' : 'Expand All'}
+          </button>
+          <span class={toolStatusStyles.expandToggleCount}>
+            {props.toolUses.length} tool call{props.toolUses.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+      </Show>
+      <For each={groups()}>
+        {(group) => (
+          <Show
+            when={group.type === 'group'}
+            fallback={
+              <ToolUseChip
+                name={group.items[0].name}
+                input={group.items[0].input}
+                status={group.items[0].status}
+                result={group.items[0].result}
+                resultIsError={group.items[0].resultIsError}
+                expandMode={expandMode()}
+              />
+            }
+          >
+            <ToolGroupChip group={group} expandMode={expandMode()} />
+          </Show>
+        )}
+      </For>
+    </>
+  );
+}
+
+/** Map icon name string from ToolSummary to a lucide-solid component. */
+const TOOL_ICON_MAP: Record<string, typeof Wrench> = {
+  Terminal,
+  Bot,
+  Eye,
+  Search,
+  Pencil,
+  FilePlus,
+  FolderSearch,
+  Globe,
+  ListTodo,
+  FileCode,
+  Wrench,
+};
+
+const formatToolInput = (input: string): string => {
+  try {
+    const parsed = JSON.parse(input);
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return input;
+  }
+};
+
+function ToolUseChip(props: {
+  name: string;
+  input: string;
+  status: 'running' | 'done' | 'error';
+  result?: string;
+  resultIsError?: boolean;
+  expandMode?: 'all' | 'none' | 'individual';
+}) {
+  const [localOpen, setLocalOpen] = createSignal(false);
+  const [showFullResult, setShowFullResult] = createSignal(false);
+  const RESULT_PREVIEW_LIMIT = 2000;
+
+  const effectiveOpen = () => {
+    const mode = props.expandMode ?? 'individual';
+    if (mode === 'all') return true;
+    if (mode === 'none') return false;
+    return localOpen();
+  };
+
+  const summary = () => extractToolSummary(props.name, props.input);
+  const IconComponent = () => TOOL_ICON_MAP[summary().iconName] ?? Wrench;
+
   const dotClass = () => {
     switch (props.status) {
       case 'running': return toolStatusStyles.statusDotRunning;
@@ -1212,18 +1528,168 @@ function ToolUseChip(props: { name: string; input: string; status: 'running' | '
       default: return toolStatusStyles.statusDotSuccess;
     }
   };
+
+  const truncatedResult = () => {
+    const r = props.result ?? '';
+    if (r.length <= RESULT_PREVIEW_LIMIT || showFullResult()) return r;
+    return r.slice(0, RESULT_PREVIEW_LIMIT) + '\n...';
+  };
+
+  const resultIsTruncated = () => (props.result ?? '').length > RESULT_PREVIEW_LIMIT && !showFullResult();
+
+  const handleClick = () => {
+    // Only toggle local state when in individual mode.
+    setLocalOpen(!localOpen());
+  };
+
   return (
-    <div class={styles.toolBlock} onClick={() => setOpen(!open())} style={{ cursor: 'pointer' }}>
+    <div class={styles.toolBlock} onClick={handleClick} style={{ cursor: 'pointer' }}>
       <span class={dotClass()} />
-      <Wrench size={11} style={{ 'vertical-align': 'middle', 'margin-right': '4px' }} />
-      <Show when={open()} fallback={<ChevronRight size={11} style={{ 'vertical-align': 'middle' }} />}>
-        <ChevronDown size={11} style={{ 'vertical-align': 'middle' }} />
+      {(() => {
+        const Ic = IconComponent();
+        return <Ic size={11} style={{ 'vertical-align': 'middle', 'margin-right': '4px', 'flex-shrink': '0' }} />;
+      })()}
+      <Show when={effectiveOpen()} fallback={<ChevronRight size={11} style={{ 'vertical-align': 'middle', 'flex-shrink': '0' }} />}>
+        <ChevronDown size={11} style={{ 'vertical-align': 'middle', 'flex-shrink': '0' }} />
       </Show>
-      <span style={{ 'margin-left': '4px' }}>{props.name}</span>
-      <Show when={open()}>
-        <pre style={{ 'margin-top': '4px', 'white-space': 'pre-wrap', 'word-break': 'break-all' }}>
-          {props.input}
+      <span style={{ 'margin-left': '4px', 'flex-shrink': '0' }}>{props.name}</span>
+      <Show when={summary().label}>
+        <span class={toolStatusStyles.toolNameSep}>—</span>
+        <span class={toolStatusStyles.toolSummaryLabel} title={summary().label}>{summary().label}</span>
+      </Show>
+      <Show when={summary().badge}>
+        <span class={toolStatusStyles.toolBadge}>{summary().badge}</span>
+      </Show>
+      <Show when={effectiveOpen()}>
+        <pre style={{
+          'margin-top': '6px',
+          'white-space': 'pre-wrap',
+          'word-break': 'break-word',
+          'width': '100%',
+          'padding': '8px 10px',
+          'border-radius': '6px',
+          'background': 'rgba(255, 255, 255, 0.03)',
+          'border': '1px solid rgba(255, 255, 255, 0.06)',
+          'font-size': '11px',
+          'line-height': '1.5',
+          'overflow-x': 'auto',
+        }}>
+          <code>{formatToolInput(props.input)}</code>
         </pre>
+        <Show when={props.result}>
+          <div
+            style={{
+              'margin-top': '6px',
+              'padding': '6px 8px',
+              'border-radius': '4px',
+              'font-size': '11px',
+              'background': props.resultIsError ? 'rgba(255, 98, 126, 0.08)' : 'rgba(255, 255, 255, 0.04)',
+              'border-left': props.resultIsError ? '2px solid var(--danger, #ff627e)' : '2px solid var(--accent, #7c8aff)',
+              'width': '100%',
+            }}
+          >
+            <span style={{
+              'font-weight': '600',
+              'font-size': '10px',
+              'text-transform': 'uppercase',
+              'letter-spacing': '0.5px',
+              'color': props.resultIsError ? 'var(--danger, #ff627e)' : 'var(--accent, #7c8aff)',
+            }}>
+              {props.resultIsError ? 'Error' : 'Result'}
+            </span>
+            <pre style={{
+              'margin-top': '4px',
+              'white-space': 'pre-wrap',
+              'word-break': 'break-all',
+              'color': props.resultIsError ? 'var(--danger, #ff627e)' : 'inherit',
+            }}>
+              {truncatedResult()}
+            </pre>
+            <Show when={resultIsTruncated()}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowFullResult(true); }}
+                style={{
+                  'margin-top': '4px',
+                  'background': 'none',
+                  'border': 'none',
+                  'color': 'var(--accent, #7c8aff)',
+                  'cursor': 'pointer',
+                  'font-size': '11px',
+                  'padding': '0',
+                  'text-decoration': 'underline',
+                }}
+              >
+                Show more ({((props.result ?? '').length / 1000).toFixed(1)}K chars)
+              </button>
+            </Show>
+          </div>
+        </Show>
+      </Show>
+    </div>
+  );
+}
+
+/** Collapsed group chip for 5+ consecutive same-name tool calls. */
+function ToolGroupChip(props: {
+  group: ToolGroup;
+  expandMode: 'all' | 'none' | 'individual';
+}) {
+  const [open, setOpen] = createSignal(false);
+
+  const effectiveOpen = () => {
+    const mode = props.expandMode;
+    if (mode === 'all') return true;
+    if (mode === 'none') return false;
+    return open();
+  };
+
+  const runningCount = () => props.group.items.filter((i) => i.status === 'running').length;
+  const errorCount = () => props.group.items.filter((i) => i.status === 'error').length;
+  const IconComponent = () => TOOL_ICON_MAP[extractToolSummary(props.group.name, '{}').iconName] ?? Wrench;
+
+  return (
+    <div>
+      <div class={toolStatusStyles.toolGroupHeader} onClick={() => setOpen(!open())}>
+        {(() => {
+          const Ic = IconComponent();
+          return <Ic size={11} style={{ 'flex-shrink': '0' }} />;
+        })()}
+        <Show when={effectiveOpen()} fallback={<ChevronRight size={11} style={{ 'flex-shrink': '0' }} />}>
+          <ChevronDown size={11} style={{ 'flex-shrink': '0' }} />
+        </Show>
+        <span>{props.group.name}</span>
+        <span>({props.group.items.length} calls)</span>
+        <Show when={runningCount() > 0}>
+          <span class={toolStatusStyles.statusDotRunning} />
+        </Show>
+        <Show when={errorCount() > 0}>
+          <span class={toolStatusStyles.statusDotError} />
+          <span style={{ 'font-size': '10px' }}>{errorCount()} failed</span>
+        </Show>
+        <Show when={props.group.previewLabels.length > 0 && !effectiveOpen()}>
+          <span class={toolStatusStyles.toolNameSep}>—</span>
+          <span class={toolStatusStyles.toolGroupPreview}>
+            {props.group.previewLabels.join(', ')}
+            {props.group.items.length > 3 ? ', …' : ''}
+          </span>
+        </Show>
+      </div>
+      <Show when={effectiveOpen()}>
+        <div class={toolStatusStyles.toolGroupChildren}>
+          <For each={props.group.items}>
+            {(t) => (
+              <ToolUseChip
+                name={t.name}
+                input={t.input}
+                status={t.status}
+                result={t.result}
+                resultIsError={t.resultIsError}
+                expandMode="individual"
+              />
+            )}
+          </For>
+        </div>
       </Show>
     </div>
   );
@@ -1270,43 +1736,6 @@ function TurnMetrics(props: { turn: TurnView; turnIndex: number; edits: Record<s
   );
 }
 
-function EditCardRow(props: {
-  card: ComposerEditCard;
-  onDiff: () => void;
-  onAccept: () => void;
-  onDiscard: () => void;
-}) {
-  const decidedClass = () =>
-    props.card.status === 'accepted'
-      ? styles.editDecidedAccepted
-      : props.card.status === 'discarded'
-        ? styles.editDecidedDiscarded
-        : '';
-
-  return (
-    <div class={`${styles.editCard} ${decidedClass()}`}>
-      <FileEdit size={14} />
-      <span class={styles.editPath} title={props.card.path}>
-        {basename(props.card.path)}
-      </span>
-      <span class={styles.editStats}>
-        <span class={styles.editRemoved}>-{props.card.lines_removed}</span>{' '}
-        <span class={styles.editAdded}>+{props.card.lines_added}</span>
-      </span>
-      <button class={styles.editBtn} type="button" onClick={props.onDiff}>
-        Diff
-      </button>
-      <Show when={props.card.status === 'pending'}>
-        <button class={`${styles.editBtn} ${styles.editAccept}`} type="button" onClick={props.onAccept}>
-          ✓
-        </button>
-        <button class={`${styles.editBtn} ${styles.editDiscard}`} type="button" onClick={props.onDiscard}>
-          ✕
-        </button>
-      </Show>
-    </div>
-  );
-}
 
 // ── Helpers ────────────────────────────────────────────────────────────
 

@@ -780,3 +780,41 @@ func (q *Queries) UpdateSessionTokens(ctx context.Context, arg UpdateSessionToke
 	)
 	return err
 }
+
+const updateSessionName = `-- name: UpdateSessionName :exec
+UPDATE sessions SET name = ? WHERE id = ?
+`
+
+type UpdateSessionNameParams struct {
+	Name sql.NullString `json:"name"`
+	ID   string         `json:"id"`
+}
+
+func (q *Queries) UpdateSessionName(ctx context.Context, arg UpdateSessionNameParams) error {
+	_, err := q.db.ExecContext(ctx, updateSessionName, arg.Name, arg.ID)
+	return err
+}
+
+const listUnnamedSessions = `-- name: ListUnnamedSessions :many
+SELECT id FROM sessions WHERE name IS NULL OR name = ''
+`
+
+func (q *Queries) ListUnnamedSessions(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listUnnamedSessions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

@@ -302,6 +302,7 @@ export interface WardEvaluation {
 
 export interface JournalEntry {
   id: string;
+  name: string | null;
   date: string | null;
   summary: string | null;
   outcome: string | null;

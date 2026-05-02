@@ -171,6 +171,9 @@ export const editDecidedAccepted = style({ opacity: 0.5, borderColor: vars.color
 export const editDecidedDiscarded = style({ opacity: 0.4, textDecoration: 'line-through' });
 
 export const toolBlock = style({
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
   fontFamily: vars.font.mono,
   fontSize: vars.fontSize.xs,
   color: vars.color.textSecondary,
@@ -783,4 +786,52 @@ export const main = style({
   flexDirection: 'column',
   flex: 1,
   minWidth: 0,
+});
+
+// ── Conflict banner ───────────────────────────────────────────────────
+// Amber/warning strip shown above the feed when another Composer pane is
+// editing the same repository. Dismissable; reappears when a new conflict
+// is detected.
+export const conflictBanner = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  padding: `${vars.space.sm} ${vars.space.xxl}`,
+  background: vars.color.warningMuted,
+  borderBottom: `1px solid ${vars.color.warning}`,
+  color: vars.color.warning,
+  fontSize: vars.fontSize.xs,
+  fontWeight: 500,
+});
+
+export const conflictBannerText = style({
+  flex: 1,
+});
+
+export const conflictAction = style({
+  background: 'transparent',
+  border: `1px solid ${vars.color.warning}`,
+  color: vars.color.warning,
+  padding: `2px ${vars.space.sm}`,
+  borderRadius: vars.radius.sm,
+  cursor: 'pointer',
+  fontSize: vars.fontSize.xs,
+  fontWeight: 500,
+  ':hover': {
+    background: `color-mix(in srgb, ${vars.color.warning} 15%, transparent)`,
+  },
+});
+
+export const conflictDismiss = style({
+  background: 'transparent',
+  border: 'none',
+  color: vars.color.warning,
+  padding: `2px ${vars.space.xs}`,
+  borderRadius: vars.radius.sm,
+  cursor: 'pointer',
+  fontSize: vars.fontSize.xs,
+  opacity: 0.7,
+  ':hover': {
+    opacity: 1,
+  },
 });

@@ -181,6 +181,9 @@ func registerTools(s *server.MCPServer, deps *Deps, scoped bool) {
 			mcp.Description("What the user wants to accomplish"),
 			mcp.Required(),
 		),
+		mcp.WithString("cwd",
+			mcp.Description("Repo working directory — enables conflict detection with other active sessions"),
+		),
 		mcp.WithArray("activeFiles",
 			mcp.Description("Files currently being worked with"),
 			mcp.Items(map[string]any{"type": "string"}),
@@ -212,4 +215,16 @@ func registerTools(s *server.MCPServer, deps *Deps, scoped bool) {
 		mcp.WithDescription("List all available reasoning strategies and whether they are enabled."),
 		projectIDOpt(scoped),
 	), deps.HandleOrchestratorStrategies)
+
+	// 14. phantom_conflict_status
+	s.AddTool(mcp.NewTool("phantom_conflict_status",
+		mcp.WithDescription("Check if other active sessions are editing the same repository. Returns active session count and conflict details."),
+		mcp.WithString("cwd",
+			mcp.Description("Working directory to check for conflicts"),
+			mcp.Required(),
+		),
+		mcp.WithString("session_id",
+			mcp.Description("Current session ID (to exclude from results)"),
+		),
+	), deps.HandleConflictStatus)
 }

@@ -11,9 +11,15 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"time"
 
 	charmlog "github.com/charmbracelet/log"
+	"github.com/lmittmann/tint"
+	"github.com/muesli/termenv"
+	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
+	"github.com/subashkarki/phantom-os-v2/internal/ai/extractor"
 	"github.com/subashkarki/phantom-os-v2/internal/applog"
 	"github.com/subashkarki/phantom-os-v2/internal/app"
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
@@ -48,10 +54,38 @@ func main() {
 	}
 
 	applog.Init(500)
+
+	// Resolve log level from PHANTOM_LOG_LEVEL env var (debug|info|warn|error).
+	logLevel := slog.LevelInfo
+	if lvl := strings.ToLower(os.Getenv("PHANTOM_LOG_LEVEL")); lvl != "" {
+		switch lvl {
+		case "debug":
+			logLevel = slog.LevelDebug
+		case "warn":
+			logLevel = slog.LevelWarn
+		case "error":
+			logLevel = slog.LevelError
+		}
+	}
+
+	// Colored handler → stderr (tint); plain text → applog ring buffer (UI).
+	colorHandler := tint.NewHandler(os.Stderr, &tint.Options{
+		Level:      logLevel,
+		TimeFormat: time.TimeOnly, // "15:04:05"
+	})
+	plainHandler := slog.NewTextHandler(applog.Writer(), &slog.HandlerOptions{
+		Level: logLevel,
+	})
+	slog.SetDefault(slog.New(applog.NewMultiHandler(colorHandler, plainHandler)))
+
+	// Redirect stdlog and charmbracelet/log to stderr (tint colors stderr directly).
 	mw := io.MultiWriter(os.Stderr, applog.Writer())
 	stdlog.SetOutput(mw)
+	stdlog.SetFlags(0)
 	charmlog.SetOutput(mw)
-	slog.SetDefault(slog.New(slog.NewTextHandler(mw, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	charmlog.SetTimeFormat(time.TimeOnly)
+	charmlog.SetReportTimestamp(true)
+	charmlog.SetColorProfile(termenv.ANSI256)
 
 	// 1. Open SQLite database (runs migrations automatically).
 	dbPath, err := db.DefaultDBPath()
@@ -184,6 +218,37 @@ func main() {
 	}
 	streamSvc := stream.NewService(database.Writer, emitFn)
 	a.SetStream(streamSvc)
+
+	// Wire memory extraction pipeline into enricher. The VectorStore is created
+	// from the main DB (same as knowledge stores). Embedder degrades to a stub
+	// when ONNX is unavailable, and extractor.Store is a no-op when VectorStore
+	// is nil — so the entire chain is nil-safe.
+	embedder, _ := embedding.NewEmbedder()
+	if vectorStore, vsErr := embedding.NewVectorStore(database.Writer, embedder); vsErr == nil {
+		memExtractor := extractor.New(vectorStore)
+		enricher.SetExtractor(memExtractor)
+		enricher.SetStreamService(streamSvc)
+		slog.Info("phantomos: memory extraction pipeline wired", "memories", vectorStore.Stats().TotalMemories)
+	} else {
+		slog.Warn("phantomos: vector store init failed (memory extraction disabled)", "err", vsErr)
+	}
+
+	// First-run: download ONNX runtime + model if not already present.
+	// Runs in a background goroutine so it never blocks app startup. The user
+	// gets the app immediately — embedding becomes available after download
+	// completes (or on next launch if interrupted).
+	go func() {
+		status := embedding.CheckSetup()
+		if !status.NeedsDownload {
+			return
+		}
+		slog.Info("embedding: first-run setup starting", "download_mb", status.DownloadSizeMB)
+		if err := embedding.EnsureAll(); err != nil {
+			slog.Warn("embedding: first-run setup failed (app works without ONNX)", "err", err)
+			return
+		}
+		slog.Info("embedding: first-run setup complete — restart to enable semantic search")
+	}()
 
 	// Auto-start JSONL tailing when session watcher discovers active sessions.
 	// Uses the provider's FindConversationFile instead of hardcoded path walking.

@@ -8,10 +8,14 @@ package knowledge
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"log/slog"
+	"math"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
 )
 
 // ErrInvalidDecision is returned when Record is called with empty required fields.
@@ -19,13 +23,15 @@ var ErrInvalidDecision = errors.New("decision goal and strategy_id must be non-e
 
 // Decision records a strategy choice made for a specific goal.
 type Decision struct {
-	ID         string
-	Goal       string
-	StrategyID string
-	Confidence float64
-	Complexity string
-	Risk       string
-	CreatedAt  time.Time
+	ID             string
+	Goal           string
+	StrategyID     string
+	Confidence     float64
+	Complexity     string
+	Risk           string
+	CreatedAt      time.Time
+	AccessCount    int
+	LastAccessedAt time.Time
 }
 
 // Outcome records whether a decision succeeded or failed.
@@ -59,7 +65,8 @@ const PhaseEvaluator = "evaluator"
 
 // DecisionStore provides CRUD access to AI decisions and outcomes.
 type DecisionStore struct {
-	db *sql.DB
+	db          *sql.DB
+	vectorStore *embedding.VectorStore
 }
 
 // NewDecisionStore creates a DecisionStore and ensures the schema exists.
@@ -75,7 +82,9 @@ func NewDecisionStore(db *sql.DB) (*DecisionStore, error) {
 			confidence REAL DEFAULT 0,
 			complexity TEXT DEFAULT '',
 			risk TEXT DEFAULT '',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			access_count INTEGER NOT NULL DEFAULT 0,
+			last_accessed_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE TABLE IF NOT EXISTS ai_outcomes (
 			id TEXT PRIMARY KEY,
@@ -92,7 +101,23 @@ func NewDecisionStore(db *sql.DB) (*DecisionStore, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Migrate existing databases: add access_count and last_accessed_at if missing.
+	// SQLite's ADD COLUMN is idempotent-safe via "IF NOT EXISTS"-style error ignoring.
+	db.Exec("ALTER TABLE ai_decisions ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0")
+	db.Exec("ALTER TABLE ai_decisions ADD COLUMN last_accessed_at DATETIME DEFAULT CURRENT_TIMESTAMP")
 	return &DecisionStore{db: db}, nil
+}
+
+// DB returns the underlying database handle. Used by the orchestrator to look up
+// outcome details for semantic matches without exposing full query helpers.
+func (ds *DecisionStore) DB() *sql.DB {
+	return ds.db
+}
+
+// SetVectorStore attaches a VectorStore for embedding decisions on Record().
+// Nil-safe: passing nil disables semantic embedding.
+func (ds *DecisionStore) SetVectorStore(vs *embedding.VectorStore) {
+	ds.vectorStore = vs
 }
 
 // Record persists a new decision and returns its ID.
@@ -105,10 +130,22 @@ func (ds *DecisionStore) Record(goal, strategyID string, confidence float64, com
 	}
 	id := uuid.New().String()
 	_, err := ds.db.Exec(
-		"INSERT INTO ai_decisions (id, goal, strategy_id, confidence, complexity, risk) VALUES (?, ?, ?, ?, ?, ?)",
-		id, goal, strategyID, confidence, complexity, risk,
+		"INSERT INTO ai_decisions (id, goal, strategy_id, confidence, complexity, risk, access_count, last_accessed_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?)",
+		id, goal, strategyID, confidence, complexity, risk, time.Now().UTC(),
 	)
-	return id, err
+	if err != nil {
+		return id, err
+	}
+
+	// Embed the decision for semantic retrieval.
+	if ds.vectorStore != nil {
+		text := fmt.Sprintf("%s [strategy:%s complexity:%s risk:%s]", goal, strategyID, complexity, risk)
+		if storeErr := ds.vectorStore.Store("decision", id, text); storeErr != nil {
+			slog.Debug("embedding decision skipped", "id", id, "err", storeErr)
+		}
+	}
+
+	return id, nil
 }
 
 // RecordOutcome persists a verifier-phase outcome (ground-truth pass/fail
@@ -153,7 +190,7 @@ func (ds *DecisionStore) ListRecent(limit int) ([]Decision, error) {
 		limit = 20
 	}
 	rows, err := ds.db.Query(
-		"SELECT id, goal, strategy_id, confidence, complexity, risk, created_at FROM ai_decisions ORDER BY created_at DESC LIMIT ?",
+		"SELECT id, goal, strategy_id, confidence, complexity, risk, created_at, access_count, last_accessed_at FROM ai_decisions ORDER BY created_at DESC LIMIT ?",
 		limit,
 	)
 	if err != nil {
@@ -164,7 +201,7 @@ func (ds *DecisionStore) ListRecent(limit int) ([]Decision, error) {
 	var out []Decision
 	for rows.Next() {
 		var d Decision
-		if err := rows.Scan(&d.ID, &d.Goal, &d.StrategyID, &d.Confidence, &d.Complexity, &d.Risk, &d.CreatedAt); err != nil {
+		if err := rows.Scan(&d.ID, &d.Goal, &d.StrategyID, &d.Confidence, &d.Complexity, &d.Risk, &d.CreatedAt, &d.AccessCount, &d.LastAccessedAt); err != nil {
 			LogError("decisions", "ListRecent-scan", err)
 			continue
 		}
@@ -186,7 +223,7 @@ func (ds *DecisionStore) FindSimilar(goal string, minSimilarity float64, limits 
 	}
 
 	rows, err := ds.db.Query(
-		"SELECT id, goal, strategy_id, confidence, complexity, risk, created_at FROM ai_decisions ORDER BY created_at DESC LIMIT 200",
+		"SELECT id, goal, strategy_id, confidence, complexity, risk, created_at, access_count, last_accessed_at FROM ai_decisions ORDER BY created_at DESC LIMIT 200",
 	)
 	if err != nil {
 		return nil, err
@@ -197,23 +234,78 @@ func (ds *DecisionStore) FindSimilar(goal string, minSimilarity float64, limits 
 	goalTrigrams := extractTrigrams(goalLower)
 	goalTokens := tokenize(goal)
 
-	var results []Decision
+	now := time.Now()
+	var results []scored
 	for rows.Next() {
 		var d Decision
-		if err := rows.Scan(&d.ID, &d.Goal, &d.StrategyID, &d.Confidence, &d.Complexity, &d.Risk, &d.CreatedAt); err != nil {
+		if err := rows.Scan(&d.ID, &d.Goal, &d.StrategyID, &d.Confidence, &d.Complexity, &d.Risk, &d.CreatedAt, &d.AccessCount, &d.LastAccessedAt); err != nil {
 			LogError("decisions", "FindSimilar-scan", err)
 			continue
 		}
-		sim := combinedSimilarity(goalLower, goalTrigrams, goalTokens, d.Goal)
-		if sim >= minSimilarity {
-			results = append(results, d)
+		textSim := combinedSimilarity(goalLower, goalTrigrams, goalTokens, d.Goal)
+		finalScore := textSim * effectiveConfidence(d, now)
+		if finalScore >= minSimilarity {
+			results = append(results, scored{decision: d, score: finalScore})
 		}
 	}
 
-	if len(results) > limit {
-		results = results[:limit]
+	// Sort by score descending so the most relevant decisions come first.
+	sortScoredDescending(results)
+
+	out := make([]Decision, 0, min(len(results), limit))
+	for i := 0; i < len(results) && i < limit; i++ {
+		out = append(out, results[i].decision)
 	}
-	return results, nil
+	return out, nil
+}
+
+// FindSimilarSemantic uses the VectorStore for embedding-based similarity when
+// available, falling back to trigram+Jaccard FindSimilar otherwise.
+func (ds *DecisionStore) FindSimilarSemantic(goal string, topK int) ([]Decision, error) {
+	if ds.vectorStore == nil {
+		return ds.FindSimilar(goal, 0.3, topK)
+	}
+	memories, err := ds.vectorStore.FindSimilar(goal, topK, "decision")
+	if err != nil {
+		slog.Debug("semantic FindSimilar failed, falling back to trigram", "err", err)
+		return ds.FindSimilar(goal, 0.3, topK)
+	}
+	if len(memories) == 0 {
+		return nil, nil
+	}
+
+	// Convert memories back to Decision structs by loading from DB.
+	out := make([]Decision, 0, len(memories))
+	for _, m := range memories {
+		var d Decision
+		err := ds.db.QueryRow(
+			"SELECT id, goal, strategy_id, confidence, complexity, risk, created_at, access_count, last_accessed_at FROM ai_decisions WHERE id = ?",
+			m.SourceID,
+		).Scan(&d.ID, &d.Goal, &d.StrategyID, &d.Confidence, &d.Complexity, &d.Risk, &d.CreatedAt, &d.AccessCount, &d.LastAccessedAt)
+		if err != nil {
+			continue // Decision may have been pruned — skip.
+		}
+		out = append(out, d)
+	}
+	return out, nil
+}
+
+// sortScoredDescending sorts scored decisions by score descending (insertion sort —
+// N is small, capped at 200).
+func sortScoredDescending(s []scored) {
+	for i := 1; i < len(s); i++ {
+		j := i
+		for j > 0 && s[j].score > s[j-1].score {
+			s[j], s[j-1] = s[j-1], s[j]
+			j--
+		}
+	}
+}
+
+// scored is a Decision paired with its time-weighted similarity score.
+type scored struct {
+	decision Decision
+	score    float64
 }
 
 // FailedApproach is a strategy+timestamp pair from a failed decision.
@@ -339,6 +431,56 @@ func combinedSimilarity(goalLower string, goalTrigrams, goalTokens map[string]bo
 	tokSim := jaccardSimilarity(goalTokens, candidateTokens)
 
 	return 0.7*triSim + 0.3*tokSim
+}
+
+// --- Category-based confidence decay ---
+
+// decayHalfLife returns the half-life in days for a given risk tier.
+// Higher-risk decisions go stale faster because the codebase context they
+// depend on changes more rapidly. User corrections are gold and decay slowly.
+func decayHalfLife(risk string) float64 {
+	switch risk {
+	case "high":
+		return 14.0
+	case "medium":
+		return 30.0
+	case "low":
+		return 60.0
+	case "user-override":
+		return 180.0
+	default:
+		return 30.0
+	}
+}
+
+// effectiveConfidence calculates time-decayed, access-boosted confidence.
+//
+//	effective = base_confidence * exp(-age / half_life * ln2) * (1 + 0.1*ln(access+1))
+//
+// The result is capped at 1.0 so it stays a valid probability.
+func effectiveConfidence(d Decision, now time.Time) float64 {
+	ageDays := now.Sub(d.CreatedAt).Hours() / 24.0
+	if ageDays < 0 {
+		ageDays = 0
+	}
+
+	halfLife := decayHalfLife(d.Risk)
+	decay := math.Exp(-ageDays / halfLife * 0.693)
+
+	accessBoost := 1.0 + 0.1*math.Log(float64(d.AccessCount)+1.0)
+
+	return math.Min(d.Confidence*decay*accessBoost, 1.0)
+}
+
+// IncrementAccess bumps the access counter and last-accessed timestamp for
+// a decision. Call this whenever a past decision is referenced during
+// strategy selection or failure-avoidance lookups.
+func (ds *DecisionStore) IncrementAccess(id string) error {
+	_, err := ds.db.Exec(
+		"UPDATE ai_decisions SET access_count = access_count + 1, last_accessed_at = ? WHERE id = ?",
+		time.Now().UTC(), id,
+	)
+	return err
 }
 
 // boolToInt converts a bool to 0 or 1 for SQLite storage.

@@ -256,7 +256,7 @@ func (a *App) GitStashDrop(repoPath string, index int) error {
 
 // GetAllWorktreeStatus returns enriched status for all discovered worktrees in parallel.
 func (a *App) GetAllWorktreeStatus() []git.WorktreeStatus {
-	log.Info("app/GetAllWorktreeStatus: called")
+	log.Debug("app/GetAllWorktreeStatus: called")
 	worktrees, err := git.Discover("")
 	if err != nil {
 		log.Error("app/GetAllWorktreeStatus: Discover failed", "err", err)
@@ -294,6 +294,6 @@ func (a *App) GetAllWorktreeStatus() []git.WorktreeStatus {
 			RepoStatus:   *rs,
 		})
 	}
-	log.Info("app/GetAllWorktreeStatus: success", "count", len(statuses))
+	log.Debug("app/GetAllWorktreeStatus: success", "count", len(statuses))
 	return statuses
 }

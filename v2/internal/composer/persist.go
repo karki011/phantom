@@ -223,6 +223,7 @@ func (s *Service) querySessionSummaries(ctx context.Context, limit int) ([]Sessi
 				AND a.first_started_at = t.started_at
 		)
 		SELECT a.session_id,
+			COALESCE(s.name, ''),
 			COALESCE(f.pane_id, ''),
 			COALESCE(f.prompt, ''),
 			a.turn_count,
@@ -236,6 +237,7 @@ func (s *Service) querySessionSummaries(ctx context.Context, limit int) ([]Sessi
 			) AS cwd
 		FROM agg a
 		LEFT JOIN firsts f ON f.session_id = a.session_id
+		LEFT JOIN sessions s ON s.id = a.session_id
 		ORDER BY a.last_activity DESC
 		LIMIT ?
 	`
@@ -247,7 +249,7 @@ func (s *Service) querySessionSummaries(ctx context.Context, limit int) ([]Sessi
 	out := make([]SessionSummary, 0)
 	for rows.Next() {
 		var s SessionSummary
-		if err := rows.Scan(&s.SessionID, &s.FirstPaneID, &s.FirstPrompt,
+		if err := rows.Scan(&s.SessionID, &s.Name, &s.FirstPaneID, &s.FirstPrompt,
 			&s.TurnCount, &s.LastActivity, &s.TotalCost, &s.Cwd); err != nil {
 			return nil, err
 		}
@@ -293,6 +295,45 @@ func (s *Service) queryEditsForTurn(ctx context.Context, turnID string) ([]Edit,
 		return nil, err
 	}
 	return out, nil
+}
+
+// ensureSessionRow inserts a row into the `sessions` table for the given
+// session ID so the "Past Sessions" sidebar can join against it immediately
+// (before the session watcher picks up the JSONL file). Uses INSERT OR IGNORE
+// so it's idempotent — if the session watcher already created the row, this
+// is a harmless no-op.
+func (s *Service) ensureSessionRow(ctx context.Context, sessionID, name, cwd, model, prompt string) error {
+	const q = `INSERT OR IGNORE INTO sessions
+		(id, name, cwd, kind, model, first_prompt, started_at, status, provider)
+		VALUES (?, ?, ?, 'composer', ?, ?, strftime('%s','now'), 'active', 'composer')`
+	truncatedPrompt := prompt
+	if len(truncatedPrompt) > 200 {
+		runes := []rune(truncatedPrompt)
+		if len(runes) > 200 {
+			truncatedPrompt = string(runes[:200])
+		}
+	}
+	_, err := s.writer.ExecContext(ctx, q, sessionID, name, cwd, model, truncatedPrompt)
+	return err
+}
+
+// queryExistingSessionNames returns a set of all session names currently in use,
+// used to avoid collisions when generating a new Pokémon name.
+func (s *Service) queryExistingSessionNames(ctx context.Context) map[string]bool {
+	const q = `SELECT COALESCE(name, '') FROM sessions WHERE name IS NOT NULL AND name != ''`
+	rows, err := s.writer.QueryContext(ctx, q)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	out := make(map[string]bool)
+	for rows.Next() {
+		var n string
+		if rows.Scan(&n) == nil && n != "" {
+			out[n] = true
+		}
+	}
+	return out
 }
 
 // Compile-time guard: ensure sql.DB pointer compiles.

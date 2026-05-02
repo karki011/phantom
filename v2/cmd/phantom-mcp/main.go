@@ -12,9 +12,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/knowledge"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/strategies"
+	"github.com/subashkarki/phantom-os-v2/internal/conflict"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	mcpserver "github.com/subashkarki/phantom-os-v2/internal/mcp"
 )
@@ -66,17 +69,57 @@ func main() {
 		fmt.Fprintf(os.Stderr, "[phantom-mcp] load auto-tune: %v (using defaults)\n", err)
 	}
 
+	// Create embedding engine and vector store for semantic memory features.
+	// Both degrade gracefully: embedder falls back to a stub when ONNX is
+	// unavailable, and VectorStore returns nil on failure — all consumers
+	// nil-check before use.
+	embedder, _ := embedding.NewEmbedder()
+	vectorStore, vsErr := embedding.NewVectorStore(database.Writer, embedder)
+	if vsErr != nil {
+		fmt.Fprintf(os.Stderr, "[phantom-mcp] vector store: %v (semantic features disabled)\n", vsErr)
+		vectorStore = nil
+	}
+
+	// Wire vector store into knowledge components for semantic retrieval.
+	if decisions != nil && vectorStore != nil {
+		decisions.SetVectorStore(vectorStore)
+	}
+	if compactor != nil && vectorStore != nil {
+		compactor.SetVectorStore(vectorStore)
+	}
+
+	// Conflict tracker — enables multi-session conflict awareness so the
+	// orchestrator and phantom_conflict_status can detect when multiple
+	// Claude Code sessions are editing the same repository.
+	tracker := conflict.NewTracker(nil)
+
+	// Register this MCP process as an active session so other instances
+	// can see it via GetActiveSessions. The CWD is resolved to the git
+	// repo root internally by the tracker.
+	cwd, _ := os.Getwd()
+	sessionID := fmt.Sprintf("mcp-%d", os.Getpid())
+	tracker.Register(conflict.Session{
+		ID:        sessionID,
+		SessionID: sessionID,
+		Name:      "Claude Code",
+		Source:    "mcp",
+		RepoCWD:   cwd,
+		StartedAt: time.Now(),
+	})
+
 	deps := &mcpserver.Deps{
-		Queries:        queries,
-		Indexers:       pool,
-		Builder:        pool,
-		V1Bridge:       knowledge.NewV1Bridge(),
-		ProjectID:      projectID,
-		Decisions:      decisions,
-		Performance:    performance,
-		AutoTune:       autoTune,
-		GapDetector:    strategies.NewGapDetector(),
-		Compactor:      compactor,
+		Queries:         queries,
+		Indexers:        pool,
+		Builder:         pool,
+		V1Bridge:        knowledge.NewV1Bridge(),
+		ProjectID:       projectID,
+		Decisions:       decisions,
+		Performance:     performance,
+		AutoTune:        autoTune,
+		GapDetector:     strategies.NewGapDetector(),
+		Compactor:       compactor,
+		ConflictTracker: tracker,
+		VectorStore:     vectorStore,
 	}
 
 	if err := mcpserver.Run(deps); err != nil {

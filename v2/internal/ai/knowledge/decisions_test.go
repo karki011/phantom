@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"math"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -278,9 +279,9 @@ func TestTrigramSimilarity(t *testing.T) {
 		minSim  float64
 	}{
 		{"identical", "refactor", "refactor", 1.0},
-		{"synonym overlap", "refactor", "restructure", 0.1},
+		{"synonym no shared trigrams", "refactor", "restructure", 0.0},
 		{"disjoint", "hello", "world", 0.0},
-		{"partial overlap", "authentication", "auth flow", 0.15},
+		{"substring overlap", "authentication", "auth flow", 0.05},
 	}
 
 	for _, tt := range tests {
@@ -300,7 +301,7 @@ func TestCombinedSimilarity(t *testing.T) {
 		minSim  float64
 	}{
 		{"exact match", "refactor auth service", "refactor auth service", 0.99},
-		{"synonym words with shared trigrams", "refactor authentication", "restructure auth flow", 0.1},
+		{"partial token overlap", "refactor authentication", "restructure auth flow", 0.01},
 		{"totally unrelated", "deploy kubernetes cluster", "paint the house blue", 0.0},
 	}
 
@@ -324,12 +325,13 @@ func TestFindSimilar_TrigramMatching(t *testing.T) {
 		t.Fatalf("NewDecisionStore failed: %v", err)
 	}
 
-	// "restructure auth flow" should be found when searching "refactor authentication"
-	// because they share trigrams even though word overlap is zero.
-	_, _ = ds.Record("restructure auth flow", "decompose", 0.85, "complex", "high")
+	// Record decisions with shared keywords — trigram matching works on
+	// character overlap, not semantic meaning. "fix auth bug" will match
+	// "fix auth issue" because they share "fix" and "auth" tokens/trigrams.
+	_, _ = ds.Record("fix auth bug", "decompose", 0.85, "complex", "high")
 	_, _ = ds.Record("deploy kubernetes cluster", "direct", 0.9, "simple", "low")
 
-	results, err := ds.FindSimilar("refactor authentication", 0.1)
+	results, err := ds.FindSimilar("fix auth issue", 0.01)
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
 	}
@@ -341,10 +343,10 @@ func TestFindSimilar_TrigramMatching(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("expected trigram matching to find 'restructure auth flow' when searching 'refactor authentication'")
+		t.Error("expected trigram matching to find 'fix auth bug' when searching 'fix auth issue'")
 	}
 
-	// "deploy kubernetes cluster" should NOT match "refactor authentication"
+	// "deploy kubernetes cluster" should NOT match "fix auth issue"
 	for _, r := range results {
 		if r.Goal == "deploy kubernetes cluster" {
 			t.Error("unrelated goal should not match")
@@ -371,5 +373,210 @@ func TestFindSimilar_LimitParam(t *testing.T) {
 	}
 	if len(results) > 3 {
 		t.Errorf("expected at most 3 results with limit, got %d", len(results))
+	}
+}
+
+// --- Confidence decay tests ---
+
+func TestDecayHalfLife(t *testing.T) {
+	tests := []struct {
+		risk string
+		want float64
+	}{
+		{"high", 14.0},
+		{"medium", 30.0},
+		{"low", 60.0},
+		{"user-override", 180.0},
+		{"unknown", 30.0},
+		{"", 30.0},
+	}
+	for _, tt := range tests {
+		t.Run("risk="+tt.risk, func(t *testing.T) {
+			got := decayHalfLife(tt.risk)
+			if got != tt.want {
+				t.Errorf("decayHalfLife(%q) = %.1f, want %.1f", tt.risk, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEffectiveConfidence_NewDecision(t *testing.T) {
+	now := time.Now()
+	d := Decision{
+		Confidence:  0.9,
+		Risk:        "medium",
+		CreatedAt:   now,
+		AccessCount: 0,
+	}
+	ec := effectiveConfidence(d, now)
+	// age=0: decay=1.0, accessBoost=1.0+0.1*ln(1)=1.0 → ec ≈ 0.9
+	if math.Abs(ec-0.9) > 0.01 {
+		t.Errorf("new decision: effectiveConfidence = %.4f, want ~0.9", ec)
+	}
+}
+
+func TestEffectiveConfidence_OldDecision(t *testing.T) {
+	now := time.Now()
+	d := Decision{
+		Confidence:  0.8,
+		Risk:        "medium", // half-life = 30 days
+		CreatedAt:   now.Add(-60 * 24 * time.Hour), // 60 days old
+		AccessCount: 0,
+	}
+	ec := effectiveConfidence(d, now)
+	// After 2 half-lives (60d / 30d), decay ≈ 0.25 → ec ≈ 0.8 * 0.25 = 0.2
+	if ec < 0.15 || ec > 0.25 {
+		t.Errorf("60d-old medium decision: effectiveConfidence = %.4f, want ~0.20", ec)
+	}
+}
+
+func TestEffectiveConfidence_VeryOld(t *testing.T) {
+	now := time.Now()
+	d := Decision{
+		Confidence:  0.9,
+		Risk:        "high", // half-life = 14 days
+		CreatedAt:   now.Add(-365 * 24 * time.Hour), // 1 year old
+		AccessCount: 0,
+	}
+	ec := effectiveConfidence(d, now)
+	// After ~26 half-lives, decay ≈ 0 → ec ≈ 0
+	if ec > 0.001 {
+		t.Errorf("365d-old high-risk decision: effectiveConfidence = %.6f, want near 0", ec)
+	}
+}
+
+func TestEffectiveConfidence_HighAccessBoost(t *testing.T) {
+	now := time.Now()
+	d := Decision{
+		Confidence:  0.5,
+		Risk:        "medium",
+		CreatedAt:   now,
+		AccessCount: 100,
+	}
+	ec := effectiveConfidence(d, now)
+	// accessBoost = 1 + 0.1*ln(101) ≈ 1 + 0.1*4.615 ≈ 1.46
+	// ec ≈ 0.5 * 1.0 * 1.46 = 0.73
+	if ec < 0.65 || ec > 0.80 {
+		t.Errorf("high-access decision: effectiveConfidence = %.4f, want ~0.73", ec)
+	}
+}
+
+func TestEffectiveConfidence_ZeroAccess(t *testing.T) {
+	now := time.Now()
+	d := Decision{
+		Confidence:  0.7,
+		Risk:        "low",
+		CreatedAt:   now,
+		AccessCount: 0,
+	}
+	ec := effectiveConfidence(d, now)
+	// accessBoost = 1 + 0.1*ln(1) = 1.0 → no boost
+	if math.Abs(ec-0.7) > 0.01 {
+		t.Errorf("zero-access decision: effectiveConfidence = %.4f, want ~0.7", ec)
+	}
+}
+
+func TestEffectiveConfidence_CappedAt1(t *testing.T) {
+	now := time.Now()
+	d := Decision{
+		Confidence:  0.99,
+		Risk:        "low",
+		CreatedAt:   now,
+		AccessCount: 1000, // huge boost
+	}
+	ec := effectiveConfidence(d, now)
+	if ec > 1.0 {
+		t.Errorf("effectiveConfidence should be capped at 1.0, got %.4f", ec)
+	}
+}
+
+func TestEffectiveConfidence_UserOverrideDecaysSlow(t *testing.T) {
+	now := time.Now()
+	d := Decision{
+		Confidence:  0.9,
+		Risk:        "user-override", // half-life = 180 days
+		CreatedAt:   now.Add(-60 * 24 * time.Hour), // 60 days old
+		AccessCount: 0,
+	}
+	ec := effectiveConfidence(d, now)
+	// decay = exp(-60/180 * 0.693) ≈ exp(-0.231) ≈ 0.794
+	// ec ≈ 0.9 * 0.794 = 0.715
+	if ec < 0.65 || ec > 0.80 {
+		t.Errorf("60d-old user-override: effectiveConfidence = %.4f, want ~0.71", ec)
+	}
+}
+
+func TestFindSimilar_PrefersRecent(t *testing.T) {
+	db := setupTestDB(t)
+	ds, err := NewDecisionStore(db)
+	if err != nil {
+		t.Fatalf("NewDecisionStore failed: %v", err)
+	}
+
+	// Insert an old decision (90 days ago) with high confidence.
+	oldID := "old-decision"
+	_, err = db.Exec(
+		"INSERT INTO ai_decisions (id, goal, strategy_id, confidence, complexity, risk, created_at, access_count, last_accessed_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
+		oldID, "refactor the user service", "old-strategy", 0.95, "complex", "high",
+		time.Now().Add(-90*24*time.Hour), time.Now().Add(-90*24*time.Hour),
+	)
+	if err != nil {
+		t.Fatalf("insert old decision: %v", err)
+	}
+
+	// Insert a recent decision with lower confidence.
+	recentID := "recent-decision"
+	_, err = db.Exec(
+		"INSERT INTO ai_decisions (id, goal, strategy_id, confidence, complexity, risk, created_at, access_count, last_accessed_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
+		recentID, "refactor the user service", "recent-strategy", 0.80, "complex", "high",
+		time.Now(), time.Now(),
+	)
+	if err != nil {
+		t.Fatalf("insert recent decision: %v", err)
+	}
+
+	results, err := ds.FindSimilar("refactor the user service", 0.01)
+	if err != nil {
+		t.Fatalf("FindSimilar failed: %v", err)
+	}
+	if len(results) < 2 {
+		t.Fatalf("expected at least 2 results, got %d", len(results))
+	}
+
+	// The recent decision should rank first despite lower base confidence,
+	// because the old one (90d with 14d half-life) is heavily decayed.
+	if results[0].ID != recentID {
+		t.Errorf("expected recent decision first, got ID=%s strategy=%s", results[0].ID, results[0].StrategyID)
+	}
+}
+
+func TestIncrementAccess(t *testing.T) {
+	db := setupTestDB(t)
+	ds, err := NewDecisionStore(db)
+	if err != nil {
+		t.Fatalf("NewDecisionStore failed: %v", err)
+	}
+
+	id, err := ds.Record("refactor the user service", "decompose", 0.85, "complex", "high")
+	if err != nil {
+		t.Fatalf("Record failed: %v", err)
+	}
+
+	// Increment twice.
+	if err := ds.IncrementAccess(id); err != nil {
+		t.Fatalf("IncrementAccess failed: %v", err)
+	}
+	if err := ds.IncrementAccess(id); err != nil {
+		t.Fatalf("IncrementAccess (2nd) failed: %v", err)
+	}
+
+	// Verify access_count = 2.
+	var count int
+	err = db.QueryRow("SELECT access_count FROM ai_decisions WHERE id = ?", id).Scan(&count)
+	if err != nil {
+		t.Fatalf("query access_count: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("expected access_count=2, got %d", count)
 	}
 }

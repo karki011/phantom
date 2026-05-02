@@ -9,8 +9,11 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"math"
 	"time"
+
+	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
 )
 
 const (
@@ -48,7 +51,14 @@ type KnowledgeHealth struct {
 
 // Compactor compacts decisions into patterns and prunes stale data.
 type Compactor struct {
-	db *sql.DB
+	db          *sql.DB
+	vectorStore *embedding.VectorStore
+}
+
+// SetVectorStore attaches a VectorStore for embedding patterns on synthesis
+// and cleaning up stale decision embeddings on prune. Nil-safe.
+func (c *Compactor) SetVectorStore(vs *embedding.VectorStore) {
+	c.vectorStore = vs
 }
 
 // NewCompactor creates a Compactor and ensures the ai_patterns table exists.
@@ -71,7 +81,8 @@ func NewCompactor(db *sql.DB) (*Compactor, error) {
 	return &Compactor{db: db}, nil
 }
 
-// Run executes a full compaction cycle: synthesize, prune, then demote.
+// Run executes a full compaction cycle: synthesize, prune, demote, then prune
+// expired embeddings.
 func (c *Compactor) Run() error {
 	if err := c.synthesizePatterns(); err != nil {
 		return fmt.Errorf("synthesize: %w", err)
@@ -81,6 +92,15 @@ func (c *Compactor) Run() error {
 	}
 	if err := c.demoteFailingPatterns(); err != nil {
 		return fmt.Errorf("demote: %w", err)
+	}
+	// Prune expired embeddings alongside knowledge compaction.
+	if c.vectorStore != nil {
+		pruned, pruneErr := c.vectorStore.PruneExpired()
+		if pruneErr != nil {
+			slog.Warn("failed to prune expired embeddings", "err", pruneErr)
+		} else if pruned > 0 {
+			slog.Info("pruned expired embeddings", "count", pruned)
+		}
 	}
 	return nil
 }
@@ -150,6 +170,14 @@ func (c *Compactor) synthesizePatterns() error {
 		if err != nil {
 			return err
 		}
+
+		// Embed pattern for semantic retrieval.
+		if c.vectorStore != nil {
+			text := fmt.Sprintf("strategy:%s complexity:%s risk:%s success:%.2f", r.strategyID, r.complexity, r.risk, successRate)
+			if storeErr := c.vectorStore.Store("pattern", patternID, text); storeErr != nil {
+				slog.Debug("embedding pattern skipped", "id", patternID, "err", storeErr)
+			}
+		}
 	}
 	return nil
 }
@@ -161,6 +189,27 @@ func (c *Compactor) synthesizePatterns() error {
 // aware check would never prune anything.
 func (c *Compactor) pruneStale() error {
 	cutoff := time.Now().Add(-PruneTTL)
+
+	// Collect IDs of decisions that will be pruned so we can clean up embeddings.
+	var staleIDs []string
+	if c.vectorStore != nil {
+		rows, err := c.db.Query(`
+			SELECT d.id FROM ai_decisions d
+			WHERE d.created_at < ?
+			AND d.id NOT IN (
+				SELECT o.decision_id FROM ai_outcomes o WHERE o.success = 1 AND o.phase = ?
+			)
+		`, cutoff, PhaseVerifier)
+		if err == nil {
+			for rows.Next() {
+				var id string
+				if rows.Scan(&id) == nil {
+					staleIDs = append(staleIDs, id)
+				}
+			}
+			rows.Close()
+		}
+	}
 
 	// Delete orphan outcomes for decisions that will be pruned.
 	_, err := c.db.Exec(`
@@ -184,7 +233,19 @@ func (c *Compactor) pruneStale() error {
 			SELECT decision_id FROM ai_outcomes WHERE success = 1 AND phase = ?
 		)
 	`, cutoff, PhaseVerifier)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Clean up embeddings for pruned decisions.
+	if c.vectorStore != nil && len(staleIDs) > 0 {
+		for _, id := range staleIDs {
+			_ = c.vectorStore.Delete("decision", id)
+		}
+		slog.Info("pruned stale decision embeddings", "count", len(staleIDs))
+	}
+
+	return nil
 }
 
 // demoteFailingPatterns marks patterns with success_rate < DemoteThreshold as deprecated.

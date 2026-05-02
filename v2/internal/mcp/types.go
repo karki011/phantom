@@ -142,6 +142,24 @@ type OrchestratorStrategiesResult struct {
 	Strategies []OrchestratorStrategy `json:"strategies"`
 }
 
+// ConflictSessionInfo is a single active session in phantom_conflict_status output.
+type ConflictSessionInfo struct {
+	ID        string `json:"id"`
+	SessionID string `json:"session_id"`
+	Name      string `json:"name"`
+	Source    string `json:"source"`
+	RepoCWD   string `json:"repo_cwd"`
+	StartedAt int64  `json:"started_at"`
+}
+
+// ConflictStatusResult is returned by phantom_conflict_status.
+type ConflictStatusResult struct {
+	ActiveSessions int                   `json:"active_sessions"`
+	Sessions       []ConflictSessionInfo `json:"sessions"`
+	IsConflicted   bool                  `json:"is_conflicted"`
+	Message        string                `json:"message,omitempty"`
+}
+
 // NotImplementedResult is returned for tools the v2 backend does not yet provide.
 type NotImplementedResult struct {
 	Error   string `json:"error"`

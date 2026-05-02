@@ -195,6 +195,7 @@ function RecentSessions(props: { repoPath: string | null }) {
                 if (!fp) return '';
                 return fp.length > 50 ? fp.slice(0, 47) + '...' : fp;
               };
+              const sessionName = () => session.name || '';
               return (
                 <div class={styles.sessionRow}>
                   <Show when={session.provider && session.provider !== 'claude'}>
@@ -206,6 +207,12 @@ function RecentSessions(props: { repoPath: string | null }) {
                       <span class={styles.providerDot} style={{ '--provider-color': providerColor(session.provider) }} />
                       {providerLabel(session.provider)}
                     </span>
+                  </Show>
+                  <Show when={sessionName()}>
+                    <span style={{ 'font-weight': '600', 'margin-right': '4px' }}>
+                      {sessionName()}
+                    </span>
+                    <span class={styles.sessionSeparatorDot}>&middot;</span>
                   </Show>
                   <span class={styles.sessionTimeAgo}>
                     {timeAgo(session.started_at)}

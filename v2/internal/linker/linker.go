@@ -19,12 +19,17 @@ const (
 	EventTerminalUnlinked = "terminal:unlinked"
 )
 
+// LinkHook is called after every link/unlink operation with (paneID, sessionID, linked).
+// The linked parameter is true for link events, false for unlink events.
+type LinkHook func(paneID, sessionID string, linked bool)
+
 // Linker matches terminal panes to Claude sessions using CWD overlap
 // and PID ancestry, then persists the link in the database.
 type Linker struct {
 	queries     *db.Queries
 	termManager *terminal.Manager
 	emitEvent   func(name string, data interface{})
+	linkHook    LinkHook
 	mu          sync.Mutex // serialise link/unlink operations
 }
 
@@ -35,6 +40,13 @@ func New(queries *db.Queries, termManager *terminal.Manager, emitEvent func(stri
 		termManager: termManager,
 		emitEvent:   emitEvent,
 	}
+}
+
+// SetLinkHook registers a callback invoked after every link/unlink operation.
+// Used by the App to update the in-memory terminal↔session map for the
+// terminal activity bridge without polling the database.
+func (l *Linker) SetLinkHook(hook LinkHook) {
+	l.linkHook = hook
 }
 
 // LinkTerminalToActiveSession finds an active Claude session whose CWD
@@ -96,6 +108,9 @@ func (l *Linker) LinkTerminalToActiveSession(ctx context.Context, paneID, termCw
 		"paneId":    paneID,
 		"sessionId": chosen.ID,
 	})
+	if l.linkHook != nil {
+		l.linkHook(paneID, chosen.ID, true)
+	}
 
 	return nil
 }
@@ -162,6 +177,9 @@ func (l *Linker) LinkSessionToUnlinkedTerminals(ctx context.Context, sessionID s
 			"paneId":    t.PaneID,
 			"sessionId": sessionID,
 		})
+		if l.linkHook != nil {
+			l.linkHook(t.PaneID, sessionID, true)
+		}
 	}
 
 	return nil
@@ -194,6 +212,9 @@ func (l *Linker) UnlinkTerminal(ctx context.Context, paneID string) error {
 		"paneId":    paneID,
 		"sessionId": sessionID,
 	})
+	if l.linkHook != nil {
+		l.linkHook(paneID, sessionID, false)
+	}
 
 	return nil
 }
@@ -221,6 +242,9 @@ func (l *Linker) UnlinkSession(ctx context.Context, sessionID string) error {
 			"paneId":    t.PaneID,
 			"sessionId": sessionID,
 		})
+		if l.linkHook != nil {
+			l.linkHook(t.PaneID, sessionID, false)
+		}
 	}
 
 	return nil

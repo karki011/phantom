@@ -43,6 +43,16 @@ func (a *App) ComposerSend(paneID, prompt, cwd, model string, mentions []compose
 	return id, nil
 }
 
+// ComposerIsRunning returns true when the pane has an in-flight run on the
+// backend. Used by the frontend on pane mount/remount so it can restore the
+// "running" indicator instead of treating a still-live session as dead.
+func (a *App) ComposerIsRunning(paneID string) bool {
+	if a.Composer == nil {
+		return false
+	}
+	return a.Composer.IsRunning(paneID)
+}
+
 // ComposerCancel stops the active run on a pane (no-op if nothing running).
 func (a *App) ComposerCancel(paneID string) {
 	if a.Composer == nil {
