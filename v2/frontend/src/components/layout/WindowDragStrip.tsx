@@ -1,7 +1,9 @@
 // Phantom — Draggable strip housing macOS traffic-light inset, nav history, primary tab toggle, system stats, and action icons
 // Author: Subash Karki
 
-import { createMemo, onCleanup, onMount, Show } from 'solid-js';
+import type { Accessor } from 'solid-js';
+import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { Pin } from 'lucide-solid';
 import { APP_NAME } from '@/core/branding';
 import {
   activeTopTab,
@@ -20,13 +22,16 @@ import {
 import { openSettings } from '@/core/signals/settings';
 import { openAICommandCenter, aiCommandCenterSeen } from '@/core/signals/ai-command-center';
 import { toggleDocs } from '@/core/signals/docs';
-import { focusOrCreateTab, addTab } from '@/core/panes/signals';
+import { focusOrCreateTab } from '@/core/panes/signals';
 import { toggleCommandPalette } from '@/core/signals/command-palette';
 import { requestShutdown } from '@/core/signals/shutdown';
 import { gamificationEnabled, hunterProfile, dailyQuests } from '@/core/signals/gamification';
 import { RankBadge } from '@/shared/Gamification/RankBadge';
 import { XPProgressBar } from '@/shared/Gamification/XPProgressBar';
 import { Tip } from '@/shared/Tip/Tip';
+import { PhantomDrawer } from '@/shared/PhantomDrawer/PhantomDrawer';
+import * as drawerStyles from '@/shared/PhantomDrawer/PhantomDrawer.css';
+import { AppBackendLogDrawer } from './AppBackendLogDrawer';
 import { ChevronLeft, ChevronRight, SystemIcon, FolderIcon } from './header-icons';
 import * as shellStyles from '@/styles/app-shell.css';
 import * as gamStyles from '@/styles/gamification.css';
@@ -68,12 +73,11 @@ function JournalIcon() {
   );
 }
 
-function TerminalIcon() {
+function LogIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <rect x="1.5" y="2.5" width="13" height="11" rx="2" stroke="currentColor" stroke-width="1.4" />
-      <path d="M4 6l2.5 2L4 10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
-      <path d="M8 10h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M14 2v6h6M8 13h8M8 17h8M8 9h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
     </svg>
   );
 }
@@ -97,6 +101,31 @@ function PowerIcon() {
   );
 }
 
+function ServerLogPinButton(props: {
+  pinned: Accessor<boolean>;
+  onToggle: () => void;
+}) {
+  return (
+    <Tip
+      label="Pin: keep server log open without blocking the app. Click again to unpin."
+      placement="bottom"
+    >
+      <button
+        type="button"
+        class={`${drawerStyles.pinToggle} ${props.pinned() ? drawerStyles.pinToggleActive : ''}`}
+        aria-pressed={props.pinned()}
+        aria-label={props.pinned() ? 'Unpin server log' : 'Pin server log'}
+        onClick={(e) => {
+          e.preventDefault();
+          props.onToggle();
+        }}
+      >
+        <Pin size={16} />
+      </button>
+    </Tip>
+  );
+}
+
 export function WindowDragStrip() {
   onMount(() => {
     startSystemStatsPoll();
@@ -115,6 +144,8 @@ export function WindowDragStrip() {
   });
 
   const stats = systemStats;
+  const [backendLogOpen, setBackendLogOpen] = createSignal(false);
+  const [backendLogPinned, setBackendLogPinned] = createSignal(false);
 
   return (
     <div class={shellStyles.windowDragStrip}>
@@ -192,9 +223,15 @@ export function WindowDragStrip() {
 
       <div class={shellStyles.windowDragStripRight}>
         <div class={shellStyles.headerActions}>
-          <Tip label="Terminal" placement="bottom">
-            <button data-tour="action-terminal" class={shellStyles.headerIconButton} type="button" aria-label="Open terminal" onClick={() => addTab('terminal')}>
-              <TerminalIcon />
+          <Tip label="Server log" placement="bottom">
+            <button
+              data-tour="action-server-log"
+              class={shellStyles.headerIconButton}
+              type="button"
+              aria-label="Open server log"
+              onClick={() => setBackendLogOpen(true)}
+            >
+              <LogIcon />
             </button>
           </Tip>
           <Tip label="Command Palette" placement="bottom">
@@ -286,6 +323,24 @@ export function WindowDragStrip() {
           </Show>
         </Show>
       </div>
+
+      <PhantomDrawer
+        open={backendLogOpen}
+        onOpenChange={(open) => {
+          setBackendLogOpen(open);
+          if (!open) setBackendLogPinned(false);
+        }}
+        title="Server log"
+        modal={() => !backendLogPinned()}
+        headerTrailing={
+          <ServerLogPinButton
+            pinned={backendLogPinned}
+            onToggle={() => setBackendLogPinned((p) => !p)}
+          />
+        }
+      >
+        <AppBackendLogDrawer open={backendLogOpen} />
+      </PhantomDrawer>
     </div>
   );
 }

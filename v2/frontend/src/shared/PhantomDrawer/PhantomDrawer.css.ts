@@ -70,6 +70,38 @@ export const title = style({
   fontWeight: 700,
   margin: 0,
   flex: 1,
+  minWidth: 0,
+});
+
+export const headerTrailingWrap = style({
+  display: 'flex',
+  alignItems: 'center',
+  flexShrink: 0,
+});
+
+export const pinToggle = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '28px',
+  height: '28px',
+  borderRadius: vars.radius.sm,
+  border: `1px solid ${vars.color.border}`,
+  background: 'transparent',
+  color: vars.color.textDisabled,
+  cursor: 'pointer',
+  flexShrink: 0,
+  transition: 'all 150ms ease',
+  ':hover': {
+    color: vars.color.textPrimary,
+    background: vars.color.bgHover,
+  },
+});
+
+export const pinToggleActive = style({
+  color: vars.color.accent,
+  borderColor: `color-mix(in srgb, ${vars.color.accent} 45%, ${vars.color.border})`,
+  background: `color-mix(in srgb, ${vars.color.accent} 12%, transparent)`,
 });
 
 export const closeButton = style({
@@ -93,5 +125,8 @@ export const closeButton = style({
 
 export const body = style({
   flex: 1,
+  minHeight: 0,
   overflow: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
 });
