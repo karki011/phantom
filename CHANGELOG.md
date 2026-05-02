@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.14](https://github.com/karki011/phantom/compare/v0.1.13...v0.1.14) (2026-05-02)
+
+
+### Performance
+
+* **v2:** bulk scan worktree load, graph guards, lighter modal overlays ([#39](https://github.com/karki011/phantom/issues/39)) ([0be9db6](https://github.com/karki011/phantom/commit/0be9db68191c51a3c6813f16413348b1e9c9cd6f))
+
 ## [0.1.13](https://github.com/karki011/phantom/compare/v0.1.12...v0.1.13) (2026-05-02)
 
 
