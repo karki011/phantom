@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.15](https://github.com/karki011/phantom/compare/v0.1.14...v0.1.15) (2026-05-02)
+
+
+### Bug Fixes
+
+* **v2:** align welcome standby scan with sidebar flow ([#41](https://github.com/karki011/phantom/issues/41)) ([7cb3cc0](https://github.com/karki011/phantom/commit/7cb3cc054c81207ba7e00e01ff908d0a77e94f68))
+
 ## [0.1.14](https://github.com/karki011/phantom/compare/v0.1.13...v0.1.14) (2026-05-02)
 
 
