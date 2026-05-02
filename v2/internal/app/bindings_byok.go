@@ -55,7 +55,7 @@ func (a *App) TestAnthropicAPIKey(key string) error {
 		return fmt.Errorf("api key is empty")
 	}
 
-	cliPath, err := exec.LookPath("claude")
+	cliPath, err := composer.ResolveClaudeBin()
 	if err != nil {
 		return fmt.Errorf("claude CLI not found: %w", err)
 	}

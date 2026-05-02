@@ -162,7 +162,7 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 		args.Model = defaultModel
 	}
 
-	cliPath, err := exec.LookPath("claude")
+	cliPath, err := ResolveClaudeBin()
 	if err != nil {
 		s.emit("composer:event", Event{PaneID: args.PaneID, Type: "error", Content: "claude CLI not found in PATH"})
 		return "", fmt.Errorf("composer: claude CLI not found: %w", err)
@@ -1253,6 +1253,32 @@ func diffLineCounts(oldS, newS string) (added, removed int) {
 		added = 1
 	}
 	return added, removed
+}
+
+// ResolveClaudeBin locates the `claude` CLI binary. It checks PATH first,
+// then probes well-known install locations. macOS GUI apps (launched from
+// Finder/Dock) don't inherit the user's shell PATH, so ~/.local/bin — the
+// standard Claude CLI install location — is invisible to exec.LookPath.
+func ResolveClaudeBin() (string, error) {
+	if p, err := exec.LookPath("claude"); err == nil {
+		return p, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("claude CLI not found and cannot resolve home dir: %w", err)
+	}
+	candidates := []string{
+		filepath.Join(home, ".local", "bin", "claude"),
+		filepath.Join(home, ".claude", "local", "claude"),
+		"/opt/homebrew/bin/claude",
+		"/usr/local/bin/claude",
+	}
+	for _, p := range candidates {
+		if _, statErr := os.Stat(p); statErr == nil {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("claude CLI not found in PATH or common install locations")
 }
 
 func revertFile(path, oldContent string) error {
