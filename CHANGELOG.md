@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.19](https://github.com/karki011/phantom/compare/v0.1.18...v0.1.19) (2026-05-02)
+
+
+### Features
+
+* **composer:** full event capture, session replay, stop button, and thinking support ([#72](https://github.com/karki011/phantom/issues/72)) ([ca85cc8](https://github.com/karki011/phantom/commit/ca85cc8972c2e4d7d0507d5c04b69b4a9c8b117a))
+
 ## [0.1.18](https://github.com/karki011/phantom/compare/v0.1.17...v0.1.18) (2026-05-02)
 
 
