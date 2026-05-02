@@ -5,10 +5,11 @@ import { createSignal } from 'solid-js';
 import { FolderPlus, GitBranch, ScanLine } from 'lucide-solid';
 import * as styles from '@/styles/home.css';
 import { APP_NAME_SPACED } from '@/core/branding';
-import { addProject, browseDirectory, cloneRepository, scanDirectory } from '@/core/bindings';
+import { addProject, browseDirectory, cloneRepository } from '@/core/bindings';
 import { refreshProjects } from '@/core/signals/projects';
 import { bootstrapWorktrees } from '@/core/signals/worktrees';
 import { CloneDialog } from '@/shared/CloneDialog/CloneDialog';
+import { ScanResultsDialog } from '@/shared/ScanResultsDialog/ScanResultsDialog';
 import { showWarningToast } from '@/shared/Toast/Toast';
 import { BootRings } from '@/screens/boot/BootRings';
 
@@ -22,6 +23,8 @@ interface ActionTile {
 
 export function WelcomePage() {
   const [cloneOpen, setCloneOpen] = createSignal(false);
+  const [scanOpen, setScanOpen] = createSignal(false);
+  const [scanParent, setScanParent] = createSignal('');
 
   async function handleAddProject() {
     const path = await browseDirectory('Select project directory');
@@ -43,15 +46,11 @@ export function WelcomePage() {
     }
   }
 
-  async function handleScan() {
+  async function handleScanDirectory() {
     const parent = await browseDirectory('Select directory to scan');
     if (!parent) return;
-    const paths = await scanDirectory(parent);
-    for (const p of paths) {
-      await addProject(p);
-    }
-    await refreshProjects();
-    await bootstrapWorktrees();
+    setScanParent(parent);
+    setScanOpen(true);
   }
 
   const tiles: ActionTile[] = [
@@ -74,7 +73,7 @@ export function WelcomePage() {
       label: 'Scan',
       hint: '// discover in directory',
       icon: ScanLine,
-      onPress: handleScan,
+      onPress: handleScanDirectory,
     },
   ];
 
@@ -144,6 +143,12 @@ export function WelcomePage() {
         open={cloneOpen}
         onOpenChange={setCloneOpen}
         onClone={handleCloneSubmit}
+      />
+
+      <ScanResultsDialog
+        open={scanOpen}
+        onOpenChange={setScanOpen}
+        parentPath={scanParent}
       />
     </div>
   );
