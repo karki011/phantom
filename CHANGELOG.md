@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.17](https://github.com/karki011/phantom/compare/v0.1.16...v0.1.17) (2026-05-02)
+
+
+### Features
+
+* **v2:** AI Engine Overhaul + Composer UX + Memory Pipeline ([#68](https://github.com/karki011/phantom/issues/68)) ([335a571](https://github.com/karki011/phantom/commit/335a571e9ca8742f84224e3780622a3e10d4ba9b))
+
 ## [0.1.16](https://github.com/karki011/phantom/compare/v0.1.15...v0.1.16) (2026-05-02)
 
 
