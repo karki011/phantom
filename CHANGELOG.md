@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.12](https://github.com/karki011/phantom/compare/v0.1.11...v0.1.12) (2026-05-02)
+
+
+### Bug Fixes
+
+* remove domain-link onboarding step, fix project/worktree refresh, improve composer errors ([#34](https://github.com/karki011/phantom/issues/34)) ([921ee24](https://github.com/karki011/phantom/commit/921ee243f460dacbaf994f47e22ac9810bf985d7)), closes [#32](https://github.com/karki011/phantom/issues/32)
+
 ## [0.1.11](https://github.com/karki011/phantom/compare/v0.1.10...v0.1.11) (2026-05-01)
 
 
