@@ -81,7 +81,7 @@ func main() {
 	// Redirect stdlog and charmbracelet/log to stderr (tint colors stderr directly).
 	mw := io.MultiWriter(os.Stderr, applog.Writer())
 	stdlog.SetOutput(mw)
-	stdlog.SetFlags(0) // tint adds its own timestamp; avoid double timestamps
+	stdlog.SetFlags(0)
 	charmlog.SetOutput(mw)
 	charmlog.SetTimeFormat(time.TimeOnly)
 	charmlog.SetReportTimestamp(true)
