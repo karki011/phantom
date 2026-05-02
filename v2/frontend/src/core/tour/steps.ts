@@ -53,9 +53,9 @@ export const TOUR_STEPS: TourStep[] = [
     align: 'center',
   },
   {
-    element: '[data-tour="action-terminal"]',
-    title: '[SYSTEM] Terminal',
-    description: 'Spin up a new terminal pane in the workspace.',
+    element: '[data-tour="action-server-log"]',
+    title: '[SYSTEM] Server log',
+    description: 'Recent server log lines — same output as the running process, in a side drawer. Pin to keep it open while you work.',
     side: 'bottom',
     align: 'end',
   },

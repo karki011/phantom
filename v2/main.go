@@ -6,12 +6,15 @@ import (
 	"context"
 	"embed"
 	"errors"
-	"log"
-
+	"io"
+	stdlog "log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
 
+	charmlog "github.com/charmbracelet/log"
+	"github.com/subashkarki/phantom-os-v2/internal/applog"
 	"github.com/subashkarki/phantom-os-v2/internal/app"
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
 	"github.com/subashkarki/phantom-os-v2/internal/composer"
@@ -44,14 +47,20 @@ func main() {
 		}
 	}
 
+	applog.Init(500)
+	mw := io.MultiWriter(os.Stderr, applog.Writer())
+	stdlog.SetOutput(mw)
+	charmlog.SetOutput(mw)
+	slog.SetDefault(slog.New(slog.NewTextHandler(mw, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
 	// 1. Open SQLite database (runs migrations automatically).
 	dbPath, err := db.DefaultDBPath()
 	if err != nil {
-		log.Fatalf("phantomos: resolve db path: %v", err)
+		stdlog.Fatalf("phantomos: resolve db path: %v", err)
 	}
 	database, err := db.Open(dbPath)
 	if err != nil {
-		log.Fatalf("phantomos: open database: %v", err)
+		stdlog.Fatalf("phantomos: open database: %v", err)
 	}
 
 	// 2. Build sqlc Queries backed by the writer connection.
@@ -64,11 +73,11 @@ func main() {
 	journalSvc := journal.NewService("")
 
 	if backfillJournal {
-		log.Printf("phantomos: backfilling journal from DB...")
+		stdlog.Printf("phantomos: backfilling journal from DB...")
 		if err := collector.BackfillJournal(context.Background(), queries, database.Writer, journalSvc); err != nil {
-			log.Fatalf("phantomos: backfill: %v", err)
+			stdlog.Fatalf("phantomos: backfill: %v", err)
 		}
-		log.Printf("phantomos: backfill complete; exiting.")
+		stdlog.Printf("phantomos: backfill complete; exiting.")
 		os.Exit(0)
 	}
 
@@ -87,7 +96,7 @@ func main() {
 	// 6. Set up provider registry with 3-tier config loading.
 	//    Ensure user config directories exist for overrides and custom providers.
 	if err := provider.EnsureConfigDir(); err != nil {
-		log.Printf("phantomos: warning: config dir setup: %v", err)
+		stdlog.Printf("phantomos: warning: config dir setup: %v", err)
 	}
 
 	provRegistry := provider.NewRegistry()
@@ -102,7 +111,7 @@ func main() {
 
 	// LoadAll: embedded (fatal) -> user overrides (warn+skip) -> custom (warn+skip).
 	if err := provRegistry.LoadAll(); err != nil {
-		log.Fatalf("phantomos: provider registry: %v", err)
+		stdlog.Fatalf("phantomos: provider registry: %v", err)
 	}
 
 	// Instantiate all providers using registered adapter factories.
@@ -112,7 +121,7 @@ func main() {
 	// the first enabled provider. Fatal if no providers are available.
 	activeProv, err := selectActiveProvider(provRegistry, queries)
 	if err != nil {
-		log.Fatalf("phantomos: %v", err)
+		stdlog.Fatalf("phantomos: %v", err)
 	}
 
 	// Inject provider into app for bindings_stream and boot_scan.
@@ -125,7 +134,7 @@ func main() {
 	}
 	gamSvc := gamification.NewService(database.Writer, database.Reader, gamEmitFn)
 	if err := gamSvc.Init(context.Background()); err != nil {
-		log.Printf("phantomos: gamification init warning: %v", err)
+		stdlog.Printf("phantomos: gamification init warning: %v", err)
 	}
 	a.SetGamification(gamSvc)
 
@@ -136,7 +145,7 @@ func main() {
 	registry := collector.NewRegistry()
 
 	onTaskComplete := func(sessionID, taskID string) {
-		log.Printf("phantomos: task completed session=%s task=%s", sessionID, taskID)
+		stdlog.Printf("phantomos: task completed session=%s task=%s", sessionID, taskID)
 		gamSvc.OnTaskComplete(context.Background(), sessionID, taskID)
 	}
 
@@ -196,9 +205,9 @@ func main() {
 			tailedMu.Unlock()
 			return
 		}
-		log.Printf("phantomos: auto-tailing session %s", sessionID)
+		stdlog.Printf("phantomos: auto-tailing session %s", sessionID)
 		if err := streamSvc.StartTailing(a.Ctx(), sessionID, jsonlPath); err != nil {
-			log.Printf("phantomos: auto-tail %s: %v", sessionID, err)
+			stdlog.Printf("phantomos: auto-tail %s: %v", sessionID, err)
 		}
 	})
 
@@ -213,7 +222,7 @@ func main() {
 	safety.InstallDefaults(wardsDir)
 	safetySvc, err := safety.NewService(wardsDir, database.Writer, emitFn)
 	if err != nil {
-		log.Printf("phantomos: safety service warning: %v", err)
+		stdlog.Printf("phantomos: safety service warning: %v", err)
 	} else {
 		safetySvc.SetJournal(journalSvc)
 		a.SetSafety(safetySvc)
@@ -251,7 +260,7 @@ func main() {
 		},
 	})
 	if err != nil {
-		log.Fatalf("phantomos: wails run: %v", err)
+		stdlog.Fatalf("phantomos: wails run: %v", err)
 	}
 }
 
@@ -268,7 +277,7 @@ func selectActiveProvider(reg *provider.Registry, queries *db.Queries) (provider
 		if p, ok := reg.Get(pref); ok {
 			return p, nil
 		}
-		log.Printf("phantomos: default_provider=%q not registered; falling back", pref)
+		stdlog.Printf("phantomos: default_provider=%q not registered; falling back", pref)
 	}
 
 	// 2. Legacy default — preserves prior "prefer Claude" behaviour when no preference is set.

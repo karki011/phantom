@@ -262,6 +262,18 @@ cd v2 && make docs-llm
 
 This is an early-stage project. Issues and PRs welcome — but expect things to move fast and break.
 
+### Commit messages (semver + changelog)
+
+[Conventional Commits](https://www.conventionalcommits.org/) drive **release-please** updates to `CHANGELOG.md` and version bumps:
+
+| Bump   | When to use | Example subject |
+|--------|----------------|-----------------|
+| **patch** | fixes | `fix(v2): close server log drawer on escape` |
+| **minor** | new behavior, backward compatible | `feat(v2): export server log to file` |
+| **major** | breaking API / behavior | `feat(v2)!: rename GetRecentAppLogs` or a body line `BREAKING CHANGE: …` |
+
+Use **`feat`**, **`fix`**, **`perf`**, **`docs`**, etc., with an optional scope like **`(v2)`**. Squash-merge PRs with **one** conventional title so `main` history stays clean for the bot.
+
 ## License
 
 TBD.
