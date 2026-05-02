@@ -3,7 +3,7 @@
 
 import { createSignal, createEffect, onMount, For, Show, batch } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
-import { Paperclip, X, Wrench, Brain, ChevronRight, ChevronDown, ChevronLeft, History, Plus, Trash2, BookOpen, Zap, AlertTriangle, Terminal, Bot, Eye, Search, Pencil, FilePlus, FolderSearch, Globe, ListTodo, FileCode } from 'lucide-solid';
+import { Paperclip, X, Wrench, Brain, ChevronRight, ChevronDown, ChevronLeft, History, Plus, Trash2, BookOpen, Zap, AlertTriangle, Terminal, Bot, Eye, Search, Pencil, FilePlus, FolderSearch, Globe, ListTodo, FileCode, Square } from 'lucide-solid';
 import { Select } from '@kobalte/core/select';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import * as sidebarStyles from '@/styles/sidebar.css';
@@ -67,6 +67,7 @@ import {
   composerResumeSession,
   type ComposerEvent,
   type ComposerEditCard,
+  type ComposerEventRecord,
   type ComposerMention,
   type ComposerSessionSummary,
 } from '@/core/bindings/composer';
@@ -230,6 +231,54 @@ export default function ComposerPane(props: ComposerPaneProps) {
   // component-level `running` signal so the thinking indicator and event
   // handlers stay alive after a remount (e.g. tab switch that caused
   // SolidJS to dispose/recreate the component).
+  const replayThinking = (events: ComposerEventRecord[]): string => {
+    console.log('[Composer] replayThinking: events count =', events.length, 'types =', [...new Set(events.map(e => `${e.type}:${e.subtype}`))]);
+    let thinking = '';
+    for (const e of events) {
+      if (e.type === 'content_block_delta' && e.subtype === 'thinking_delta') {
+        try {
+          const parsed = JSON.parse(e.content);
+          thinking += parsed?.delta?.thinking ?? '';
+        } catch { /* skip malformed */ }
+      }
+    }
+    return thinking;
+  };
+
+  const replayToolUses = (events: ComposerEventRecord[]): TurnView['toolUses'] => {
+    const tools: TurnView['toolUses'] = [];
+    for (const e of events) {
+      if (e.type === 'content_block_start' && e.subtype === 'tool_use' && e.tool_name) {
+        tools.push({ name: e.tool_name, input: '', status: 'done' });
+      }
+      if (e.type === 'content_block_delta' && e.subtype === 'input_json_delta' && tools.length > 0) {
+        try {
+          const parsed = JSON.parse(e.content);
+          tools[tools.length - 1].input += parsed?.delta?.partial_json ?? '';
+        } catch { /* skip */ }
+      }
+      if (e.type === 'tool_result') {
+        try {
+          const parsed = JSON.parse(e.content);
+          let resultText = '';
+          if (typeof parsed?.content === 'string') {
+            resultText = parsed.content;
+          } else if (Array.isArray(parsed?.content)) {
+            resultText = parsed.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n');
+          }
+          const idx = tools.length - 1;
+          if (idx >= 0) {
+            tools[idx].result = resultText;
+            tools[idx].resultIsError = parsed?.is_error ?? false;
+            tools[idx].status = parsed?.is_error ? 'error' : 'done';
+          }
+        } catch { /* skip */ }
+      }
+    }
+    console.log('[Composer] replayToolUses:', tools.length, 'tools', tools.map(t => `${t.name}(${t.input.length}b)`));
+    return tools;
+  };
+
   type HistoryRow = Awaited<ReturnType<typeof composerHistory>>[number];
   const applyHistory = (history: HistoryRow[], pending: ComposerEditCard[], backendRunning = false) => {
     const restored: TurnView[] = history.map((h, idx) => {
@@ -248,14 +297,10 @@ export default function ComposerPane(props: ComposerPaneProps) {
       }
       return {
         id: h.turn.id,
-        // Persisted assistant text (migration 010+). Empty for older turns —
-        // the prompt + edit cards still convey the gist of what happened.
-        // Thinking blocks + tool_use timeline are intentionally NOT
-        // rehydrated — text alone is the highest-signal slice.
         prompt: h.turn.prompt,
         text: h.turn.response_text ?? '',
-        thinking: '',
-        toolUses: [],
+        thinking: replayThinking(h.events ?? []),
+        toolUses: replayToolUses(h.events ?? []),
         editIds: (h.edits ?? []).map((e) => e.id),
         status,
         inputTokens: h.turn.input_tokens,
@@ -263,7 +308,6 @@ export default function ComposerPane(props: ComposerPaneProps) {
         costUSD: h.turn.cost_usd,
         startedAt: h.turn.started_at * 1000,
         completedAt: h.turn.completed_at ? h.turn.completed_at * 1000 : h.turn.started_at * 1000,
-        // Strategy metadata is not persisted — only available during live streaming.
         strategyName: '',
         strategyConfidence: 0,
         taskComplexity: '',
@@ -271,6 +315,11 @@ export default function ComposerPane(props: ComposerPaneProps) {
         blastRadius: 0,
       };
     });
+    console.log('[Composer] applyHistory:', history.length, 'turns, events per turn:', history.map(h => (h.events ?? []).length));
+    for (const h of history) {
+      console.log('[Composer] turn', h.turn.id, 'has', (h.events ?? []).length, 'events, keys:', Object.keys(h));
+      if (h.events?.length) console.log('[Composer] first event:', JSON.stringify(h.events[0]));
+    }
     const editsById: Record<string, ComposerEditCard> = {};
     for (const h of history) for (const e of (h.edits ?? [])) editsById[e.id] = e;
     for (const e of pending) editsById[e.id] = e;
@@ -390,6 +439,8 @@ export default function ComposerPane(props: ComposerPaneProps) {
       return;
     }
 
+    console.log('[Composer] live event:', ev.type, ev);
+
     const turnId = ev.turn_id ?? activeTurnId();
     if (!turnId) return;
 
@@ -417,8 +468,14 @@ export default function ComposerPane(props: ComposerPaneProps) {
           });
         }));
         break;
+      case 'input_json': {
+        const lastTuIdx = turns[idx].toolUses.length - 1;
+        if (lastTuIdx >= 0) {
+          setTurns(idx, 'toolUses', lastTuIdx, 'input', prev => prev + (ev.content ?? ''));
+        }
+        break;
+      }
       case 'tool_result': {
-        // Find the last running tool use entry.
         const tuIdx = turns[idx].toolUses.findLastIndex(u => u.status === 'running');
         if (tuIdx >= 0) {
           setTurns(idx, 'toolUses', tuIdx, produce(tu => {
@@ -1311,7 +1368,19 @@ export default function ComposerPane(props: ComposerPaneProps) {
           </Select>
 
           <span class={styles.grow} />
-          <span class={styles.sendHint}>Cmd+↵ to send</span>
+          <Show
+            when={running()}
+            fallback={<span class={styles.sendHint}>Cmd+↵ to send</span>}
+          >
+            <button
+              class={styles.stopBtn}
+              type="button"
+              onClick={() => { composerCancel(paneId()); setRunning(false); }}
+            >
+              <Square size={10} style={{ fill: 'currentColor' }} />
+              Stop
+            </button>
+          </Show>
         </div>
       </div>
       </div>{/* /main */}

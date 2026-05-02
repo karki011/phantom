@@ -86,6 +86,22 @@ type Event struct {
 	BlastRadius        int     `json:"blast_radius,omitempty"`
 }
 
+// EventRecord is persisted to the composer_events table for session replay.
+// Every CLI streaming event produces one row so past sessions can be fully
+// rehydrated with thinking blocks, tool calls, and tool results intact.
+type EventRecord struct {
+	ID        int64  `json:"id"`
+	TurnID    string `json:"turn_id"`
+	SessionID string `json:"session_id"`
+	Seq       int    `json:"seq"`
+	Type      string `json:"type"`
+	Subtype   string `json:"subtype"`
+	ToolName  string `json:"tool_name"`
+	ToolUseID string `json:"tool_use_id"`
+	Content   string `json:"content"`
+	CreatedAt int64  `json:"created_at"`
+}
+
 // Mention is an `@file` reference passed alongside a prompt.
 type Mention struct {
 	Path string `json:"path"`

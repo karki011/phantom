@@ -393,8 +393,9 @@ func (s *Service) DecideEdit(ctx context.Context, editID string, accept bool) er
 // Used on pane mount to rehydrate the conversation feed so users don't
 // see a blank slate after re-opening a Composer.
 type HistoryTurn struct {
-	Turn  Turn   `json:"turn"`
-	Edits []Edit `json:"edits"`
+	Turn   Turn          `json:"turn"`
+	Edits  []Edit        `json:"edits"`
+	Events []EventRecord `json:"events"`
 }
 
 func (s *Service) History(ctx context.Context, paneID string) ([]HistoryTurn, error) {
@@ -408,7 +409,11 @@ func (s *Service) History(ctx context.Context, paneID string) ([]HistoryTurn, er
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, HistoryTurn{Turn: t, Edits: edits})
+		events, err := s.queryEventsForTurn(ctx, t.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, HistoryTurn{Turn: t, Edits: edits, Events: events})
 	}
 	return out, nil
 }
@@ -440,7 +445,11 @@ func (s *Service) HistoryBySession(ctx context.Context, sessionID string) ([]His
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, HistoryTurn{Turn: t, Edits: edits})
+		events, err := s.queryEventsForTurn(ctx, t.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, HistoryTurn{Turn: t, Edits: edits, Events: events})
 	}
 	return out, nil
 }
@@ -533,6 +542,8 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		"--verbose",
 		"--include-partial-messages",
 		"--include-hook-events",
+		"--thinking", "enabled",
+		"--thinking-display", "summarized",
 		"--permission-mode", "acceptEdits",
 		sessionFlag, sessionID,
 		"--model", args.Model,
@@ -623,6 +634,14 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 	// run() takes.
 	responseTextRef = &responseText
 
+	var eventSeq int
+	var seenDeltas bool
+	// thinkingLen tracks the cumulative length of thinking content emitted
+	// to the frontend. extractThinking uses this to emit only NEW thinking
+	// text from assistant partial messages, avoiding double-emit when
+	// thinking_delta events also fire via content_block_delta.
+	var thinkingLen int
+
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
@@ -651,9 +670,22 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		switch typ {
 		// ---- Legacy / primary event types (always present) ----
 		case "assistant":
-			s.handleAssistant(ctx, args.PaneID, turnID, args.CWD, raw["message"], &responseText)
+			thinkingLen = s.extractThinking(args.PaneID, turnID, raw["message"], thinkingLen)
+			if !seenDeltas {
+				s.handleAssistant(ctx, args.PaneID, turnID, args.CWD, raw["message"], &responseText)
+			}
+			eventSeq++
+			aLine, _ := json.Marshal(raw)
+			s.persistEvent(ctx, turnID, sessionID, eventSeq, "assistant", "", "", "", string(aLine))
 		case "tool_result":
 			s.handleToolResult(args.PaneID, turnID, raw)
+			eventSeq++
+			trLine, _ := json.Marshal(raw)
+			var tr struct {
+				ToolUseID string `json:"tool_use_id"`
+			}
+			json.Unmarshal(trLine, &tr)
+			s.persistEvent(ctx, turnID, sessionID, eventSeq, "tool_result", "", "", tr.ToolUseID, string(trLine))
 		case "result":
 			in, out, cost := parseResult(raw)
 			totalIn, totalOut, totalCost = in, out, cost
@@ -668,33 +700,75 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 				OutputTokens: out,
 				CostUSD:      cost,
 			})
+			eventSeq++
+			rLine, _ := json.Marshal(raw)
+			s.persistEvent(ctx, turnID, sessionID, eventSeq, "result", "", "", "", string(rLine))
 		case "error":
 			var msg string
 			_ = json.Unmarshal(raw["error"], &msg)
 			s.emit("composer:event", Event{PaneID: args.PaneID, TurnID: turnID, Type: "error", Content: msg})
+			eventSeq++
+			s.persistEvent(ctx, turnID, sessionID, eventSeq, "error", "", "", "", msg)
 
 		// ---- Richer stream-json events (from --input-format stream-json) ----
 		// content_block_delta carries incremental text/thinking chunks that
 		// supplement (or in some CLI versions replace) the batched "assistant"
 		// events. We handle them so streaming feels instant.
 		case "content_block_delta":
+			seenDeltas = true
 			s.handleContentBlockDelta(args.PaneID, turnID, raw, &responseText)
+			// Persist for replay
+			eventSeq++
+			dLine, _ := json.Marshal(raw)
+			var d struct {
+				Delta struct {
+					Type string `json:"type"`
+				} `json:"delta"`
+			}
+			json.Unmarshal(dLine, &d)
+			s.persistEvent(ctx, turnID, sessionID, eventSeq, "content_block_delta", d.Delta.Type, "", "", string(dLine))
 
 		// content_block_start can carry tool_use blocks; handle the same way
 		// as the assistant-level tool_use for edit tracking.
 		case "content_block_start":
+			seenDeltas = true
 			s.handleContentBlockStart(ctx, args.PaneID, turnID, args.CWD, raw)
+			eventSeq++
+			cbLine, _ := json.Marshal(raw)
+			var cb struct {
+				ContentBlock struct {
+					Type string `json:"type"`
+					Name string `json:"name"`
+					ID   string `json:"id"`
+				} `json:"content_block"`
+			}
+			json.Unmarshal(cbLine, &cb)
+			s.persistEvent(ctx, turnID, sessionID, eventSeq, "content_block_start", cb.ContentBlock.Type, cb.ContentBlock.Name, cb.ContentBlock.ID, string(cbLine))
 
 		// message_start / message_stop / content_block_stop are structural
 		// markers — pass through as typed events so the frontend can use
 		// them for lifecycle UI (typing indicator, etc.) if it wants.
 		case "message_start", "message_stop", "content_block_stop":
 			s.emit("composer:event", Event{PaneID: args.PaneID, TurnID: turnID, Type: typ})
+			eventSeq++
+			s.persistEvent(ctx, turnID, sessionID, eventSeq, typ, "", "", "", "")
+
+		// message_delta carries mid-stream token usage updates.
+		case "message_delta":
+			eventSeq++
+			mdLine, _ := json.Marshal(raw)
+			s.persistEvent(ctx, turnID, sessionID, eventSeq, "message_delta", "", "", "", string(mdLine))
 
 		// system events carry hook lifecycle info — already handled by
 		// --include-hook-events, just forward for observability.
 		case "system":
-			// No-op: hook events are informational, don't surface to user.
+			eventSeq++
+			sysLine, _ := json.Marshal(raw)
+			var sys struct {
+				Subtype string `json:"subtype"`
+			}
+			json.Unmarshal(sysLine, &sys)
+			s.persistEvent(ctx, turnID, sessionID, eventSeq, "system", sys.Subtype, "", "", string(sysLine))
 
 		// Unknown types: silently drop. The CLI may add new event types in
 		// future versions; crashing on them would be worse than ignoring.
@@ -789,9 +863,10 @@ func writeStreamJSONPrompt(stdin io.WriteCloser, prompt string) error {
 func (s *Service) handleContentBlockDelta(paneID, turnID string, raw map[string]json.RawMessage, responseText *strings.Builder) {
 	var delta struct {
 		Delta struct {
-			Type     string `json:"type"`
-			Text     string `json:"text,omitempty"`
-			Thinking string `json:"thinking,omitempty"`
+			Type        string `json:"type"`
+			Text        string `json:"text,omitempty"`
+			Thinking    string `json:"thinking,omitempty"`
+			PartialJSON string `json:"partial_json,omitempty"`
 		} `json:"delta"`
 	}
 	line, _ := json.Marshal(raw)
@@ -815,6 +890,10 @@ func (s *Service) handleContentBlockDelta(paneID, turnID string, raw map[string]
 	case "thinking_delta":
 		if delta.Delta.Thinking != "" {
 			s.emit("composer:event", Event{PaneID: paneID, TurnID: turnID, Type: "thinking", Content: delta.Delta.Thinking})
+		}
+	case "input_json_delta":
+		if delta.Delta.PartialJSON != "" {
+			s.emit("composer:event", Event{PaneID: paneID, TurnID: turnID, Type: "input_json", Content: delta.Delta.PartialJSON})
 		}
 	}
 }
@@ -1039,6 +1118,58 @@ func (s *Service) emitEdit(ctx context.Context, paneID, turnID, cwd, path, oldCo
 		log.Warn("composer: insertEdit failed", "err", err)
 	}
 	s.emit("composer:edit-pending", edit)
+}
+
+// extractThinking pulls thinking blocks from assistant partial messages and
+// emits only NEW content to the frontend. prevLen is the cumulative length
+// already emitted; returns the updated length. This prevents double-emit
+// when thinking_delta events also fire via content_block_delta.
+func (s *Service) extractThinking(paneID, turnID string, raw json.RawMessage, prevLen int) int {
+	if len(raw) == 0 {
+		return prevLen
+	}
+	var msg struct {
+		Content []struct {
+			Type     string `json:"type"`
+			Thinking string `json:"thinking,omitempty"`
+		} `json:"content"`
+	}
+	if json.Unmarshal(raw, &msg) != nil {
+		return prevLen
+	}
+	total := 0
+	for _, block := range msg.Content {
+		if block.Type == "thinking" {
+			total += len(block.Thinking)
+		}
+	}
+	if total > prevLen {
+		for _, block := range msg.Content {
+			if block.Type == "thinking" && len(block.Thinking) > prevLen {
+				newContent := block.Thinking[prevLen:]
+				s.emit("composer:event", Event{PaneID: paneID, TurnID: turnID, Type: "thinking", Content: newContent})
+			}
+		}
+	}
+	return total
+}
+
+// persistEvent is a fire-and-forget helper that writes an EventRecord to the
+// composer_events table. Errors are logged but never block the stream.
+func (s *Service) persistEvent(ctx context.Context, turnID, sessionID string, seq int, typ, subtype, toolName, toolUseID, content string) {
+	if err := s.insertEvent(ctx, &EventRecord{
+		TurnID:    turnID,
+		SessionID: sessionID,
+		Seq:       seq,
+		Type:      typ,
+		Subtype:   subtype,
+		ToolName:  toolName,
+		ToolUseID: toolUseID,
+		Content:   content,
+		CreatedAt: time.Now().Unix(),
+	}); err != nil {
+		log.Debug("composer: persistEvent failed", "type", typ, "err", err)
+	}
 }
 
 // ---------------------------------------------------------------------------
