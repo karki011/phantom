@@ -132,9 +132,12 @@ export function SessionControls(props: Props) {
   }
 
   const sessionLabel = () => {
+    // Prefer the Pokémon name when available; fall back to first prompt, then ID.
+    const name = props.session.name;
+    if (name) return name;
     const fp = props.session.first_prompt;
     if (fp) return fp.length > 50 ? fp.slice(0, 50) + '…' : fp;
-    return props.session.name ?? props.session.id.slice(0, 12);
+    return props.session.id.slice(0, 12);
   };
 
   return (

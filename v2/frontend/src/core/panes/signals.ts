@@ -201,6 +201,15 @@ export function setActiveTab(tabId: string): void {
   setWorkspace('activeTabId', tabId);
 }
 
+export function renameTabByPane(paneId: string, label: string): void {
+  setWorkspace(
+    produce((s) => {
+      const tab = s.tabs.find((t) => paneId in t.panes);
+      if (tab) tab.label = label;
+    }),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Pane actions
 // ---------------------------------------------------------------------------

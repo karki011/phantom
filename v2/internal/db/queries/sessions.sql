@@ -120,5 +120,11 @@ INSERT INTO sessions (
 -- Returns all sessions whose parent_session_id matches the given session.
 SELECT * FROM sessions WHERE parent_session_id = ? ORDER BY started_at DESC;
 
+-- name: UpdateSessionName :exec
+UPDATE sessions SET name = ? WHERE id = ?;
+
+-- name: ListUnnamedSessions :many
+SELECT id FROM sessions WHERE name IS NULL OR name = '';
+
 -- name: DeleteSession :exec
 DELETE FROM sessions WHERE id = ?;

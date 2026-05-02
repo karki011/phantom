@@ -26,10 +26,15 @@ export interface ComposerEditCard {
 export interface ComposerEvent {
   pane_id: string;
   turn_id?: string;
-  type: 'delta' | 'thinking' | 'tool_use' | 'result' | 'done' | 'error' | 'strategy';
+  type: 'delta' | 'thinking' | 'tool_use' | 'tool_result' | 'result' | 'done' | 'error' | 'strategy' | 'session_started';
   content?: string;
   tool_name?: string;
   tool_input?: string;
+  tool_use_id?: string;
+  is_error?: boolean;
+  // Session-specific fields, populated on type=="session_started".
+  session_id?: string;
+  session_name?: string;
   input_tokens?: number;
   output_tokens?: number;
   cost_usd?: number;
@@ -73,6 +78,20 @@ export async function composerCancel(paneId: string): Promise<void> {
     await App()?.ComposerCancel(paneId);
   } catch {
     /* ignore */
+  }
+}
+
+/**
+ * Check whether the backend has an in-flight run for this pane.
+ * Used on pane mount/remount to restore the "running" indicator when the
+ * backend is still streaming but the frontend lost its event subscriptions
+ * (e.g. after a tab switch that caused a SolidJS reactive dispose/recreate).
+ */
+export async function composerIsRunning(paneId: string): Promise<boolean> {
+  try {
+    return !!(await App()?.ComposerIsRunning(paneId));
+  } catch {
+    return false;
   }
 }
 
@@ -138,6 +157,7 @@ export async function composerHistory(paneId: string): Promise<ComposerHistoryTu
 
 export interface ComposerSessionSummary {
   session_id: string;
+  name: string; // Pokémon-style memorable name
   first_pane_id: string;
   first_prompt: string;
   turn_count: number;

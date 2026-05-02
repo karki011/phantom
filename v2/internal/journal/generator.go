@@ -11,8 +11,10 @@ import (
 	"log/slog"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/subashkarki/phantom-os-v2/internal/ai/extractor"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/provider"
 )
@@ -27,9 +29,11 @@ type ProjectInfo struct {
 // Generator creates morning brief and end-of-day content using
 // git/gh commands and DB queries (sessions, tasks, worktrees).
 type Generator struct {
-	queries    *db.Queries
-	aiGatherer *AIDigestGatherer
-	prov       provider.Provider
+	queries      *db.Queries
+	aiGatherer   *AIDigestGatherer
+	prov         provider.Provider
+	extractions  []*extractor.ExtractionResult
+	extractionMu sync.Mutex
 }
 
 // NewGenerator creates a Generator backed by a read-only Queries handle.
@@ -56,6 +60,26 @@ func (g *Generator) SetProvider(p provider.Provider) {
 // Provider returns the attached provider (may be nil).
 func (g *Generator) Provider() provider.Provider {
 	return g.prov
+}
+
+// AddExtraction records an extraction result for inclusion in the daily
+// digest. Thread-safe — called from session-completion goroutines.
+func (g *Generator) AddExtraction(result *extractor.ExtractionResult) {
+	if result == nil {
+		return
+	}
+	g.extractionMu.Lock()
+	defer g.extractionMu.Unlock()
+	g.extractions = append(g.extractions, result)
+}
+
+// Extractions returns a snapshot of all extraction results added so far.
+func (g *Generator) Extractions() []*extractor.ExtractionResult {
+	g.extractionMu.Lock()
+	defer g.extractionMu.Unlock()
+	out := make([]*extractor.ExtractionResult, len(g.extractions))
+	copy(out, g.extractions)
+	return out
 }
 
 // EnrichEndOfDay runs the configured AI provider over the deterministic
@@ -198,6 +222,12 @@ func (g *Generator) GenerateMorningBrief(ctx context.Context, projects []Project
 			lines = append(lines, "")
 			lines = append(lines, aiSection)
 		}
+	}
+
+	// --- Session Intelligence (extraction data) ---
+	if extractionSection := DailyExtractionDigest(g.Extractions()); extractionSection != "" {
+		lines = append(lines, "")
+		lines = append(lines, extractionSection)
 	}
 
 	// --- Yesterday's terminal activity ---
@@ -487,6 +517,12 @@ func (g *Generator) GenerateEndOfDay(ctx context.Context, projects []ProjectInfo
 			lines = append(lines, "")
 			lines = append(lines, hunterSection)
 		}
+	}
+
+	// --- Session Intelligence (extraction data) ---
+	if extractionSection := DailyExtractionDigest(g.Extractions()); extractionSection != "" {
+		lines = append(lines, "")
+		lines = append(lines, extractionSection)
 	}
 
 	// --- Terminal activity (today's transcripts) ---

@@ -54,6 +54,11 @@ type ServerDeps struct {
 	// edit-gate hook calls /api/workspaces to scope the gate to these paths
 	// only — edits outside any linked workspace pass through untouched.
 	ListWorkspaces func() []Workspace
+
+	// OnEvent is an optional callback invoked when the API server wants to
+	// surface an event to the frontend (e.g. Wails EventsEmit). The API
+	// package has no Wails dependency — the caller wires the bridge.
+	OnEvent func(name string, data any)
 }
 
 // hookHealthEntry records the last health report from a hook.
@@ -87,6 +92,22 @@ type errorEntry struct {
 	Source    string    `json:"source"`
 	Message  string    `json:"message"`
 	Timestamp time.Time `json:"timestamp"`
+}
+
+// HookRelayEvent is the wire shape for POST /api/hooks/relay — the
+// phantom-relay hook sends one of these after every Claude Code tool call.
+type HookRelayEvent struct {
+	Type         string         `json:"type"`
+	HookType     string         `json:"hook_type"`
+	SessionID    string         `json:"session_id"`
+	ToolName     string         `json:"tool_name"`
+	ToolInput    any            `json:"tool_input"`
+	ToolResponse string         `json:"tool_response"`
+	ToolUseID    string         `json:"tool_use_id"`
+	DurationMs   int            `json:"duration_ms"`
+	CWD          string         `json:"cwd"`
+	Timestamp    int64          `json:"timestamp"`
+	Parsed       map[string]any `json:"parsed,omitempty"`
 }
 
 // NewServer creates a new API server with the given port and dependencies.
@@ -176,6 +197,9 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("POST /api/verify/queue", s.handleVerifyQueue)
 	s.mux.HandleFunc("GET /api/verify/latest", s.handleVerifyLatest)
 
+	// Hook relay (phantom-relay hook — real-time tool event capture)
+	s.mux.HandleFunc("POST /api/hooks/relay", s.handleHookRelay)
+
 	// Errors (for structured error logging)
 	s.mux.HandleFunc("GET /api/errors", s.handleGetErrors)
 }
@@ -207,7 +231,7 @@ var defaultAIPrefs = map[string]bool{
 
 func (s *Server) handleGetAIPrefs(w http.ResponseWriter, _ *http.Request) {
 	start := time.Now()
-	slog.Info("🧠 Preferences query", "type", "get-ai-prefs")
+	slog.Debug("🧠 Preferences query", "type", "get-ai-prefs")
 
 	prefs := make(map[string]bool, len(defaultAIPrefs))
 	for k, v := range defaultAIPrefs {
@@ -227,7 +251,7 @@ func (s *Server) handleGetAIPrefs(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 
-	slog.Info("🧠 Preferences done", "type", "get-ai-prefs", "ms", time.Since(start).Milliseconds())
+	slog.Debug("🧠 Preferences done", "type", "get-ai-prefs", "ms", time.Since(start).Milliseconds())
 	writeJSON(w, http.StatusOK, prefs)
 }
 
@@ -382,7 +406,7 @@ func (s *Server) handleGraphAutoIncremental(w http.ResponseWriter, r *http.Reque
 // handleGraphStatsAll returns graph stats for all indexed projects.
 func (s *Server) handleGraphStatsAll(w http.ResponseWriter, _ *http.Request) {
 	start := time.Now()
-	slog.Info("🧠 Graph stats", "type", "all")
+	slog.Debug("🧠 Graph stats", "type", "all")
 
 	type projectStats struct {
 		ProjectID string `json:"project_id"`
@@ -406,7 +430,7 @@ func (s *Server) handleGraphStatsAll(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	ms := time.Since(start).Milliseconds()
-	slog.Info("🧠 Graph stats done", "projects", len(result), "ms", ms)
+	slog.Debug("🧠 Graph stats done", "projects", len(result), "ms", ms)
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -576,7 +600,7 @@ func (s *Server) handleCheckRetry(w http.ResponseWriter, r *http.Request) {
 	}
 
 	start := time.Now()
-	slog.Info("🧠 Check retry", "goal", body.Goal)
+	slog.Debug("🧠 Check retry", "goal", body.Goal)
 
 	if s.deps.DecisionStore == nil {
 		writeJSON(w, http.StatusOK, map[string]any{
@@ -607,7 +631,7 @@ func (s *Server) handleCheckRetry(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ms := time.Since(start).Milliseconds()
-	slog.Info("🧠 Check retry done", "goal", body.Goal, "failures", len(approaches), "ms", ms)
+	slog.Debug("🧠 Check retry done", "goal", body.Goal, "failures", len(approaches), "ms", ms)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"failed_approaches": approaches,
 		"suggestion":        suggestion,
@@ -617,7 +641,7 @@ func (s *Server) handleCheckRetry(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleOrchestratorHistory(w http.ResponseWriter, r *http.Request) {
 	projectID := r.PathValue("projectId")
 	start := time.Now()
-	slog.Info("🧠 Orchestrator history", "project", projectID)
+	slog.Debug("🧠 Orchestrator history", "project", projectID)
 
 	if s.deps.DecisionStore == nil {
 		writeJSON(w, http.StatusOK, []any{})
@@ -646,7 +670,7 @@ func (s *Server) handleOrchestratorHistory(w http.ResponseWriter, r *http.Reques
 	}
 
 	ms := time.Since(start).Milliseconds()
-	slog.Info("🧠 History done", "project", projectID, "results", len(result), "ms", ms)
+	slog.Debug("🧠 History done", "project", projectID, "results", len(result), "ms", ms)
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -706,6 +730,27 @@ func (s *Server) handleVerifyLatest(w http.ResponseWriter, _ *http.Request) {
 		"status":   status,
 		"projects": len(indexers),
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Hook Relay — real-time tool event capture
+// ---------------------------------------------------------------------------
+
+func (s *Server) handleHookRelay(w http.ResponseWriter, r *http.Request) {
+	var event HookRelayEvent
+	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+
+	slog.Debug("hook-relay: received", "tool", event.ToolName, "session", event.SessionID, "hook_type", event.HookType)
+
+	// Emit to frontend via the OnEvent bridge (if wired).
+	if s.deps.OnEvent != nil {
+		s.deps.OnEvent("hook:tool-event", event)
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 // ---------------------------------------------------------------------------

@@ -21,10 +21,12 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/knowledge"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/orchestrator"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/strategies"
+	"github.com/subashkarki/phantom-os-v2/internal/conflict"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 )
 
@@ -87,12 +89,14 @@ type Deps struct {
 	// read past decisions, apply auto-tune + performance + global-pattern bias,
 	// and persist a new decision after each run. When nil, Process degrades to
 	// a stateless run.
-	Decisions      *knowledge.DecisionStore
-	Performance    *strategies.PerformanceStore
-	AutoTune       *strategies.ThresholdTracker
-	GlobalPatterns *knowledge.GlobalPatternStore
-	GapDetector    *strategies.GapDetector
-	Compactor      *knowledge.Compactor
+	Decisions       *knowledge.DecisionStore
+	Performance     *strategies.PerformanceStore
+	AutoTune        *strategies.ThresholdTracker
+	GlobalPatterns  *knowledge.GlobalPatternStore
+	GapDetector     *strategies.GapDetector
+	Compactor       *knowledge.Compactor
+	ConflictTracker *conflict.Tracker      // optional — multi-session conflict awareness
+	VectorStore     *embedding.VectorStore // optional — enables semantic memory retrieval
 }
 
 // jsonResult marshals payload to a TextContent CallToolResult that mirrors
@@ -662,6 +666,7 @@ func (d *Deps) HandleOrchestratorProcess(ctx context.Context, req mcp.CallToolRe
 		return errorResult(err.Error())
 	}
 	activeFiles := req.GetStringSlice("activeFiles", nil)
+	cwd := req.GetString("cwd", "")
 
 	hints := orchestrator.Hints{}
 	if raw := req.GetArguments(); raw != nil {
@@ -679,17 +684,20 @@ func (d *Deps) HandleOrchestratorProcess(ctx context.Context, req mcp.CallToolRe
 	}
 
 	deps := orchestrator.Dependencies{
-		Indexer:        d.indexerFor(pid),
-		Decisions:      d.Decisions,
-		Performance:    d.Performance,
-		AutoTune:       d.AutoTune,
-		GlobalPatterns: d.GlobalPatterns,
-		GapDetector:    d.GapDetector,
-		Compactor:      d.Compactor,
+		Indexer:         d.indexerFor(pid),
+		Decisions:       d.Decisions,
+		Performance:     d.Performance,
+		AutoTune:        d.AutoTune,
+		GlobalPatterns:  d.GlobalPatterns,
+		GapDetector:     d.GapDetector,
+		Compactor:       d.Compactor,
+		ConflictTracker: d.ConflictTracker,
+		VectorStore:     d.VectorStore,
 	}
 	result, err := orchestrator.Process(ctx, deps, orchestrator.ProcessInput{
 		ProjectID:   pid,
 		Goal:        goal,
+		CWD:         cwd,
 		ActiveFiles: activeFiles,
 		Hints:       hints,
 	})
@@ -777,6 +785,53 @@ func (d *Deps) HandleOrchestratorHistory(ctx context.Context, req mcp.CallToolRe
 		})
 	}
 	return jsonResult(OrchestratorHistoryResult{Decisions: out, Count: len(out)})
+}
+
+// HandleConflictStatus: phantom_conflict_status — check if other sessions
+// are editing the same repository. Returns active session count and details.
+func (d *Deps) HandleConflictStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	cwd := req.GetString("cwd", "")
+	sessionID := req.GetString("session_id", "")
+
+	if d.ConflictTracker == nil {
+		return jsonResult(ConflictStatusResult{
+			ActiveSessions: 0,
+			Sessions:       []ConflictSessionInfo{},
+			IsConflicted:   false,
+			Message:        "Conflict tracking not available",
+		})
+	}
+
+	if cwd == "" {
+		return errorResult("cwd is required")
+	}
+
+	sessions := d.ConflictTracker.GetActiveSessions(cwd)
+
+	// Filter out the caller's own session so they only see *other* editors.
+	var others []ConflictSessionInfo
+	for _, s := range sessions {
+		if s.ID == sessionID || s.SessionID == sessionID {
+			continue
+		}
+		others = append(others, ConflictSessionInfo{
+			ID:        s.ID,
+			SessionID: s.SessionID,
+			Name:      s.Name,
+			Source:    s.Source,
+			RepoCWD:   s.RepoCWD,
+			StartedAt: s.StartedAt.UnixMilli(),
+		})
+	}
+	if others == nil {
+		others = []ConflictSessionInfo{}
+	}
+
+	return jsonResult(ConflictStatusResult{
+		ActiveSessions: len(others),
+		Sessions:       others,
+		IsConflicted:   len(others) > 0,
+	})
 }
 
 // toSortedSlice converts a set to a deterministic sorted slice.

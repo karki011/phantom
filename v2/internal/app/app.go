@@ -18,6 +18,7 @@ import (
 
 	"net/http"
 
+	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
 	graphctx "github.com/subashkarki/phantom-os-v2/internal/ai/graph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/knowledge"
@@ -27,6 +28,7 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/branding"
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
 	"github.com/subashkarki/phantom-os-v2/internal/composer"
+	"github.com/subashkarki/phantom-os-v2/internal/conflict"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/gamification"
 	"github.com/subashkarki/phantom-os-v2/internal/git"
@@ -89,6 +91,7 @@ type App struct {
 	Safety            *safety.Service
 	Composer          *composer.Service
 	Gamification      *gamification.Service
+	ConflictTracker   *conflict.Tracker
 	collectorRegistry *collector.Registry
 
 	// AI context injection — initialized during Startup from DB connections.
@@ -101,6 +104,11 @@ type App struct {
 
 	// apiServer is the lightweight HTTP API for Claude Code hook communication.
 	apiServer *api.Server
+
+	// tsMap tracks which terminal panes are linked to which Claude sessions.
+	// Updated by Linker events; used by the stream event hook to emit
+	// terminal:activity events with pane IDs attached.
+	tsMap *terminalSessionMap
 
 	// shutdownOnce ensures graceful teardown (including factory reset) runs at most once.
 	shutdownOnce sync.Once
@@ -227,6 +235,13 @@ func (a *App) Startup(ctx context.Context) {
 	// gives external Claude Code users. Mirrors cmd/phantom-mcp/main.go.
 	a.wireComposerEngine()
 
+	// Initialize the conflict tracker and wire it into the Composer service
+	// so simultaneous panes editing the same repo surface warnings.
+	a.ConflictTracker = conflict.NewTracker(nil)
+	if a.Composer != nil {
+		a.Composer.SetConflictTracker(a.ConflictTracker)
+	}
+
 	// Start lightweight HTTP API server for Claude Code hook communication.
 	a.startAPIServer()
 
@@ -267,11 +282,29 @@ func (a *App) Startup(ctx context.Context) {
 		})
 	}
 
-	// Wire stream event hook — chains safety evaluation + activity detection.
+	// Initialize terminal ↔ session activity bridge (in-memory map + DB hydration).
+	a.initTerminalActivityBridge()
+
+	// Wire the Linker's link hook so the in-memory map stays in sync with
+	// link/unlink operations and the frontend gets terminal:session-linked/unlinked events.
+	if a.Linker != nil {
+		a.Linker.SetLinkHook(func(paneID, sessionID string, linked bool) {
+			if linked {
+				a.onTerminalLinked(paneID, sessionID)
+			} else {
+				a.onTerminalUnlinked(paneID, sessionID)
+			}
+		})
+	}
+
+	// Wire stream event hook — chains safety evaluation + activity detection + terminal activity.
 	if a.Stream != nil {
 		a.Stream.SetEventHook(func(ctx context.Context, ev *stream.Event) {
 			// Activity detection (async, zero-blocking) — runs for all providers.
 			a.detectActivityEvents(ev)
+
+			// Terminal activity bridge — emit terminal:activity for linked panes.
+			a.emitTerminalActivity(ev)
 
 			// Ward safety evaluation — synchronous, can pause sessions.
 			if a.Safety != nil && a.SessionCtrl != nil && a.GetPreference("wards_enabled") == "true" {
@@ -378,13 +411,32 @@ func (a *App) wireComposerEngine() {
 
 	deps := orchestrator.Dependencies{}
 
+	// Create embedding engine (graceful degradation if ONNX not available).
+	embedder, _ := embedding.NewEmbedder()
+
+	// Create vector store backed by the main DB.
+	var vectorStore *embedding.VectorStore
+	if vs, vsErr := embedding.NewVectorStore(a.DB.Writer, embedder); vsErr == nil {
+		vectorStore = vs
+		deps.VectorStore = vs
+		log.Info("app: vector store initialized", "memories", vs.Stats().TotalMemories)
+	} else {
+		log.Warn("app: vector store init failed (semantic features disabled)", "err", vsErr)
+	}
+
 	if ds, err := knowledge.NewDecisionStore(a.DB.Writer); err == nil {
+		if vectorStore != nil {
+			ds.SetVectorStore(vectorStore)
+		}
 		deps.Decisions = ds
 	} else {
 		log.Warn("app: composer engine — decision store init failed", "err", err)
 	}
 
 	if comp, err := knowledge.NewCompactor(a.DB.Writer); err == nil {
+		if vectorStore != nil {
+			comp.SetVectorStore(vectorStore)
+		}
 		deps.Compactor = comp
 	} else {
 		log.Warn("app: composer engine — compactor init failed", "err", err)
@@ -540,6 +592,9 @@ func (a *App) startAPIServer() {
 		DecisionStore:  decisionStore,
 		DB:             dbWriter,
 		ListWorkspaces: listWorkspacesFn,
+		OnEvent: func(name string, data any) {
+			wailsRuntime.EventsEmit(a.ctx, name, data)
+		},
 	})
 
 	go func() {

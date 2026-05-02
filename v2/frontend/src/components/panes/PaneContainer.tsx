@@ -6,7 +6,7 @@ import { Suspense, Dynamic } from 'solid-js/web';
 import { Columns2, Rows2, X, Settings2 } from 'lucide-solid';
 import { Skeleton } from '@kobalte/core/skeleton';
 import * as styles from '@/styles/panes.css';
-import { activeTab, setActivePaneInTab, splitPane, closePane, activePaneId, getPaneColor } from '@/core/panes/signals';
+import { activeTab, setActivePaneInTab, splitPane, closePane, activePaneId, getPaneColor, tabs } from '@/core/panes/signals';
 import { getPaneComponent } from './PaneRegistry';
 import type { PaneLeaf } from '@/core/panes/types';
 
@@ -31,7 +31,22 @@ const PANE_TYPE_LABELS: Record<string, string> = {
 export function PaneContainer(props: PaneContainerProps) {
   const paneId = () => props.pane?.id ?? '';
   const paneType = () => props.pane?.paneType ?? 'terminal';
-  const paneData = () => activeTab()?.panes[paneId()];
+  // Look up pane data from the tab that OWNS this pane, not the currently
+  // active tab.  The old code read `activeTab()?.panes[paneId()]` which
+  // returned `undefined` whenever the user switched to a different tab,
+  // causing all props (cwd, sessionId, …) to flash to empty strings.
+  // For components like ComposerPane that rely on stable props across
+  // tab switches this was benign — but it also meant every inactive tab's
+  // Dynamic received a prop churn cycle on every tab switch, which could
+  // cause SolidJS's fine-grained reactivity to trigger unintended updates.
+  const paneData = () => {
+    const id = paneId();
+    if (!id) return undefined;
+    for (const tab of tabs()) {
+      if (id in tab.panes) return tab.panes[id];
+    }
+    return undefined;
+  };
   const isActive = () => activePaneId() === paneId();
   const PaneComponent = () => getPaneComponent(paneType());
   const [showSettings, setShowSettings] = createSignal(false);

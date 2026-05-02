@@ -60,10 +60,16 @@ type Edit struct {
 type Event struct {
 	PaneID    string `json:"pane_id"`
 	TurnID    string `json:"turn_id,omitempty"`
-	Type      string `json:"type"` // "delta" | "thinking" | "tool_use" | "result" | "done" | "error" | "strategy"
+	Type      string `json:"type"` // "delta" | "thinking" | "tool_use" | "tool_result" | "result" | "done" | "error" | "strategy" | "session_started"
 	Content   string `json:"content,omitempty"`
 	ToolName  string `json:"tool_name,omitempty"`
 	ToolInput string `json:"tool_input,omitempty"`
+	ToolUseID string `json:"tool_use_id,omitempty"`
+	IsError   bool   `json:"is_error,omitempty"`
+
+	// Session-specific fields, populated on type=="session_started".
+	SessionID   string `json:"session_id,omitempty"`
+	SessionName string `json:"session_name,omitempty"`
 
 	// Result-specific fields, populated on type=="result"|"done".
 	InputTokens  int64   `json:"input_tokens,omitempty"`
@@ -91,6 +97,7 @@ type Mention struct {
 // truncated to 200 chars before being returned to the frontend.
 type SessionSummary struct {
 	SessionID    string  `json:"session_id"`
+	Name         string  `json:"name"`           // Pokémon-style memorable name
 	FirstPaneID  string  `json:"first_pane_id"`  // any pane that touched the session
 	FirstPrompt  string  `json:"first_prompt"`   // truncated to 200 chars
 	TurnCount    int     `json:"turn_count"`

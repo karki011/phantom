@@ -19,6 +19,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
+	"github.com/subashkarki/phantom-os-v2/internal/namegen"
 	"github.com/subashkarki/phantom-os-v2/internal/provider"
 )
 
@@ -120,6 +121,9 @@ func (sw *SessionWatcher) Start(ctx context.Context) error {
 
 	// Scan existing files on startup
 	sw.scanExisting(sessDir)
+
+	// Backfill Pokémon names on any existing sessions that don't have one.
+	sw.backfillNames()
 
 	// Resurrect sessions whose PID is still alive but DB says completed.
 	// This handles app restarts where the Claude process outlived Phantom.
@@ -246,15 +250,14 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 		return
 	}
 
-	// Resolve session ID: prefer sessionId, fall back to id, then filename
+	// Resolve session ID: prefer sessionId, fall back to id.
+	// Never use the filename (PID) as session ID — it causes lookup failures.
 	sessionID := raw.SessionID
 	if sessionID == "" {
 		sessionID = raw.ID
 	}
 	if sessionID == "" {
-		sessionID = strings.TrimSuffix(filepath.Base(path), ".json")
-	}
-	if sessionID == "" {
+		slog.Debug("session_watcher: skipping file without sessionId", "path", filepath.Base(path))
 		return
 	}
 
@@ -309,6 +312,13 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 		status = "completed"
 	}
 
+	// Generate a Pokémon name if the session doesn't already have one.
+	sessionName := raw.Name
+	if sessionName == "" {
+		existing := sw.buildNameCollisionSet()
+		sessionName = namegen.GenerateUnique(existing)
+	}
+
 	// Try GetSession first — if exists, update; if not, create
 	existing, err := sw.queries.GetSession(sw.ctx, sessionID)
 	if err == nil {
@@ -327,12 +337,17 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 		if status == "active" {
 			endedAt = sql.NullInt64{}
 		}
+		// Preserve existing name if already set; otherwise use generated name.
+		updateName := existing.Name
+		if !updateName.Valid || updateName.String == "" {
+			updateName = nullString(sessionName)
+		}
 		if err := sw.queries.UpdateSession(sw.ctx, db.UpdateSessionParams{
 			ID:                  sessionID,
 			Pid:                 nullInt64(pid),
 			Cwd:                 nullString(raw.Cwd),
 			Repo:                nullString(repo),
-			Name:                nullString(raw.Name),
+			Name:                updateName,
 			Kind:                nullString(raw.Kind),
 			Model:               nullStringOr(raw.Model, existing.Model),
 			Entrypoint:          nullString(raw.Entrypoint),
@@ -364,13 +379,13 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 			"live_state": liveState,
 		})
 	} else {
-		// Session does not exist — create
+		// Session does not exist — create with generated Pokémon name.
 		if err := sw.queries.CreateSession(sw.ctx, db.CreateSessionParams{
 			ID:         sessionID,
 			Pid:        nullInt64(pid),
 			Cwd:        nullString(raw.Cwd),
 			Repo:       nullString(repo),
-			Name:       nullString(raw.Name),
+			Name:       nullString(sessionName),
 			Kind:       nullString(raw.Kind),
 			Model:      nullString(raw.Model),
 			Entrypoint: nullString(raw.Entrypoint),
@@ -425,8 +440,17 @@ func (sw *SessionWatcher) processSessionFile(path string, _ bool) {
 
 // handleRemove marks a session as completed when its JSON file is removed.
 func (sw *SessionWatcher) handleRemove(path string) {
-	sessionID := strings.TrimSuffix(filepath.Base(path), ".json")
-	if sessionID == "" {
+	fileID := strings.TrimSuffix(filepath.Base(path), ".json")
+	if fileID == "" {
+		return
+	}
+
+	// The filename is the PID, not the session UUID. Only proceed if it looks
+	// like a UUID (contains hyphens). PID-based removals are handled by the
+	// stale-check loop which already has the real session ID.
+	sessionID := fileID
+	if !strings.Contains(fileID, "-") {
+		slog.Debug("session_watcher: remove — skipping PID-based file", "file", fileID)
 		return
 	}
 
@@ -889,6 +913,47 @@ func int64OrZeroCollector(n sql.NullInt64) int64 {
 		return n.Int64
 	}
 	return 0
+}
+
+// buildNameCollisionSet queries active session names to avoid duplicates.
+func (sw *SessionWatcher) buildNameCollisionSet() map[string]bool {
+	sessions, err := sw.queries.ListActiveSessions(sw.ctx)
+	if err != nil {
+		return nil
+	}
+	existing := make(map[string]bool, len(sessions))
+	for _, s := range sessions {
+		if s.Name.Valid && s.Name.String != "" {
+			existing[s.Name.String] = true
+		}
+	}
+	return existing
+}
+
+// backfillNames assigns Pokémon names to all existing sessions that have
+// no name. Called once at startup from Start().
+func (sw *SessionWatcher) backfillNames() {
+	ids, err := sw.queries.ListUnnamedSessions(sw.ctx)
+	if err != nil {
+		slog.Error("session_watcher: backfill list unnamed", "err", err)
+		return
+	}
+	if len(ids) == 0 {
+		return
+	}
+	existing := sw.buildNameCollisionSet()
+	for _, id := range ids {
+		name := namegen.GenerateUnique(existing)
+		existing[name] = true
+		if err := sw.queries.UpdateSessionName(sw.ctx, db.UpdateSessionNameParams{
+			Name: nullString(name),
+			ID:   id,
+		}); err != nil {
+			slog.Error("session_watcher: backfill name", "session_id", id, "err", err)
+		} else {
+			slog.Info("session_watcher: backfilled name", "session_id", id, "name", name)
+		}
+	}
 }
 
 // --- helpers ---

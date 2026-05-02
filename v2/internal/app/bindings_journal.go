@@ -21,6 +21,7 @@ import (
 // It unwraps sql.Null* types from the generated Session struct.
 type JournalEntry struct {
 	ID                  string `json:"id"`
+	Name                string `json:"name"`
 	Date                string `json:"date"`
 	Summary             string `json:"summary"`
 	Outcome             string `json:"outcome"`
@@ -66,6 +67,7 @@ type DailyStatsEntry struct {
 func sessionToJournalEntry(s db.Session) JournalEntry {
 	return JournalEntry{
 		ID:                  s.ID,
+		Name:                stringOrEmpty(s.Name),
 		Date:                stringOrEmpty(s.Date),
 		Summary:             stringOrEmpty(s.Summary),
 		Outcome:             stringOrEmpty(s.Outcome),

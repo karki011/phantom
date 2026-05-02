@@ -50,11 +50,33 @@ const (
 	// payload: { phase: "register" | "enable-projects", error: string, hint?: string }
 	EventMCPRegistrationFailed = "mcp:registration-failed"
 
+	EventConflictRepo = "conflict:repo" // payload: conflict.Conflict (repo-level overlap)
+	EventConflictFile = "conflict:file" // payload: conflict.Conflict (file-level overlap)
+
 	EventGamificationXPGained           = "gamification:xp_gained"            // payload: {amount, total, trigger}
 	EventGamificationLevelUp            = "gamification:level_up"             // payload: {level, xpToNext}
 	EventGamificationRankUp             = "gamification:rank_up"              // payload: {rank, title}
 	EventGamificationAchievementUnlocked = "gamification:achievement_unlocked" // payload: {id, name, description, icon, xpReward}
 	EventGamificationQuestCompleted     = "gamification:quest_completed"      // payload: {id, label, xpReward}
+
+	EventHookToolEvent = "hook:tool-event" // payload: api.HookRelayEvent
+
+	// Terminal ↔ session linking lifecycle events.
+	// payload: { paneId, sessionId, sessionName? }
+	EventTerminalSessionLinked   = "terminal:session-linked"
+	EventTerminalSessionUnlinked = "terminal:session-unlinked"
+
+	// Terminal activity — enriched stream events for linked terminal panes.
+	// payload: { pane_id, session_id, event_type, tool_name, file_path, is_error, timestamp }
+	EventTerminalActivity = "terminal:activity"
+
+	// Embedding auto-setup lifecycle events.
+	// payload: { file: string, percent: int, totalMB: int }
+	EventEmbeddingDownloadProgress = "embedding:download-progress"
+	// payload: nil — signals UI to show "restart to enable semantic search"
+	EventEmbeddingSetupComplete = "embedding:setup-complete"
+	// payload: { error: string }
+	EventEmbeddingSetupFailed = "embedding:setup-failed"
 )
 
 func EmitEvent(ctx context.Context, name string, data interface{}) {
