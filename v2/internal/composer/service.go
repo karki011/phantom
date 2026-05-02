@@ -623,6 +623,14 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 	// run() takes.
 	responseTextRef = &responseText
 
+	// seenDeltas tracks whether we've received any content_block_delta or
+	// content_block_start events during this run. When true, the stream-json
+	// protocol is providing incremental updates and we skip "assistant"
+	// events — those are partial-message snapshots (--include-partial-messages)
+	// that contain the *entire accumulated* content, causing massive text
+	// duplication if re-emitted alongside the deltas.
+	seenDeltas := false
+
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
@@ -651,7 +659,18 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		switch typ {
 		// ---- Legacy / primary event types (always present) ----
 		case "assistant":
-			s.handleAssistant(ctx, args.PaneID, turnID, args.CWD, raw["message"], &responseText)
+			// When the stream-json protocol is active (seenDeltas), skip
+			// "assistant" events. With --include-partial-messages the CLI
+			// emits partial assistant snapshots that contain ALL content
+			// accumulated so far. Re-processing these via handleAssistant
+			// duplicates every text/thinking chunk that content_block_delta
+			// already delivered, causing garbled text in the UI.
+			//
+			// Fall back to handleAssistant only when no deltas arrived
+			// (older CLI versions that don't emit content_block_delta).
+			if !seenDeltas {
+				s.handleAssistant(ctx, args.PaneID, turnID, args.CWD, raw["message"], &responseText)
+			}
 		case "tool_result":
 			s.handleToolResult(args.PaneID, turnID, raw)
 		case "result":
@@ -678,11 +697,13 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		// supplement (or in some CLI versions replace) the batched "assistant"
 		// events. We handle them so streaming feels instant.
 		case "content_block_delta":
+			seenDeltas = true
 			s.handleContentBlockDelta(args.PaneID, turnID, raw, &responseText)
 
 		// content_block_start can carry tool_use blocks; handle the same way
 		// as the assistant-level tool_use for edit tracking.
 		case "content_block_start":
+			seenDeltas = true
 			s.handleContentBlockStart(ctx, args.PaneID, turnID, args.CWD, raw)
 
 		// message_start / message_stop / content_block_stop are structural
@@ -814,6 +835,7 @@ func (s *Service) handleContentBlockDelta(paneID, turnID string, raw map[string]
 		}
 	case "thinking_delta":
 		if delta.Delta.Thinking != "" {
+			log.Debug("composer: thinking_delta received", "len", len(delta.Delta.Thinking), "turn", turnID)
 			s.emit("composer:event", Event{PaneID: paneID, TurnID: turnID, Type: "thinking", Content: delta.Delta.Thinking})
 		}
 	}

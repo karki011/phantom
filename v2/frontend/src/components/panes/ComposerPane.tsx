@@ -372,30 +372,13 @@ export default function ComposerPane(props: ComposerPaneProps) {
   });
 
   // ── Stream events ────────────────────────────────────────────────────
-  onWailsEvent<ComposerEvent>('composer:event', (ev) => {
-    if (ev.pane_id !== paneId()) return;
+  // Events from the Go goroutine can arrive before composerSend resolves
+  // and the turn is rekeyed from the temp ID to the server-assigned UUID.
+  // Buffer those early events and replay them after the rekey.
+  let earlyEventBuffer: ComposerEvent[] = [];
 
-    // Handle session_started before the turn-id gate — this event fires
-    // before any turn exists and carries the session ID + Pokémon name so
-    // the sidebar can show the session immediately on Send.
-    if (ev.type === 'session_started') {
-      if (ev.session_id) {
-        setActiveSessionId(ev.session_id);
-        void refreshSessions();
-        const name = ev.session_name || ev.content || '';
-        if (name) {
-          renameTabByPane(paneId(), `Composer · ${name}`);
-        }
-      }
-      return;
-    }
-
-    const turnId = ev.turn_id ?? activeTurnId();
-    if (!turnId) return;
-
-    const idx = turns.findIndex(t => t.id === turnId);
-    if (idx < 0) return; // turn not found — nothing to update
-
+  /** Apply a single event to the turn at the given index. */
+  const applyEvent = (idx: number, ev: ComposerEvent) => {
     switch (ev.type) {
       case 'delta':
         setTurns(idx, 'text', prev => prev + (ev.content ?? ''));
@@ -476,6 +459,41 @@ export default function ComposerPane(props: ComposerPaneProps) {
       void refreshSessions();
     }
     scrollToBottom();
+  };
+
+  onWailsEvent<ComposerEvent>('composer:event', (ev) => {
+    if (ev.pane_id !== paneId()) return;
+
+    // Handle session_started before the turn-id gate — this event fires
+    // before any turn exists and carries the session ID + Pokémon name so
+    // the sidebar can show the session immediately on Send.
+    if (ev.type === 'session_started') {
+      if (ev.session_id) {
+        setActiveSessionId(ev.session_id);
+        void refreshSessions();
+        const name = ev.session_name || ev.content || '';
+        if (name) {
+          renameTabByPane(paneId(), `Composer · ${name}`);
+        }
+      }
+      return;
+    }
+
+    const turnId = ev.turn_id ?? activeTurnId();
+    if (!turnId) return;
+
+    const idx = turns.findIndex(t => t.id === turnId);
+    if (idx < 0) {
+      // Turn not found — likely a race where the Go goroutine emitted
+      // events before composerSend resolved and the turn was rekeyed.
+      // Buffer the event; handleSend will replay after rekeying.
+      if (running()) {
+        earlyEventBuffer.push(ev);
+      }
+      return;
+    }
+
+    applyEvent(idx, ev);
   });
 
   onWailsEvent<ComposerEditCard>('composer:edit-pending', (card) => {
@@ -532,6 +550,9 @@ export default function ComposerPane(props: ComposerPaneProps) {
     if (!prompt && mentions().length === 0) return;
     if (running()) return;
 
+    // Clear any stale buffered events from a previous run.
+    earlyEventBuffer.length = 0;
+
     const turnId = `turn-${Date.now()}`;
     const turn: TurnView = {
       id: turnId,
@@ -572,6 +593,17 @@ export default function ComposerPane(props: ComposerPaneProps) {
     if (rekeyIdx >= 0) setTurns(rekeyIdx, 'id', result.id);
     setActiveTurnId(result.id);
     setMentions([]);
+
+    // Flush any events that arrived from the Go goroutine before the rekey.
+    // These were buffered because the turn still had the temp ID when they
+    // arrived and couldn't be matched by turn_id.
+    if (earlyEventBuffer.length > 0) {
+      const buffered = earlyEventBuffer.splice(0);
+      for (const ev of buffered) {
+        const bufIdx = turns.findIndex(t => t.id === result.id);
+        if (bufIdx >= 0) applyEvent(bufIdx, ev);
+      }
+    }
   };
 
   const handleCancel = async () => {
