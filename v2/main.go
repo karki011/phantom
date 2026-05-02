@@ -54,18 +54,13 @@ func main() {
 		log.Fatalf("phantomos: open database: %v", err)
 	}
 
-	// 2. Run v1 import if a legacy database is present (no-op if already done).
-	if err := database.ImportV1(); err != nil {
-		log.Printf("phantomos: v1 import warning: %v", err)
-	}
-
-	// 3. Build sqlc Queries backed by the writer connection.
+	// 2. Build sqlc Queries backed by the writer connection.
 	queries := db.New(database.Writer)
 
-	// 4. Create terminal manager.
+	// 3. Create terminal manager.
 	term := terminal.New()
 
-	// 5. Create shared journal service (single instance for all components).
+	// 4. Create shared journal service (single instance for all components).
 	journalSvc := journal.NewService("")
 
 	if backfillJournal {
