@@ -126,6 +126,30 @@ func GetDefaultBranch(ctx context.Context, repoPath string) string {
 	return "main"
 }
 
+// remoteTrackingBranchExists reports whether origin/<branch> exists locally (after fetch).
+func remoteTrackingBranchExists(ctx context.Context, repoPath, branch string) bool {
+	if branch == "" {
+		return false
+	}
+	_, err := runGit(ctx, repoPath, "rev-parse", "--verify", "origin/"+branch)
+	return err == nil
+}
+
+// ResolvePrMergeBase chooses the GitHub PR base branch for gh pr create --base.
+// preferred is typically the Phantom project/workspace default; it wins when origin/<preferred> exists.
+// Otherwise origin/main, origin/master, then GetDefaultBranch are used so PRs target the real default (usually main).
+func ResolvePrMergeBase(ctx context.Context, repoPath, preferred string) string {
+	if preferred != "" && remoteTrackingBranchExists(ctx, repoPath, preferred) {
+		return preferred
+	}
+	for _, candidate := range []string{"main", "master"} {
+		if remoteTrackingBranchExists(ctx, repoPath, candidate) {
+			return candidate
+		}
+	}
+	return GetDefaultBranch(ctx, repoPath)
+}
+
 // HasUncommittedChanges checks whether the repo has uncommitted changes.
 // It returns true if there are changes, along with the porcelain status output.
 func HasUncommittedChanges(ctx context.Context, repoPath string) (bool, string) {

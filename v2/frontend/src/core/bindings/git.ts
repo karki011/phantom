@@ -125,8 +125,8 @@ export async function getFailedSteps(worktreeId: string, checkURL: string): Prom
   try { return (await App()?.GetFailedSteps(worktreeId, checkURL)) ?? []; } catch { return []; }
 }
 
-export async function createPrWithAI(worktreeId: string): Promise<PrStatus | null> {
-  try { return (await App()?.CreatePrWithAIForWorkspace(worktreeId)) ?? null; } catch { return null; }
+export async function createPrWithAI(worktreeId: string, draft: boolean = false): Promise<PrStatus | null> {
+  try { return (await App()?.CreatePrWithAIForWorkspace(worktreeId, draft)) ?? null; } catch { return null; }
 }
 
 export async function isGhCliAvailable(): Promise<boolean> {
