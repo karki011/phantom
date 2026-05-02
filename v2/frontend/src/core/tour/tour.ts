@@ -28,7 +28,7 @@ const THEME: Config = {
   smoothScroll: true,
   allowClose: true,
   overlayColor: '#000',
-  overlayOpacity: 0.75,
+  overlayOpacity: 0.12,
   stagePadding: 8,
   stageRadius: 8,
   popoverClass: 'phantom-tour-popover',

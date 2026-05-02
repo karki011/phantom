@@ -180,7 +180,7 @@ func (a *App) RemoveWorktree(worktreeId, worktreePath string) error {
 //
 // Falls back to plain DB read if git command fails (e.g. corrupt repo).
 func (a *App) ListWorktrees(projectId string) []db.Workspace {
-	log.Info("app/ListWorktrees: called", "projectId", projectId)
+	log.Debug("app/ListWorktrees: called", "projectId", projectId)
 	q := db.New(a.DB.Reader)
 
 	dbRows, err := q.ListWorkspacesByProject(a.ctx, projectId)
@@ -240,7 +240,7 @@ func (a *App) ListWorktrees(projectId string) []db.Workspace {
 		}
 	}
 
-	log.Info("app/ListWorktrees: success", "git", len(gitWts), "db", len(dbRows), "merged", len(out))
+	log.Debug("app/ListWorktrees: success", "git", len(gitWts), "db", len(dbRows), "merged", len(out))
 	return out
 }
 

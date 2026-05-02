@@ -17,8 +17,6 @@ export const overlay = style({
   position: 'fixed',
   inset: 0,
   background: vars.color.bgOverlay,
-  backdropFilter: 'blur(8px)',
-  WebkitBackdropFilter: 'blur(8px)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',

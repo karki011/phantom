@@ -629,9 +629,18 @@ func (a *App) StartFileGraph(projectID string) map[string]interface{} {
 		return map[string]interface{}{"error": "project not found"}
 	}
 
+	wantRoot := linker.NormalizeCWD(project.RepoPath)
+
 	a.fileIndexersMu.Lock()
-	// Stop existing indexer for this project if running.
 	if existing, ok := a.fileIndexers[projectID]; ok {
+		if linker.NormalizeCWD(existing.RootDir()) == wantRoot {
+			// Sidebar refresh replaces project objects while bulk-adding repos; Solid
+			// remounts rows and re-invokes StartFileGraph — restarting here would
+			// re-index the same tree hundreds of times.
+			a.fileIndexersMu.Unlock()
+			log.Debug("app: file graph already running", "project", project.Name, "path", project.RepoPath)
+			return map[string]interface{}{"started": true, "skipped": true, "project": project.Name}
+		}
 		a.fileIndexersMu.Unlock()
 		existing.Stop()
 		a.fileIndexersMu.Lock()

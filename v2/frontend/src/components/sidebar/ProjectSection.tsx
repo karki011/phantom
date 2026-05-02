@@ -11,6 +11,7 @@ import {
   worktreeMap,
   expandedProjects,
   toggleProject,
+  activeProject,
 } from '@/core/signals/worktrees';
 import { removeProject, toggleStarProject } from '@/core/bindings';
 import { refreshProjects } from '@/core/signals/projects';
@@ -66,9 +67,14 @@ export function ProjectSection(props: ProjectSectionProps) {
     pollGraphStats();
   }
 
-  // Auto-start graph when project is expanded.
+  // Index only the focused project — expanded sidebar alone should not fan out
+  // filegraph across many repos (bulk scan / expand-all).
   createEffect(() => {
-    if (isExpanded()) ensureGraphStarted();
+    if (!isExpanded()) return;
+    const ap = activeProject();
+    if (ap?.id === props.project.id) {
+      void ensureGraphStarted();
+    }
   });
 
   // Check if graph is already running on mount (e.g. re-mount after tab switch).
