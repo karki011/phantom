@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.18](https://github.com/karki011/phantom/compare/v0.1.17...v0.1.18) (2026-05-02)
+
+
+### Bug Fixes
+
+* **composer:** resolve claude CLI in GUI apps via fallback paths ([#70](https://github.com/karki011/phantom/issues/70)) ([99c0a34](https://github.com/karki011/phantom/commit/99c0a349c5d97b1b83f693b9c03b822dac05b440))
+
 ## [0.1.17](https://github.com/karki011/phantom/compare/v0.1.16...v0.1.17) (2026-05-02)
 
 
