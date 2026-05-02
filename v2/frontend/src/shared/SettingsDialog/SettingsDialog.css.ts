@@ -566,3 +566,29 @@ export const sliderValue = style({
   minWidth: '40px',
   textAlign: 'right',
 });
+
+export const factoryResetModalBody = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: vars.space.md,
+  padding: `${vars.space.sm} 0 ${vars.space.lg}`,
+});
+
+export const factoryResetPhrase = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.accent,
+  padding: vars.space.sm,
+  borderRadius: vars.radius.md,
+  background: vars.color.bgTertiary,
+  border: `1px solid ${vars.color.border}`,
+  userSelect: 'all',
+});
+
+export const factoryResetActions = style({
+  display: 'flex',
+  flexDirection: 'row',
+  justifyContent: 'flex-end',
+  gap: vars.space.sm,
+  marginTop: vars.space.md,
+});

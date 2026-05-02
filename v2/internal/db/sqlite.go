@@ -114,6 +114,16 @@ func (d *DB) Path() string {
 	return d.path
 }
 
+// RemoveDatabaseFiles deletes the main SQLite file and any WAL journal sidecars.
+func RemoveDatabaseFiles(dbPath string) error {
+	for _, p := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove %s: %w", p, err)
+		}
+	}
+	return nil
+}
+
 // setPragmas configures WAL mode, busy timeout, and foreign keys on a connection.
 func setPragmas(conn *sql.DB) error {
 	pragmas := []string{

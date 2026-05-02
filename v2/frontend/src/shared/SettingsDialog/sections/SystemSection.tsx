@@ -1,14 +1,19 @@
 // Phantom — Settings > System section
 // Author: Subash Karki
 
-import { For } from 'solid-js';
-import { RotateCcw, Keyboard, Info, Compass } from 'lucide-solid';
+import { For, createSignal } from 'solid-js';
+import { TextField } from '@kobalte/core/text-field';
+import { RotateCcw, Keyboard, Info, Compass, Trash2 } from 'lucide-solid';
 import { APP_NAME, APP_AUTHOR } from '../../../core/branding';
+import { FACTORY_RESET_CONFIRM_PHRASE } from '../../../core/constants/factoryReset';
+import { factoryResetLocalData } from '../../../core/bindings/system';
 import { buttonRecipe } from '../../../styles/recipes.css';
+import { textFieldInput, textFieldLabel, textFieldRoot } from '../../CloneDialog/CloneDialog.css';
 import { setPreference } from '../../../core/bindings';
 import { setPref } from '../../../core/signals/preferences';
 import { startTour } from '../../../core/tour/tour';
 import { closeSettings } from '../../../core/signals/settings';
+import { PhantomModal } from '../../PhantomModal/PhantomModal';
 import { showWarningToast } from '../../Toast/Toast';
 import * as styles from '../SettingsDialog.css';
 
@@ -21,6 +26,32 @@ const SHORTCUTS: { keys: string; description: string }[] = [
 ];
 
 export default function SystemSection() {
+  const [wipeOpen, setWipeOpen] = createSignal(false);
+  const [wipePhrase, setWipePhrase] = createSignal('');
+  const [wiping, setWiping] = createSignal(false);
+
+  const wipePhraseOk = () => wipePhrase() === FACTORY_RESET_CONFIRM_PHRASE;
+
+  async function handleWipeConfirm() {
+    if (!wipePhraseOk()) return;
+    setWiping(true);
+    const err = await factoryResetLocalData(wipePhrase());
+    setWiping(false);
+    if (err) {
+      showWarningToast('Erase failed', err);
+      return;
+    }
+    setWipeOpen(false);
+  }
+
+  function handleWipeOpenChange(open: boolean) {
+    if (!open) {
+      setWipePhrase('');
+      setWiping(false);
+    }
+    setWipeOpen(open);
+  }
+
   async function handleReinitialize() {
     try {
       await setPreference('onboarding_completed', '');
@@ -39,6 +70,49 @@ export default function SystemSection() {
 
   return (
     <div class={styles.sectionRoot}>
+      <PhantomModal
+        open={wipeOpen}
+        onOpenChange={handleWipeOpenChange}
+        title="Erase all local Phantom data?"
+        description="This cannot be undone. The app will quit when finished; the next launch runs first-time onboarding."
+        size="md"
+      >
+        <div class={styles.factoryResetModalBody}>
+          <p class={styles.settingDescription}>
+            Removes the main database (projects, workspaces, sessions, preferences, gamification),
+            any legacy phantom.v1.db snapshot on disk, AI engine files, daily journal files, custom ward
+            rules, terminal restore snapshots, and context cache under ~/.phantom-os/. Your provider YAML
+            overrides in ~/.phantom-os/providers/ are not deleted.
+          </p>
+          <div>
+            <span class={styles.settingLabel}>Type this phrase exactly to confirm</span>
+            <div class={styles.factoryResetPhrase}>{FACTORY_RESET_CONFIRM_PHRASE}</div>
+          </div>
+          <TextField class={textFieldRoot} value={wipePhrase()} onChange={setWipePhrase}>
+            <TextField.Label class={textFieldLabel}>Confirmation</TextField.Label>
+            <TextField.Input class={textFieldInput} placeholder={FACTORY_RESET_CONFIRM_PHRASE} spellcheck={false} />
+          </TextField>
+          <div class={styles.factoryResetActions}>
+            <button
+              type="button"
+              class={buttonRecipe({ variant: 'ghost', size: 'sm' })}
+              onClick={() => handleWipeOpenChange(false)}
+              disabled={wiping()}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class={buttonRecipe({ variant: 'danger', size: 'sm' })}
+              onClick={() => void handleWipeConfirm()}
+              disabled={!wipePhraseOk() || wiping()}
+            >
+              {wiping() ? 'Erasing…' : 'Erase and quit'}
+            </button>
+          </div>
+        </div>
+      </PhantomModal>
+
       {/* Replay Tour */}
       <div class={styles.settingGroup}>
         <span class={styles.settingLabel}>Guided Tour</span>
@@ -67,9 +141,30 @@ export default function SystemSection() {
         <span class={styles.settingLabel}>Danger Zone</span>
         <div class={styles.settingRow}>
           <div>
+            <div class={styles.settingLabel}>Erase local data (factory reset)</div>
+            <div class={styles.settingDescription}>
+              Delete the database and Phantom-owned files under ~/.phantom-os/ — like a fresh install.
+            </div>
+            <div class={styles.settingDescription}>
+              The app quits when finished. The next launch runs first-time onboarding.
+            </div>
+          </div>
+          <button
+            type="button"
+            class={buttonRecipe({ variant: 'danger', size: 'sm' })}
+            onClick={() => setWipeOpen(true)}
+          >
+            <span class={styles.inlineIconLabel}>
+              <Trash2 size={14} />
+              Erase data…
+            </span>
+          </button>
+        </div>
+        <div class={styles.settingRow}>
+          <div>
             <div class={styles.settingLabel}>Re-initialize System</div>
             <div class={styles.settingDescription}>
-              Reset onboarding and reload the application
+              Reset onboarding and reload the application (does not delete the database)
             </div>
           </div>
           <button
@@ -115,7 +210,7 @@ export default function SystemSection() {
         </span>
         <div class={styles.aboutBlock}>
           <span class={styles.aboutTitle}>
-            {APP_NAME} v2
+            {APP_NAME}
           </span>
           <span class={styles.aboutAuthor}>
             Author: {APP_AUTHOR}

@@ -41,6 +41,7 @@ interface Window {
         ResetProviderOverride(name: string): Promise<void>;
         GetActiveProvider(): Promise<string>;
         QuitApp(): Promise<void>;
+        FactoryResetLocalData(confirmation: string): Promise<void>;
         GetShutdownStats(): Promise<{ session_count: number; total_tokens: number; total_cost: number; uptime: string }>;
         GetFileGraphStats(projectID: string): Promise<{ indexed: boolean; indexing: boolean; files: number; symbols: number; edges: number }>;
         StartFileGraph(projectID: string): Promise<{ started?: boolean; error?: string; project?: string }>;

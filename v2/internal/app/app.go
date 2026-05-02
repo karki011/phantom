@@ -101,6 +101,9 @@ type App struct {
 
 	// apiServer is the lightweight HTTP API for Claude Code hook communication.
 	apiServer *api.Server
+
+	// shutdownOnce ensures graceful teardown (including factory reset) runs at most once.
+	shutdownOnce sync.Once
 }
 
 func New() *App {
@@ -766,10 +769,16 @@ func (a *App) FileGraphNeighbors(projectID, filePath string, depth int) []map[st
 }
 
 func (a *App) Shutdown(ctx context.Context) {
+	a.shutdownOnce.Do(func() {
+		a.doTeardown(true)
+	})
+}
+
+// doTeardown stops background services in a safe order. When persistTerminalState
+// is false (factory reset), terminal scrollback is not written to disk or DB.
+func (a *App) doTeardown(persistTerminalState bool) {
 	// Shutdown order: file indexers → snapshots → collectors → terminals → DB.
 
-	// Stop file graph indexers — snapshot the list first to avoid holding
-	// the lock while blocking on Stop().
 	a.fileIndexersMu.RLock()
 	indexers := make([]*filegraph.Indexer, 0, len(a.fileIndexers))
 	for _, ix := range a.fileIndexers {
@@ -780,11 +789,22 @@ func (a *App) Shutdown(ctx context.Context) {
 		ix.Stop()
 	}
 
-	// Save terminal scrollback to BOTH file snapshots and DB before destroying.
 	if a.Terminal != nil {
-		a.saveTerminalSnapshots()
-		a.saveScrollbacksToDB()
+		if persistTerminalState {
+			a.saveTerminalSnapshots()
+			a.saveScrollbacksToDB()
+		} else {
+			_ = os.Remove(snapshotPath())
+			_ = os.Remove(snapshotPath() + ".tmp")
+		}
 	}
+
+	a.terminalSubsMu.Lock()
+	for _, cancel := range a.terminalSubs {
+		cancel()
+	}
+	clear(a.terminalSubs)
+	a.terminalSubsMu.Unlock()
 
 	if a.gitWatcher != nil {
 		a.gitWatcher.Stop()
@@ -806,7 +826,6 @@ func (a *App) Shutdown(ctx context.Context) {
 		a.Terminal.DestroyAll()
 	}
 
-	// Clean up TUI sessions to release PTY file descriptors.
 	a.tuiSessionsMu.Lock()
 	for id, sess := range a.tuiSessions {
 		sess.Close()
@@ -814,7 +833,6 @@ func (a *App) Shutdown(ctx context.Context) {
 	}
 	a.tuiSessionsMu.Unlock()
 
-	// Cancel the app context to stop all remaining goroutines (WS, health pulse).
 	if a.cancel != nil {
 		a.cancel()
 	}
@@ -823,6 +841,7 @@ func (a *App) Shutdown(ctx context.Context) {
 		if err := a.DB.Close(); err != nil {
 			log.Error("app: close db failed", "err", err)
 		}
+		a.DB = nil
 	}
 }
 
