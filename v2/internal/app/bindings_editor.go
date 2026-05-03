@@ -46,6 +46,28 @@ func (a *App) ReadFileContents(workspaceId, relativePath string) (string, error)
 	return string(data), nil
 }
 
+// ReadFileByPath reads a text file by absolute path. Used by the Composer
+// file preview popover where we have a resolved absolute path, not a
+// workspace-relative one. Capped at 1 MiB.
+func (a *App) ReadFileByPath(absPath string) (string, error) {
+	clean := filepath.Clean(absPath)
+	if !filepath.IsAbs(clean) {
+		return "", fmt.Errorf("path must be absolute: %s", absPath)
+	}
+	info, err := os.Stat(clean)
+	if err != nil {
+		return "", err
+	}
+	if info.Size() > 1<<20 {
+		return "", fmt.Errorf("file too large: %d bytes", info.Size())
+	}
+	data, err := os.ReadFile(clean)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 // WriteFileContents writes content to a file in the workspace.
 // The relativePath is resolved against the workspace root and validated.
 func (a *App) WriteFileContents(workspaceId, relativePath, content string) error {

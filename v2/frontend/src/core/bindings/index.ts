@@ -45,7 +45,7 @@ export {
 export { revealInFinder, openInFinder, openInDefaultApp, openURL } from './shell';
 export { getWards, saveWardRule, deleteWardRule, toggleWardRule, getWardPresets, applyWardPreset } from './wards';
 export type { WardRule, WardPreset } from './wards';
-export { readFileContents, writeFileContents, getFileAtRevision, getWorkspaceBlame, createFile, createFolder, deleteFile } from './editor';
+export { readFileByPath, readFileContents, writeFileContents, getFileAtRevision, getWorkspaceBlame, createFile, createFolder, deleteFile } from './editor';
 export { getSessionsByDate, getSessionsByProject, getRecentSessions, getDailyStatsRange, getDailyStatsRangeByProject, getLastActiveSession, getDailyJournalEntry, generateMorningBrief, generateEndOfDay, updateJournalNotes, listJournalDates } from './journal';
 export { getProviders, getProviderDetail, setProviderEnabled, setActiveProvider, testProvider, autoDetectProviders, addCustomProvider, removeCustomProvider, resetProviderOverride, getActiveProvider } from './providers';
 export { recheckProviderHealth, setProviderBinaryPath, browseFile } from './deps';

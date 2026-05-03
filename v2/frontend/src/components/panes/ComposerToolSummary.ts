@@ -65,7 +65,28 @@ export const extractToolSummary = (name: string, input: string): ToolSummary => 
       case 'NotebookEdit': {
         return { label: basenameOf(parsed.notebook_path || ''), iconName: 'FileCode' };
       }
+      case 'LS': {
+        return { label: parsed.path || '.', iconName: 'FolderSearch' };
+      }
+      case 'Task': {
+        const desc = parsed.description || parsed.prompt || 'sub-task';
+        return { label: truncate(desc, 50), iconName: 'Bot' };
+      }
+      case 'ToolSearch': {
+        return { label: truncate(parsed.query || '', 50), iconName: 'Search' };
+      }
+      case 'Skill': {
+        return { label: parsed.skill || parsed.name || 'skill', iconName: 'Zap' };
+      }
+      case 'Monitor': {
+        return { label: truncate(parsed.command || parsed.url || '', 50), iconName: 'Eye' };
+      }
       default: {
+        // MCP tools get wrench icon but try to show a useful label
+        if (name.startsWith('mcp__')) {
+          const shortName = name.split('__').pop() || name;
+          return { label: shortName, iconName: 'Wrench' };
+        }
         // For unknown tools, try to show something useful from the input
         if (typeof parsed === 'object' && parsed !== null) {
           const first = Object.values(parsed)[0];

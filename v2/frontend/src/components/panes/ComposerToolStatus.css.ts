@@ -2,71 +2,142 @@
 import { style, keyframes } from '@vanilla-extract/css';
 import { vars } from '@/styles/theme.css';
 
-const blink = keyframes({
-  '0%, 100%': { opacity: 1 },
-  '50%': { opacity: 0.3 },
+const spin = keyframes({
+  '0%': { transform: 'rotate(0deg)' },
+  '100%': { transform: 'rotate(360deg)' },
 });
 
 export const statusDotRunning = style({
-  display: 'inline-block',
-  width: 6,
-  height: 6,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 12,
+  height: 12,
   borderRadius: '50%',
-  background: vars.color.accent,
-  animation: `${blink} 1s ease-in-out infinite`,
+  border: `1.5px solid ${vars.color.accent}`,
+  borderTopColor: 'transparent',
+  animation: `${spin} 0.8s linear infinite`,
   marginRight: vars.space.xs,
   verticalAlign: 'middle',
+  flexShrink: 0,
 });
 
 export const statusDotSuccess = style({
-  display: 'inline-block',
-  width: 6,
-  height: 6,
-  borderRadius: '50%',
-  background: vars.color.success,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 12,
+  height: 12,
+  color: vars.color.success,
   marginRight: vars.space.xs,
   verticalAlign: 'middle',
+  flexShrink: 0,
 });
 
 export const statusDotError = style({
-  display: 'inline-block',
-  width: 6,
-  height: 6,
-  borderRadius: '50%',
-  background: vars.color.danger,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 12,
+  height: 12,
+  color: vars.color.danger,
   marginRight: vars.space.xs,
   verticalAlign: 'middle',
+  flexShrink: 0,
+});
+
+/** Status label text next to the status icon. */
+export const statusLabelRunning = style({
+  fontSize: '10px',
+  fontWeight: 500,
+  color: vars.color.accent,
+  marginLeft: 'auto',
+  flexShrink: 0,
+  paddingLeft: vars.space.xs,
+});
+
+export const statusLabelError = style({
+  fontSize: '10px',
+  fontWeight: 500,
+  color: vars.color.danger,
+  marginLeft: 'auto',
+  flexShrink: 0,
+  paddingLeft: vars.space.xs,
 });
 
 export const thinkingCollapsed = style({
   display: 'flex',
-  alignItems: 'center',
-  gap: vars.space.xs,
-  fontStyle: 'italic',
+  flexDirection: 'column',
   fontSize: vars.fontSize.xs,
   color: vars.color.textDisabled,
-  padding: `${vars.space.xs} ${vars.space.sm}`,
-  borderLeft: `2px solid ${vars.color.accent}`,
+  borderRadius: vars.radius.sm,
+  background: vars.color.bgSecondary,
+  overflow: 'hidden',
   cursor: 'pointer',
   ':hover': {
-    color: vars.color.textSecondary,
+    background: vars.color.bgTertiary,
   },
 });
 
 export const thinkingExpanded = style({
-  fontStyle: 'italic',
+  display: 'flex',
+  flexDirection: 'column',
   fontSize: vars.fontSize.xs,
   color: vars.color.textDisabled,
-  padding: `${vars.space.xs} ${vars.space.sm}`,
-  borderLeft: `2px solid ${vars.color.accent}`,
-  whiteSpace: 'pre-wrap',
+  borderRadius: vars.radius.sm,
+  background: vars.color.bgSecondary,
+  overflow: 'hidden',
   cursor: 'pointer',
 });
 
+export const thinkingHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: `${vars.space.xs} ${vars.space.sm}`,
+  minWidth: 0,
+  userSelect: 'none',
+});
+
+export const thinkingLabel = style({
+  fontWeight: 500,
+  fontStyle: 'italic',
+  flexShrink: 0,
+});
+
+export const thinkingPreview = style({
+  color: vars.color.textDisabled,
+  fontSize: '0.85em',
+  fontStyle: 'italic',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  minWidth: 0,
+  opacity: 0.7,
+});
+
+export const thinkingLineCount = style({
+  color: vars.color.textDisabled,
+  fontSize: '0.75em',
+  flexShrink: 0,
+  opacity: 0.6,
+});
+
 export const thinkingContent = style({
-  marginTop: vars.space.xs,
-  maxHeight: '200px',
+  margin: `0 ${vars.space.sm} ${vars.space.sm}`,
+  padding: `${vars.space.sm} 10px`,
+  borderRadius: vars.radius.sm,
+  background: 'rgba(255, 255, 255, 0.03)',
+  border: '1px solid rgba(255, 255, 255, 0.06)',
+  fontFamily: vars.font.mono,
+  fontSize: '11px',
+  lineHeight: '1.5',
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+  maxHeight: '300px',
   overflowY: 'auto',
+  fontStyle: 'normal',
+  color: vars.color.textSecondary,
 });
 
 // ── Rich tool summary styles ──────────────────────────────────────────────
@@ -164,6 +235,18 @@ export const toolGroupChildren = style({
   display: 'flex',
   flexDirection: 'column',
   gap: vars.space.xs,
+});
+
+/** Muted token estimate label shown at the bottom of expanded tool calls. */
+export const tokenEstimate = style({
+  display: 'flex',
+  justifyContent: 'flex-end',
+  fontFamily: vars.font.mono,
+  fontSize: '10px',
+  color: vars.color.textDisabled,
+  marginTop: '4px',
+  opacity: 0.7,
+  userSelect: 'none',
 });
 
 /** Separator between tool name and summary in the chip. */
