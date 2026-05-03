@@ -6,13 +6,17 @@
 package knowledge
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
 )
 
@@ -25,6 +29,15 @@ const (
 	DemoteThreshold = 0.4
 	// DisableThreshold flags strategies that may need disabling at a given complexity.
 	DisableThreshold = 0.3
+
+	// ConsolidateCooldown is the minimum interval between LLM consolidation runs.
+	ConsolidateCooldown = 120 * time.Second
+	// MaxClustersPerRun caps how many clusters are sent to the LLM per compaction.
+	MaxClustersPerRun = 10
+	// MinClusterSize is the minimum number of decisions to form a consolidation cluster.
+	MinClusterSize = 3
+	// SimilarityThreshold is the minimum cosine similarity for cluster membership.
+	SimilarityThreshold = 0.85
 )
 
 // CompactedPattern represents a synthesized insight from repeated decisions.
@@ -50,9 +63,13 @@ type KnowledgeHealth struct {
 }
 
 // Compactor compacts decisions into patterns and prunes stale data.
+// When a HaikuClient is set, it also runs LLM-powered semantic deduplication
+// to consolidate similar decisions into richer patterns.
 type Compactor struct {
-	db          *sql.DB
-	vectorStore *embedding.VectorStore
+	db              *sql.DB
+	vectorStore     *embedding.VectorStore
+	haikuClient     *HaikuClient
+	lastConsolidate time.Time
 }
 
 // SetVectorStore attaches a VectorStore for embedding patterns on synthesis
@@ -78,11 +95,38 @@ func NewCompactor(db *sql.DB) (*Compactor, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Migrate: add LLM consolidation columns (idempotent — errors ignored on existing columns).
+	db.Exec("ALTER TABLE ai_patterns ADD COLUMN description TEXT DEFAULT ''")
+	db.Exec("ALTER TABLE ai_patterns ADD COLUMN conditions TEXT DEFAULT '[]'")
+	db.Exec("ALTER TABLE ai_patterns ADD COLUMN failure_modes TEXT DEFAULT '[]'")
+	db.Exec("ALTER TABLE ai_patterns ADD COLUMN source TEXT DEFAULT 'sql'")
+	db.Exec("ALTER TABLE ai_patterns ADD COLUMN last_consolidated_at DATETIME")
+
+	// Consolidation audit log.
+	db.Exec(`
+		CREATE TABLE IF NOT EXISTS ai_consolidation_log (
+			id TEXT PRIMARY KEY,
+			pattern_id TEXT NOT NULL,
+			decisions_consumed TEXT NOT NULL,
+			input_tokens INTEGER DEFAULT 0,
+			output_tokens INTEGER DEFAULT 0,
+			cost_usd REAL DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+
 	return &Compactor{db: db}, nil
 }
 
-// Run executes a full compaction cycle: synthesize, prune, demote, then prune
-// expired embeddings.
+// SetHaikuClient attaches a HaikuClient for LLM-powered consolidation.
+// Nil-safe: passing nil disables LLM dedup.
+func (c *Compactor) SetHaikuClient(hc *HaikuClient) {
+	c.haikuClient = hc
+}
+
+// Run executes a full compaction cycle: synthesize, prune, demote, LLM
+// consolidate (if available), then prune expired embeddings.
 func (c *Compactor) Run() error {
 	if err := c.synthesizePatterns(); err != nil {
 		return fmt.Errorf("synthesize: %w", err)
@@ -93,6 +137,21 @@ func (c *Compactor) Run() error {
 	if err := c.demoteFailingPatterns(); err != nil {
 		return fmt.Errorf("demote: %w", err)
 	}
+
+	// LLM-powered semantic dedup — additive, non-fatal.
+	if c.haikuClient != nil && time.Since(c.lastConsolidate) > ConsolidateCooldown {
+		stats, err := c.RunLLMConsolidation()
+		if err != nil {
+			slog.Warn("llm consolidation skipped", "err", err)
+		} else if stats.ClustersProcessed > 0 {
+			slog.Info("llm consolidation complete",
+				"clusters", stats.ClustersProcessed,
+				"patterns_created", stats.PatternsCreated,
+				"decisions_consumed", stats.DecisionsConsumed)
+		}
+		c.lastConsolidate = time.Now()
+	}
+
 	// Prune expired embeddings alongside knowledge compaction.
 	if c.vectorStore != nil {
 		pruned, pruneErr := c.vectorStore.PruneExpired()
@@ -331,4 +390,306 @@ func (c *Compactor) ShouldRun() (bool, error) {
 func patternKey(strategyID, complexity, risk string) string {
 	h := sha256.Sum256([]byte(strategyID + "|" + complexity + "|" + risk))
 	return fmt.Sprintf("pat-%x", h[:8])
+}
+
+// --- LLM consolidation ---
+
+const consolidationSystemPrompt = `You consolidate similar AI strategy decisions into one pattern.
+Output ONLY valid JSON. No markdown, no explanation, no code fences.
+Schema:
+{
+  "consolidated_pattern": {
+    "strategy_id": "string — the winning strategy",
+    "description": "string — 1-2 sentence insight about when/why this works",
+    "success_rate": 0.85,
+    "conditions": ["when this works"],
+    "failure_modes": ["when this fails"],
+    "sample_size": 15
+  },
+  "decisions_consumed": ["id1", "id2"]
+}`
+
+// ConsolidationStats tracks what happened during a consolidation run.
+type ConsolidationStats struct {
+	ClustersProcessed int
+	PatternsCreated   int
+	DecisionsConsumed int
+}
+
+// DecisionCluster groups semantically similar decisions for LLM consolidation.
+type DecisionCluster struct {
+	Decisions []Decision
+	Outcomes  map[string][]Outcome // keyed by decision ID
+}
+
+// RunLLMConsolidation finds semantic clusters and sends them to Haiku for
+// consolidation. Returns stats about what was processed. Safe to call when
+// haikuClient or vectorStore is nil (returns zero stats).
+func (c *Compactor) RunLLMConsolidation() (ConsolidationStats, error) {
+	var stats ConsolidationStats
+
+	if c.haikuClient == nil || c.vectorStore == nil {
+		return stats, nil
+	}
+
+	clusters := c.findSemanticClusters()
+	if len(clusters) == 0 {
+		return stats, nil
+	}
+	if len(clusters) > MaxClustersPerRun {
+		clusters = clusters[:MaxClustersPerRun]
+	}
+
+	ctx := context.Background()
+	for _, cluster := range clusters {
+		prompt := buildClusterPrompt(cluster)
+		text, inTok, outTok, err := c.haikuClient.Call(ctx, consolidationSystemPrompt, prompt)
+		if err != nil {
+			slog.Warn("haiku consolidation call failed",
+				"err", err, "cluster_size", len(cluster.Decisions))
+			continue
+		}
+
+		result, err := parseConsolidation(text)
+		if err != nil {
+			slog.Warn("haiku response unparseable", "err", err)
+			continue
+		}
+
+		// Validate consumed IDs are a subset of the input cluster.
+		clusterIDs := make(map[string]bool, len(cluster.Decisions))
+		for _, d := range cluster.Decisions {
+			clusterIDs[d.ID] = true
+		}
+		var validConsumed []string
+		for _, id := range result.DecisionsConsumed {
+			if clusterIDs[id] {
+				validConsumed = append(validConsumed, id)
+			}
+		}
+		if len(validConsumed) == 0 {
+			slog.Warn("haiku consumed no valid decision IDs, skipping cluster")
+			continue
+		}
+		result.DecisionsConsumed = validConsumed
+
+		if err := c.applyConsolidation(result, inTok, outTok); err != nil {
+			slog.Warn("apply consolidation failed", "err", err)
+			continue
+		}
+
+		stats.ClustersProcessed++
+		stats.PatternsCreated++
+		stats.DecisionsConsumed += len(validConsumed)
+	}
+
+	return stats, nil
+}
+
+// findSemanticClusters discovers groups of semantically similar decisions
+// using embedding-based cosine similarity from the VectorStore.
+func (c *Compactor) findSemanticClusters() []DecisionCluster {
+	if c.vectorStore == nil {
+		return nil
+	}
+
+	rows, err := c.db.Query(`
+		SELECT id, goal, strategy_id, confidence, complexity, risk
+		FROM ai_decisions
+		WHERE created_at > datetime('now', '-30 days')
+		ORDER BY created_at DESC
+		LIMIT 500
+	`)
+	if err != nil {
+		slog.Warn("findSemanticClusters query failed", "err", err)
+		return nil
+	}
+	defer rows.Close()
+
+	var decisions []Decision
+	for rows.Next() {
+		var d Decision
+		if err := rows.Scan(&d.ID, &d.Goal, &d.StrategyID, &d.Confidence, &d.Complexity, &d.Risk); err != nil {
+			continue
+		}
+		decisions = append(decisions, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil
+	}
+
+	visited := make(map[string]bool)
+	var clusters []DecisionCluster
+
+	for _, d := range decisions {
+		if visited[d.ID] {
+			continue
+		}
+
+		similar, err := c.vectorStore.FindSimilar(d.Goal, 20, "decision")
+		if err != nil {
+			continue
+		}
+
+		// Build lookup from VectorStore results.
+		similarSourceIDs := make(map[string]float64, len(similar))
+		for _, mem := range similar {
+			similarSourceIDs[mem.SourceID] = mem.Score
+		}
+
+		// Match back to our decision list, filtering by similarity threshold.
+		var members []Decision
+		for _, dd := range decisions {
+			if visited[dd.ID] {
+				continue
+			}
+			// The anchor decision itself is always included.
+			if dd.ID == d.ID {
+				members = append(members, dd)
+				continue
+			}
+			if score, ok := similarSourceIDs[dd.ID]; ok && score >= SimilarityThreshold {
+				members = append(members, dd)
+			}
+		}
+
+		if len(members) >= MinClusterSize {
+			cluster := DecisionCluster{
+				Decisions: members,
+				Outcomes:  c.loadOutcomesForDecisions(members),
+			}
+			clusters = append(clusters, cluster)
+			for _, m := range members {
+				visited[m.ID] = true
+			}
+		}
+	}
+
+	return clusters
+}
+
+// loadOutcomesForDecisions loads verifier-phase outcomes for each decision.
+func (c *Compactor) loadOutcomesForDecisions(decisions []Decision) map[string][]Outcome {
+	outcomes := make(map[string][]Outcome, len(decisions))
+	for _, d := range decisions {
+		rows, err := c.db.Query(
+			"SELECT decision_id, success, failure_reason, phase FROM ai_outcomes WHERE decision_id = ? AND phase = ?",
+			d.ID, PhaseVerifier,
+		)
+		if err != nil {
+			continue
+		}
+		for rows.Next() {
+			var o Outcome
+			var successInt int
+			if rows.Scan(&o.DecisionID, &successInt, &o.FailureReason, &o.Phase) == nil {
+				o.Success = successInt == 1
+				outcomes[d.ID] = append(outcomes[d.ID], o)
+			}
+		}
+		rows.Close()
+	}
+	return outcomes
+}
+
+// buildClusterPrompt creates the user prompt for Haiku consolidation.
+func buildClusterPrompt(cluster DecisionCluster) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "These %d decisions share similar goals and strategies. Consolidate them into one pattern.\n\n", len(cluster.Decisions))
+	fmt.Fprintln(&b, "Decisions:")
+
+	for _, d := range cluster.Decisions {
+		fmt.Fprintf(&b, "- ID: %s\n  Goal: %q\n  Strategy: %s\n  Complexity: %s | Risk: %s\n",
+			d.ID, d.Goal, d.StrategyID, d.Complexity, d.Risk)
+		if outcomes, ok := cluster.Outcomes[d.ID]; ok {
+			for _, o := range outcomes {
+				fmt.Fprintf(&b, "  Outcome: success=%v reason=%q phase=%s\n",
+					o.Success, o.FailureReason, o.Phase)
+			}
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("Rules:\n")
+	b.WriteString("1. Pick the winning strategy (highest success rate, most samples)\n")
+	b.WriteString("2. Synthesize conditions that predict success vs failure\n")
+	b.WriteString("3. Aggregate the sample size\n")
+	b.WriteString("4. List ALL decision IDs being consumed\n")
+	return b.String()
+}
+
+// applyConsolidation writes the consolidated pattern and removes consumed decisions.
+func (c *Compactor) applyConsolidation(result *ConsolidationResult, inTok, outTok int) error {
+	complexity := extractConditionValue(result.Pattern.Conditions, "complexity")
+	risk := extractConditionValue(result.Pattern.Conditions, "risk")
+	if complexity == "" {
+		complexity = "medium"
+	}
+	if risk == "" {
+		risk = "medium"
+	}
+
+	patternID := patternKey(result.Pattern.StrategyID, complexity, risk)
+
+	condJSON, _ := json.Marshal(result.Pattern.Conditions)
+	failJSON, _ := json.Marshal(result.Pattern.FailureModes)
+	consumedJSON, _ := json.Marshal(result.DecisionsConsumed)
+
+	// Upsert the consolidated pattern.
+	_, err := c.db.Exec(`
+		INSERT INTO ai_patterns (id, strategy_id, complexity, risk, success_rate, sample_size,
+								 status, description, conditions, failure_modes, source, last_consolidated_at)
+		VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, 'llm', CURRENT_TIMESTAMP)
+		ON CONFLICT(id) DO UPDATE SET
+			success_rate = excluded.success_rate,
+			sample_size = excluded.sample_size,
+			description = excluded.description,
+			conditions = excluded.conditions,
+			failure_modes = excluded.failure_modes,
+			source = 'llm',
+			last_consolidated_at = CURRENT_TIMESTAMP
+	`, patternID, result.Pattern.StrategyID, complexity, risk,
+		result.Pattern.SuccessRate, result.Pattern.SampleSize,
+		result.Pattern.Description, string(condJSON), string(failJSON))
+	if err != nil {
+		return fmt.Errorf("upsert pattern: %w", err)
+	}
+
+	// Log the consolidation for audit.
+	logID := uuid.New().String()
+	costUSD := float64(inTok)*0.80/1_000_000 + float64(outTok)*4.00/1_000_000
+	_, _ = c.db.Exec(`
+		INSERT INTO ai_consolidation_log (id, pattern_id, decisions_consumed, input_tokens, output_tokens, cost_usd)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, logID, patternID, string(consumedJSON), inTok, outTok, costUSD)
+
+	// Delete consumed decisions and their outcomes/embeddings.
+	for _, id := range result.DecisionsConsumed {
+		c.db.Exec("DELETE FROM ai_outcomes WHERE decision_id = ?", id)
+		c.db.Exec("DELETE FROM ai_decisions WHERE id = ?", id)
+		if c.vectorStore != nil {
+			_ = c.vectorStore.Delete("decision", id)
+		}
+	}
+
+	// Embed the new pattern for semantic retrieval.
+	if c.vectorStore != nil {
+		text := fmt.Sprintf("pattern: %s — %s", result.Pattern.StrategyID, result.Pattern.Description)
+		if storeErr := c.vectorStore.Store("pattern", patternID, text); storeErr != nil {
+			slog.Debug("embedding consolidated pattern skipped", "id", patternID, "err", storeErr)
+		}
+	}
+
+	return nil
+}
+
+// extractConditionValue looks for "key:value" in a conditions list and returns the value.
+func extractConditionValue(conditions []string, key string) string {
+	prefix := key + ":"
+	for _, c := range conditions {
+		if strings.HasPrefix(c, prefix) {
+			return strings.TrimPrefix(c, prefix)
+		}
+	}
+	return ""
 }

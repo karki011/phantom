@@ -437,6 +437,12 @@ func (a *App) wireComposerEngine() {
 		if vectorStore != nil {
 			comp.SetVectorStore(vectorStore)
 		}
+		// Wire LLM-powered pattern consolidation (graceful: nil key = skip).
+		if apiKey, ok := composer.GetAnthropicAPIKey(); ok {
+			comp.SetHaikuClient(knowledge.NewHaikuClient(apiKey))
+		} else if envKey := os.Getenv("ANTHROPIC_API_KEY"); envKey != "" {
+			comp.SetHaikuClient(knowledge.NewHaikuClient(envKey))
+		}
 		deps.Compactor = comp
 	} else {
 		log.Warn("app: composer engine — compactor init failed", "err", err)
@@ -456,9 +462,27 @@ func (a *App) wireComposerEngine() {
 
 	deps.GapDetector = strategies.NewGapDetector()
 
+	// Wire GlobalPatternStore for cross-project pattern awareness.
+	home, _ := os.UserHomeDir()
+	aiEngineDir := filepath.Join(home, branding.ConfigDirName, "ai-engine")
+	if gps, err := knowledge.NewGlobalPatternStore(aiEngineDir); err == nil {
+		deps.GlobalPatterns = gps
+		log.Info("app: global pattern store initialized")
+	} else {
+		log.Warn("app: global pattern store init failed (cross-project patterns disabled)", "err", err)
+	}
+
 	a.Composer.SetEngineDeps(deps)
 	a.Composer.SetIndexerResolver(a.resolveIndexerForCwd)
-	log.Info("app: composer engine wired")
+
+	// Wire session memory builder so new sessions get orientation from
+	// knowledge stores. The Indexer is resolved per-turn via indexerResolver,
+	// so we leave it nil here.
+	a.Composer.SetMemoryBuilder(&composer.SessionMemoryBuilder{
+		Decisions:      deps.Decisions,
+		GlobalPatterns: deps.GlobalPatterns,
+	})
+	log.Info("app: composer engine wired (session memory enabled)")
 }
 
 // resolveIndexerForCwd maps a turn's CWD to the file-graph indexer of the

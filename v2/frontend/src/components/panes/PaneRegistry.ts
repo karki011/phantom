@@ -19,6 +19,7 @@ const registry: Partial<Record<PaneType, Component<any>>> = {
   chat: lazy(() => import('./ChatRedirect')),
   composer: lazy(() => import('./ComposerPane')),
   'markdown-preview': lazy(() => import('./MarkdownPreviewPane')),
+  playground: lazy(() => import('./PlaygroundPane')),
 };
 
 export function getPaneComponent(kind: string): Component<any> | undefined {

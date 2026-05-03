@@ -1,0 +1,886 @@
+<!-- Author: Subash Karki -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phantom Composer vs Claude Code CLI — Honest Comparison</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #0f1419;
+            color: #e0e6ed;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        h1 {
+            font-size: 2.2em;
+            margin-bottom: 10px;
+            color: #60a5fa;
+            text-align: center;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #94a3b8;
+            margin-bottom: 40px;
+            font-size: 0.95em;
+        }
+        
+        .executive-summary {
+            background: #1a2332;
+            border-left: 4px solid #60a5fa;
+            padding: 20px;
+            margin-bottom: 40px;
+            border-radius: 6px;
+        }
+        
+        .executive-summary h2 {
+            color: #60a5fa;
+            margin-bottom: 12px;
+            font-size: 1.1em;
+        }
+        
+        .executive-summary p {
+            margin-bottom: 8px;
+            color: #cbd5e1;
+        }
+        
+        .section {
+            margin-bottom: 50px;
+        }
+        
+        .section h2 {
+            color: #60a5fa;
+            margin-bottom: 20px;
+            font-size: 1.4em;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #334155;
+        }
+        
+        .section h3 {
+            color: #94a3b8;
+            margin-top: 20px;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+        
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #0f1419;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        .comparison-table th {
+            background: #1a2332;
+            color: #60a5fa;
+            padding: 14px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #334155;
+        }
+        
+        .comparison-table td {
+            padding: 14px;
+            border-bottom: 1px solid #334155;
+        }
+        
+        .comparison-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .category-col {
+            width: 25%;
+            color: #60a5fa;
+            font-weight: 500;
+        }
+        
+        .score {
+            text-align: center;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        
+        .score-5 { background: #064e3b; color: #10b981; }
+        .score-4 { background: #1e3a3a; color: #34d399; }
+        .score-3 { background: #332900; color: #fbbf24; }
+        .score-2 { background: #3a1a2a; color: #f87171; }
+        .score-1 { background: #3f0f0f; color: #ff6b6b; }
+        
+        .notes {
+            color: #cbd5e1;
+            font-size: 0.9em;
+        }
+        
+        .feature-matrix {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .feature-card {
+            background: #1a2332;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 15px;
+        }
+        
+        .feature-card h4 {
+            color: #60a5fa;
+            margin-bottom: 10px;
+            font-size: 1em;
+        }
+        
+        .feature-list {
+            list-style: none;
+        }
+        
+        .feature-list li {
+            padding: 6px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .feature-list li:before {
+            content: attr(data-symbol);
+            font-weight: bold;
+            width: 20px;
+        }
+        
+        .yes { color: #10b981; }
+        .no { color: #ef4444; }
+        .partial { color: #f59e0b; }
+        
+        .comparison-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .comparison-box {
+            background: #1a2332;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 20px;
+        }
+        
+        .comparison-box h3 {
+            margin-top: 0;
+            color: #60a5fa;
+        }
+        
+        .comparison-box ul {
+            list-style: none;
+            margin-top: 12px;
+        }
+        
+        .comparison-box li {
+            padding: 8px 0;
+            padding-left: 20px;
+            position: relative;
+            color: #cbd5e1;
+        }
+        
+        .comparison-box li:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #60a5fa;
+        }
+        
+        .gap-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .gap-item {
+            background: #1a2332;
+            border-left: 3px solid #f59e0b;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        
+        .gap-item h4 {
+            color: #60a5fa;
+            margin-bottom: 8px;
+        }
+        
+        .gap-item .effort {
+            display: inline-block;
+            background: #334155;
+            color: #60a5fa;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            margin-left: 10px;
+        }
+        
+        .gap-item .impact {
+            color: #cbd5e1;
+            font-size: 0.9em;
+            margin-top: 8px;
+        }
+        
+        .effort-s { background: #064e3b; color: #10b981; }
+        .effort-m { background: #332900; color: #fbbf24; }
+        .effort-l { background: #3f0f0f; color: #ff6b6b; }
+        
+        .architecture {
+            background: #1a2332;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 20px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+            margin-bottom: 20px;
+        }
+        
+        .architecture pre {
+            margin: 0;
+            color: #94a3b8;
+            line-height: 1.4;
+        }
+        
+        .code-snippet {
+            background: #0f1419;
+            border: 1px solid #334155;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 10px 0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.85em;
+            overflow-x: auto;
+            color: #e0e6ed;
+        }
+        
+        .timestamp {
+            color: #64748b;
+            font-size: 0.85em;
+            text-align: right;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #334155;
+        }
+        
+        .highlight-composer {
+            background: rgba(96, 165, 250, 0.1);
+            border-left: 3px solid #60a5fa;
+            padding-left: 10px;
+        }
+        
+        .highlight-cli {
+            background: rgba(34, 197, 94, 0.1);
+            border-left: 3px solid #22c55e;
+            padding-left: 10px;
+        }
+        
+        @media (max-width: 900px) {
+            .comparison-section {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Phantom Composer vs Claude Code CLI</h1>
+        <p class="subtitle">Honest Feature & UX Comparison — May 2026</p>
+        
+        <div class="executive-summary">
+            <h2>Executive Summary</h2>
+            <p><strong>Composer</strong> is a rich, stateful GUI for agentic coding within Phantom OS—it owns the full feedback loop (edits, acceptance, metrics, memory). It excels at visual diff inspection and decision persistence but is locked into the Phantom app window.</p>
+            <p><strong>Claude Code CLI</strong> is a pure terminal interface—lightweight, scriptable, and available anywhere. It's the engine Composer delegates to, but lacks visual richness and long-term session state beyond CLI-level memory.</p>
+            <p><strong>Verdict:</strong> Composer is feature-richer for iterative development; CLI is faster for quick tasks and integrates into any editor. They serve different workflows—Composer for deep work, CLI for speed and portability.</p>
+        </div>
+        
+        <div class="section">
+            <h2>1. Category Scores (1-5 Scale)</h2>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th style="text-align: center; width: 15%;">Composer</th>
+                        <th style="text-align: center; width: 15%;">CLI</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="category-col">Prompt Input & @mentions</td>
+                        <td><span class="score score-5">5</span></td>
+                        <td><span class="score score-3">3</span></td>
+                        <td class="notes">Composer: Inline @file, @symbol, model picker, effort selector. CLI: stdin only, limited context hints.</td>
+                    </tr>
+                    <tr>
+                        <td class="category-col">Streaming & Real-time</td>
+                        <td><span class="score score-5">5</span></td>
+                        <td><span class="score score-4">4</span></td>
+                        <td class="notes">Composer: Full event stream, thinking blocks, tool renders. CLI: Text deltas only, no thinking display.</td>
+                    </tr>
+                    <tr>
+                        <td class="category-col">Tool Call Rendering</td>
+                        <td><span class="score score-4">4</span></td>
+                        <td><span class="score score-2">2</span></td>
+                        <td class="notes">Composer: Collapsible tool cards with icons. CLI: Raw JSON in stdout, hard to parse visually.</td>
+                    </tr>
+                    <tr>
+                        <td class="category-col">Edit Management</td>
+                        <td><span class="score score-5">5</span></td>
+                        <td><span class="score score-1">1</span></td>
+                        <td class="notes">Composer: Monaco diff view, accept/reject, git auto-rollback. CLI: Edits happen live, no undo UI.</td>
+                    </tr>
+                    <tr>
+                        <td class="category-col">Code Display & Syntax</td>
+                        <td><span class="score score-5">5</span></td>
+                        <td><span class="score score-2">2</span></td>
+                        <td class="notes">Composer: Monaco with syntax highlight, copy buttons. CLI: ANSI codes only.</td>
+                    </tr>
+                    <tr>
+                        <td class="category-col">AI Engine & Strategy</td>
+                        <td><span class="score score-5">5</span></td>
+                        <td><span class="score score-1">1</span></td>
+                        <td class="notes">Composer: Blast radius, risk scoring, decision recording, orchestrator. CLI: No strategy layer.</td>
+                    </tr>
+                    <tr>
+                        <td class="category-col">Session & History</td>
+                        <td><span class="score score-5">5</span></td>
+                        <td><span class="score score-3">3</span></td>
+                        <td class="notes">Composer: Pokémon naming, resume across panes, 50-session sidebar. CLI: --resume flag, no sidebar.</td>
+                    </tr>
+                    <tr>
+                        <td class="category-col">Context & Memory</td>
+                        <td><span class="score score-4">4</span></td>
+                        <td><span class="score score-3">3</span></td>
+                        <td class="notes">Composer: CLAUDE.md + memory panel UI. CLI: CLAUDE.md only, no visual memory browser.</td>
+                    </tr>
+                    <tr>
+                        <td class="category-col">File Interaction</td>
+                        <td><span class="score score-4">4</span></td>
+                        <td><span class="score score-1">1</span></td>
+                        <td class="notes">Composer: Clickable paths, preview popover. CLI: Path in stdout, no clickable links.</td>
+                    </tr>
+                    <tr>
+                        <td class="category-col">Conflict Detection</td>
+                        <td><span class="score score-4">4</span></td>
+                        <td><span class="score score-1">1</span></td>
+                        <td class="notes">Composer: ConflictTracker wired to detect multi-session edits. CLI: No multi-session awareness.</td>
+                    </tr>
+                    <tr>
+                        <td class="category-col">Verification & Testing</td>
+                        <td><span class="score score-2">2</span></td>
+                        <td><span class="score score-2">2</span></td>
+                        <td class="notes">Neither auto-runs post-edit tests. Composer hooks can wire it; CLI relies on manual steps.</td>
+                    </tr>
+                    <tr>
+                        <td class="category-col">Gamification</td>
+                        <td><span class="score score-3">3</span></td>
+                        <td><span class="score score-1">1</span></td>
+                        <td class="notes">Composer: XP, quests, achievements wired. CLI: No gamification layer.</td>
+                    </tr>
+                    <tr>
+                        <td class="category-col">Accessibility</td>
+                        <td><span class="score score-2">2</span></td>
+                        <td><span class="score score-3">3</span></td>
+                        <td class="notes">Composer: Some ARIA but complex React state. CLI: Terminal-native, better for screen readers.</td>
+                    </tr>
+                    <tr>
+                        <td class="category-col">Performance & Caching</td>
+                        <td><span class="score score-4">4</span></td>
+                        <td><span class="score score-3">3</span></td>
+                        <td class="notes">Composer: Prompt cache warm via CLI flags. CLI: No Phantom-level caching orchestration.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h2>2. Feature Matrix</h2>
+            <div class="feature-matrix">
+                <div class="feature-card">
+                    <h4>Composer Capabilities</h4>
+                    <ul class="feature-list">
+                        <li data-symbol="✓" class="yes">@file, @symbol mentions</li>
+                        <li data-symbol="✓" class="yes">File attach & paste</li>
+                        <li data-symbol="✓" class="yes">Model selector UI</li>
+                        <li data-symbol="✓" class="yes">Effort & risk sliders</li>
+                        <li data-symbol="✓" class="yes">Slash commands (/foo)</li>
+                        <li data-symbol="✓" class="yes">Streaming thinking blocks</li>
+                        <li data-symbol="✓" class="yes">Tool card rendering</li>
+                        <li data-symbol="✓" class="yes">Monaco inline diff</li>
+                        <li data-symbol="✓" class="yes">Accept/reject workflow</li>
+                        <li data-symbol="✓" class="yes">Git auto-rollback</li>
+                        <li data-symbol="✓" class="yes">Syntax highlighting</li>
+                        <li data-symbol="✓" class="yes">Copy code button</li>
+                        <li data-symbol="✓" class="yes">Strategy chip display</li>
+                        <li data-symbol="✓" class="yes">Blast radius scores</li>
+                        <li data-symbol="✓" class="yes">Decision recording</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>Composer Limitations</h4>
+                    <ul class="feature-list">
+                        <li data-symbol="✗" class="no">No image paste in prompt</li>
+                        <li data-symbol="✗" class="no">Single pane bound to Phantom</li>
+                        <li data-symbol="✗" class="no">No post-edit type checking</li>
+                        <li data-symbol="✗" class="no">No auto-run tests</li>
+                        <li data-symbol="✗" class="no">Conflict detection half-wired</li>
+                        <li data-symbol="✗" class="no">Memory panel view-only</li>
+                        <li data-symbol="◐" class="partial">Skills browser exists, limited curation</li>
+                        <li data-symbol="◐" class="partial">Accessibility: basic ARIA only</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>Claude Code CLI Capabilities</h4>
+                    <ul class="feature-list">
+                        <li data-symbol="✓" class="yes">Runs in any terminal</li>
+                        <li data-symbol="✓" class="yes">Scriptable stdin/stdout</li>
+                        <li data-symbol="✓" class="yes">Session resume (--resume)</li>
+                        <li data-symbol="✓" class="yes">Streaming output</li>
+                        <li data-symbol="✓" class="yes">Hook system (pre/post)</li>
+                        <li data-symbol="✓" class="yes">MCP tool support</li>
+                        <li data-symbol="✓" class="yes">CLAUDE.md reading</li>
+                        <li data-symbol="✓" class="yes">Effort/model flags</li>
+                        <li data-symbol="✓" class="yes">Slash command resolution</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>Claude Code CLI Limitations</h4>
+                    <ul class="feature-list">
+                        <li data-symbol="✗" class="no">No visual diff viewer</li>
+                        <li data-symbol="✗" class="no">No edit approval UI</li>
+                        <li data-symbol="✗" class="no">No syntax highlighting</li>
+                        <li data-symbol="✗" class="no">No thinking display</li>
+                        <li data-symbol="✗" class="no">No strategy layer</li>
+                        <li data-symbol="✗" class="no">No blast radius scoring</li>
+                        <li data-symbol="✗" class="no">No gamification</li>
+                        <li data-symbol="✗" class="no">Limited session sidebar (no UI)</li>
+                        <li data-symbol="✗" class="no">No file browser integration</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>3. What Composer Does BETTER</h2>
+            
+            <h3>Visual Edit Approval (Score: Composer 5 vs CLI 1)</h3>
+            <div class="highlight-composer">
+                <p><strong>Composer's diff card:</strong> Inline Monaco DiffEditor with syntax-highlighted side-by-side (or inline) diffs. User sees exactly what changed before accepting. Edit states tracked: pending → accepted → discarded (git rollback). Status badges show live decision status.</p>
+                <p><strong>Code location:</strong> <code>ComposerDiffCard.tsx</code> line 15–100</p>
+                <p><strong>CLI equivalent:</strong> None. Edits happen live. User must manually inspect files or use <code>git diff</code>.</p>
+            </div>
+            
+            <h3>AI Strategy & Risk Scoring (Score: Composer 5 vs CLI 1)</h3>
+            <div class="highlight-composer">
+                <p><strong>Composer:</strong> Routes prompts through Phantom's orchestrator before sending to Claude. Returns strategy name, confidence, task complexity, risk level, and blast radius. These render as a collapsible "strategy chip" in the turn. User sees: "Refactor (92% confidence, Risk: Medium, 3 files affected)".</p>
+                <p><strong>Code location:</strong> <code>service.go</code> lines 265–310, orchestrator integration.</p>
+                <p><strong>CLI equivalent:</strong> Zero. CLI is stateless, no strategy layer.</p>
+            </div>
+            
+            <h3>Session Resume & Memory (Score: Composer 5 vs CLI 3)</h3>
+            <div class="highlight-composer">
+                <p><strong>Composer:</strong> Allocates session ID per pane (Pokémon-style memorable names like "azure-dragon-1"). Resume works cross-pane if needed. Sidebar shows last 50 sessions with turn count, cost, CWD. User can resume any past session or start fresh.</p>
+                <p><strong>Memory panel:</strong> Displays loaded CLAUDE.md, rules, and context files. Shows total size. One click to close/manage.</p>
+                <p><strong>CLI equivalent:</strong> <code>claude --resume &lt;session-id&gt;</code> works but no UI. No session browser. CLAUDE.md loaded silently.</p>
+            </div>
+            
+            <h3>Interactive Context Discovery (Score: Composer 4 vs CLI 1)</h3>
+            <div class="highlight-composer">
+                <p><strong>Composer:</strong> Skills browser panel with search filter. Shows skill name, description, invoke button. Skill discovery from <code>.claude/skills/</code>.</p>
+                <p><strong>Memory context panel:</strong> Lists all loaded context by level (global, project, rule), file path, and size.</p>
+                <p><strong>CLI equivalent:</strong> No UI. User must manually list <code>.claude/skills/</code> or know the skill names.</p>
+            </div>
+            
+            <h3>Gamification & Metrics (Score: Composer 3 vs CLI 1)</h3>
+            <div class="highlight-composer">
+                <p><strong>Composer:</strong> Wired to gamification service. Shows XP, quests, achievements. Turn metrics include tokens, cost USD, latency. User sees real-time feedback on productivity.</p>
+                <p><strong>CLI equivalent:</strong> None.</p>
+            </div>
+            
+            <h3>Conflict Detection (Score: Composer 4 vs CLI 1)</h3>
+            <div class="highlight-composer">
+                <p><strong>Composer:</strong> ConflictTracker monitors edits across multiple panes/sessions. If two panes edit the same file, emits <code>composer:conflict</code> event. Prevents silent overwrites in multi-window workflows.</p>
+                <p><strong>Code location:</strong> <code>service.go</code> lines 143–155, <code>types.go</code> conflict detection.</p>
+                <p><strong>CLI equivalent:</strong> No awareness of other CLI instances.</p>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>4. What CLI Does BETTER</h2>
+            
+            <h3>Portability (Score: CLI 5 vs Composer 2)</h3>
+            <div class="highlight-cli">
+                <p><strong>CLI:</strong> Runs anywhere—Linux, macOS, Windows. SSH session, CI/CD pipeline, local terminal, tmux. No GUI dependency. Pure text interface.</p>
+                <p><strong>Composer equivalent:</strong> Locked to Phantom OS Wails app. Requires GUI. Not portable to remote servers.</p>
+            </div>
+            
+            <h3>Scriptability (Score: CLI 5 vs Composer 1)</h3>
+            <div class="highlight-cli">
+                <p><strong>CLI:</strong> Structured JSON input/output. Piping, shell integration, automation. Can chain multiple invocations. Works in loops, conditionals, automation frameworks.</p>
+                <div class="code-snippet">claude --input-format stream-json --output-format stream-json < prompt.json | jq '.events[] | select(.type=="tool_use")'</div>
+                <p><strong>Composer equivalent:</strong> GUI-only. No programmatic API for batch operations.</p>
+            </div>
+            
+            <h3>Speed (Score: CLI 4 vs Composer 3)</h3>
+            <div class="highlight-cli">
+                <p><strong>CLI:</strong> Lightweight startup, no GUI overhead. Streaming to terminal is faster than rendering in Phantom's Wails event loop.</p>
+                <p><strong>Composer:</strong> Adds Wails IPC, event emission, Solid signal updates, Monaco rendering. Slower perceived latency.</p>
+            </div>
+            
+            <h3>Hook Integration (Score: CLI 4 vs Composer 2)</h3>
+            <div class="highlight-cli">
+                <p><strong>CLI:</strong> Pre-edit, post-edit, post-tool hooks available. Can wire custom logic for every step.</p>
+                <p><strong>Composer equivalent:</strong> No documented hook system. Composer emits events, but no user-level pre/post hooks.</p>
+            </div>
+            
+            <h3>Native Terminal Features (Score: CLI 4 vs Composer 1)</h3>
+            <div class="highlight-cli">
+                <p><strong>CLI:</strong> Terminal history, readline editing, environment variables, shell completion, ANSI colors, less paging.</p>
+                <p><strong>Composer:</strong> None of the above. Isolated text input box.</p>
+            </div>
+            
+            <h3>Accessibility (Score: CLI 3 vs Composer 2)</h3>
+            <div class="highlight-cli">
+                <p><strong>CLI:</strong> Works with screen readers out-of-the-box. POSIX terminal standard. No JavaScript rendering complexity.</p>
+                <p><strong>Composer:</strong> Solid.js + Monaco + complex event system. ARIA support is minimal. Harder for assistive tech.</p>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>5. Gap Priority List (Ranked by Impact, Estimated Effort)</h2>
+            <div class="gap-list">
+                <div class="gap-item">
+                    <h4>Composer: Post-edit Type Checking & Test Runner</h4>
+                    <p>Currently zero automation after edits are accepted. No <code>npm run type-check</code> or <code>npm test</code> feedback loop.</p>
+                    <p class="impact">Impact: High. User must manually verify edits work. Slows iteration.</p>
+                    <span class="effort effort-l">Large (L)</span>
+                </div>
+                
+                <div class="gap-item">
+                    <h4>Composer: Edit Undo History</h4>
+                    <p>Currently: pending → accepted → discarded (git rollback). No undo stack for multi-edit sequences within a turn.</p>
+                    <p class="impact">Impact: Medium. Users doing iterative refinement lose granularity.</p>
+                    <span class="effort effort-m">Medium (M)</span>
+                </div>
+                
+                <div class="gap-item">
+                    <h4>Composer: Image Paste in Prompt</h4>
+                    <p>File attach works; image paste (Cmd+V) does not. CLI supports images via --input-format stream-json.</p>
+                    <p class="impact">Impact: Medium. Screenshots for bug reports require extra steps.</p>
+                    <span class="effort effort-m">Medium (M)</span>
+                </div>
+                
+                <div class="gap-item">
+                    <h4>CLI: Visual Diff Viewer (TUI)</h4>
+                    <p>Add a TUI diff pager (like <code>delta</code> + tree-sitter syntax highlight) to make edits readable without Monaco.</p>
+                    <p class="impact">Impact: Medium. Would make CLI more usable for edit-heavy tasks.</p>
+                    <span class="effort effort-m">Medium (M)</span>
+                </div>
+                
+                <div class="gap-item">
+                    <h4>CLI: Strategy & Orchestrator Integration</h4>
+                    <p>Pipe prompts through Phantom's orchestrator if available. Return risk/complexity scores in --output-format stream-json.</p>
+                    <p class="impact">Impact: High. Brings Composer's intelligence layer to the terminal.</p>
+                    <span class="effort effort-l">Large (L)</span>
+                </div>
+                
+                <div class="gap-item">
+                    <h4>Composer: Conflict Detection UI Polish</h4>
+                    <p>ConflictTracker is wired but UI is minimal. Show real-time conflict warnings with merge strategy options.</p>
+                    <p class="impact">Impact: Medium. Multi-pane workflows need better feedback.</p>
+                    <span class="effort effort-m">Medium (M)</span>
+                </div>
+                
+                <div class="gap-item">
+                    <h4>CLI: Session Sidebar (Terminal UI)</h4>
+                    <p>Add <code>claude --ui</code> mode with a TUI sidebar showing last 50 sessions, turn count, cost. Allow resume from sidebar.</p>
+                    <p class="impact">Impact: Low-Medium. Nice-to-have for CLI power users.</p>
+                    <span class="effort effort-l">Large (L)</span>
+                </div>
+                
+                <div class="gap-item">
+                    <h4>Composer: Accessibility Audit & ARIA Labels</h4>
+                    <p>Full keyboard navigation, screen reader support for all panels, semantic HTML. Currently minimal.</p>
+                    <p class="impact">Impact: Medium. Unlocks Composer for accessible use.</p>
+                    <span class="effort effort-m">Medium (M)</span>
+                </div>
+                
+                <div class="gap-item">
+                    <h4>Composer: Bash/Terminal Integration in Prompt</h4>
+                    <p>Allow inline shell commands in prompts (e.g., <code>@bash npm test</code>). CLI can do this natively.</p>
+                    <p class="impact">Impact: Low. CLI handles this; Composer rarely needs it.</p>
+                    <span class="effort effort-m">Medium (M)</span>
+                </div>
+                
+                <div class="gap-item">
+                    <h4>Both: Outcome Recording (Decision Store)</h4>
+                    <p>Currently Composer records decisions in DecisionStore, but neither system fully captures user satisfaction/quality feedback for long-term learning.</p>
+                    <p class="impact">Impact: Medium. Needed for SONA learning and pattern extraction.</p>
+                    <span class="effort effort-m">Medium (M)</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>6. Architecture Comparison</h2>
+            <div class="architecture">
+                <pre>
+COMPOSER DATAFLOW:
+┌─────────────────────────────────────────────────────────────┐
+│ Phantom OS (Wails + Solid.js)                               │
+│                                                              │
+│  ┌──────────────────────┐                                   │
+│  │  ComposerPane (UI)   │◄──── Wails JSON-RPC bindings ────┐│
+│  │  - Edit cards        │                                   ││
+│  │  - Skill browser     │                                   ││
+│  │  - Memory panel      │                                   ││
+│  │  - Strategy chip     │                                   ││
+│  └──────────────────────┘                                   ││
+│           ▲                                                  ││
+│           │ EventsEmit                                      ││
+│           │                                                  ││
+│    ┌──────▼──────┐                                          ││
+│    │   Composer  │                                          ││
+│    │   Service   │◄──── Phantom AI Engine (Orchestrator)    ││
+│    │   (Go)      │      - Strategy selection                ││
+│    │             │      - Blast radius                      ││
+│    │             │      - Decision store                    ││
+│    └──────┬──────┘      - Conflict tracker                  ││
+│           │                                                  ││
+│           │ spawn claude CLI process                        ││
+│           ▼                                                  ││
+│    ┌─────────────────┐                                      ││
+│    │  claude binary  │◄────────── Input: Structured JSON   ││
+│    │  (--session-id) │────────────► Output: Stream JSON    ││
+│    └─────────────────┘                                      ││
+│           │                                                  ││
+└───────────┼──────────────────────────────────────────────────┘
+            │ Streaming events
+            │ (message_start, content_block_delta, tool_use, ...)
+            │
+            ▼ Parse & emit back to UI
+
+CLI DATAFLOW:
+┌────────────────────────────────────┐
+│ User Terminal                      │
+│                                    │
+│ $ claude --resume <session-id>    │
+│          --input-format stream-json│
+│          --output-format stream-json
+└────────┬─────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────┐
+│ Claude CLI (Anthropic)             │
+│                                    │
+│ - Parse flags                      │
+│ - Read CLAUDE.md + skills          │
+│ - Connect to Claude API            │
+│ - Stream events to stdout          │
+│                                    │
+│ (No strategy layer)                │
+│ (No conflict tracking)             │
+│ (No decision store)                │
+└────────┬─────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────┐
+│ Terminal Output (ANSI + JSON)      │
+│                                    │
+│ Streamed to user, captured in     │
+│ shell history / scripts            │
+└────────────────────────────────────┘
+
+KEY DIFFERENCE:
+- Composer: Stateful orchestrator (Phantom) + stateless CLI (Claude)
+- CLI: Pure stateless, all state in shell/script context
+        </pre>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>7. Direct Feature Comparisons</h2>
+            <div class="comparison-section">
+                <div class="comparison-box">
+                    <h3>Composer: Prompt Input</h3>
+                    <ul>
+                        <li>@file/@symbol inline autocomplete</li>
+                        <li>File drag-and-drop attach</li>
+                        <li>Dropdown model selector (Haiku/Sonnet/Opus)</li>
+                        <li>Effort slider (quick/standard/thorough)</li>
+                        <li>Slash command resolver (/foo)</li>
+                        <li>Markdown formatting toolbar</li>
+                        <li>Focus management & keyboard nav (partial)</li>
+                    </ul>
+                </div>
+                <div class="comparison-box">
+                    <h3>CLI: Prompt Input</h3>
+                    <ul>
+                        <li>stdin only (no GUI completion)</li>
+                        <li>No file picker (use flags instead)</li>
+                        <li>--model flag (Haiku/Sonnet/Opus)</li>
+                        <li>--effort flag (quick/standard/thorough)</li>
+                        <li>Slash command resolution (built-in)</li>
+                        <li>No formatting toolbar (raw markdown)</li>
+                        <li>Full readline/shell keybindings</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="comparison-section">
+                <div class="comparison-box">
+                    <h3>Composer: Edit Workflow</h3>
+                    <ul>
+                        <li>Monaco DiffEditor inline (default)</li>
+                        <li>Side-by-side mode (toggle)</li>
+                        <li>Accept button (keeps file, clears card)</li>
+                        <li>Discard button (git checkout --, reverts)</li>
+                        <li>Status: pending/accepted/discarded</li>
+                        <li>Auto-accept mode (skip user approval)</li>
+                        <li>Collapse after decision</li>
+                    </ul>
+                </div>
+                <div class="comparison-box">
+                    <h3>CLI: Edit Workflow</h3>
+                    <ul>
+                        <li>Files written directly (no preview)</li>
+                        <li>No diff viewer in CLI output</li>
+                        <li>No accept/reject UI</li>
+                        <li>All edits permanent immediately</li>
+                        <li>User must use git to undo</li>
+                        <li>No auto-accept concept</li>
+                        <li>No state tracking for edits</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="comparison-section">
+                <div class="comparison-box">
+                    <h3>Composer: Tool Rendering</h3>
+                    <ul>
+                        <li>Tool name with icon (Lucide icons)</li>
+                        <li>Input params collapsible</li>
+                        <li>Status indicator (pending/running/done)</li>
+                        <li>Result preview if available</li>
+                        <li>Token count & cost inline</li>
+                        <li>Color-coded by tool type</li>
+                        <li>Searchable tool history (turn-based)</li>
+                    </ul>
+                </div>
+                <div class="comparison-box">
+                    <h3>CLI: Tool Rendering</h3>
+                    <ul>
+                        <li>Raw JSON objects in stdout</li>
+                        <li>Tool name + params only</li>
+                        <li>No status indicators</li>
+                        <li>Result as text or JSON block</li>
+                        <li>Token count in message_delta</li>
+                        <li>No colors (unless user pipes to jq colorize)</li>
+                        <li>History in shell history only</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>8. Real-World Scenarios</h2>
+            
+            <h3>Scenario: Bug in Production (Which is Better?)</h3>
+            <p><strong>Composer edge:</strong> Diff review before accepting fix. Strategy chip shows risk assessment. If conflict detected across panes, warns before overwriting.</p>
+            <p><strong>CLI edge:</strong> Can automate across 10 repos in a loop. Faster response time. Post-hook can run tests immediately.</p>
+            
+            <h3>Scenario: Deep Refactoring Session (30+ edits)</h3>
+            <p><strong>Composer:</strong> Each edit gets an individual card, user reviews + accepts. Slower but safer. Memory of decision chain. Strategy guidance per turn.</p>
+            <p><strong>CLI:</strong> Faster, but no per-edit review. User must manually verify. Better for experts who trust the agent.</p>
+            
+            <h3>Scenario: Remote Server Coding (SSH)</h3>
+            <p><strong>Composer:</strong> Not possible. GUI over SSH is painful.</p>
+            <p><strong>CLI:</strong> Perfect. Pure terminal. Works over slow connections.</p>
+            
+            <h3>Scenario: Integration into CI/CD</h3>
+            <p><strong>Composer:</strong> Not possible. GUI-only.</p>
+            <p><strong>CLI:</strong> Ideal. Pipe into test runner, gate PR merge on outcome.</p>
+        </div>
+        
+        <div class="section">
+            <h2>9. Honest Assessment: Completeness</h2>
+            
+            <h3>Composer: 60% Complete</h3>
+            <ul style="list-style: none; margin-top: 12px;">
+                <li style="padding: 6px 0;">✓ Core agentic loop (prompt → code → edit review)</li>
+                <li style="padding: 6px 0;">✓ Visual diff + acceptance</li>
+                <li style="padding: 6px 0;">✓ Session resume & naming</li>
+                <li style="padding: 6px 0;">✓ Strategy & risk scoring</li>
+                <li style="padding: 6px 0;">✓ Skills & memory discovery</li>
+                <li style="padding: 6px 0;">✗ Post-edit verification (type check, test runner)</li>
+                <li style="padding: 6px 0;">✗ Conflict resolution UI</li>
+                <li style="padding: 6px 0;">✗ Image paste in prompt</li>
+                <li style="padding: 6px 0;">◐ Accessibility (basic but incomplete)</li>
+            </ul>
+            
+            <h3>CLI: 75% Complete</h3>
+            <ul style="list-style: none; margin-top: 12px;">
+                <li style="padding: 6px 0;">✓ Lightweight, portable, scriptable</li>
+                <li style="padding: 6px 0;">✓ Session resume</li>
+                <li style="padding: 6px 0;">✓ Hook system</li>
+                <li style="padding: 6px 0;">✓ MCP tool support</li>
+                <li style="padding: 6px 0;">✓ CLAUDE.md + skills</li>
+                <li style="padding: 6px 0;">✗ No visual diff</li>
+                <li style="padding: 6px 0;">✗ No strategy layer</li>
+                <li style="padding: 6px 0;">✓ Full terminal integration</li>
+                <li style="padding: 6px 0;">◐ Accessible (terminal native but limited UI feedback)</li>
+            </ul>
+        </div>
+        
+        <div class="section">
+            <h2>10. Recommendations</h2>
+            
+            <h3>If You Work on Phantom OS Full-Time</h3>
+            <p>Use Composer for iterative feature work (new endpoints, components, migrations). Use CLI for quick fixes and script automation. Combine both: CLI for fast exploration, Composer for careful integration.</p>
+            
+            <h3>If You Spend Time in the Terminal</h3>
+            <p>CLI is your natural home. Add a post-edit hook that runs <code>npm test</code>. If you need visual diffs, pipe to <code>delta</code> or use Composer for critical refactors only.</p>
+            
+            <h3>If You're on a Remote Server</h3>
+            <p>CLI only. No option.</p>
+            
+            <h3>If You Want Maximum Productivity</h3>
+            <p>Composer. The strategy layer + conflict detection + visual review reduces mistakes. Trade off speed for confidence.</p>
+            
+            <h3>For the Product Team</h3>
+            <p>Composer needs post-edit verification (auto-test, type check). CLI needs a TUI diff viewer. Both benefit from unified outcome recording for learning loops.</p>
+        </div>
+        
+        <div class="timestamp">
+            Generated: 2026-05-03 | Phantom OS v2 | Claude Code v2.1.126<br>
+            Author: Subash Karki | Role: Development Assessment
+        </div>
+    </div>
+</body>
+</html>
