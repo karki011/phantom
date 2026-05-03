@@ -437,7 +437,10 @@ export default function ComposerPane(props: ComposerPaneProps) {
     void refreshSessions();
 
     // Load slash commands for autocomplete.
-    composerListCommands(cwd()).then(setCommands);
+    composerListCommands(cwd()).then((cmds) => {
+      console.log('[Composer] loaded commands:', cmds.length, cmds.filter(c => c.name.startsWith('team')).map(c => c.name));
+      setCommands(cmds);
+    });
 
     // If this pane was opened with a sessionId from the sidebar, bind it
     // BEFORE the rehydration query so the next Send resumes correctly,
