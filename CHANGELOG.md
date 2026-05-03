@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.22](https://github.com/karki011/phantom/compare/v0.1.21...v0.1.22) (2026-05-03)
+
+
+### Features
+
+* **docs:** update README and ai-engine docs with v0.1.22 features ([#79](https://github.com/karki011/phantom/issues/79)) ([a2eb54f](https://github.com/karki011/phantom/commit/a2eb54fdc0747a3e3ece5fe5399b7d43a26c2574))
+
 ## [0.1.21](https://github.com/karki011/phantom/compare/v0.1.20...v0.1.21) (2026-05-03)
 
 
