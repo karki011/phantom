@@ -593,6 +593,10 @@ func (s *Service) ResumeSession(paneID, sessionID string) {
 	s.sessions[paneID] = sessionID
 	s.sessionStarted[paneID] = true
 	s.mu.Unlock()
+
+	// Clear the interrupted badge so the sidebar no longer highlights this
+	// session as crashed — the user has explicitly resumed it.
+	s.ClearInterruptedFlag(context.Background(), sessionID)
 }
 
 // DeleteSession hard-deletes every turn + edit for the given session_id and

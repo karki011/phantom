@@ -132,10 +132,10 @@ export const editBtn = style({
   background: 'transparent',
   border: `1px solid ${vars.color.border}`,
   color: vars.color.textSecondary,
-  padding: '3px 10px',
+  padding: '5px 12px',
   borderRadius: vars.radius.sm,
   cursor: 'pointer',
-  fontSize: vars.fontSize.xs,
+  fontSize: vars.fontSize.sm,
   fontWeight: 500,
   transition: `all 150ms ease`,
   ':hover': {
@@ -276,9 +276,9 @@ export const composerToolbar = style({
   display: 'flex',
   alignItems: 'center',
   gap: vars.space.md,
-  fontSize: vars.fontSize.xs,
+  fontSize: vars.fontSize.sm,
   color: vars.color.textSecondary,
-  paddingTop: vars.space.xs,
+  paddingTop: vars.space.sm,
 });
 
 export const grow = style({ flex: 1 });
@@ -288,12 +288,12 @@ export const modelSelectTrigger = style({
   display: 'inline-flex',
   alignItems: 'center',
   gap: vars.space.xs,
-  padding: `3px ${vars.space.md}`,
+  padding: `5px ${vars.space.md}`,
   borderRadius: vars.radius.sm,
   border: `1px solid ${vars.color.border}`,
   background: vars.color.bgTertiary,
   color: vars.color.textPrimary,
-  fontSize: vars.fontSize.xs,
+  fontSize: vars.fontSize.sm,
   fontFamily: vars.font.mono,
   cursor: 'pointer',
   transition: `border-color ${vars.animation.fast} ease`,
@@ -307,7 +307,7 @@ export const modelSelectTrigger = style({
 
 export const modelSelectValue = style({
   fontFamily: vars.font.mono,
-  fontSize: vars.fontSize.xs,
+  fontSize: vars.fontSize.sm,
   color: vars.color.textPrimary,
 });
 
@@ -484,8 +484,8 @@ export const contextPill = style({
   border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.full,
   color: vars.color.textSecondary,
-  padding: `2px ${vars.space.sm}`,
-  fontSize: vars.fontSize.xs,
+  padding: `4px ${vars.space.md}`,
+  fontSize: vars.fontSize.sm,
   cursor: 'pointer',
   ':hover': {
     color: vars.color.textPrimary,
@@ -895,6 +895,41 @@ export const sidebarRowDelete = style({
   },
 });
 
+// Small amber badge shown next to sessions that were interrupted by a crash.
+export const sidebarInterruptedBadge = style({
+  flex: '0 0 auto',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 3,
+  padding: '1px 5px',
+  borderRadius: vars.radius.sm,
+  background: vars.color.warningMuted,
+  color: vars.color.warning,
+  fontSize: '9px',
+  fontWeight: 600,
+  lineHeight: '14px',
+  whiteSpace: 'nowrap',
+});
+
+// Banner shown at the top of the sidebar when interrupted sessions exist.
+export const sidebarInterruptedBanner = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `4px ${vars.space.sm}`,
+  margin: `0 ${vars.space.xs} ${vars.space.xs}`,
+  borderRadius: vars.radius.sm,
+  background: vars.color.warningMuted,
+  color: vars.color.warning,
+  fontSize: vars.fontSize.xs,
+  fontWeight: 500,
+  cursor: 'pointer',
+  transition: `background ${vars.animation.fast} ease`,
+  ':hover': {
+    background: `color-mix(in srgb, ${vars.color.warning} 20%, transparent)`,
+  },
+});
+
 export const sidebarEmpty = style({
   margin: 'auto',
   padding: vars.space.lg,
@@ -1245,4 +1280,11 @@ export const searchClose = style({
     color: vars.color.textPrimary,
     background: vars.color.bgHover,
   },
+});
+
+globalStyle('mark.search-hit', {
+  background: `color-mix(in srgb, ${vars.color.accent} 40%, transparent)`,
+  color: 'inherit',
+  borderRadius: '2px',
+  padding: '0 1px',
 });

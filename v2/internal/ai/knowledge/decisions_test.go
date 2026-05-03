@@ -550,6 +550,206 @@ func TestFindSimilar_PrefersRecent(t *testing.T) {
 	}
 }
 
+// --- Outcome decay tests ---
+
+func TestOutcomeDecayWeight_Zero(t *testing.T) {
+	dc := DefaultDecayConfig()
+	// At age 0, weight should be 1.0 regardless of success/failure.
+	if w := dc.outcomeDecayWeight(0, true); math.Abs(w-1.0) > 0.001 {
+		t.Errorf("success age=0: weight=%.4f, want 1.0", w)
+	}
+	if w := dc.outcomeDecayWeight(0, false); math.Abs(w-1.0) > 0.001 {
+		t.Errorf("failure age=0: weight=%.4f, want 1.0", w)
+	}
+}
+
+func TestOutcomeDecayWeight_HalfLife(t *testing.T) {
+	dc := DefaultDecayConfig()
+	// At exactly one half-life, weight should be ~0.5.
+	if w := dc.outcomeDecayWeight(30.0, true); math.Abs(w-0.5) > 0.01 {
+		t.Errorf("success at 30d (1 half-life): weight=%.4f, want ~0.5", w)
+	}
+	if w := dc.outcomeDecayWeight(90.0, false); math.Abs(w-0.5) > 0.01 {
+		t.Errorf("failure at 90d (1 half-life): weight=%.4f, want ~0.5", w)
+	}
+}
+
+func TestOutcomeDecayWeight_TwoHalfLives(t *testing.T) {
+	dc := DefaultDecayConfig()
+	// At two half-lives, weight should be ~0.25.
+	if w := dc.outcomeDecayWeight(60.0, true); math.Abs(w-0.25) > 0.02 {
+		t.Errorf("success at 60d (2 half-lives): weight=%.4f, want ~0.25", w)
+	}
+	if w := dc.outcomeDecayWeight(180.0, false); math.Abs(w-0.25) > 0.02 {
+		t.Errorf("failure at 180d (2 half-lives): weight=%.4f, want ~0.25", w)
+	}
+}
+
+func TestOutcomeDecayWeight_SuccessDecaysFaster(t *testing.T) {
+	dc := DefaultDecayConfig()
+	// At 60 days: success has had 2 half-lives (~0.25), failure only ~0.67 half-lives (~0.63).
+	ws := dc.outcomeDecayWeight(60.0, true)
+	wf := dc.outcomeDecayWeight(60.0, false)
+	if ws >= wf {
+		t.Errorf("success should decay faster: success=%.4f, failure=%.4f", ws, wf)
+	}
+}
+
+func TestOutcomeDecayWeight_NegativeAge(t *testing.T) {
+	dc := DefaultDecayConfig()
+	// Negative age is clamped to 0.
+	if w := dc.outcomeDecayWeight(-10.0, true); math.Abs(w-1.0) > 0.001 {
+		t.Errorf("negative age: weight=%.4f, want 1.0", w)
+	}
+}
+
+func TestOutcomeDecayWeight_CustomConfig(t *testing.T) {
+	dc := DecayConfig{SuccessHalfLifeDays: 7.0, FailureHalfLifeDays: 14.0}
+	// Success at 7 days should be ~0.5.
+	if w := dc.outcomeDecayWeight(7.0, true); math.Abs(w-0.5) > 0.01 {
+		t.Errorf("custom success at 7d: weight=%.4f, want ~0.5", w)
+	}
+	// Failure at 14 days should be ~0.5.
+	if w := dc.outcomeDecayWeight(14.0, false); math.Abs(w-0.5) > 0.01 {
+		t.Errorf("custom failure at 14d: weight=%.4f, want ~0.5", w)
+	}
+}
+
+func TestGetSuccessRate_WithDecay(t *testing.T) {
+	db := setupTestDB(t)
+	ds, err := NewDecisionStore(db)
+	if err != nil {
+		t.Fatalf("NewDecisionStore failed: %v", err)
+	}
+
+	// Insert 2 old successes (120 days ago) and 1 recent failure (today).
+	// Without decay: rate = 2/3 ≈ 0.667
+	// With decay (success half-life=30d, failure half-life=90d):
+	//   old success weight: exp(-0.693 * 120/30) = exp(-2.772) ≈ 0.0625
+	//   recent failure weight: exp(-0.693 * 0/90) = 1.0
+	//   weighted_successes = 2 * 0.0625 = 0.125
+	//   total_weight = 0.125 + 1.0 = 1.125
+	//   rate = 0.125 / 1.125 ≈ 0.111
+	oldTime := time.Now().Add(-120 * 24 * time.Hour)
+	for i := 0; i < 2; i++ {
+		dID, _ := ds.Record("task", "decay-test", 0.9, "simple", "low")
+		// Backdate the outcome.
+		db.Exec(
+			"INSERT INTO ai_outcomes (id, decision_id, success, failure_reason, phase, created_at) VALUES (?, ?, 1, '', ?, ?)",
+			"out-old-"+string(rune('a'+i)), dID, PhaseVerifier, oldTime,
+		)
+	}
+	// Recent failure.
+	dID, _ := ds.Record("task", "decay-test", 0.9, "simple", "low")
+	ds.RecordOutcome(dID, false, "recent fail")
+
+	rate, total, err := ds.GetSuccessRate("decay-test", "simple")
+	if err != nil {
+		t.Fatalf("GetSuccessRate failed: %v", err)
+	}
+	if total != 3 {
+		t.Errorf("expected total=3, got %d", total)
+	}
+	// Decayed rate should be well below unweighted 0.667.
+	if rate > 0.25 {
+		t.Errorf("expected decay-weighted rate < 0.25, got %.4f", rate)
+	}
+	if rate < 0.05 {
+		t.Errorf("expected decay-weighted rate > 0.05, got %.4f", rate)
+	}
+}
+
+func TestGetSuccessRate_RecentDominates(t *testing.T) {
+	db := setupTestDB(t)
+	ds, err := NewDecisionStore(db)
+	if err != nil {
+		t.Fatalf("NewDecisionStore failed: %v", err)
+	}
+
+	// 1 old failure (200 days) + 1 recent success (today).
+	// Old failure weight: exp(-0.693 * 200/90) ≈ 0.214
+	// Recent success weight: 1.0
+	// rate = 1.0 / (1.0 + 0.214) ≈ 0.824
+	dOld, _ := ds.Record("task", "recent-dom", 0.9, "medium", "low")
+	db.Exec(
+		"INSERT INTO ai_outcomes (id, decision_id, success, failure_reason, phase, created_at) VALUES (?, ?, 0, 'old', ?, ?)",
+		"out-old-f", dOld, PhaseVerifier, time.Now().Add(-200*24*time.Hour),
+	)
+	dNew, _ := ds.Record("task", "recent-dom", 0.9, "medium", "low")
+	ds.RecordOutcome(dNew, true, "")
+
+	rate, _, err := ds.GetSuccessRate("recent-dom", "medium")
+	if err != nil {
+		t.Fatalf("GetSuccessRate failed: %v", err)
+	}
+	// Recent success should dominate.
+	if rate < 0.70 {
+		t.Errorf("expected recent success to dominate, rate=%.4f", rate)
+	}
+}
+
+func TestGetFailedApproaches_DecayFiltersOld(t *testing.T) {
+	db := setupTestDB(t)
+	ds, err := NewDecisionStore(db)
+	if err != nil {
+		t.Fatalf("NewDecisionStore failed: %v", err)
+	}
+
+	// Insert a very old failure (500 days ago). At 90d half-life,
+	// that's ~5.5 half-lives → weight ≈ 0.021, below 0.05 threshold.
+	oldTime := time.Now().Add(-500 * 24 * time.Hour)
+	dID, _ := ds.Record("fix auth bug", "old-bad-strategy", 0.85, "complex", "high")
+	db.Exec(
+		"INSERT INTO ai_outcomes (id, decision_id, success, failure_reason, phase, created_at) VALUES (?, ?, 0, 'old fail', ?, ?)",
+		"out-ancient", dID, PhaseVerifier, oldTime,
+	)
+
+	failures, err := ds.GetFailedApproaches("fix auth bug")
+	if err != nil {
+		t.Fatalf("GetFailedApproaches failed: %v", err)
+	}
+	// Should be filtered out due to decay.
+	if len(failures) != 0 {
+		t.Errorf("expected 0 failures after decay filter, got %d", len(failures))
+	}
+}
+
+func TestGetFailedApproaches_RecentKept(t *testing.T) {
+	db := setupTestDB(t)
+	ds, err := NewDecisionStore(db)
+	if err != nil {
+		t.Fatalf("NewDecisionStore failed: %v", err)
+	}
+
+	// Insert a recent failure (5 days ago). Weight ≈ 0.96, well above threshold.
+	dID, _ := ds.Record("fix auth bug", "bad-strategy", 0.85, "complex", "high")
+	db.Exec(
+		"INSERT INTO ai_outcomes (id, decision_id, success, failure_reason, phase, created_at) VALUES (?, ?, 0, 'recent fail', ?, ?)",
+		"out-recent", dID, PhaseVerifier, time.Now().Add(-5*24*time.Hour),
+	)
+
+	failures, err := ds.GetFailedApproaches("fix auth bug")
+	if err != nil {
+		t.Fatalf("GetFailedApproaches failed: %v", err)
+	}
+	if len(failures) != 1 {
+		t.Fatalf("expected 1 recent failure, got %d", len(failures))
+	}
+	if failures[0].StrategyID != "bad-strategy" {
+		t.Errorf("expected strategy 'bad-strategy', got %q", failures[0].StrategyID)
+	}
+}
+
+func TestDefaultDecayConfig(t *testing.T) {
+	dc := DefaultDecayConfig()
+	if dc.SuccessHalfLifeDays != 30.0 {
+		t.Errorf("SuccessHalfLifeDays = %.1f, want 30.0", dc.SuccessHalfLifeDays)
+	}
+	if dc.FailureHalfLifeDays != 90.0 {
+		t.Errorf("FailureHalfLifeDays = %.1f, want 90.0", dc.FailureHalfLifeDays)
+	}
+}
+
 func TestIncrementAccess(t *testing.T) {
 	db := setupTestDB(t)
 	ds, err := NewDecisionStore(db)

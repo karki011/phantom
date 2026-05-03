@@ -112,14 +112,15 @@ type Mention struct {
 // touched it. Fields are sized for one-line rendering; FirstPrompt is
 // truncated to 200 chars before being returned to the frontend.
 type SessionSummary struct {
-	SessionID    string  `json:"session_id"`
-	Name         string  `json:"name"`           // Pokémon-style memorable name
-	FirstPaneID  string  `json:"first_pane_id"`  // any pane that touched the session
-	FirstPrompt  string  `json:"first_prompt"`   // truncated to 200 chars
-	TurnCount    int     `json:"turn_count"`
-	LastActivity int64   `json:"last_activity"`  // unix seconds
-	TotalCost    float64 `json:"total_cost"`
-	Cwd          string  `json:"cwd"`            // first non-empty cwd seen
+	SessionID      string  `json:"session_id"`
+	Name           string  `json:"name"`             // Pokémon-style memorable name
+	FirstPaneID    string  `json:"first_pane_id"`    // any pane that touched the session
+	FirstPrompt    string  `json:"first_prompt"`     // truncated to 200 chars
+	TurnCount      int     `json:"turn_count"`
+	LastActivity   int64   `json:"last_activity"`    // unix seconds
+	TotalCost      float64 `json:"total_cost"`
+	Cwd            string  `json:"cwd"`              // first non-empty cwd seen
+	WasInterrupted bool    `json:"was_interrupted"`  // true if any turn in this session was interrupted by a crash
 }
 
 // SendArgs is the Wails-binding payload for ComposerSend.

@@ -19,6 +19,10 @@ import (
 // tab unlinked the terminal but never killed the linked Claude session,
 // so the row sat at status='active' forever and showed up in the
 // resource monitor as a ghost).
+//
+// Also reaps interrupted Composer turns: any composer_turns row still in
+// "running" at boot is from a crash / force-quit. We mark them
+// was_interrupted=1 so the sidebar can prompt the user to resume.
 func (a *App) reapZombieSessions() {
 	if a.DB == nil {
 		return
@@ -32,7 +36,8 @@ func (a *App) reapZombieSessions() {
 		return
 	}
 	if len(sessions) == 0 {
-		return
+		// Fall through — still need to reap composer turns even when no
+		// sessions table zombies exist.
 	}
 
 	now := time.Now().Unix()
@@ -50,6 +55,14 @@ func (a *App) reapZombieSessions() {
 	}
 	if reaped > 0 {
 		slog.Info("reapZombieSessions: marked stale Claude sessions completed", "count", reaped)
+	}
+
+	// Reap interrupted Composer turns — any turn still "running" at boot
+	// belongs to a process that died without clean shutdown.
+	if a.Composer != nil {
+		if n := a.Composer.ReapInterruptedTurns(context.Background()); n > 0 {
+			slog.Info("reapZombieSessions: marked interrupted composer turns", "count", n)
+		}
 	}
 }
 

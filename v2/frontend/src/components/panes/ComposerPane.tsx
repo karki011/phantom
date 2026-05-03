@@ -413,32 +413,74 @@ export default function ComposerPane(props: ComposerPaneProps) {
     }
   };
 
+  const [searchMatchCount, setSearchMatchCount] = createSignal(0);
+
+  const clearHighlights = () => {
+    if (!feedRef) return;
+    feedRef.querySelectorAll('mark.search-hit').forEach((m) => {
+      const parent = m.parentNode;
+      if (parent) {
+        parent.replaceChild(document.createTextNode(m.textContent ?? ''), m);
+        parent.normalize();
+      }
+    });
+  };
+
+  const highlightMatches = (query: string) => {
+    clearHighlights();
+    if (!query || !feedRef) { setSearchMatchCount(0); return; }
+    const lower = query.toLowerCase();
+    const walker = document.createTreeWalker(feedRef, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        const p = node.parentElement;
+        if (p?.closest('pre') || p?.closest('textarea') || p?.closest('input') || p?.tagName === 'MARK') {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return (node.nodeValue?.toLowerCase().includes(lower)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      },
+    });
+    const nodes: Text[] = [];
+    let n: Node | null;
+    while ((n = walker.nextNode())) nodes.push(n as Text);
+
+    let count = 0;
+    for (const textNode of nodes) {
+      const text = textNode.nodeValue ?? '';
+      const frag = document.createDocumentFragment();
+      let lastIdx = 0;
+      let idx = text.toLowerCase().indexOf(lower);
+      while (idx !== -1) {
+        if (idx > lastIdx) frag.appendChild(document.createTextNode(text.slice(lastIdx, idx)));
+        const mark = document.createElement('mark');
+        mark.className = 'search-hit';
+        mark.textContent = text.slice(idx, idx + query.length);
+        frag.appendChild(mark);
+        count++;
+        lastIdx = idx + query.length;
+        idx = text.toLowerCase().indexOf(lower, lastIdx);
+      }
+      if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+      textNode.parentNode?.replaceChild(frag, textNode);
+    }
+    setSearchMatchCount(count);
+    if (count > 0) {
+      feedRef.querySelector('mark.search-hit')?.scrollIntoView({ block: 'nearest' });
+    }
+  };
+
   const closeSearch = () => {
     setSearchOpen(false);
     setSearchQuery('');
-    // Clear the browser's native find highlights
-    try { window.getSelection()?.removeAllRanges(); } catch { /* ignore */ }
-  };
-
-  const runBrowserFind = (query: string, forward = true) => {
-    if (!query) return;
-    // The native window.find API highlights text in the page content.
-    // It's the simplest way to get search highlighting for v1.
-    try {
-      (window as any).find(query, false, !forward, true, false, false, false);
-    } catch { /* unsupported in some contexts — safe to ignore */ }
+    clearHighlights();
+    setSearchMatchCount(0);
   };
 
   const handleSearchInput = (value: string) => {
     setSearchQuery(value);
-    if (value) runBrowserFind(value);
+    highlightMatches(value);
   };
 
   const handleSearchKeydownInInput = (e: KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      runBrowserFind(searchQuery(), !e.shiftKey);
-    }
     if (e.key === 'Escape') {
       e.preventDefault();
       closeSearch();
@@ -1349,6 +1391,29 @@ export default function ComposerPane(props: ComposerPaneProps) {
           <History size={10} style={{ 'vertical-align': 'middle', 'margin-right': '4px' }} />
           Recents
         </div>
+
+        {/* Banner shown when any past session was interrupted by a crash */}
+        <Show when={sessions().some(s => s.was_interrupted)}>
+          {(() => {
+            const interrupted = () => sessions().filter(s => s.was_interrupted);
+            const firstInterrupted = () => interrupted()[0];
+            return (
+              <div
+                class={styles.sidebarInterruptedBanner}
+                onClick={() => {
+                  const s = firstInterrupted();
+                  if (s) handleSessionRowClick(s, new MouseEvent('click'));
+                }}
+                title="Click to resume the most recent interrupted session"
+                role="button"
+              >
+                <AlertTriangle size={12} />
+                <span>{interrupted().length} interrupted — Resume?</span>
+              </div>
+            );
+          })()}
+        </Show>
+
         <div class={styles.sidebarList} role="list" aria-label="Session history">
           <Show
             when={sessions().length > 0}
@@ -1368,13 +1433,18 @@ export default function ComposerPane(props: ComposerPaneProps) {
                       class={`${styles.sidebarRow} ${isActive() ? styles.sidebarRowActive : ''}`}
                       onClick={(e) => handleSessionRowClick(s, e)}
                       aria-current={isActive() ? 'true' : undefined}
-                      aria-label={`Session: ${displayName()}`}
-                      title={`${s.name ? s.name + '\n' : ''}${s.first_prompt || s.session_id}\n\nClick to open · Cmd+Click for new tab · Right-click for actions`}
+                      aria-label={`Session: ${displayName()}${s.was_interrupted ? ' (interrupted)' : ''}`}
+                      title={`${s.name ? s.name + '\n' : ''}${s.first_prompt || s.session_id}${s.was_interrupted ? '\n\n⚠ This session was interrupted by a crash — click to resume' : ''}\n\nClick to open · Cmd+Click for new tab · Right-click for actions`}
                     >
                       <span class={styles.sidebarRowPrompt}>
                         {displayName()}
                       </span>
-                      <Show when={subtitle()}>
+                      <Show when={s.was_interrupted}>
+                        <span class={styles.sidebarInterruptedBadge} title="Session interrupted by crash">
+                          <AlertTriangle size={8} />
+                        </span>
+                      </Show>
+                      <Show when={subtitle() && !s.was_interrupted}>
                         <span class={styles.sidebarRowPromptEmpty} style={{ 'font-size': '10px', 'margin-left': '4px', 'flex-shrink': '1', overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap' }}>
                           {subtitle()}
                         </span>
@@ -1470,22 +1540,6 @@ export default function ComposerPane(props: ComposerPaneProps) {
           }
         >
           {autoAccept() ? '⚡ Auto-accept on' : '✋ Manual review'}
-        </button>
-        <button
-          class={`${styles.contextPill} ${planMode() ? styles.contextPillActive : ''}`}
-          type="button"
-          onClick={togglePlanMode}
-          disabled={running()}
-          aria-pressed={planMode()}
-          aria-label={planMode() ? 'Plan mode on — responses are plan-only' : 'Plan mode off — normal execution'}
-          title={
-            planMode()
-              ? 'Plan mode: agent will describe steps without writing code.'
-              : 'Normal mode: agent executes changes as usual.'
-          }
-        >
-          <ListTodo size={11} style={{ 'margin-right': '4px', 'vertical-align': 'middle' }} />
-          {planMode() ? 'Plan' : 'Plan'}
         </button>
         <span class={styles.statusGrow} />
         <Show when={turns.length > 0}>
@@ -1595,6 +1649,11 @@ export default function ComposerPane(props: ComposerPaneProps) {
             spellcheck={false}
             autocomplete="off"
           />
+          <Show when={searchQuery()}>
+            <span style={{ 'font-size': '10px', color: 'inherit', opacity: 0.6, 'font-family': 'var(--font-mono)' }}>
+              {searchMatchCount()} match{searchMatchCount() !== 1 ? 'es' : ''}
+            </span>
+          </Show>
           <button
             type="button"
             class={styles.searchClose}
@@ -1927,6 +1986,19 @@ export default function ComposerPane(props: ComposerPaneProps) {
               <Zap size={12} />
             </button>
           </Tip>
+
+          <button
+            class={`${styles.contextPill} ${planMode() ? styles.contextPillActive : ''}`}
+            type="button"
+            onClick={togglePlanMode}
+            disabled={running()}
+            aria-pressed={planMode()}
+            aria-label={planMode() ? 'Plan mode on' : 'Plan mode off'}
+            title={planMode() ? 'Plan mode: describe steps without writing code' : 'Normal mode: execute changes'}
+          >
+            <ListTodo size={11} style={{ 'margin-right': '4px', 'vertical-align': 'middle' }} />
+            Plan
+          </button>
 
           <Select<string>
             value={model()}
