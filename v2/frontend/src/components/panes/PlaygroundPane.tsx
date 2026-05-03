@@ -92,20 +92,7 @@ const PlaygroundPane = () => {
     return '';
   };
 
-  // Debounced analysis — runs 300ms after the user stops typing.
-  createEffect(
-    on(goal, (g) => {
-      clearTimeout(debounceTimer);
-      if (!g.trim()) {
-        setResult(null);
-        setError(null);
-        return;
-      }
-      debounceTimer = setTimeout(() => runAnalysis(g), 300);
-    }),
-  );
-
-  onCleanup(() => clearTimeout(debounceTimer));
+  // Manual trigger only — user clicks Analyze or presses Cmd+Enter.
 
   const runAnalysis = async (g?: string) => {
     const prompt = g ?? goal();
@@ -150,9 +137,15 @@ const PlaygroundPane = () => {
       <div class={styles.inputArea}>
         <textarea
           class={styles.textarea}
-          placeholder="Type a goal... e.g. 'Refactor the auth service to use JWT tokens'"
+          placeholder="Type a goal... e.g. 'Refactor the auth service to use JWT tokens' (Cmd+Enter to analyze)"
           value={goal()}
           onInput={(e) => setGoal(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+              e.preventDefault();
+              runAnalysis();
+            }
+          }}
           rows={3}
         />
         <div class={styles.inputRow}>
@@ -172,6 +165,14 @@ const PlaygroundPane = () => {
             onClick={() => runAnalysis()}
           >
             {loading() ? 'Analyzing...' : 'Analyze'}
+          </button>
+          <button
+            class={styles.analyzeBtn}
+            style={{ background: 'transparent', border: `1px solid var(--color-border)`, color: 'var(--color-text-secondary)' }}
+            onClick={() => { setGoal(''); setResult(null); setError(null); }}
+            aria-label="Reset playground"
+          >
+            Reset
           </button>
         </div>
       </div>

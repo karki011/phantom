@@ -191,6 +191,8 @@ export const cardBadge = style({
 
 export const cardBody = style({
   padding: `0 ${vars.space.md} ${vars.space.md}`,
+  maxHeight: '500px',
+  overflow: 'auto',
 });
 
 export const chevron = style({
