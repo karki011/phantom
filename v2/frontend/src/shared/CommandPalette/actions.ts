@@ -6,11 +6,11 @@ import {
   Terminal, SplitSquareHorizontal, SplitSquareVertical, X,
   Monitor, GitBranch, GitFork, Settings, FileSearch, BookOpen,
   Pause, Play, Square, Sun, Moon, ZoomIn, ZoomOut, RotateCcw,
-  PenTool, Sidebar, PanelRight, LayoutGrid, Eye, Plug,
+  PenTool, Sidebar, PanelRight, LayoutGrid, Eye, Plug, Sparkles,
 } from 'lucide-solid';
 
 // === Pane signals ===
-import { addTab, splitPane, activePaneId, switchWorkspace } from '@/core/panes/signals';
+import { addTab, splitPane, activePaneId, switchWorkspace, focusOrCreateTab } from '@/core/panes/signals';
 
 // === App signals ===
 import { setActiveTopTab, activeWorktreeId } from '@/core/signals/app';
@@ -191,6 +191,14 @@ const NAVIGATION_ACTIONS: CommandAction[] = [
     icon: PanelRight,
     shortcut: '⌘⇧B',
     execute: () => setRightSidebarCollapsed(!rightSidebarCollapsed()),
+  },
+  {
+    id: 'nav:ai-playground',
+    label: 'AI Engine Playground',
+    category: 'Navigation',
+    icon: Sparkles,
+    keywords: ['ai', 'playground', 'engine', 'strategy', 'orchestrator', 'dry run'],
+    execute: () => focusOrCreateTab('playground', 'AI Playground'),
   },
 ];
 

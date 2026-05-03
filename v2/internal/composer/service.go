@@ -298,7 +298,7 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 		// a multi-file refactor.
 		activeFiles := mentionPaths(args.Mentions, args.CWD)
 		if resolvedIndexer != nil {
-			if inferred := inferFilesFromPrompt(resolvedIndexer, args.Prompt); len(inferred) > 0 {
+			if inferred := InferFilesFromPrompt(resolvedIndexer, args.Prompt); len(inferred) > 0 {
 				activeFiles = append(activeFiles, inferred...)
 				log.Info("composer: symbol inference",
 					"symbols_found", len(inferred),
@@ -401,11 +401,14 @@ func mentionPaths(mentions []Mention, cwd string) []string {
 	return out
 }
 
-// inferFilesFromPrompt extracts code-like identifiers (PascalCase,
+// InferFilesFromPrompt extracts code-like identifiers (PascalCase,
 // camelCase) from the prompt and finds files that declare or use them.
 // Two-phase: graph symbol lookup (fast) + grep (catches barrel re-exports
 // and all consumer files regardless of how they import the symbol).
-func inferFilesFromPrompt(ix *filegraph.Indexer, prompt string) []string {
+//
+// Exported so callers outside the package (e.g. the Playground binding) can
+// reuse the same symbol-inference logic without duplicating it.
+func InferFilesFromPrompt(ix *filegraph.Indexer, prompt string) []string {
 	words := regexp.MustCompile(`\b([A-Z][a-zA-Z0-9]{2,}|[a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]*)\b`).FindAllString(prompt, -1)
 	if len(words) == 0 {
 		return nil
