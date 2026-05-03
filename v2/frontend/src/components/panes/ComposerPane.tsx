@@ -86,6 +86,8 @@ import ComposerSkillBrowser from './ComposerSkillBrowser';
 import ComposerDiffCard from './ComposerDiffCard';
 import * as strategyStyles from './ComposerStrategy.css';
 import { extractToolSummary, groupToolCalls, type ToolGroup, type ToolUseEntry } from './ComposerToolSummary';
+import { initWidgets, updateWidget } from '@/core/signals/widgets';
+import WidgetBar from '@/shared/WidgetBar/WidgetBar';
 
 interface ComposerPaneProps {
   paneId?: string;
@@ -413,6 +415,8 @@ export default function ComposerPane(props: ComposerPaneProps) {
   // Survives app restart, pane re-open, and tab switching. Also pulls in
   // any pending edits from previous sessions so cards reappear.
   onMount(async () => {
+    initWidgets();
+
     // Per-user default for the "No project context" toggle. Loaded async,
     // doesn't block first render.
     void loadPref('composer_no_context_default').then((val) => {
@@ -528,6 +532,11 @@ export default function ComposerPane(props: ComposerPaneProps) {
             status: 'running',
           });
         }));
+        updateWidget('tokens', {
+          label: `${ev.tool_name ?? 'tool'}...`,
+          visible: true,
+          variant: 'default',
+        });
         break;
       case 'input_json': {
         const lastTuIdx = turns[idx].toolUses.length - 1;
@@ -553,6 +562,13 @@ export default function ComposerPane(props: ComposerPaneProps) {
           if (ev.output_tokens != null) turn.outputTokens = ev.output_tokens;
           if (ev.cost_usd != null) turn.costUSD = ev.cost_usd;
         }));
+        if (ev.input_tokens || ev.output_tokens) {
+          updateWidget('tokens', {
+            label: `${formatTokenCount(ev.input_tokens ?? 0)}↑ ${formatTokenCount(ev.output_tokens ?? 0)}↓`,
+            detail: `Input: ${formatTokenCount(ev.input_tokens ?? 0)} · Output: ${formatTokenCount(ev.output_tokens ?? 0)}`,
+            visible: true,
+          });
+        }
         break;
       case 'done':
         setTurns(idx, produce(turn => {
@@ -565,6 +581,14 @@ export default function ComposerPane(props: ComposerPaneProps) {
             if (tu.status === 'running') tu.status = 'done';
           }
         }));
+        if (ev.cost_usd) {
+          updateWidget('cost', {
+            label: `$${ev.cost_usd.toFixed(4)}`,
+            detail: `Turn cost: $${ev.cost_usd.toFixed(4)}`,
+            visible: true,
+          });
+        }
+        updateWidget('tokens', { visible: false });
         break;
       case 'error':
         setTurns(idx, produce(turn => {
@@ -633,6 +657,13 @@ export default function ComposerPane(props: ComposerPaneProps) {
       return [...prev, data.conflict];
     });
     setConflictDismissed(false);
+
+    updateWidget('conflict', {
+      label: 'Conflict',
+      detail: `File conflict detected`,
+      variant: 'danger',
+      visible: true,
+    });
 
     // File-level conflicts surface as a toast rather than a persistent banner.
     if (data.conflict.type === 'file' && data.conflict.file_path) {
@@ -1179,6 +1210,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
           </button>
         </Show>
       </div>
+      <WidgetBar />
 
       {/* Context window gauge */}
       <Show when={contextUsed() > 0}>
