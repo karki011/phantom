@@ -281,7 +281,7 @@ interface TurnView {
   prompt: string;
   text: string;
   thinking: string;
-  toolUses: { name: string; input: string; status: 'running' | 'done' | 'error'; result?: string; resultIsError?: boolean }[];
+  toolUses: { toolUseId?: string; name: string; input: string; status: 'running' | 'done' | 'error'; result?: string; resultIsError?: boolean }[];
   editIds: string[];
   status: 'running' | 'done' | 'error' | 'cancelled';
   error?: string;
@@ -848,8 +848,9 @@ export default function ComposerPane(props: ComposerPaneProps) {
           for (const tu of turn.toolUses) {
             if (tu.status === 'running') tu.status = 'done';
           }
-          // Append the new tool use.
+          // Append the new tool use with ID for reliable result matching.
           turn.toolUses.push({
+            toolUseId: ev.tool_use_id,
             name: ev.tool_name ?? 'tool',
             input: ev.tool_input ?? '',
             status: 'running',
@@ -869,7 +870,14 @@ export default function ComposerPane(props: ComposerPaneProps) {
         break;
       }
       case 'tool_result': {
-        const tuIdx = turns[idx].toolUses.findLastIndex(u => u.status === 'running');
+        // Match by tool_use_id when available (reliable for async agents),
+        // fall back to last running tool (legacy sequential behavior).
+        let tuIdx = ev.tool_use_id
+          ? turns[idx].toolUses.findIndex(u => u.toolUseId === ev.tool_use_id)
+          : -1;
+        if (tuIdx < 0) {
+          tuIdx = turns[idx].toolUses.findLastIndex(u => u.status === 'running');
+        }
         if (tuIdx >= 0) {
           setTurns(idx, 'toolUses', tuIdx, produce(tu => {
             tu.result = ev.content ?? '';
@@ -2236,7 +2244,7 @@ function ThinkingChip(props: { content: string }) {
 
 /** Section wrapper for tool calls with expand-all / collapse-all toggle + grouping. */
 function ToolCallsSection(props: {
-  toolUses: { name: string; input: string; status: 'running' | 'done' | 'error'; result?: string; resultIsError?: boolean }[];
+  toolUses: { toolUseId?: string; name: string; input: string; status: 'running' | 'done' | 'error'; result?: string; resultIsError?: boolean }[];
 }) {
   const [expandMode, setExpandMode] = createSignal<'all' | 'none' | 'individual'>('individual');
 

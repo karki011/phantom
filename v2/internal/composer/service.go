@@ -1119,6 +1119,7 @@ func (s *Service) handleAssistant(ctx context.Context, paneID, turnID, cwd strin
 			Type     string          `json:"type"`
 			Text     string          `json:"text,omitempty"`
 			Thinking string          `json:"thinking,omitempty"`
+			ID       string          `json:"id,omitempty"`
 			Name     string          `json:"name,omitempty"`
 			Input    json.RawMessage `json:"input,omitempty"`
 		} `json:"content"`
@@ -1151,6 +1152,7 @@ func (s *Service) handleAssistant(ctx context.Context, paneID, turnID, cwd strin
 				Type:      "tool_use",
 				ToolName:  block.Name,
 				ToolInput: string(block.Input),
+				ToolUseID: block.ID,
 			})
 			s.maybeRecordEdit(ctx, paneID, turnID, cwd, block.Name, block.Input)
 		}
