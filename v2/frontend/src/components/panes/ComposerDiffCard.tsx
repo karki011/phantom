@@ -78,7 +78,7 @@ const ComposerDiffCard = (props: ComposerDiffCardProps) => {
   // Signals
   const [monaco, setMonaco] = createSignal<typeof MonacoNS | null>(null);
   const [isReady, setIsReady] = createSignal(false);
-  const [expanded, setExpanded] = createSignal(true);
+  const [expanded, setExpanded] = createSignal(false);
   const [sideBySide, setSideBySide] = createSignal(false); // inline by default for chat
 
   // Derived

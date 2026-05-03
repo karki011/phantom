@@ -65,6 +65,8 @@ import {
   composerListSessions,
   composerHistoryBySession,
   composerResumeSession,
+  composerListCommands,
+  type ComposerCommand,
   type ComposerEvent,
   type ComposerEditCard,
   type ComposerEventRecord,
@@ -186,10 +188,25 @@ export default function ComposerPane(props: ComposerPaneProps) {
   // per-user default so power users who always want clean answers don't
   // have to flip it every time.
   const [noContext, setNoContext] = createSignal(false);
-  const [autoAccept, setAutoAccept] = createSignal(false);
+  const [autoAccept, setAutoAccept] = createSignal(true);
   const [dragOver, setDragOver] = createSignal(false);
   const [showMemory, setShowMemory] = createSignal(false);
   const [showSkills, setShowSkills] = createSignal(false);
+
+  // Slash command autocomplete
+  const [commands, setCommands] = createSignal<ComposerCommand[]>([]);
+  const [showCommandPalette, setShowCommandPalette] = createSignal(false);
+  const [commandFilter, setCommandFilter] = createSignal('');
+  const [commandIdx, setCommandIdx] = createSignal(0);
+
+  const filteredCommands = () => {
+    const filter = commandFilter().toLowerCase();
+    if (!filter) return commands();
+    return commands().filter(c =>
+      c.name.toLowerCase().includes(filter) ||
+      c.description.toLowerCase().includes(filter)
+    );
+  };
 
   // Past Sessions sidebar — list, collapsed-state, and the currently
   // active claude session_id. activeSessionId tracks the live session this
@@ -388,11 +405,14 @@ export default function ComposerPane(props: ComposerPaneProps) {
 
     // Auto-accept edits toggle — when on, edit cards are accepted as they arrive.
     void loadPref('composer_auto_accept_edits').then((val) => {
-      if (val === 'true') setAutoAccept(true);
+      if (val === 'false') setAutoAccept(false);
     });
 
     // Kick off the sessions list in parallel — doesn't block history load.
     void refreshSessions();
+
+    // Load slash commands for autocomplete.
+    composerListCommands(cwd()).then(setCommands);
 
     // If this pane was opened with a sessionId from the sidebar, bind it
     // BEFORE the rehydration query so the next Send resumes correctly,
@@ -761,6 +781,33 @@ export default function ComposerPane(props: ComposerPaneProps) {
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    // Slash command palette navigation
+    if (showCommandPalette()) {
+      const cmds = filteredCommands();
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setCommandIdx(i => Math.min(i + 1, cmds.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setCommandIdx(i => Math.max(i - 1, 0));
+        return;
+      }
+      if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && cmds.length > 0) {
+        e.preventDefault();
+        const selected = cmds[commandIdx()];
+        setInput('/' + selected.name + ' ');
+        setShowCommandPalette(false);
+        textareaRef?.focus();
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowCommandPalette(false);
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       handleSend();
@@ -1268,12 +1315,47 @@ export default function ComposerPane(props: ComposerPaneProps) {
           </div>
         </Show>
 
+        <Show when={showCommandPalette() && filteredCommands().length > 0}>
+          <div class={styles.commandPalette}>
+            <For each={filteredCommands()}>
+              {(cmd, i) => (
+                <div
+                  class={`${styles.commandItem} ${i() === commandIdx() ? styles.commandItemActive : ''}`}
+                  onClick={() => {
+                    setInput('/' + cmd.name + ' ');
+                    setShowCommandPalette(false);
+                    textareaRef?.focus();
+                  }}
+                >
+                  <span class={styles.commandName}>/{cmd.name}</span>
+                  <Show when={cmd.description}>
+                    <span class={styles.commandDesc}>{cmd.description}</span>
+                  </Show>
+                  <span class={styles.commandSource}>{cmd.source}</span>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
+
         <textarea
           ref={textareaRef}
           class={styles.textarea}
           placeholder="What should Composer do… (paste an image to attach it)"
           value={input()}
-          onInput={(e) => setInput(e.currentTarget.value)}
+          onInput={(e) => {
+            const val = e.currentTarget.value;
+            setInput(val);
+            // Detect slash command prefix
+            if (val.startsWith('/') && !val.includes('\n')) {
+              const filter = val.slice(1).split(' ')[0];
+              setCommandFilter(filter);
+              setShowCommandPalette(true);
+              setCommandIdx(0);
+            } else {
+              setShowCommandPalette(false);
+            }
+          }}
           onKeyDown={handleKeyDown}
           onPaste={handleTextareaPaste}
           rows={3}

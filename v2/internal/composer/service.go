@@ -162,6 +162,24 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 		args.Model = defaultModel
 	}
 
+	// Resolve slash commands: /command-name args → command markdown body.
+	// Must happen before prompt is consumed by buildPromptWithMentions so the
+	// CLI sees the expanded command body, not the raw "/foo" shorthand.
+	if strings.HasPrefix(strings.TrimSpace(args.Prompt), "/") {
+		parts := strings.SplitN(strings.TrimSpace(args.Prompt), " ", 2)
+		cmdName := strings.TrimPrefix(parts[0], "/")
+		cmdArgs := ""
+		if len(parts) > 1 {
+			cmdArgs = parts[1]
+		}
+		if resolved, cmdModel := ResolveCommand(args.CWD, cmdName, cmdArgs); resolved != "" {
+			args.Prompt = resolved
+			if cmdModel != "" {
+				args.Model = cmdModel
+			}
+		}
+	}
+
 	cliPath, err := ResolveClaudeBin()
 	if err != nil {
 		s.emit("composer:event", Event{PaneID: args.PaneID, Type: "error", Content: "claude CLI not found in PATH"})
@@ -1040,7 +1058,9 @@ func (s *Service) maybeRecordEdit(ctx context.Context, paneID, turnID, cwd, tool
 		if json.Unmarshal(input, &w) != nil || w.FilePath == "" {
 			return
 		}
-		old, _ := readFileSafe(w.FilePath)
+		// The CLI writes the file before emitting tool_use, so readFileSafe
+		// returns the NEW content. Use git to get the pre-edit base.
+		old := gitShowHead(w.FilePath, cwd)
 		s.emitEdit(ctx, paneID, turnID, cwd, w.FilePath, old, w.Content)
 		s.trackConflictFile(paneID, cwd, w.FilePath)
 
@@ -1349,6 +1369,40 @@ func buildPromptWithMentions(prompt string, mentions []Mention, cwd string) stri
 	sb.WriteString("USER:\n")
 	sb.WriteString(prompt)
 	return sb.String()
+}
+
+// gitShowHead returns the file content at HEAD using git show. Falls back to
+// empty string for untracked files or when git isn't available. Used to get
+// the pre-edit baseline for Write operations where the CLI writes the file
+// before emitting the tool_use event.
+func gitShowHead(filePath, cwd string) string {
+	if filePath == "" {
+		return ""
+	}
+	absPath := filePath
+	if !filepath.IsAbs(filePath) && cwd != "" {
+		absPath = filepath.Join(cwd, filePath)
+	}
+	dir := filepath.Dir(absPath)
+	// Get the path relative to the git repo root
+	rootCmd := exec.Command("git", "-c", "core.optionalLocks=false", "rev-parse", "--show-toplevel")
+	rootCmd.Dir = dir
+	rootOut, err := rootCmd.Output()
+	if err != nil {
+		return ""
+	}
+	repoRoot := strings.TrimSpace(string(rootOut))
+	rel, err := filepath.Rel(repoRoot, absPath)
+	if err != nil {
+		return ""
+	}
+	cmd := exec.Command("git", "-c", "core.optionalLocks=false", "show", "HEAD:"+rel)
+	cmd.Dir = repoRoot
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return string(out)
 }
 
 func readFileSafe(path string) (string, error) {

@@ -426,6 +426,61 @@ export const composerAreaDragOver = style({
   outlineOffset: -2,
 });
 
+// ── Slash command palette ────────────────────────────────────────────
+export const commandPalette = style({
+  position: 'relative',
+  maxHeight: '240px',
+  overflowY: 'auto',
+  background: vars.color.bgPrimary,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+  padding: vars.space.xs,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '1px',
+});
+
+export const commandItem = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  padding: `${vars.space.xs} ${vars.space.sm}`,
+  borderRadius: vars.radius.sm,
+  cursor: 'pointer',
+  fontSize: vars.fontSize.xs,
+  ':hover': {
+    background: vars.color.bgHover,
+  },
+});
+
+export const commandItemActive = style({
+  background: vars.color.bgHover,
+});
+
+export const commandName = style({
+  fontFamily: vars.font.mono,
+  fontWeight: 600,
+  color: vars.color.accent,
+  flexShrink: 0,
+});
+
+export const commandDesc = style({
+  color: vars.color.textSecondary,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  flex: 1,
+});
+
+export const commandSource = style({
+  fontSize: '10px',
+  color: vars.color.textDisabled,
+  flexShrink: 0,
+  padding: '1px 4px',
+  borderRadius: vars.radius.sm,
+  background: vars.color.bgTertiary,
+});
+
 // `.copy-btn` is appended via DOM in ComposerMarkdown after each render
 // (DOMPurify strips inline handlers, hence the post-render walk). Styled
 // globally so the button is positioned absolutely inside the <pre> code

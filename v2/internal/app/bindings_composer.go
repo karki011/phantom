@@ -244,6 +244,14 @@ func (a *App) ComposerGetMemoryContext(cwd string) []map[string]interface{} {
 	return result
 }
 
+// ComposerListCommands returns all available slash commands for the given cwd.
+// Scans project (.claude/commands/), global (~/.claude/commands/), and
+// installed plugin command directories. Used by the Composer input to power
+// slash-command autocomplete.
+func (a *App) ComposerListCommands(cwd string) []composer.Command {
+	return composer.DiscoverCommands(cwd)
+}
+
 // ComposerListPending returns all pending edit cards for a pane (used on
 // pane mount to repopulate cards after a refresh / app restart).
 func (a *App) ComposerListPending(paneID string) []composer.Edit {
