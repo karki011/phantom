@@ -45,6 +45,10 @@ func (d *DebateStrategy) ShouldActivate(t TaskAssessment) (float64, string) {
 		return 0.6, "High risk but simple complexity — debate may help identify hidden risks"
 	case t.BlastRadius > 15:
 		return 0.7, fmt.Sprintf("Large blast radius (%d files) — multi-perspective review recommended", t.BlastRadius)
+	case t.IsAmbiguous && t.AmbiguityScore > 0.3:
+		return 0.85, "Ambiguous requirements — debate can explore alternatives"
+	case t.IsAmbiguous:
+		return 0.7, "Mild ambiguity — debate may help clarify approach"
 	default:
 		return 0.05, "Low risk — debate deliberation rarely needed"
 	}

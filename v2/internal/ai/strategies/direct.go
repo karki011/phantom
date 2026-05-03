@@ -24,14 +24,21 @@ func (d *DirectStrategy) Description() string {
 
 // ShouldActivate returns a score indicating how well this strategy fits.
 func (d *DirectStrategy) ShouldActivate(a TaskAssessment) (float64, string) {
+	var score float64
+	var reason string
 	switch a.Complexity {
 	case Simple:
-		return 0.9, "simple task"
+		score, reason = 0.9, "simple task"
 	case Moderate:
-		return 0.6, "moderate task"
+		score, reason = 0.6, "moderate task"
 	default:
-		return 0.3, "complex task, prefer other strategies"
+		score, reason = 0.3, "complex task, prefer other strategies"
 	}
+	if a.IsAmbiguous {
+		score *= 0.5
+		reason += " (penalized: ambiguous requirements)"
+	}
+	return score, reason
 }
 
 // Enrich returns the message unchanged — direct strategy adds no guidance.

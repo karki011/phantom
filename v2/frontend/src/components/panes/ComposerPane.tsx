@@ -9,8 +9,91 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import * as sidebarStyles from '@/styles/sidebar.css';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { openFileInEditor } from '@/core/editor/open-file';
 
 marked.use({ gfm: true, breaks: true });
+
+// ── File-path linkification (ported from TerminalPane) ──────────────
+// Matches relative paths (./foo, ../foo), home-rooted (~/) , absolute
+// paths under common roots, and well-known project directories followed
+// by a file extension. Optional :line:col suffix is preserved.
+const FILE_PATH_REGEX = /(?<![a-zA-Z0-9_\-/])(?:\.{1,2}\/[\w.\-/]+|~\/[\w.\-/]+|\/(?:Users|home|tmp|var|opt|etc)\/[\w.\-/]+|(?:src|lib|libs|app|apps|packages|tests?|spec|docs?|scripts?|config|\.ai|\.claude|\.github|\.vscode)\/[\w.\-/]+)(?:\.\w+)(?::\d+(?::\d+)?)?/g;
+const FILE_EXTENSIONS = new Set([
+  'ts', 'tsx', 'js', 'jsx', 'md', 'json', 'yaml', 'yml', 'sh', 'css',
+  'go', 'py', 'toml', 'html', 'sql', 'env', 'lock', 'mjs', 'cjs',
+  'rs', 'rb', 'java', 'c', 'cpp', 'h', 'hpp', 'vue', 'svelte', 'scss',
+  'less', 'graphql', 'gql', 'prisma', 'proto', 'xml', 'csv', 'txt',
+]);
+
+/**
+ * Walk every text node inside `root` (skipping <pre>/<code> blocks which
+ * already have their own rendering) and wrap file-path matches in
+ * `<a class="file-link" data-file-path="..." data-line="..." data-col="...">`.
+ */
+const linkifyFilePaths = (root: HTMLElement): void => {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      // Skip text inside <pre> or <code> — those are code blocks.
+      const parent = node.parentElement;
+      if (parent?.closest('pre') || parent?.closest('code')) return NodeFilter.FILTER_REJECT;
+      // Skip text inside an <a> — already a link.
+      if (parent?.closest('a')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  const textNodes: Text[] = [];
+  let n: Node | null;
+  while ((n = walker.nextNode())) textNodes.push(n as Text);
+
+  for (const textNode of textNodes) {
+    const text = textNode.nodeValue ?? '';
+    FILE_PATH_REGEX.lastIndex = 0;
+    if (!FILE_PATH_REGEX.test(text)) continue;
+
+    // Build a replacement fragment
+    FILE_PATH_REGEX.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let lastIdx = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = FILE_PATH_REGEX.exec(text)) !== null) {
+      const fullMatch = match[0];
+
+      // Extract line:col suffix
+      const lineColMatch = fullMatch.match(/^(.+?)(?::(\d+)(?::(\d+))?)?$/);
+      if (!lineColMatch) continue;
+      const pathPart = lineColMatch[1];
+      const lineNum = lineColMatch[2] ?? '';
+      const colNum = lineColMatch[3] ?? '';
+
+      // Validate extension
+      const extMatch = pathPart.match(/\.(\w+)$/);
+      if (!extMatch || !FILE_EXTENSIONS.has(extMatch[1])) continue;
+
+      // Append preceding plain text
+      if (match.index > lastIdx) {
+        frag.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+      }
+
+      const a = document.createElement('a');
+      a.className = 'file-link';
+      a.dataset.filePath = pathPart;
+      if (lineNum) a.dataset.line = lineNum;
+      if (colNum) a.dataset.col = colNum;
+      a.textContent = fullMatch;
+      a.title = `Open ${pathPart}${lineNum ? `:${lineNum}` : ''}`;
+      frag.appendChild(a);
+      lastIdx = match.index + fullMatch.length;
+    }
+
+    if (lastIdx === 0) continue; // no valid matches after extension check
+    if (lastIdx < text.length) {
+      frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+    }
+    textNode.parentNode?.replaceChild(frag, textNode);
+  }
+};
 
 // Tiny Markdown renderer for Composer assistant text. Light-weight (no
 // highlight.js); promote to a shared component if a third consumer shows up.
@@ -19,12 +102,17 @@ marked.use({ gfm: true, breaks: true });
 // to each <pre> code block (DOMPurify strips inline onclick attrs, so we
 // wire via addEventListener after the fact). Marker class .copy-btn keeps
 // the effect idempotent across re-renders.
-function ComposerMarkdown(props: { text: string }) {
+//
+// File paths (e.g. `.claude/tmp/foo.md`) are also linkified after render
+// so clicking them opens the file in the editor pane.
+function ComposerMarkdown(props: { text: string; cwd: string }) {
   let ref: HTMLDivElement | undefined;
   const html = () => DOMPurify.sanitize(marked.parse(props.text) as string);
 
-  const addCopyButtons = () => {
+  const postRenderEnhance = () => {
     if (!ref) return;
+
+    // ── Copy buttons on <pre> blocks ──
     ref.querySelectorAll('pre').forEach((pre) => {
       if (pre.querySelector('.copy-btn')) return;
       const btn = document.createElement('button');
@@ -41,13 +129,44 @@ function ComposerMarkdown(props: { text: string }) {
       });
       pre.appendChild(btn);
     });
+
+    // ── Linkify file paths ──
+    linkifyFilePaths(ref);
+
+    // ── Click handlers for file-path links ──
+    ref.querySelectorAll('a.file-link').forEach((a) => {
+      if ((a as HTMLElement).dataset.wired) return;
+      (a as HTMLElement).dataset.wired = '1';
+
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        const el = e.currentTarget as HTMLElement;
+        let filePath = el.dataset.filePath ?? '';
+        const lineNum = el.dataset.line ? parseInt(el.dataset.line, 10) : undefined;
+        const colNum = el.dataset.col ? parseInt(el.dataset.col, 10) : undefined;
+        const cwdVal = props.cwd;
+
+        // Resolve relative paths against cwd
+        if (filePath.startsWith('./')) filePath = filePath.slice(2);
+        if (!filePath.startsWith('/') && !filePath.startsWith('~')) {
+          filePath = cwdVal ? `${cwdVal.replace(/\/$/, '')}/${filePath}` : filePath;
+        }
+        // Expand ~ to home directory
+        if (filePath.startsWith('~/')) {
+          const homeMatch = cwdVal.match(/^(\/(?:Users|home)\/[^/]+)/);
+          if (homeMatch) filePath = filePath.replace(/^~/, homeMatch[1]);
+        }
+
+        openFileInEditor({ workspaceId: '', filePath, line: lineNum, column: colNum });
+      });
+    });
   };
 
   // Re-run after each text change, deferred to next paint so the freshly
-  // rendered <pre> nodes exist before we query them.
+  // rendered DOM nodes exist before we query them.
   createEffect(() => {
     void props.text;
-    requestAnimationFrame(addCopyButtons);
+    requestAnimationFrame(postRenderEnhance);
   });
 
   return <div ref={ref} class={styles.assistantText} innerHTML={html()} />;
@@ -160,10 +279,25 @@ const EFFORTS = [
   { value: 'max', label: 'Max' },
 ];
 
-const MODEL_CONTEXT_LIMITS: Record<string, number> = {
+const MODEL_CONTEXT_DEFAULTS: Record<string, number> = {
   sonnet: 200_000,
-  opus: 200_000,
+  opus: 1_000_000,
   haiku: 200_000,
+};
+
+const parseContextLimit = (modelId: string): number => {
+  // Model strings like "claude-opus-4-6[1m]" embed context in brackets
+  const match = modelId.match(/\[(\d+)(k|m)\]/i);
+  if (match) {
+    const num = parseInt(match[1], 10);
+    return match[2].toLowerCase() === 'm' ? num * 1_000_000 : num * 1_000;
+  }
+  // Fall back to alias lookup
+  const lower = modelId.toLowerCase();
+  for (const [key, limit] of Object.entries(MODEL_CONTEXT_DEFAULTS)) {
+    if (lower.includes(key)) return limit;
+  }
+  return 200_000;
 };
 
 const formatTokenCount = (n: number): string => {
@@ -180,6 +314,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
   const [edits, setEdits] = createStore<Record<string, ComposerEditCard>>({});
   const [input, setInput] = createSignal('');
   const [model, setModel] = createSignal<string>('opus');
+  const [liveModelId, setLiveModelId] = createSignal<string>('');
   const [effort, setEffort] = createSignal<string>('auto');
   const [running, setRunning] = createSignal(false);
   const [activeTurnId, setActiveTurnId] = createSignal<string | null>(null);
@@ -272,7 +407,6 @@ export default function ComposerPane(props: ComposerPaneProps) {
   // handlers stay alive after a remount (e.g. tab switch that caused
   // SolidJS to dispose/recreate the component).
   const replayThinking = (events: ComposerEventRecord[]): string => {
-    console.log('[Composer] replayThinking: events count =', events.length, 'types =', [...new Set(events.map(e => `${e.type}:${e.subtype}`))]);
     let thinking = '';
     for (const e of events) {
       if (e.type === 'content_block_delta' && e.subtype === 'thinking_delta') {
@@ -315,7 +449,6 @@ export default function ComposerPane(props: ComposerPaneProps) {
         } catch { /* skip */ }
       }
     }
-    console.log('[Composer] replayToolUses:', tools.length, 'tools', tools.map(t => `${t.name}(${t.input.length}b)`));
     return tools;
   };
 
@@ -355,11 +488,6 @@ export default function ComposerPane(props: ComposerPaneProps) {
         blastRadius: 0,
       };
     });
-    console.log('[Composer] applyHistory:', history.length, 'turns, events per turn:', history.map(h => (h.events ?? []).length));
-    for (const h of history) {
-      console.log('[Composer] turn', h.turn.id, 'has', (h.events ?? []).length, 'events, keys:', Object.keys(h));
-      if (h.events?.length) console.log('[Composer] first event:', JSON.stringify(h.events[0]));
-    }
     const editsById: Record<string, ComposerEditCard> = {};
     for (const h of history) for (const e of (h.edits ?? [])) editsById[e.id] = e;
     for (const e of pending) editsById[e.id] = e;
@@ -404,6 +532,10 @@ export default function ComposerPane(props: ComposerPaneProps) {
       setConflicts([]);
       setConflictDismissed(false);
     });
+    const sessionInfo = sessions().find(s => s.session_id === sessionId);
+    if (sessionInfo?.name) {
+      renameTabByPane(paneId(), `Composer · ${sessionInfo.name}`);
+    }
     const [history, pending] = await Promise.all([
       composerHistoryBySession(sessionId),
       composerListPending(paneId()),
@@ -442,7 +574,6 @@ export default function ComposerPane(props: ComposerPaneProps) {
 
     // Load slash commands for autocomplete.
     composerListCommands(cwd()).then((cmds) => {
-      console.log('[Composer] loaded commands:', cmds.length, cmds.filter(c => c.name.startsWith('team')).map(c => c.name));
       setCommands(cmds);
     });
 
@@ -491,8 +622,6 @@ export default function ComposerPane(props: ComposerPaneProps) {
       return;
     }
 
-    console.log('[Composer] live event:', ev.type, ev);
-
     // Update sticky progress label
     switch (ev.type) {
       case 'thinking': setActivityLabel('Thinking...'); break;
@@ -509,8 +638,15 @@ export default function ComposerPane(props: ComposerPaneProps) {
     const turnId = ev.turn_id ?? activeTurnId();
     if (!turnId) return;
 
-    const idx = turns.findIndex(t => t.id === turnId);
-    if (idx < 0) return; // turn not found — nothing to update
+    let idx = turns.findIndex(t => t.id === turnId);
+
+    // Strategy events fire before composerSend returns, so the turn still
+    // has its client-side ID (turn-<timestamp>) — the server-assigned UUID
+    // won't match. Fall back to the last running turn.
+    if (idx < 0 && ev.type === 'strategy') {
+      idx = turns.findIndex(t => t.status === 'running');
+    }
+    if (idx < 0) return;
 
     switch (ev.type) {
       case 'delta':
@@ -599,6 +735,9 @@ export default function ComposerPane(props: ComposerPaneProps) {
           }
         }));
         break;
+      case 'init':
+        if (ev.content) setLiveModelId(ev.content);
+        break;
       case 'strategy':
         setTurns(idx, produce(turn => {
           if (ev.strategy_name != null) turn.strategyName = ev.strategy_name;
@@ -644,6 +783,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
   // Conflict detection — listen for repo/file overlap events from the backend.
   onWailsEvent<{ pane_id: string; conflict: ConflictInfo }>('composer:conflict', (data) => {
     if (data.pane_id !== paneId()) return;
+    if (data.conflict.type === 'repo') return; // Only warn on file-level conflicts
     setConflicts((prev) => {
       // Deduplicate by session pair + type.
       const exists = prev.some(
@@ -1013,11 +1153,18 @@ export default function ComposerPane(props: ComposerPaneProps) {
   const sessionTurnCount = () => turns.length;
 
   // ── Context window gauge ───────────────────────────────────────────────
+  // With --resume, each turn's input_tokens includes the full conversation
+  // context. Use the highest value seen across all turns (the most recent
+  // completed turn has the most accurate number). This prevents the gauge
+  // from resetting to 0 between turns.
   const contextUsed = () => {
-    if (turns.length === 0) return 0;
-    return turns[turns.length - 1].inputTokens;
+    let max = 0;
+    for (const t of turns) {
+      if (t.inputTokens > max) max = t.inputTokens;
+    }
+    return max;
   };
-  const contextMax = () => MODEL_CONTEXT_LIMITS[model()] ?? 200_000;
+  const contextMax = () => parseContextLimit(liveModelId() || model());
   const contextPercent = () => Math.min(100, (contextUsed() / contextMax()) * 100);
   const contextColor = () => {
     const pct = contextPercent();
@@ -1189,6 +1336,10 @@ export default function ComposerPane(props: ComposerPaneProps) {
             Session: ${sessionTotalCost().toFixed(4)}
             <span class={metricsStyles.metricsDot}>&middot;</span>
             {formatTokenCount(sessionTotalTokens())} tok
+            <span class={metricsStyles.metricsDot}>&middot;</span>
+            <span style={{ color: contextColor() === 'danger' ? 'var(--danger)' : contextColor() === 'warning' ? 'var(--warning)' : 'inherit' }}>
+              {contextPercent() > 0 ? `${(100 - contextPercent()).toFixed(0)}% left` : ''}
+            </span>
           </span>
         </Show>
         <Show when={running()}>
@@ -1213,7 +1364,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
       <WidgetBar />
 
       {/* Context window gauge */}
-      <Show when={contextUsed() > 0}>
+      <Show when={contextUsed() > 0 || running()}>
         <div class={metricsStyles.contextGauge} title={`Context: ${formatTokenCount(contextUsed())} / ${formatTokenCount(contextMax())} tokens (${contextPercent().toFixed(0)}%)`}>
           <div
             class={metricsStyles.contextGaugeFill}
@@ -1234,8 +1385,8 @@ export default function ComposerPane(props: ComposerPaneProps) {
           <AlertTriangle size={14} />
           <span class={styles.conflictBannerText}>
             {conflicts().length === 1
-              ? `Another session is editing this repo: "${getOtherSession(conflicts()[0]).name || 'Unknown'}"`
-              : `${conflicts().length} other sessions are editing this repo`}
+              ? `File conflict with "${getOtherSession(conflicts()[0]).name || 'another session'}": ${conflicts()[0].file_path?.split('/').pop() ?? 'unknown file'}`
+              : `${conflicts().length} file conflicts with other sessions`}
           </span>
           <button
             class={styles.conflictAction}
@@ -1330,7 +1481,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
               <Show when={turn.text}>
                 <div>
                   <span class={turnStyles.assistantBadge}>ASSISTANT</span>
-                  <ComposerMarkdown text={turn.text} />
+                  <ComposerMarkdown text={turn.text} cwd={cwd()} />
                 </div>
               </Show>
 

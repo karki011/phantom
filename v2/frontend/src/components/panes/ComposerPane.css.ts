@@ -656,6 +656,21 @@ globalStyle(`.${assistantText} a:hover`, {
   color: vars.color.accentHover,
 });
 
+// Clickable file-path links injected by linkifyFilePaths() post-render.
+globalStyle(`.${assistantText} a.file-link`, {
+  color: vars.color.accent,
+  textDecoration: 'none',
+  fontFamily: vars.font.mono,
+  fontSize: '0.9em',
+  cursor: 'pointer',
+  borderBottom: `1px dashed transparent`,
+  transition: 'border-color 120ms ease, color 120ms ease',
+});
+globalStyle(`.${assistantText} a.file-link:hover`, {
+  color: vars.color.accentHover,
+  borderBottomColor: vars.color.accent,
+});
+
 globalStyle(`.${assistantText} blockquote`, {
   borderLeft: `2px solid ${vars.color.accent}`,
   paddingLeft: vars.space.md,

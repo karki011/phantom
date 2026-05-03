@@ -7,6 +7,7 @@
 package filegraph
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -156,13 +157,28 @@ func (g *Graph) Neighbors(path string, depth int) []*FileNode {
 
 // SymbolLookup finds all files that declare a symbol with the given name.
 func (g *Graph) SymbolLookup(name string) []*FileNode {
+	return g.symbolLookup(name, false)
+}
+
+// SymbolLookupFold finds all files declaring a symbol matching name
+// case-insensitively. Used by prompt-based inference where user input
+// may not match the exact casing of source declarations.
+func (g *Graph) SymbolLookupFold(name string) []*FileNode {
+	return g.symbolLookup(name, true)
+}
+
+func (g *Graph) symbolLookup(name string, fold bool) []*FileNode {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
 	var result []*FileNode
 	for _, node := range g.nodes {
 		for _, sym := range node.Symbols {
-			if sym.Name == name {
+			match := sym.Name == name
+			if fold && !match {
+				match = strings.EqualFold(sym.Name, name)
+			}
+			if match {
 				cp := *node
 				result = append(result, &cp)
 				break
@@ -170,6 +186,53 @@ func (g *Graph) SymbolLookup(name string) []*FileNode {
 		}
 	}
 	return result
+}
+
+// SymbolUsageLookup finds all files that either declare OR import a symbol
+// matching name (case-insensitive). This catches consumer files that use a
+// symbol via barrel re-exports where the import edge doesn't trace back to
+// the declaring file directly.
+func (g *Graph) SymbolUsageLookup(name string) []*FileNode {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	lower := strings.ToLower(name)
+	seen := make(map[string]struct{})
+	var result []*FileNode
+	for _, node := range g.nodes {
+		for _, sym := range node.Symbols {
+			if strings.EqualFold(sym.Name, name) {
+				if _, ok := seen[node.Path]; !ok {
+					seen[node.Path] = struct{}{}
+					cp := *node
+					result = append(result, &cp)
+				}
+				break
+			}
+		}
+		for _, imp := range node.Imports {
+			if strings.Contains(strings.ToLower(imp), lower) {
+				if _, ok := seen[node.Path]; !ok {
+					seen[node.Path] = struct{}{}
+					cp := *node
+					result = append(result, &cp)
+				}
+				break
+			}
+		}
+	}
+	return result
+}
+
+// WalkNodes calls fn for every node in the graph. The callback receives a
+// read-only copy so it's safe to call concurrently with Upsert.
+func (g *Graph) WalkNodes(fn func(node *FileNode)) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	for _, node := range g.nodes {
+		cp := *node
+		fn(&cp)
+	}
 }
 
 // Stats returns basic metrics about the graph.

@@ -18,6 +18,8 @@ func TestDebate_ShouldActivate(t *testing.T) {
 		{"high+complex", TaskAssessment{Risk: HighRisk, Complexity: Complex}, 0.8},
 		{"high+simple", TaskAssessment{Risk: HighRisk, Complexity: Simple}, 0.6},
 		{"large blast", TaskAssessment{Risk: LowRisk, Complexity: Simple, BlastRadius: 20}, 0.7},
+		{"ambiguous high score", TaskAssessment{Risk: LowRisk, Complexity: Simple, IsAmbiguous: true, AmbiguityScore: 0.6}, 0.85},
+		{"ambiguous low score", TaskAssessment{Risk: LowRisk, Complexity: Simple, IsAmbiguous: true, AmbiguityScore: 0.2}, 0.7},
 		{"low risk", TaskAssessment{Risk: LowRisk, Complexity: Simple}, 0.05},
 	}
 	for _, tt := range tests {
