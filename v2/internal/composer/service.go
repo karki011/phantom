@@ -107,6 +107,11 @@ type Service struct {
 	// Composer panes (or other sources) target the same repo or edit the
 	// same files. Optional — nil means conflict detection is disabled.
 	conflicts *conflict.Tracker
+
+	// memoryBuilder assembles a session memory block for injection into the
+	// Claude system prompt on the first turn of new sessions. Optional — nil
+	// means no memory injection (pre-existing behaviour preserved).
+	memoryBuilder *SessionMemoryBuilder
 }
 
 // NewService constructs a Composer service. emit should be wired to
@@ -156,6 +161,14 @@ func (s *Service) SetConflictTracker(t *conflict.Tracker) {
 			"conflict": c,
 		})
 	})
+}
+
+// SetMemoryBuilder registers a SessionMemoryBuilder for injection into new
+// sessions. The builder's Indexer field is resolved per-turn from the CWD
+// (via the indexerResolver) so the memory sees the correct project graph.
+// Passing nil disables memory injection.
+func (s *Service) SetMemoryBuilder(b *SessionMemoryBuilder) {
+	s.memoryBuilder = b
 }
 
 // ---------------------------------------------------------------------------
@@ -689,6 +702,33 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 	if args.NoContext {
 		cliArgs = append(cliArgs, "--setting-sources", "")
 	}
+
+	// Session memory injection — first turn only.
+	// On --resume, the system prompt (including memory) persists from the
+	// first turn's --append-system-prompt, so re-injection is unnecessary.
+	if !isResume && !args.NoContext && s.memoryBuilder != nil {
+		builder := *s.memoryBuilder // shallow copy
+		// Resolve per-turn indexer so memory sees the correct project graph.
+		if s.indexerResolver != nil && args.CWD != "" {
+			if ix := s.indexerResolver(args.CWD); ix != nil {
+				builder.Indexer = ix
+			}
+		}
+		if block := builder.Build(); block != "" {
+			cliArgs = append(cliArgs, "--append-system-prompt", block)
+			log.Info("composer: session memory injected",
+				"chars", len(block),
+				"session", sessionID,
+			)
+			s.emit("composer:event", Event{
+				PaneID:  args.PaneID,
+				TurnID:  turnID,
+				Type:    "memory_loaded",
+				Content: fmt.Sprintf("Session memory: %d chars injected", len(block)),
+			})
+		}
+	}
+
 	cmd := exec.CommandContext(ctx, cliPath, cliArgs...)
 
 	// CWD selection:
