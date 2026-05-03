@@ -278,3 +278,24 @@ export async function composerListSkills(cwd: string): Promise<ComposerSkill[]> 
     return [];
   }
 }
+
+// ── Slash command autocomplete ───────────────────────────────────────
+
+export interface ComposerCommand {
+  name: string;
+  description: string;
+  argument_hint: string;
+  model: string;
+  allowed_tools: string;
+  source: string; // "project" | "global" | "plugin:<name>"
+  file_path: string;
+}
+
+export async function composerListCommands(cwd: string): Promise<ComposerCommand[]> {
+  try {
+    const raw = (await App()?.ComposerListCommands(cwd)) ?? [];
+    return normalize<ComposerCommand[]>(raw);
+  } catch {
+    return [];
+  }
+}

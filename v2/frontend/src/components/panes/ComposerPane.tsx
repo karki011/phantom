@@ -65,6 +65,8 @@ import {
   composerListSessions,
   composerHistoryBySession,
   composerResumeSession,
+  composerListCommands,
+  type ComposerCommand,
   type ComposerEvent,
   type ComposerEditCard,
   type ComposerEventRecord,
@@ -186,10 +188,30 @@ export default function ComposerPane(props: ComposerPaneProps) {
   // per-user default so power users who always want clean answers don't
   // have to flip it every time.
   const [noContext, setNoContext] = createSignal(false);
-  const [autoAccept, setAutoAccept] = createSignal(false);
+  const [autoAccept, setAutoAccept] = createSignal(true);
   const [dragOver, setDragOver] = createSignal(false);
   const [showMemory, setShowMemory] = createSignal(false);
   const [showSkills, setShowSkills] = createSignal(false);
+  const COMPOSER_FONT_SIZES = [11, 12, 13, 14, 15, 16, 18, 20] as const;
+  const [composerFontSize, setComposerFontSize] = createSignal(13);
+
+  // Sticky progress indicator — shows last activity so user doesn't have to scroll
+  const [activityLabel, setActivityLabel] = createSignal('');
+
+  // Slash command autocomplete
+  const [commands, setCommands] = createSignal<ComposerCommand[]>([]);
+  const [showCommandPalette, setShowCommandPalette] = createSignal(false);
+  const [commandFilter, setCommandFilter] = createSignal('');
+  const [commandIdx, setCommandIdx] = createSignal(0);
+
+  const filteredCommands = () => {
+    const filter = commandFilter().toLowerCase();
+    if (!filter) return commands();
+    return commands().filter(c =>
+      c.name.toLowerCase().includes(filter) ||
+      c.description.toLowerCase().includes(filter)
+    );
+  };
 
   // Past Sessions sidebar — list, collapsed-state, and the currently
   // active claude session_id. activeSessionId tracks the live session this
@@ -215,10 +237,26 @@ export default function ComposerPane(props: ComposerPaneProps) {
   let feedRef: HTMLDivElement | undefined;
   let textareaRef: HTMLTextAreaElement | undefined;
 
-  const scrollToBottom = () => {
+  const SCROLL_THRESHOLD = 80;
+  const [userScrolledUp, setUserScrolledUp] = createSignal(false);
+
+  const isNearBottom = (): boolean => {
+    if (!feedRef) return true;
+    return feedRef.scrollHeight - feedRef.scrollTop - feedRef.clientHeight < SCROLL_THRESHOLD;
+  };
+
+  const scrollToBottom = (force = false) => {
     requestAnimationFrame(() => {
-      if (feedRef) feedRef.scrollTop = feedRef.scrollHeight;
+      if (!feedRef) return;
+      if (force || !userScrolledUp()) {
+        feedRef.scrollTop = feedRef.scrollHeight;
+        setUserScrolledUp(false);
+      }
     });
+  };
+
+  const handleFeedScroll = () => {
+    setUserScrolledUp(!isNearBottom());
   };
 
   // ── Rehydration helpers ──────────────────────────────────────────────
@@ -388,11 +426,21 @@ export default function ComposerPane(props: ComposerPaneProps) {
 
     // Auto-accept edits toggle — when on, edit cards are accepted as they arrive.
     void loadPref('composer_auto_accept_edits').then((val) => {
-      if (val === 'true') setAutoAccept(true);
+      if (val === 'false') setAutoAccept(false);
+    });
+    void loadPref('composer_font_size').then((val) => {
+      const n = Number(val);
+      if (n && COMPOSER_FONT_SIZES.includes(n as any)) setComposerFontSize(n);
     });
 
     // Kick off the sessions list in parallel — doesn't block history load.
     void refreshSessions();
+
+    // Load slash commands for autocomplete.
+    composerListCommands(cwd()).then((cmds) => {
+      console.log('[Composer] loaded commands:', cmds.length, cmds.filter(c => c.name.startsWith('team')).map(c => c.name));
+      setCommands(cmds);
+    });
 
     // If this pane was opened with a sessionId from the sidebar, bind it
     // BEFORE the rehydration query so the next Send resumes correctly,
@@ -440,6 +488,19 @@ export default function ComposerPane(props: ComposerPaneProps) {
     }
 
     console.log('[Composer] live event:', ev.type, ev);
+
+    // Update sticky progress label
+    switch (ev.type) {
+      case 'thinking': setActivityLabel('Thinking...'); break;
+      case 'delta': setActivityLabel('Writing response...'); break;
+      case 'tool_use': {
+        const summary = extractToolSummary(ev.tool_name ?? 'tool', ev.tool_input ?? '{}');
+        setActivityLabel(`${ev.tool_name} — ${summary.label}`);
+        break;
+      }
+      case 'tool_result': setActivityLabel('Processing result...'); break;
+      case 'done': case 'error': setActivityLabel(''); break;
+    }
 
     const turnId = ev.turn_id ?? activeTurnId();
     if (!turnId) return;
@@ -761,6 +822,33 @@ export default function ComposerPane(props: ComposerPaneProps) {
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    // Slash command palette navigation
+    if (showCommandPalette()) {
+      const cmds = filteredCommands();
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setCommandIdx(i => Math.min(i + 1, cmds.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setCommandIdx(i => Math.max(i - 1, 0));
+        return;
+      }
+      if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && cmds.length > 0) {
+        e.preventDefault();
+        const selected = cmds[commandIdx()];
+        setInput('/' + selected.name + ' ');
+        setShowCommandPalette(false);
+        textareaRef?.focus();
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowCommandPalette(false);
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       handleSend();
@@ -1138,7 +1226,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
       </Show>
 
       {/* Conversation feed */}
-      <div class={styles.feed} ref={feedRef}>
+      <div class={styles.feed} ref={feedRef} onScroll={handleFeedScroll} style={{ 'font-size': `${composerFontSize()}px` }}>
         <Show when={turns.length === 0}>
           <div class={styles.emptyState}>
             Ask Composer to make changes across files. Try{' '}
@@ -1243,10 +1331,22 @@ export default function ComposerPane(props: ComposerPaneProps) {
         </For>
       </div>
 
-      {/* Composer / textarea / model picker / send hint.
-          Drag-drop accepts both Finder files (DataTransfer.files[].path)
-          and internal sidebar drags (text/phantom-path mime). Each dropped
-          item lands as a fresh @mention chip. */}
+      <Show when={userScrolledUp() && running()}>
+        <button
+          class={styles.jumpToLatest}
+          type="button"
+          onClick={() => scrollToBottom(true)}
+        >
+          ↓ Jump to latest
+        </button>
+      </Show>
+
+      <Show when={running() && activityLabel()}>
+        <div class={styles.progressStrip}>
+          <span class={styles.progressDot} />
+          <span class={styles.progressLabel}>{activityLabel()}</span>
+        </div>
+      </Show>
       <div
         class={`${styles.composerArea} ${dragOver() ? styles.composerAreaDragOver : ''}`}
         onDragOver={handleDragOver}
@@ -1268,12 +1368,47 @@ export default function ComposerPane(props: ComposerPaneProps) {
           </div>
         </Show>
 
+        <Show when={showCommandPalette() && filteredCommands().length > 0}>
+          <div class={styles.commandPalette}>
+            <For each={filteredCommands()}>
+              {(cmd, i) => (
+                <div
+                  class={`${styles.commandItem} ${i() === commandIdx() ? styles.commandItemActive : ''}`}
+                  onClick={() => {
+                    setInput('/' + cmd.name + ' ');
+                    setShowCommandPalette(false);
+                    textareaRef?.focus();
+                  }}
+                >
+                  <span class={styles.commandName}>/{cmd.name}</span>
+                  <Show when={cmd.description}>
+                    <span class={styles.commandDesc}>{cmd.description}</span>
+                  </Show>
+                  <span class={styles.commandSource}>{cmd.source}</span>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
+
         <textarea
           ref={textareaRef}
           class={styles.textarea}
           placeholder="What should Composer do… (paste an image to attach it)"
           value={input()}
-          onInput={(e) => setInput(e.currentTarget.value)}
+          onInput={(e) => {
+            const val = e.currentTarget.value;
+            setInput(val);
+            // Detect slash command prefix
+            if (val.startsWith('/') && !val.includes('\n')) {
+              const filter = val.slice(1).split(' ')[0];
+              setCommandFilter(filter);
+              setShowCommandPalette(true);
+              setCommandIdx(0);
+            } else {
+              setShowCommandPalette(false);
+            }
+          }}
           onKeyDown={handleKeyDown}
           onPaste={handleTextareaPaste}
           rows={3}
@@ -1355,6 +1490,38 @@ export default function ComposerPane(props: ComposerPaneProps) {
                   const label = EFFORTS.find((e) => e.value === state.selectedOption())?.label ?? state.selectedOption();
                   return `Effort: ${label}`;
                 }}
+              </Select.Value>
+              <Select.Icon class={styles.modelSelectIcon}>
+                <ChevronDown size={12} />
+              </Select.Icon>
+            </Select.Trigger>
+            <Select.Portal>
+              <Select.Content class={styles.modelSelectContent}>
+                <Select.Listbox class={styles.modelSelectListbox} />
+              </Select.Content>
+            </Select.Portal>
+          </Select>
+
+          <Select<string>
+            value={String(composerFontSize())}
+            onChange={(val) => {
+              if (val === null) return;
+              const n = Number(val);
+              setComposerFontSize(n);
+              void setPref('composer_font_size', String(n));
+            }}
+            options={COMPOSER_FONT_SIZES.map(String)}
+            itemComponent={(itemProps) => (
+              <Select.Item item={itemProps.item} class={styles.modelSelectItem}>
+                <Select.ItemLabel class={styles.modelSelectItemLabel}>
+                  {itemProps.item.rawValue}px
+                </Select.ItemLabel>
+              </Select.Item>
+            )}
+          >
+            <Select.Trigger class={styles.modelSelectTrigger} title="Composer font size">
+              <Select.Value<string> class={styles.modelSelectValue}>
+                {(state) => `${state.selectedOption()}px`}
               </Select.Value>
               <Select.Icon class={styles.modelSelectIcon}>
                 <ChevronDown size={12} />
