@@ -192,6 +192,11 @@ export default function ComposerPane(props: ComposerPaneProps) {
   const [dragOver, setDragOver] = createSignal(false);
   const [showMemory, setShowMemory] = createSignal(false);
   const [showSkills, setShowSkills] = createSignal(false);
+  const COMPOSER_FONT_SIZES = [11, 12, 13, 14, 15, 16, 18, 20] as const;
+  const [composerFontSize, setComposerFontSize] = createSignal(13);
+
+  // Sticky progress indicator — shows last activity so user doesn't have to scroll
+  const [activityLabel, setActivityLabel] = createSignal('');
 
   // Slash command autocomplete
   const [commands, setCommands] = createSignal<ComposerCommand[]>([]);
@@ -232,10 +237,26 @@ export default function ComposerPane(props: ComposerPaneProps) {
   let feedRef: HTMLDivElement | undefined;
   let textareaRef: HTMLTextAreaElement | undefined;
 
-  const scrollToBottom = () => {
+  const SCROLL_THRESHOLD = 80;
+  const [userScrolledUp, setUserScrolledUp] = createSignal(false);
+
+  const isNearBottom = (): boolean => {
+    if (!feedRef) return true;
+    return feedRef.scrollHeight - feedRef.scrollTop - feedRef.clientHeight < SCROLL_THRESHOLD;
+  };
+
+  const scrollToBottom = (force = false) => {
     requestAnimationFrame(() => {
-      if (feedRef) feedRef.scrollTop = feedRef.scrollHeight;
+      if (!feedRef) return;
+      if (force || !userScrolledUp()) {
+        feedRef.scrollTop = feedRef.scrollHeight;
+        setUserScrolledUp(false);
+      }
     });
+  };
+
+  const handleFeedScroll = () => {
+    setUserScrolledUp(!isNearBottom());
   };
 
   // ── Rehydration helpers ──────────────────────────────────────────────
@@ -407,6 +428,10 @@ export default function ComposerPane(props: ComposerPaneProps) {
     void loadPref('composer_auto_accept_edits').then((val) => {
       if (val === 'false') setAutoAccept(false);
     });
+    void loadPref('composer_font_size').then((val) => {
+      const n = Number(val);
+      if (n && COMPOSER_FONT_SIZES.includes(n as any)) setComposerFontSize(n);
+    });
 
     // Kick off the sessions list in parallel — doesn't block history load.
     void refreshSessions();
@@ -460,6 +485,19 @@ export default function ComposerPane(props: ComposerPaneProps) {
     }
 
     console.log('[Composer] live event:', ev.type, ev);
+
+    // Update sticky progress label
+    switch (ev.type) {
+      case 'thinking': setActivityLabel('Thinking...'); break;
+      case 'delta': setActivityLabel('Writing response...'); break;
+      case 'tool_use': {
+        const summary = extractToolSummary(ev.tool_name ?? 'tool', ev.tool_input ?? '{}');
+        setActivityLabel(`${ev.tool_name} — ${summary.label}`);
+        break;
+      }
+      case 'tool_result': setActivityLabel('Processing result...'); break;
+      case 'done': case 'error': setActivityLabel(''); break;
+    }
 
     const turnId = ev.turn_id ?? activeTurnId();
     if (!turnId) return;
@@ -1185,7 +1223,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
       </Show>
 
       {/* Conversation feed */}
-      <div class={styles.feed} ref={feedRef}>
+      <div class={styles.feed} ref={feedRef} onScroll={handleFeedScroll} style={{ 'font-size': `${composerFontSize()}px` }}>
         <Show when={turns.length === 0}>
           <div class={styles.emptyState}>
             Ask Composer to make changes across files. Try{' '}
@@ -1290,10 +1328,22 @@ export default function ComposerPane(props: ComposerPaneProps) {
         </For>
       </div>
 
-      {/* Composer / textarea / model picker / send hint.
-          Drag-drop accepts both Finder files (DataTransfer.files[].path)
-          and internal sidebar drags (text/phantom-path mime). Each dropped
-          item lands as a fresh @mention chip. */}
+      <Show when={userScrolledUp() && running()}>
+        <button
+          class={styles.jumpToLatest}
+          type="button"
+          onClick={() => scrollToBottom(true)}
+        >
+          ↓ Jump to latest
+        </button>
+      </Show>
+
+      <Show when={running() && activityLabel()}>
+        <div class={styles.progressStrip}>
+          <span class={styles.progressDot} />
+          <span class={styles.progressLabel}>{activityLabel()}</span>
+        </div>
+      </Show>
       <div
         class={`${styles.composerArea} ${dragOver() ? styles.composerAreaDragOver : ''}`}
         onDragOver={handleDragOver}
@@ -1437,6 +1487,38 @@ export default function ComposerPane(props: ComposerPaneProps) {
                   const label = EFFORTS.find((e) => e.value === state.selectedOption())?.label ?? state.selectedOption();
                   return `Effort: ${label}`;
                 }}
+              </Select.Value>
+              <Select.Icon class={styles.modelSelectIcon}>
+                <ChevronDown size={12} />
+              </Select.Icon>
+            </Select.Trigger>
+            <Select.Portal>
+              <Select.Content class={styles.modelSelectContent}>
+                <Select.Listbox class={styles.modelSelectListbox} />
+              </Select.Content>
+            </Select.Portal>
+          </Select>
+
+          <Select<string>
+            value={String(composerFontSize())}
+            onChange={(val) => {
+              if (val === null) return;
+              const n = Number(val);
+              setComposerFontSize(n);
+              void setPref('composer_font_size', String(n));
+            }}
+            options={COMPOSER_FONT_SIZES.map(String)}
+            itemComponent={(itemProps) => (
+              <Select.Item item={itemProps.item} class={styles.modelSelectItem}>
+                <Select.ItemLabel class={styles.modelSelectItemLabel}>
+                  {itemProps.item.rawValue}px
+                </Select.ItemLabel>
+              </Select.Item>
+            )}
+          >
+            <Select.Trigger class={styles.modelSelectTrigger} title="Composer font size">
+              <Select.Value<string> class={styles.modelSelectValue}>
+                {(state) => `${state.selectedOption()}px`}
               </Select.Value>
               <Select.Icon class={styles.modelSelectIcon}>
                 <ChevronDown size={12} />

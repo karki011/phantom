@@ -146,6 +146,25 @@ export default function AppearanceSection() {
         </div>
       </div>
 
+      {/* Font Size */}
+      <div class={styles.settingGroup}>
+        <span class={styles.settingGroupHeader}>
+          Font Size · {Math.round(16 * (ZOOM_LEVELS.find(z => z.id === activeZoom())?.scale ?? 1))}px
+        </span>
+        <input
+          type="range"
+          class={styles.sliderInput}
+          min={0}
+          max={ZOOM_LEVELS.length - 1}
+          step={1}
+          value={ZOOM_LEVELS.findIndex(z => z.id === activeZoom())}
+          onInput={(e) => {
+            const idx = Number(e.currentTarget.value);
+            if (ZOOM_LEVELS[idx]) applyZoom(ZOOM_LEVELS[idx].id as ZoomLevelId);
+          }}
+        />
+      </div>
+
       {/* Brightness */}
       <div class={styles.settingGroup}>
         <span class={styles.settingGroupHeader}>Brightness · {activeBrightness()}%</span>

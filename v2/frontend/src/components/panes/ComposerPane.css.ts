@@ -74,7 +74,7 @@ export const feed = style({
 });
 
 export const userTurn = style({
-  fontSize: vars.fontSize.sm,
+  fontSize: 'inherit',
   color: vars.color.textPrimary,
   selectors: {
     '&::before': {
@@ -93,7 +93,7 @@ export const userTurn = style({
 });
 
 export const assistantText = style({
-  fontSize: vars.fontSize.sm,
+  fontSize: 'inherit',
   color: vars.color.textPrimary,
   wordBreak: 'break-word',
   lineHeight: 1.6,
@@ -219,7 +219,8 @@ export const thinkingBlock = style({
 
 export const composerArea = style({
   borderTop: `1px solid ${vars.color.divider}`,
-  padding: `${vars.space.md} ${vars.space.xxl} ${vars.space.lg}`,
+  padding: `${vars.space.lg} ${vars.space.xxl} ${vars.space.xl}`,
+  marginTop: vars.space.sm,
   background: vars.color.bgSecondary,
   display: 'flex',
   flexDirection: 'column',
@@ -274,9 +275,10 @@ export const textarea = style({
 export const composerToolbar = style({
   display: 'flex',
   alignItems: 'center',
-  gap: vars.space.sm,
+  gap: vars.space.md,
   fontSize: vars.fontSize.xs,
   color: vars.color.textSecondary,
+  paddingTop: vars.space.xs,
 });
 
 export const grow = style({ flex: 1 });
@@ -382,6 +384,69 @@ export const stopBtn = style({
   ':hover': {
     background: 'rgba(255, 98, 126, 0.12)',
   },
+});
+
+export const fontSizeSelect = style({
+  background: vars.color.bgPrimary,
+  border: `1px solid ${vars.color.border}`,
+  color: vars.color.textSecondary,
+  borderRadius: vars.radius.sm,
+  padding: '2px 4px',
+  fontSize: '11px',
+  fontFamily: vars.font.mono,
+  cursor: 'pointer',
+  outline: 'none',
+  ':focus': {
+    borderColor: vars.color.borderFocus,
+  },
+});
+
+export const jumpToLatest = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: vars.space.xs,
+  width: '100%',
+  padding: `${vars.space.xs} 0`,
+  background: `color-mix(in srgb, ${vars.color.accent} 10%, ${vars.color.bgSecondary})`,
+  border: 'none',
+  borderTop: `1px solid ${vars.color.divider}`,
+  color: vars.color.accent,
+  fontSize: vars.fontSize.xs,
+  fontWeight: 500,
+  cursor: 'pointer',
+  flexShrink: 0,
+  ':hover': {
+    background: `color-mix(in srgb, ${vars.color.accent} 18%, ${vars.color.bgSecondary})`,
+  },
+});
+
+export const progressStrip = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  padding: `${vars.space.xs} ${vars.space.xxl}`,
+  borderTop: `1px solid ${vars.color.divider}`,
+  background: `color-mix(in srgb, ${vars.color.accent} 5%, ${vars.color.bgSecondary})`,
+  fontSize: vars.fontSize.xs,
+  color: vars.color.textSecondary,
+  flexShrink: 0,
+});
+
+export const progressDot = style({
+  width: 6,
+  height: 6,
+  borderRadius: '50%',
+  background: vars.color.accent,
+  animation: `${pendingDotPulse} 1.2s ease-in-out infinite`,
+  flexShrink: 0,
+});
+
+export const progressLabel = style({
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  fontFamily: vars.font.mono,
 });
 
 export const emptyState = style({

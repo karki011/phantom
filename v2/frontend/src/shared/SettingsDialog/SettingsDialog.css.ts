@@ -81,8 +81,8 @@ export const settingDescription = style({
 
 export const themeGrid = style({
   display: 'grid',
-  gridTemplateColumns: 'repeat(4, 1fr)',
-  gap: vars.space.md,
+  gridTemplateColumns: 'repeat(6, 1fr)',
+  gap: vars.space.xs,
 });
 
 export const themeSwatch = style({
@@ -90,12 +90,12 @@ export const themeSwatch = style({
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: vars.space.xs,
+  gap: '2px',
   cursor: 'pointer',
   background: 'transparent',
   border: 'none',
-  padding: vars.space.sm,
-  borderRadius: vars.radius.md,
+  padding: vars.space.xs,
+  borderRadius: vars.radius.sm,
   transition: `all ${vars.animation.fast} ease`,
   selectors: {
     '&:hover': {
@@ -152,9 +152,10 @@ globalStyle(`${themeSelectedLabel} > strong`, {
 
 export const themeSwatchLabel = style({
   fontFamily: vars.font.body,
-  fontSize: vars.fontSize.xs,
+  fontSize: '9px',
   color: vars.color.textSecondary,
   textAlign: 'center',
+  lineHeight: 1.2,
 });
 
 export const segmentedControl = style({
@@ -237,8 +238,8 @@ export const settingGroupHeader = style({
 });
 
 export const themeSwatchCircle = style({
-  width: '32px',
-  height: '32px',
+  width: '22px',
+  height: '22px',
   borderRadius: vars.radius.full,
   border: `2px solid ${vars.color.border}`,
   transition: `all ${vars.animation.fast} ease`,
