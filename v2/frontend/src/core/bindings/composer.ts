@@ -178,6 +178,7 @@ export interface ComposerSessionSummary {
   last_activity: number; // unix seconds
   total_cost: number;
   cwd: string;
+  was_interrupted: boolean; // true if session was interrupted by a crash/force-quit
 }
 
 /**

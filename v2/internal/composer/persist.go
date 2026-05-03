@@ -251,7 +251,8 @@ func (s *Service) querySessionSummaries(ctx context.Context, limit int) ([]Sessi
 				COUNT(*)                AS turn_count,
 				MAX(started_at)         AS last_activity,
 				COALESCE(SUM(cost_usd), 0) AS total_cost,
-				MIN(started_at)         AS first_started_at
+				MIN(started_at)         AS first_started_at,
+				MAX(was_interrupted)    AS was_interrupted
 			FROM composer_turns
 			WHERE session_id IS NOT NULL AND session_id != ''
 			GROUP BY session_id
@@ -275,7 +276,8 @@ func (s *Service) querySessionSummaries(ctx context.Context, limit int) ([]Sessi
 					WHERE session_id = a.session_id AND cwd IS NOT NULL AND cwd != ''
 					ORDER BY started_at ASC LIMIT 1),
 				''
-			) AS cwd
+			) AS cwd,
+			a.was_interrupted
 		FROM agg a
 		LEFT JOIN firsts f ON f.session_id = a.session_id
 		LEFT JOIN sessions s ON s.id = a.session_id
@@ -290,10 +292,12 @@ func (s *Service) querySessionSummaries(ctx context.Context, limit int) ([]Sessi
 	out := make([]SessionSummary, 0)
 	for rows.Next() {
 		var s SessionSummary
+		var interrupted int
 		if err := rows.Scan(&s.SessionID, &s.Name, &s.FirstPaneID, &s.FirstPrompt,
-			&s.TurnCount, &s.LastActivity, &s.TotalCost, &s.Cwd); err != nil {
+			&s.TurnCount, &s.LastActivity, &s.TotalCost, &s.Cwd, &interrupted); err != nil {
 			return nil, err
 		}
+		s.WasInterrupted = interrupted > 0
 		// Truncate prompt to 200 bytes to keep the JSON payload bounded.
 		// We slice on a rune boundary to avoid splitting a multi-byte char.
 		if len(s.FirstPrompt) > 200 {
@@ -375,6 +379,31 @@ func (s *Service) queryExistingSessionNames(ctx context.Context) map[string]bool
 		}
 	}
 	return out
+}
+
+// ReapInterruptedTurns marks every composer turn still in "running" status as
+// interrupted. Called at app startup — if any turn is still "running" but the
+// app is just booting, its process is dead (crash / force-quit). Sets
+// was_interrupted=1 and status='error' so the sidebar can prompt the user to
+// resume. Returns the number of turns reaped.
+func (s *Service) ReapInterruptedTurns(ctx context.Context) int {
+	const q = `UPDATE composer_turns
+		SET status = 'error', was_interrupted = 1, completed_at = strftime('%s','now')
+		WHERE status = 'running'`
+	res, err := s.writer.ExecContext(ctx, q)
+	if err != nil {
+		return 0
+	}
+	n, _ := res.RowsAffected()
+	return int(n)
+}
+
+// ClearInterruptedFlag clears the was_interrupted flag for all turns in the
+// given session. Called when the user resumes an interrupted session so the
+// badge disappears from the sidebar.
+func (s *Service) ClearInterruptedFlag(ctx context.Context, sessionID string) {
+	const q = `UPDATE composer_turns SET was_interrupted = 0 WHERE session_id = ? AND was_interrupted = 1`
+	_, _ = s.writer.ExecContext(ctx, q, sessionID)
 }
 
 // Compile-time guard: ensure sql.DB pointer compiles.

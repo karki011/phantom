@@ -29,6 +29,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -54,11 +55,20 @@ type IndexerResolver func(cwd string) *filegraph.Indexer
 
 const (
 	defaultModel = "opus"
-	// maxResponseText caps the persisted assistant text per turn at 1 MiB.
-	// Beyond that we silently drop further chunks so a runaway agent can't
-	// balloon a single row to disk-busting size. The live stream UI still
-	// gets every delta; only the persisted copy is truncated.
 	maxResponseText = 1 << 20
+
+	aiEngineDirective = `<phantom-ai-engine>
+You have access to Phantom's AI engine via MCP tools. BEFORE modifying any file, call phantom_before_edit with the file paths — it returns dependency graph context, blast radius, related files, and strategy guidance in one call.
+
+Available tools:
+- phantom_before_edit: REQUIRED before editing. Returns everything in one call.
+- phantom_graph_context: Deep-dive into a file's dependencies.
+- phantom_graph_blast_radius: What breaks if a file changes.
+- phantom_graph_related: Find all files involved in a feature.
+- phantom_evaluate_output: Validate your response for hallucinated paths.
+
+Use these to make informed edits — don't guess at file relationships.
+</phantom-ai-engine>`
 )
 
 // Service runs Composer turns per pane.
@@ -243,6 +253,11 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 	// Build the prompt with @file mentions inlined as <file> tags.
 	prompt := buildPromptWithMentions(args.Prompt, args.Mentions, args.CWD)
 
+	// Inject AI engine instructions so Claude knows to use phantom-ai tools.
+	if !args.NoContext {
+		prompt = aiEngineDirective + "\n\n" + prompt
+	}
+
 	// Route through Phantom's AI engine: pick a strategy, gather graph
 	// context, record a decision. Skipped entirely in NoContext mode (the
 	// user explicitly asked for no workspace awareness) or when the engine
@@ -256,14 +271,40 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 		// Send sees the correct project graph (the user can switch active
 		// worktrees mid-session).
 		turnDeps := s.engineDeps
+		var resolvedIndexer *filegraph.Indexer
 		if s.indexerResolver != nil && args.CWD != "" {
-			if ix := s.indexerResolver(args.CWD); ix != nil {
-				turnDeps.Indexer = ix
+			resolvedIndexer = s.indexerResolver(args.CWD)
+			if resolvedIndexer != nil {
+				turnDeps.Indexer = resolvedIndexer
 			}
 		}
+
+		// Build ActiveFiles from explicit @file mentions + auto-detected
+		// symbols in the prompt. Without this, blast radius is always 0
+		// and the orchestrator can't differentiate a simple question from
+		// a multi-file refactor.
+		activeFiles := mentionPaths(args.Mentions, args.CWD)
+		if resolvedIndexer != nil {
+			if inferred := inferFilesFromPrompt(resolvedIndexer, args.Prompt); len(inferred) > 0 {
+				activeFiles = append(activeFiles, inferred...)
+				log.Info("composer: symbol inference",
+					"symbols_found", len(inferred),
+					"files", inferred,
+				)
+			}
+		}
+
+		log.Debug("composer: orchestrator — entering Process",
+			"pane_id", args.PaneID,
+			"cwd", args.CWD,
+			"has_indexer", resolvedIndexer != nil,
+			"has_registry", turnDeps.Registry != nil,
+			"has_decisions", turnDeps.Decisions != nil,
+			"active_files", len(activeFiles),
+		)
 		if result, err := orchestrator.Process(ctx, turnDeps, orchestrator.ProcessInput{
 			Goal:        args.Prompt,
-			ActiveFiles: mentionPaths(args.Mentions, args.CWD),
+			ActiveFiles: activeFiles,
 		}); err == nil && result != nil {
 			if result.Learning != nil {
 				decisionID = result.Learning.DecisionID
@@ -271,6 +312,13 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 			if directive := strings.TrimSpace(result.Output.Text); directive != "" && directive != strings.TrimSpace(args.Prompt) {
 				prompt = directive + "\n\n" + prompt
 			}
+			log.Info("composer: orchestrator — strategy selected",
+				"strategy", result.Strategy.Name,
+				"confidence", result.Confidence,
+				"complexity", result.TaskContext.Complexity,
+				"risk", result.TaskContext.Risk,
+				"blast_radius", result.Context.BlastRadius,
+			)
 			// Emit strategy metadata so the frontend can render it as a
 			// collapsible chip in the turn. Fires once per turn, before
 			// the CLI run starts.
@@ -285,19 +333,25 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 				BlastRadius:        result.Context.BlastRadius,
 			})
 		} else if err != nil {
-			// Surface but don't bypass — KISS, fail loud.
 			log.Warn("composer: orchestrator process failed", "err", err)
+		} else {
+			log.Warn("composer: orchestrator returned nil result (no error)")
 		}
+	} else {
+		log.Debug("composer: orchestrator skipped — NoContext mode")
 	}
 
 	// Register this pane as an active conflict-tracking session. The tracker
 	// fires repo-level conflict callbacks synchronously inside Register,
 	// which in turn emits "composer:conflict" events to both panes.
 	if s.conflicts != nil && args.CWD != "" {
+		s.mu.Lock()
+		sessName := s.sessions[args.PaneID]
+		s.mu.Unlock()
 		s.conflicts.Register(conflict.Session{
 			ID:        args.PaneID,
 			SessionID: sessionID,
-			Name:      "",
+			Name:      sessName,
 			Source:    "composer",
 			RepoCWD:   args.CWD,
 			StartedAt: time.Now(),
@@ -332,6 +386,61 @@ func mentionPaths(mentions []Mention, cwd string) []string {
 		out = append(out, p)
 	}
 	return out
+}
+
+// inferFilesFromPrompt extracts code-like identifiers (PascalCase,
+// camelCase) from the prompt and finds files that declare or use them.
+// Two-phase: graph symbol lookup (fast) + grep (catches barrel re-exports
+// and all consumer files regardless of how they import the symbol).
+func inferFilesFromPrompt(ix *filegraph.Indexer, prompt string) []string {
+	words := regexp.MustCompile(`\b([A-Z][a-zA-Z0-9]{2,}|[a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]*)\b`).FindAllString(prompt, -1)
+	if len(words) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{})
+	var files []string
+
+	// Phase 1: graph symbol declarations (case-insensitive, instant).
+	g := ix.Graph()
+	for _, w := range words {
+		for _, node := range g.SymbolLookupFold(w) {
+			if _, ok := seen[node.Path]; ok {
+				continue
+			}
+			seen[node.Path] = struct{}{}
+			files = append(files, node.Path)
+		}
+	}
+
+	// Phase 2: grep source tree for each identifier. Catches consumer
+	// files that import the symbol via barrel re-exports / package aliases
+	// where the graph can't trace the edge. Runs once per Send (not hot).
+	root := ix.RootDir()
+	if root != "" {
+		for _, w := range words {
+			out, err := exec.Command("grep", "-rli", w,
+				"--include=*.ts", "--include=*.tsx", "--include=*.go",
+				root,
+			).Output()
+			if err != nil {
+				continue
+			}
+			for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+				if _, ok := seen[line]; ok {
+					continue
+				}
+				seen[line] = struct{}{}
+				files = append(files, line)
+			}
+		}
+	}
+
+	return files
 }
 
 // IsRunning returns true when the pane has an in-flight run (a context
@@ -484,6 +593,10 @@ func (s *Service) ResumeSession(paneID, sessionID string) {
 	s.sessions[paneID] = sessionID
 	s.sessionStarted[paneID] = true
 	s.mu.Unlock()
+
+	// Clear the interrupted badge so the sidebar no longer highlights this
+	// session as crashed — the user has explicitly resumed it.
+	s.ClearInterruptedFlag(context.Background(), sessionID)
 }
 
 // DeleteSession hard-deletes every turn + edit for the given session_id and
@@ -562,7 +675,7 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		"--include-hook-events",
 		"--thinking", "enabled",
 		"--thinking-display", "summarized",
-		"--permission-mode", "acceptEdits",
+		"--permission-mode", "auto",
 		sessionFlag, sessionID,
 		"--model", args.Model,
 	}
@@ -784,9 +897,13 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 			sysLine, _ := json.Marshal(raw)
 			var sys struct {
 				Subtype string `json:"subtype"`
+				Model   string `json:"model"`
 			}
 			json.Unmarshal(sysLine, &sys)
 			s.persistEvent(ctx, turnID, sessionID, eventSeq, "system", sys.Subtype, "", "", string(sysLine))
+			if sys.Subtype == "init" && sys.Model != "" {
+				s.emit("composer:event", Event{PaneID: args.PaneID, TurnID: turnID, Type: "init", Content: sys.Model})
+			}
 
 		// Unknown types: silently drop. The CLI may add new event types in
 		// future versions; crashing on them would be worse than ignoring.

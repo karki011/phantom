@@ -63,10 +63,53 @@ const PhaseVerifier = "verifier"
 // paths. Mixing it into the verifier-driven learning signal would add noise.
 const PhaseEvaluator = "evaluator"
 
+// DecayConfig controls time-based exponential decay applied at query time to
+// past outcomes. Successful outcomes decay faster (default 30 days) so the
+// system stays open to trying alternatives; failed outcomes decay slower
+// (default 90 days) so it remembers mistakes longer.
+//
+// Decay formula: weight = exp(-ln(2) * age_days / half_life)
+type DecayConfig struct {
+	// SuccessHalfLifeDays is the half-life for successful outcomes. After this
+	// many days a success counts for half its original weight.
+	SuccessHalfLifeDays float64
+
+	// FailureHalfLifeDays is the half-life for failed outcomes. Longer than
+	// success so the system avoids repeating mistakes.
+	FailureHalfLifeDays float64
+}
+
+// DefaultDecayConfig returns the default decay configuration.
+// Success decays in 30 days, failure in 90 days.
+func DefaultDecayConfig() DecayConfig {
+	return DecayConfig{
+		SuccessHalfLifeDays: 30.0,
+		FailureHalfLifeDays: 90.0,
+	}
+}
+
+// outcomeDecayWeight computes exponential decay for an outcome row.
+//
+//	weight = exp(-ln(2) * age_days / half_life)
+func (dc DecayConfig) outcomeDecayWeight(ageDays float64, success bool) float64 {
+	if ageDays < 0 {
+		ageDays = 0
+	}
+	halfLife := dc.FailureHalfLifeDays
+	if success {
+		halfLife = dc.SuccessHalfLifeDays
+	}
+	if halfLife <= 0 {
+		halfLife = 30.0 // safety fallback
+	}
+	return math.Exp(-0.693 * ageDays / halfLife)
+}
+
 // DecisionStore provides CRUD access to AI decisions and outcomes.
 type DecisionStore struct {
 	db          *sql.DB
 	vectorStore *embedding.VectorStore
+	Decay       DecayConfig
 }
 
 // NewDecisionStore creates a DecisionStore and ensures the schema exists.
@@ -105,7 +148,7 @@ func NewDecisionStore(db *sql.DB) (*DecisionStore, error) {
 	// SQLite's ADD COLUMN is idempotent-safe via "IF NOT EXISTS"-style error ignoring.
 	db.Exec("ALTER TABLE ai_decisions ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0")
 	db.Exec("ALTER TABLE ai_decisions ADD COLUMN last_accessed_at DATETIME DEFAULT CURRENT_TIMESTAMP")
-	return &DecisionStore{db: db}, nil
+	return &DecisionStore{db: db, Decay: DefaultDecayConfig()}, nil
 }
 
 // DB returns the underlying database handle. Used by the orchestrator to look up
@@ -317,46 +360,89 @@ type FailedApproach struct {
 // GetFailedApproaches finds strategies that failed on goals similar to the
 // given one. Only verifier-phase outcomes count — orchestrator-phase rows are
 // optimistic auto-records and don't represent real failures.
+//
+// Failures are weighted by time decay (FailureHalfLifeDays). Failures whose
+// decay weight drops below 0.05 (~4.3 half-lives, ~387 days at default 90d)
+// are considered forgotten and excluded from results.
 func (ds *DecisionStore) GetFailedApproaches(goal string) ([]FailedApproach, error) {
 	similar, err := ds.FindSimilar(goal, 0.3)
 	if err != nil {
 		return nil, err
 	}
 
+	now := time.Now()
 	var failures []FailedApproach
 	for _, d := range similar {
 		var success int
+		var outcomeCreatedAt time.Time
 		err := ds.db.QueryRow(
-			"SELECT success FROM ai_outcomes WHERE decision_id = ? AND phase = ? LIMIT 1",
+			"SELECT success, created_at FROM ai_outcomes WHERE decision_id = ? AND phase = ? LIMIT 1",
 			d.ID, PhaseVerifier,
-		).Scan(&success)
-		if err == nil && success == 0 {
+		).Scan(&success, &outcomeCreatedAt)
+		if err != nil || success != 0 {
+			continue
+		}
+		ageDays := now.Sub(outcomeCreatedAt).Hours() / 24.0
+		w := ds.Decay.outcomeDecayWeight(ageDays, false)
+		if w >= 0.05 {
 			failures = append(failures, FailedApproach{StrategyID: d.StrategyID, CreatedAt: d.CreatedAt})
 		}
 	}
 	return failures, nil
 }
 
-// GetSuccessRate returns the success rate and total count for a strategy at a
-// complexity. Only verifier-phase outcomes feed the rate — orchestrator-phase
-// rows would skew it toward 100% (they're auto-recorded as success the moment
-// strategy selection completes, before the LLM has done anything).
+// GetSuccessRate returns the time-decay-weighted success rate and total count
+// for a strategy at a complexity. Only verifier-phase outcomes feed the rate —
+// orchestrator-phase rows would skew it toward 100%.
+//
+// Each outcome is weighted by exponential decay based on its age:
+//   - Successful outcomes use SuccessHalfLifeDays (default 30d)
+//   - Failed outcomes use FailureHalfLifeDays (default 90d)
+//
+// This means recent outcomes matter more than old ones, and the system forgets
+// successes faster than failures — keeping it open to alternatives while still
+// avoiding known-bad strategies.
 //
 // Cold-start behaviour: when no verifier-phase rows exist for the strategy +
 // complexity pair, returns (0, 0, nil). Callers (PerformanceStore weighting,
 // etc.) treat zero-sample as "no signal" and fall back to neutral defaults
 // rather than penalising untried strategies.
 func (ds *DecisionStore) GetSuccessRate(strategyID string, complexity string) (float64, int, error) {
-	var total, successes int
-	err := ds.db.QueryRow(`
-		SELECT COUNT(*), COALESCE(SUM(CASE WHEN o.success = 1 THEN 1 ELSE 0 END), 0)
+	rows, err := ds.db.Query(`
+		SELECT o.success, o.created_at
 		FROM ai_decisions d JOIN ai_outcomes o ON o.decision_id = d.id
 		WHERE d.strategy_id = ? AND d.complexity = ? AND o.phase = ?
-	`, strategyID, complexity, PhaseVerifier).Scan(&total, &successes)
-	if err != nil || total == 0 {
+	`, strategyID, complexity, PhaseVerifier)
+	if err != nil {
 		return 0, 0, err
 	}
-	return float64(successes) / float64(total), total, nil
+	defer rows.Close()
+
+	now := time.Now()
+	var weightedSuccesses, totalWeight float64
+	var count int
+
+	for rows.Next() {
+		var success int
+		var createdAt time.Time
+		if err := rows.Scan(&success, &createdAt); err != nil {
+			continue
+		}
+		ageDays := now.Sub(createdAt).Hours() / 24.0
+		w := ds.Decay.outcomeDecayWeight(ageDays, success == 1)
+		totalWeight += w
+		if success == 1 {
+			weightedSuccesses += w
+		}
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		return 0, 0, err
+	}
+	if count == 0 || totalWeight == 0 {
+		return 0, 0, nil
+	}
+	return weightedSuccesses / totalWeight, count, nil
 }
 
 // jaccardSimilarity computes the Jaccard index between two token sets.

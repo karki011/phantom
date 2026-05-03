@@ -10,6 +10,15 @@ const App = () => (window as any).go?.['app']?.App;
  * @param workspaceId — workspace/worktree identifier
  * @param relativePath — path relative to workspace root
  */
+export const readFileByPath = async (absPath: string): Promise<string> => {
+  try {
+    return (await App()?.ReadFileByPath(absPath)) ?? '';
+  } catch (err) {
+    console.error('[bindings] readFileByPath error:', err);
+    return '';
+  }
+};
+
 export const readFileContents = async (workspaceId: string, relativePath: string): Promise<string> => {
   try {
     return (await App()?.ReadFileContents(workspaceId, relativePath)) ?? '';

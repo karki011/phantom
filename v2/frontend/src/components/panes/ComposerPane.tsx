@@ -1,16 +1,147 @@
 // Phantom — Composer pane (multi-step agentic edit pane backed by `claude` CLI)
 // Author: Subash Karki
 
-import { createSignal, createEffect, onMount, For, Show, batch } from 'solid-js';
+import { createSignal, createEffect, onMount, onCleanup, For, Show, batch } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
-import { Paperclip, X, Wrench, Brain, ChevronRight, ChevronDown, ChevronLeft, History, Plus, Trash2, BookOpen, Zap, AlertTriangle, Terminal, Bot, Eye, Search, Pencil, FilePlus, FolderSearch, Globe, ListTodo, FileCode, Square } from 'lucide-solid';
+import { Paperclip, X, Wrench, Brain, ChevronRight, ChevronDown, ChevronLeft, History, Plus, Trash2, BookOpen, Zap, AlertTriangle, Terminal, Bot, Eye, Search, Pencil, FilePlus, FolderSearch, Globe, ListTodo, FileCode, Square, Check, RefreshCw, Clipboard } from 'lucide-solid';
 import { Select } from '@kobalte/core/select';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import * as sidebarStyles from '@/styles/sidebar.css';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import 'highlight.js/styles/github-dark-dimmed.min.css';
+import hljs from 'highlight.js/lib/core';
+import typescript from 'highlight.js/lib/languages/typescript';
+import javascript from 'highlight.js/lib/languages/javascript';
+import go from 'highlight.js/lib/languages/go';
+import json from 'highlight.js/lib/languages/json';
+import yaml from 'highlight.js/lib/languages/yaml';
+import bash from 'highlight.js/lib/languages/shell';
+import css from 'highlight.js/lib/languages/css';
+import python from 'highlight.js/lib/languages/python';
+import xml from 'highlight.js/lib/languages/xml';
+import sql from 'highlight.js/lib/languages/sql';
+import markdown from 'highlight.js/lib/languages/markdown';
 
-marked.use({ gfm: true, breaks: true });
+hljs.registerLanguage('typescript', typescript);
+hljs.registerLanguage('ts', typescript);
+hljs.registerLanguage('tsx', typescript);
+hljs.registerLanguage('javascript', javascript);
+hljs.registerLanguage('js', javascript);
+hljs.registerLanguage('jsx', javascript);
+hljs.registerLanguage('go', go);
+hljs.registerLanguage('json', json);
+hljs.registerLanguage('yaml', yaml);
+hljs.registerLanguage('yml', yaml);
+hljs.registerLanguage('bash', bash);
+hljs.registerLanguage('shell', bash);
+hljs.registerLanguage('sh', bash);
+hljs.registerLanguage('css', css);
+hljs.registerLanguage('python', python);
+hljs.registerLanguage('py', python);
+hljs.registerLanguage('html', xml);
+hljs.registerLanguage('xml', xml);
+hljs.registerLanguage('sql', sql);
+hljs.registerLanguage('markdown', markdown);
+hljs.registerLanguage('md', markdown);
+
+marked.use({
+  gfm: true,
+  breaks: true,
+  renderer: {
+    code({ text, lang }: { text: string; lang?: string }) {
+      const language = lang && hljs.getLanguage(lang) ? lang : undefined;
+      const highlighted = language
+        ? hljs.highlight(text, { language }).value
+        : hljs.highlightAuto(text).value;
+      return `<pre><code class="hljs${language ? ` language-${language}` : ''}">${highlighted}</code></pre>`;
+    },
+  },
+});
+
+// ── File-path linkification (ported from TerminalPane) ──────────────
+// Matches relative paths (./foo, ../foo), home-rooted (~/) , absolute
+// paths under common roots, and well-known project directories followed
+// by a file extension. Optional :line:col suffix is preserved.
+const FILE_PATH_REGEX = /(?<![a-zA-Z0-9_\-/])(?:\.{1,2}\/[\w.\-/]+|~\/[\w.\-/]+|\/(?:Users|home|tmp|var|opt|etc)\/[\w.\-/]+|(?:src|lib|libs|app|apps|packages|tests?|spec|docs?|scripts?|config|\.ai|\.claude|\.github|\.vscode)\/[\w.\-/]+)(?:\.\w+)(?::\d+(?::\d+)?)?/g;
+const FILE_EXTENSIONS = new Set([
+  'ts', 'tsx', 'js', 'jsx', 'md', 'json', 'yaml', 'yml', 'sh', 'css',
+  'go', 'py', 'toml', 'html', 'sql', 'env', 'lock', 'mjs', 'cjs',
+  'rs', 'rb', 'java', 'c', 'cpp', 'h', 'hpp', 'vue', 'svelte', 'scss',
+  'less', 'graphql', 'gql', 'prisma', 'proto', 'xml', 'csv', 'txt',
+]);
+
+/**
+ * Walk every text node inside `root` (skipping <pre>/<code> blocks which
+ * already have their own rendering) and wrap file-path matches in
+ * `<a class="file-link" data-file-path="..." data-line="..." data-col="...">`.
+ */
+const linkifyFilePaths = (root: HTMLElement): void => {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = node.parentElement;
+      // Skip text inside <pre> blocks (multi-line code). Inline <code>
+      // (backticks) should still be linkified — file paths are often
+      // wrapped in backticks in assistant text.
+      if (parent?.closest('pre')) return NodeFilter.FILTER_REJECT;
+      // Skip text inside an <a> — already a link.
+      if (parent?.closest('a')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  const textNodes: Text[] = [];
+  let n: Node | null;
+  while ((n = walker.nextNode())) textNodes.push(n as Text);
+
+  for (const textNode of textNodes) {
+    const text = textNode.nodeValue ?? '';
+    FILE_PATH_REGEX.lastIndex = 0;
+    if (!FILE_PATH_REGEX.test(text)) continue;
+
+    // Build a replacement fragment
+    FILE_PATH_REGEX.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let lastIdx = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = FILE_PATH_REGEX.exec(text)) !== null) {
+      const fullMatch = match[0];
+
+      // Extract line:col suffix
+      const lineColMatch = fullMatch.match(/^(.+?)(?::(\d+)(?::(\d+))?)?$/);
+      if (!lineColMatch) continue;
+      const pathPart = lineColMatch[1];
+      const lineNum = lineColMatch[2] ?? '';
+      const colNum = lineColMatch[3] ?? '';
+
+      // Validate extension
+      const extMatch = pathPart.match(/\.(\w+)$/);
+      if (!extMatch || !FILE_EXTENSIONS.has(extMatch[1])) continue;
+
+      // Append preceding plain text
+      if (match.index > lastIdx) {
+        frag.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+      }
+
+      const a = document.createElement('a');
+      a.className = 'file-link';
+      a.dataset.filePath = pathPart;
+      if (lineNum) a.dataset.line = lineNum;
+      if (colNum) a.dataset.col = colNum;
+      a.textContent = fullMatch;
+      a.title = `Open ${pathPart}${lineNum ? `:${lineNum}` : ''}`;
+      frag.appendChild(a);
+      lastIdx = match.index + fullMatch.length;
+    }
+
+    if (lastIdx === 0) continue; // no valid matches after extension check
+    if (lastIdx < text.length) {
+      frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+    }
+    textNode.parentNode?.replaceChild(frag, textNode);
+  }
+};
 
 // Tiny Markdown renderer for Composer assistant text. Light-weight (no
 // highlight.js); promote to a shared component if a third consumer shows up.
@@ -19,12 +150,17 @@ marked.use({ gfm: true, breaks: true });
 // to each <pre> code block (DOMPurify strips inline onclick attrs, so we
 // wire via addEventListener after the fact). Marker class .copy-btn keeps
 // the effect idempotent across re-renders.
-function ComposerMarkdown(props: { text: string }) {
+//
+// File paths (e.g. `.claude/tmp/foo.md`) are also linkified after render
+// so clicking them opens the file in the editor pane.
+function ComposerMarkdown(props: { text: string; cwd: string; onFileClick?: (absPath: string) => void }) {
   let ref: HTMLDivElement | undefined;
   const html = () => DOMPurify.sanitize(marked.parse(props.text) as string);
 
-  const addCopyButtons = () => {
+  const postRenderEnhance = () => {
     if (!ref) return;
+
+    // ── Copy buttons on <pre> blocks ──
     ref.querySelectorAll('pre').forEach((pre) => {
       if (pre.querySelector('.copy-btn')) return;
       const btn = document.createElement('button');
@@ -41,13 +177,44 @@ function ComposerMarkdown(props: { text: string }) {
       });
       pre.appendChild(btn);
     });
+
+    // ── Linkify file paths ──
+    linkifyFilePaths(ref);
+
+    // ── Click handlers for file-path links ──
+    ref.querySelectorAll('a.file-link').forEach((a) => {
+      if ((a as HTMLElement).dataset.wired) return;
+      (a as HTMLElement).dataset.wired = '1';
+
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        const el = e.currentTarget as HTMLElement;
+        let filePath = el.dataset.filePath ?? '';
+        const lineNum = el.dataset.line ? parseInt(el.dataset.line, 10) : undefined;
+        const colNum = el.dataset.col ? parseInt(el.dataset.col, 10) : undefined;
+        const cwdVal = props.cwd;
+
+        // Resolve relative paths against cwd
+        if (filePath.startsWith('./')) filePath = filePath.slice(2);
+        if (!filePath.startsWith('/') && !filePath.startsWith('~')) {
+          filePath = cwdVal ? `${cwdVal.replace(/\/$/, '')}/${filePath}` : filePath;
+        }
+        // Expand ~ to home directory
+        if (filePath.startsWith('~/')) {
+          const homeMatch = cwdVal.match(/^(\/(?:Users|home)\/[^/]+)/);
+          if (homeMatch) filePath = filePath.replace(/^~/, homeMatch[1]);
+        }
+
+        props.onFileClick?.(filePath);
+      });
+    });
   };
 
   // Re-run after each text change, deferred to next paint so the freshly
-  // rendered <pre> nodes exist before we query them.
+  // rendered DOM nodes exist before we query them.
   createEffect(() => {
     void props.text;
-    requestAnimationFrame(addCopyButtons);
+    requestAnimationFrame(postRenderEnhance);
   });
 
   return <div ref={ref} class={styles.assistantText} innerHTML={html()} />;
@@ -74,6 +241,7 @@ import {
   type ComposerSessionSummary,
 } from '@/core/bindings/composer';
 import { addTabWithData, renameTabByPane } from '@/core/panes/signals';
+import { readFileByPath } from '@/core/bindings/editor';
 import { showToast, showWarningToast } from '@/shared/Toast/Toast';
 import { loadPref, setPref } from '@/core/signals/preferences';
 import { Tip } from '@/shared/Tip/Tip';
@@ -86,6 +254,8 @@ import ComposerSkillBrowser from './ComposerSkillBrowser';
 import ComposerDiffCard from './ComposerDiffCard';
 import * as strategyStyles from './ComposerStrategy.css';
 import { extractToolSummary, groupToolCalls, type ToolGroup, type ToolUseEntry } from './ComposerToolSummary';
+import { initWidgets, updateWidget } from '@/core/signals/widgets';
+import WidgetBar from '@/shared/WidgetBar/WidgetBar';
 
 interface ComposerPaneProps {
   paneId?: string;
@@ -158,10 +328,25 @@ const EFFORTS = [
   { value: 'max', label: 'Max' },
 ];
 
-const MODEL_CONTEXT_LIMITS: Record<string, number> = {
+const MODEL_CONTEXT_DEFAULTS: Record<string, number> = {
   sonnet: 200_000,
-  opus: 200_000,
+  opus: 1_000_000,
   haiku: 200_000,
+};
+
+const parseContextLimit = (modelId: string): number => {
+  // Model strings like "claude-opus-4-6[1m]" embed context in brackets
+  const match = modelId.match(/\[(\d+)(k|m)\]/i);
+  if (match) {
+    const num = parseInt(match[1], 10);
+    return match[2].toLowerCase() === 'm' ? num * 1_000_000 : num * 1_000;
+  }
+  // Fall back to alias lookup
+  const lower = modelId.toLowerCase();
+  for (const [key, limit] of Object.entries(MODEL_CONTEXT_DEFAULTS)) {
+    if (lower.includes(key)) return limit;
+  }
+  return 200_000;
 };
 
 const formatTokenCount = (n: number): string => {
@@ -178,6 +363,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
   const [edits, setEdits] = createStore<Record<string, ComposerEditCard>>({});
   const [input, setInput] = createSignal('');
   const [model, setModel] = createSignal<string>('opus');
+  const [liveModelId, setLiveModelId] = createSignal<string>('');
   const [effort, setEffort] = createSignal<string>('auto');
   const [running, setRunning] = createSignal(false);
   const [activeTurnId, setActiveTurnId] = createSignal<string | null>(null);
@@ -189,11 +375,122 @@ export default function ComposerPane(props: ComposerPaneProps) {
   // have to flip it every time.
   const [noContext, setNoContext] = createSignal(false);
   const [autoAccept, setAutoAccept] = createSignal(true);
+  // "Plan Mode" — when true, a plan-only directive is prepended to the
+  // prompt so the agent describes steps without writing code. Persisted
+  // as a per-user default (same pattern as noContext).
+  const [planMode, setPlanMode] = createSignal(false);
   const [dragOver, setDragOver] = createSignal(false);
   const [showMemory, setShowMemory] = createSignal(false);
   const [showSkills, setShowSkills] = createSignal(false);
   const COMPOSER_FONT_SIZES = [11, 12, 13, 14, 15, 16, 18, 20] as const;
   const [composerFontSize, setComposerFontSize] = createSignal(13);
+
+  // ── Ctrl+F / Cmd+F search overlay ───────────────────────────────────
+  const [searchOpen, setSearchOpen] = createSignal(false);
+  const [searchQuery, setSearchQuery] = createSignal('');
+  let searchInputRef: HTMLInputElement | undefined;
+
+  const handleSearchKeydown = (e: KeyboardEvent) => {
+    const isMod = e.metaKey || e.ctrlKey;
+    if (isMod && e.key === 'f') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (searchOpen()) {
+        // Already open — re-focus the input
+        searchInputRef?.focus();
+        searchInputRef?.select();
+      } else {
+        setSearchOpen(true);
+        // Auto-focus after the DOM renders
+        requestAnimationFrame(() => {
+          searchInputRef?.focus();
+        });
+      }
+    }
+    if (e.key === 'Escape' && searchOpen()) {
+      e.preventDefault();
+      closeSearch();
+    }
+  };
+
+  const [searchMatchCount, setSearchMatchCount] = createSignal(0);
+
+  const clearHighlights = () => {
+    if (!feedRef) return;
+    feedRef.querySelectorAll('mark.search-hit').forEach((m) => {
+      const parent = m.parentNode;
+      if (parent) {
+        parent.replaceChild(document.createTextNode(m.textContent ?? ''), m);
+        parent.normalize();
+      }
+    });
+  };
+
+  const highlightMatches = (query: string) => {
+    clearHighlights();
+    if (!query || !feedRef) { setSearchMatchCount(0); return; }
+    const lower = query.toLowerCase();
+    const walker = document.createTreeWalker(feedRef, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        const p = node.parentElement;
+        if (p?.closest('pre') || p?.closest('textarea') || p?.closest('input') || p?.tagName === 'MARK') {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return (node.nodeValue?.toLowerCase().includes(lower)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      },
+    });
+    const nodes: Text[] = [];
+    let n: Node | null;
+    while ((n = walker.nextNode())) nodes.push(n as Text);
+
+    let count = 0;
+    for (const textNode of nodes) {
+      const text = textNode.nodeValue ?? '';
+      const frag = document.createDocumentFragment();
+      let lastIdx = 0;
+      let idx = text.toLowerCase().indexOf(lower);
+      while (idx !== -1) {
+        if (idx > lastIdx) frag.appendChild(document.createTextNode(text.slice(lastIdx, idx)));
+        const mark = document.createElement('mark');
+        mark.className = 'search-hit';
+        mark.textContent = text.slice(idx, idx + query.length);
+        frag.appendChild(mark);
+        count++;
+        lastIdx = idx + query.length;
+        idx = text.toLowerCase().indexOf(lower, lastIdx);
+      }
+      if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+      textNode.parentNode?.replaceChild(frag, textNode);
+    }
+    setSearchMatchCount(count);
+    if (count > 0) {
+      feedRef.querySelector('mark.search-hit')?.scrollIntoView({ block: 'nearest' });
+    }
+  };
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    clearHighlights();
+    setSearchMatchCount(0);
+  };
+
+  const handleSearchInput = (value: string) => {
+    setSearchQuery(value);
+    highlightMatches(value);
+  };
+
+  const handleSearchKeydownInInput = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeSearch();
+    }
+  };
+
+  // File preview popover — inline file content viewer, no tab switching needed.
+  const [previewPath, setPreviewPath] = createSignal('');
+  const [previewContent, setPreviewContent] = createSignal('');
+  const [previewLoading, setPreviewLoading] = createSignal(false);
 
   // Sticky progress indicator — shows last activity so user doesn't have to scroll
   const [activityLabel, setActivityLabel] = createSignal('');
@@ -270,7 +567,6 @@ export default function ComposerPane(props: ComposerPaneProps) {
   // handlers stay alive after a remount (e.g. tab switch that caused
   // SolidJS to dispose/recreate the component).
   const replayThinking = (events: ComposerEventRecord[]): string => {
-    console.log('[Composer] replayThinking: events count =', events.length, 'types =', [...new Set(events.map(e => `${e.type}:${e.subtype}`))]);
     let thinking = '';
     for (const e of events) {
       if (e.type === 'content_block_delta' && e.subtype === 'thinking_delta') {
@@ -313,7 +609,6 @@ export default function ComposerPane(props: ComposerPaneProps) {
         } catch { /* skip */ }
       }
     }
-    console.log('[Composer] replayToolUses:', tools.length, 'tools', tools.map(t => `${t.name}(${t.input.length}b)`));
     return tools;
   };
 
@@ -353,11 +648,6 @@ export default function ComposerPane(props: ComposerPaneProps) {
         blastRadius: 0,
       };
     });
-    console.log('[Composer] applyHistory:', history.length, 'turns, events per turn:', history.map(h => (h.events ?? []).length));
-    for (const h of history) {
-      console.log('[Composer] turn', h.turn.id, 'has', (h.events ?? []).length, 'events, keys:', Object.keys(h));
-      if (h.events?.length) console.log('[Composer] first event:', JSON.stringify(h.events[0]));
-    }
     const editsById: Record<string, ComposerEditCard> = {};
     for (const h of history) for (const e of (h.edits ?? [])) editsById[e.id] = e;
     for (const e of pending) editsById[e.id] = e;
@@ -402,6 +692,10 @@ export default function ComposerPane(props: ComposerPaneProps) {
       setConflicts([]);
       setConflictDismissed(false);
     });
+    const sessionInfo = sessions().find(s => s.session_id === sessionId);
+    if (sessionInfo?.name) {
+      renameTabByPane(paneId(), `Composer · ${sessionInfo.name}`);
+    }
     const [history, pending] = await Promise.all([
       composerHistoryBySession(sessionId),
       composerListPending(paneId()),
@@ -409,14 +703,30 @@ export default function ComposerPane(props: ComposerPaneProps) {
     applyHistory(history, pending);
   };
 
+  // Cleanup search keyboard listener on pane disposal.
+  onCleanup(() => {
+    document.removeEventListener('keydown', handleSearchKeydown, true);
+  });
+
   // ── Rehydrate full conversation on mount (turns + edits) ─────────────
   // Survives app restart, pane re-open, and tab switching. Also pulls in
   // any pending edits from previous sessions so cards reappear.
   onMount(async () => {
+    initWidgets();
+
+    // Ctrl+F / Cmd+F search — captured at the pane root so it intercepts
+    // before the browser's default find bar opens.
+    document.addEventListener('keydown', handleSearchKeydown, true);
+
     // Per-user default for the "No project context" toggle. Loaded async,
     // doesn't block first render.
     void loadPref('composer_no_context_default').then((val) => {
       if (val === 'true') setNoContext(true);
+    });
+
+    // Plan mode toggle — plan-only mode prepends a directive.
+    void loadPref('composer_plan_mode').then((val) => {
+      if (val === 'true') setPlanMode(true);
     });
 
     // Sidebar collapsed-state. Defaults to expanded for first-time users.
@@ -438,7 +748,6 @@ export default function ComposerPane(props: ComposerPaneProps) {
 
     // Load slash commands for autocomplete.
     composerListCommands(cwd()).then((cmds) => {
-      console.log('[Composer] loaded commands:', cmds.length, cmds.filter(c => c.name.startsWith('team')).map(c => c.name));
       setCommands(cmds);
     });
 
@@ -487,7 +796,18 @@ export default function ComposerPane(props: ComposerPaneProps) {
       return;
     }
 
-    console.log('[Composer] live event:', ev.type, ev);
+    // Update sticky progress label
+    switch (ev.type) {
+      case 'thinking': setActivityLabel('Thinking...'); break;
+      case 'delta': setActivityLabel('Writing response...'); break;
+      case 'tool_use': {
+        const summary = extractToolSummary(ev.tool_name ?? 'tool', ev.tool_input ?? '{}');
+        setActivityLabel(`${ev.tool_name} — ${summary.label}`);
+        break;
+      }
+      case 'tool_result': setActivityLabel('Processing result...'); break;
+      case 'done': case 'error': setActivityLabel(''); break;
+    }
 
     // Update sticky progress label
     switch (ev.type) {
@@ -505,8 +825,15 @@ export default function ComposerPane(props: ComposerPaneProps) {
     const turnId = ev.turn_id ?? activeTurnId();
     if (!turnId) return;
 
-    const idx = turns.findIndex(t => t.id === turnId);
-    if (idx < 0) return; // turn not found — nothing to update
+    let idx = turns.findIndex(t => t.id === turnId);
+
+    // Strategy events fire before composerSend returns, so the turn still
+    // has its client-side ID (turn-<timestamp>) — the server-assigned UUID
+    // won't match. Fall back to the last running turn.
+    if (idx < 0 && ev.type === 'strategy') {
+      idx = turns.findIndex(t => t.status === 'running');
+    }
+    if (idx < 0) return;
 
     switch (ev.type) {
       case 'delta':
@@ -528,6 +855,11 @@ export default function ComposerPane(props: ComposerPaneProps) {
             status: 'running',
           });
         }));
+        updateWidget('tokens', {
+          label: `${ev.tool_name ?? 'tool'}...`,
+          visible: true,
+          variant: 'default',
+        });
         break;
       case 'input_json': {
         const lastTuIdx = turns[idx].toolUses.length - 1;
@@ -553,6 +885,13 @@ export default function ComposerPane(props: ComposerPaneProps) {
           if (ev.output_tokens != null) turn.outputTokens = ev.output_tokens;
           if (ev.cost_usd != null) turn.costUSD = ev.cost_usd;
         }));
+        if (ev.input_tokens || ev.output_tokens) {
+          updateWidget('tokens', {
+            label: `${formatTokenCount(ev.input_tokens ?? 0)}↑ ${formatTokenCount(ev.output_tokens ?? 0)}↓`,
+            detail: `Input: ${formatTokenCount(ev.input_tokens ?? 0)} · Output: ${formatTokenCount(ev.output_tokens ?? 0)}`,
+            visible: true,
+          });
+        }
         break;
       case 'done':
         setTurns(idx, produce(turn => {
@@ -565,6 +904,14 @@ export default function ComposerPane(props: ComposerPaneProps) {
             if (tu.status === 'running') tu.status = 'done';
           }
         }));
+        if (ev.cost_usd) {
+          updateWidget('cost', {
+            label: `$${ev.cost_usd.toFixed(4)}`,
+            detail: `Turn cost: $${ev.cost_usd.toFixed(4)}`,
+            visible: true,
+          });
+        }
+        updateWidget('tokens', { visible: false });
         break;
       case 'error':
         setTurns(idx, produce(turn => {
@@ -574,6 +921,9 @@ export default function ComposerPane(props: ComposerPaneProps) {
             if (tu.status === 'running') tu.status = 'error';
           }
         }));
+        break;
+      case 'init':
+        if (ev.content) setLiveModelId(ev.content);
         break;
       case 'strategy':
         setTurns(idx, produce(turn => {
@@ -620,6 +970,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
   // Conflict detection — listen for repo/file overlap events from the backend.
   onWailsEvent<{ pane_id: string; conflict: ConflictInfo }>('composer:conflict', (data) => {
     if (data.pane_id !== paneId()) return;
+    if (data.conflict.type === 'repo') return; // Only warn on file-level conflicts
     setConflicts((prev) => {
       // Deduplicate by session pair + type.
       const exists = prev.some(
@@ -634,6 +985,13 @@ export default function ComposerPane(props: ComposerPaneProps) {
     });
     setConflictDismissed(false);
 
+    updateWidget('conflict', {
+      label: 'Conflict',
+      detail: `File conflict detected`,
+      variant: 'danger',
+      visible: true,
+    });
+
     // File-level conflicts surface as a toast rather than a persistent banner.
     if (data.conflict.type === 'file' && data.conflict.file_path) {
       const other = data.conflict.session_a.id === paneId() ? data.conflict.session_b : data.conflict.session_a;
@@ -645,10 +1003,15 @@ export default function ComposerPane(props: ComposerPaneProps) {
   });
 
   // ── Actions ──────────────────────────────────────────────────────────
+  const PLAN_MODE_PREFIX = 'Plan only — do NOT write any code or make any changes. Just describe what you would do step by step.\n\n';
+
   const handleSend = async () => {
-    const prompt = input().trim();
-    if (!prompt && mentions().length === 0) return;
+    const rawPrompt = input().trim();
+    if (!rawPrompt && mentions().length === 0) return;
     if (running()) return;
+
+    // Prepend plan-only directive when plan mode is active.
+    const prompt = planMode() ? PLAN_MODE_PREFIX + rawPrompt : rawPrompt;
 
     const turnId = `turn-${Date.now()}`;
     const turn: TurnView = {
@@ -921,6 +1284,12 @@ export default function ComposerPane(props: ComposerPaneProps) {
     void setPref('composer_auto_accept_edits', next ? 'true' : 'false');
   };
 
+  const togglePlanMode = () => {
+    const next = !planMode();
+    setPlanMode(next);
+    void setPref('composer_plan_mode', next ? 'true' : 'false');
+  };
+
   const handleSkillInvoke = (skillName: string) => {
     setInput(skillName + ' ');
     setShowSkills(false);
@@ -982,11 +1351,18 @@ export default function ComposerPane(props: ComposerPaneProps) {
   const sessionTurnCount = () => turns.length;
 
   // ── Context window gauge ───────────────────────────────────────────────
+  // With --resume, each turn's input_tokens includes the full conversation
+  // context. Use the highest value seen across all turns (the most recent
+  // completed turn has the most accurate number). This prevents the gauge
+  // from resetting to 0 between turns.
   const contextUsed = () => {
-    if (turns.length === 0) return 0;
-    return turns[turns.length - 1].inputTokens;
+    let max = 0;
+    for (const t of turns) {
+      if (t.inputTokens > max) max = t.inputTokens;
+    }
+    return max;
   };
-  const contextMax = () => MODEL_CONTEXT_LIMITS[model()] ?? 200_000;
+  const contextMax = () => parseContextLimit(liveModelId() || model());
   const contextPercent = () => Math.min(100, (contextUsed() / contextMax()) * 100);
   const contextColor = () => {
     const pct = contextPercent();
@@ -1011,13 +1387,14 @@ export default function ComposerPane(props: ComposerPaneProps) {
   return (
     <div class={`${styles.root} ${styles.rootWithSidebar}`}>
       {/* Past Sessions sidebar — collapsible, per-pane state. */}
-      <aside class={`${styles.sidebar} ${sidebarCollapsed() ? styles.sidebarCollapsed : ''}`}>
+      <aside class={`${styles.sidebar} ${sidebarCollapsed() ? styles.sidebarCollapsed : ''}`} role="complementary" aria-label="Past sessions">
         <div class={styles.sidebarHeader}>
           <button
             class={styles.sidebarNewBtn}
             type="button"
             onClick={handleNewConversation}
             title="Start a new conversation in this pane"
+            aria-label="New chat"
           >
             <Plus size={12} />
             <span>New chat</span>
@@ -1027,7 +1404,30 @@ export default function ComposerPane(props: ComposerPaneProps) {
           <History size={10} style={{ 'vertical-align': 'middle', 'margin-right': '4px' }} />
           Recents
         </div>
-        <div class={styles.sidebarList}>
+
+        {/* Banner shown when any past session was interrupted by a crash */}
+        <Show when={sessions().some(s => s.was_interrupted)}>
+          {(() => {
+            const interrupted = () => sessions().filter(s => s.was_interrupted);
+            const firstInterrupted = () => interrupted()[0];
+            return (
+              <div
+                class={styles.sidebarInterruptedBanner}
+                onClick={() => {
+                  const s = firstInterrupted();
+                  if (s) handleSessionRowClick(s, new MouseEvent('click'));
+                }}
+                title="Click to resume the most recent interrupted session"
+                role="button"
+              >
+                <AlertTriangle size={12} />
+                <span>{interrupted().length} interrupted — Resume?</span>
+              </div>
+            );
+          })()}
+        </Show>
+
+        <div class={styles.sidebarList} role="list" aria-label="Session history">
           <Show
             when={sessions().length > 0}
             fallback={<div class={styles.sidebarEmpty}>No past sessions yet</div>}
@@ -1042,14 +1442,22 @@ export default function ComposerPane(props: ComposerPaneProps) {
                   <ContextMenu>
                     <ContextMenu.Trigger
                       as="div"
+                      role="listitem"
                       class={`${styles.sidebarRow} ${isActive() ? styles.sidebarRowActive : ''}`}
                       onClick={(e) => handleSessionRowClick(s, e)}
-                      title={`${s.name ? s.name + '\n' : ''}${s.first_prompt || s.session_id}\n\nClick to open · Cmd+Click for new tab · Right-click for actions`}
+                      aria-current={isActive() ? 'true' : undefined}
+                      aria-label={`Session: ${displayName()}${s.was_interrupted ? ' (interrupted)' : ''}`}
+                      title={`${s.name ? s.name + '\n' : ''}${s.first_prompt || s.session_id}${s.was_interrupted ? '\n\n⚠ This session was interrupted by a crash — click to resume' : ''}\n\nClick to open · Cmd+Click for new tab · Right-click for actions`}
                     >
                       <span class={styles.sidebarRowPrompt}>
                         {displayName()}
                       </span>
-                      <Show when={subtitle()}>
+                      <Show when={s.was_interrupted}>
+                        <span class={styles.sidebarInterruptedBadge} title="Session interrupted by crash">
+                          <AlertTriangle size={8} />
+                        </span>
+                      </Show>
+                      <Show when={subtitle() && !s.was_interrupted}>
                         <span class={styles.sidebarRowPromptEmpty} style={{ 'font-size': '10px', 'margin-left': '4px', 'flex-shrink': '1', overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap' }}>
                           {subtitle()}
                         </span>
@@ -1087,6 +1495,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
             type="button"
             onClick={toggleSidebar}
             title="Hide sidebar"
+            aria-label="Collapse sidebar"
           >
             <ChevronLeft size={12} />
             <span>Collapse</span>
@@ -1108,7 +1517,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
       </Show>
 
       {/* Main column — status strip + feed + composer textarea. */}
-      <div class={styles.main}>
+      <div class={styles.main} role="main" aria-label="Composer conversation">
       {/* Sticky status strip */}
       <div class={styles.statusStrip}>
         <span class={`${styles.statusDot} ${!running() ? styles.statusDotIdle : ''}`} />
@@ -1120,6 +1529,8 @@ export default function ComposerPane(props: ComposerPaneProps) {
           type="button"
           onClick={toggleNoContext}
           disabled={running()}
+          aria-pressed={noContext()}
+          aria-label={noContext() ? 'Project context off' : 'Project context on'}
           title={
             noContext()
               ? 'Agent has zero project context (no CLAUDE.md, .claude/, hooks, settings).'
@@ -1133,6 +1544,8 @@ export default function ComposerPane(props: ComposerPaneProps) {
           type="button"
           onClick={toggleAutoAccept}
           disabled={running()}
+          aria-pressed={autoAccept()}
+          aria-label={autoAccept() ? 'Auto-accept edits on' : 'Manual review mode'}
           title={
             autoAccept()
               ? 'Edits are auto-accepted as they arrive (files already written to disk).'
@@ -1158,10 +1571,14 @@ export default function ComposerPane(props: ComposerPaneProps) {
             Session: ${sessionTotalCost().toFixed(4)}
             <span class={metricsStyles.metricsDot}>&middot;</span>
             {formatTokenCount(sessionTotalTokens())} tok
+            <span class={metricsStyles.metricsDot}>&middot;</span>
+            <span style={{ color: contextColor() === 'danger' ? 'var(--danger)' : contextColor() === 'warning' ? 'var(--warning)' : 'inherit' }}>
+              {contextPercent() > 0 ? `${(100 - contextPercent()).toFixed(0)}% left` : ''}
+            </span>
           </span>
         </Show>
         <Show when={running()}>
-          <button class={styles.cancelBtn} type="button" onClick={handleCancel}>
+          <button class={styles.cancelBtn} type="button" onClick={handleCancel} aria-label="Cancel current run">
             Cancel
           </button>
         </Show>
@@ -1174,15 +1591,17 @@ export default function ComposerPane(props: ComposerPaneProps) {
             type="button"
             onClick={handleNewConversation}
             title="Start a new conversation (cancels active run, clears history)"
+            aria-label="New conversation"
           >
             New
           </button>
         </Show>
       </div>
+      <WidgetBar />
 
       {/* Context window gauge */}
-      <Show when={contextUsed() > 0}>
-        <div class={metricsStyles.contextGauge} title={`Context: ${formatTokenCount(contextUsed())} / ${formatTokenCount(contextMax())} tokens (${contextPercent().toFixed(0)}%)`}>
+      <Show when={contextUsed() > 0 || running()}>
+        <div class={metricsStyles.contextGauge} role="progressbar" aria-valuenow={contextPercent()} aria-valuemin={0} aria-valuemax={100} aria-label={`Context window usage: ${contextPercent().toFixed(0)}%`} title={`Context: ${formatTokenCount(contextUsed())} / ${formatTokenCount(contextMax())} tokens (${contextPercent().toFixed(0)}%)`}>
           <div
             class={metricsStyles.contextGaugeFill}
             style={{
@@ -1202,12 +1621,13 @@ export default function ComposerPane(props: ComposerPaneProps) {
           <AlertTriangle size={14} />
           <span class={styles.conflictBannerText}>
             {conflicts().length === 1
-              ? `Another session is editing this repo: "${getOtherSession(conflicts()[0]).name || 'Unknown'}"`
-              : `${conflicts().length} other sessions are editing this repo`}
+              ? `File conflict with "${getOtherSession(conflicts()[0]).name || 'another session'}": ${conflicts()[0].file_path?.split('/').pop() ?? 'unknown file'}`
+              : `${conflicts().length} file conflicts with other sessions`}
           </span>
           <button
             class={styles.conflictAction}
             type="button"
+            aria-label="Switch to conflicting session"
             onClick={() => {
               const other = getOtherSession(conflicts()[0]);
               if (other?.id) void loadSessionInPlace(other.id);
@@ -1218,6 +1638,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
           <button
             class={styles.conflictDismiss}
             type="button"
+            aria-label="Dismiss conflict warning"
             onClick={() => setConflictDismissed(true)}
           >
             Dismiss
@@ -1225,8 +1646,41 @@ export default function ComposerPane(props: ComposerPaneProps) {
         </div>
       </Show>
 
+      {/* Search overlay — floats at top-right of main column */}
+      <Show when={searchOpen()}>
+        <div class={styles.searchOverlay}>
+          <Search size={13} style={{ color: 'inherit', 'flex-shrink': '0' }} />
+          <input
+            ref={searchInputRef}
+            class={styles.searchInput}
+            type="text"
+            value={searchQuery()}
+            onInput={(e) => handleSearchInput(e.currentTarget.value)}
+            onKeyDown={handleSearchKeydownInInput}
+            placeholder="Find in conversation..."
+            aria-label="Search conversation"
+            spellcheck={false}
+            autocomplete="off"
+          />
+          <Show when={searchQuery()}>
+            <span style={{ 'font-size': '10px', color: 'inherit', opacity: 0.6, 'font-family': 'var(--font-mono)' }}>
+              {searchMatchCount()} match{searchMatchCount() !== 1 ? 'es' : ''}
+            </span>
+          </Show>
+          <button
+            type="button"
+            class={styles.searchClose}
+            onClick={closeSearch}
+            aria-label="Close search"
+            title="Close (Esc)"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      </Show>
+
       {/* Conversation feed */}
-      <div class={styles.feed} ref={feedRef} onScroll={handleFeedScroll} style={{ 'font-size': `${composerFontSize()}px` }}>
+      <div class={styles.feed} ref={feedRef} onScroll={handleFeedScroll} style={{ 'font-size': `${composerFontSize()}px` }} aria-busy={running()} aria-live="polite" aria-label="Conversation feed">
         <Show when={turns.length === 0}>
           <div class={styles.emptyState}>
             Ask Composer to make changes across files. Try{' '}
@@ -1296,16 +1750,77 @@ export default function ComposerPane(props: ComposerPaneProps) {
               </For>
 
               <Show when={turn.text}>
-                <div>
-                  <span class={turnStyles.assistantBadge}>ASSISTANT</span>
-                  <ComposerMarkdown text={turn.text} />
-                </div>
+                <ContextMenu>
+                  <ContextMenu.Trigger as="div">
+                    <span class={turnStyles.assistantBadge}>ASSISTANT</span>
+                    <ComposerMarkdown text={turn.text} cwd={cwd()} onFileClick={(absPath) => {
+                      setPreviewPath(absPath);
+                      setPreviewContent('');
+                      setPreviewLoading(true);
+                      readFileByPath(absPath).then((content) => {
+                        setPreviewContent(content || '(empty file)');
+                        setPreviewLoading(false);
+                      }).catch(() => {
+                        setPreviewContent('(failed to read file)');
+                        setPreviewLoading(false);
+                      });
+                    }} />
+                  </ContextMenu.Trigger>
+                  <ContextMenu.Portal>
+                    <ContextMenu.Content class={sidebarStyles.contextMenuContent}>
+                      <ContextMenu.Item
+                        class={sidebarStyles.contextMenuItem}
+                        aria-label="Copy assistant response"
+                        onSelect={() => void navigator.clipboard.writeText(turn.text)}
+                      >
+                        <Clipboard size={13} />
+                        Copy
+                      </ContextMenu.Item>
+                      <ContextMenu.Item
+                        class={sidebarStyles.contextMenuItem}
+                        aria-label="Retry this prompt"
+                        onSelect={() => {
+                          setInput(turn.prompt);
+                          requestAnimationFrame(() => handleSend());
+                        }}
+                      >
+                        <RefreshCw size={13} />
+                        Retry
+                      </ContextMenu.Item>
+                      <div class={sidebarStyles.contextMenuSeparator} />
+                      <ContextMenu.Item
+                        class={`${sidebarStyles.contextMenuItem} ${sidebarStyles.contextMenuItemDanger}`}
+                        aria-label="Delete this turn"
+                        onSelect={() => {
+                          const idx = turns.findIndex((t) => t.id === turn.id);
+                          if (idx >= 0) setTurns(produce((draft) => { draft.splice(idx, 1); }));
+                        }}
+                      >
+                        <Trash2 size={13} />
+                        Delete
+                      </ContextMenu.Item>
+                    </ContextMenu.Content>
+                  </ContextMenu.Portal>
+                </ContextMenu>
               </Show>
 
               <Show when={turn.status === 'error' && turn.error}>
                 <div class={styles.assistantText} style={{ color: 'var(--danger, #ff627e)' }}>
                   Error: {turn.error}
                 </div>
+                <Show when={!running() && turn.prompt}>
+                  <button
+                    class={styles.retryBtn}
+                    type="button"
+                    aria-label="Retry this prompt"
+                    onClick={() => {
+                      setInput(turn.prompt);
+                      requestAnimationFrame(() => handleSend());
+                    }}
+                  >
+                    <RefreshCw size={13} /> Retry
+                  </button>
+                </Show>
               </Show>
 
               <Show when={turn.status === 'done' || turn.status === 'error'}>
@@ -1314,13 +1829,14 @@ export default function ComposerPane(props: ComposerPaneProps) {
 
               <Show when={turn.status === 'done' && turn.editIds.length > 0 && !autoAccept() && pendingEditCards().length > 0}>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button class={`${styles.editBtn} ${styles.editAccept}`} type="button" onClick={acceptAll}>
+                  <button class={`${styles.editBtn} ${styles.editAccept}`} type="button" onClick={acceptAll} aria-label={`Accept all ${pendingEditCards().length} pending edits`}>
                     Accept all ({pendingEditCards().length})
                   </button>
                   <button
                     class={`${styles.editBtn} ${styles.editDiscard}`}
                     type="button"
                     onClick={discardAll}
+                    aria-label="Discard all pending edits"
                   >
                     Discard all
                   </button>
@@ -1336,17 +1852,47 @@ export default function ComposerPane(props: ComposerPaneProps) {
           class={styles.jumpToLatest}
           type="button"
           onClick={() => scrollToBottom(true)}
+          aria-label="Jump to latest message"
         >
           ↓ Jump to latest
         </button>
       </Show>
 
       <Show when={running() && activityLabel()}>
-        <div class={styles.progressStrip}>
+        <div class={styles.progressStrip} aria-live="polite" aria-label="Current activity">
           <span class={styles.progressDot} />
           <span class={styles.progressLabel}>{activityLabel()}</span>
         </div>
       </Show>
+      {/* Context capacity warning — nudges user when context window is filling up */}
+      <Show when={contextPercent() > 80}>
+        <div
+          class={`${styles.contextWarningBanner} ${contextPercent() > 90 ? styles.contextWarningBannerCritical : styles.contextWarningBannerWarn}`}
+          role="status"
+          aria-live="polite"
+        >
+          <AlertTriangle size={14} />
+          <span class={styles.contextWarningText}>
+            {contextPercent() > 90
+              ? `Context nearly full (${contextPercent().toFixed(0)}%). Auto-compacting recommended.`
+              : `Context is ${contextPercent().toFixed(0)}% full. Consider starting a new conversation.`}
+          </span>
+          <Show when={contextPercent() > 90}>
+            <button
+              class={styles.contextWarningBtn}
+              type="button"
+              disabled={running()}
+              onClick={() => {
+                setInput('Please compact the conversation context by summarizing the key points and dropping older tool results');
+                handleSend();
+              }}
+            >
+              Compact Now
+            </button>
+          </Show>
+        </div>
+      </Show>
+
       <div
         class={`${styles.composerArea} ${dragOver() ? styles.composerAreaDragOver : ''}`}
         onDragOver={handleDragOver}
@@ -1359,7 +1905,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
               {(m, i) => (
                 <span class={styles.mentionChip}>
                   @{m.path}
-                  <button class={styles.mentionRemove} type="button" onClick={() => removeMention(i())}>
+                  <button class={styles.mentionRemove} type="button" onClick={() => removeMention(i())} aria-label={`Remove mention ${m.path}`}>
                     <X size={10} />
                   </button>
                 </span>
@@ -1369,10 +1915,12 @@ export default function ComposerPane(props: ComposerPaneProps) {
         </Show>
 
         <Show when={showCommandPalette() && filteredCommands().length > 0}>
-          <div class={styles.commandPalette}>
+          <div class={styles.commandPalette} role="listbox" aria-label="Slash commands">
             <For each={filteredCommands()}>
               {(cmd, i) => (
                 <div
+                  role="option"
+                  aria-selected={i() === commandIdx()}
                   class={`${styles.commandItem} ${i() === commandIdx() ? styles.commandItemActive : ''}`}
                   onClick={() => {
                     setInput('/' + cmd.name + ' ');
@@ -1394,7 +1942,9 @@ export default function ComposerPane(props: ComposerPaneProps) {
         <textarea
           ref={textareaRef}
           class={styles.textarea}
-          placeholder="What should Composer do… (paste an image to attach it)"
+          style={{ 'font-size': `${composerFontSize()}px` }}
+          placeholder={planMode() ? 'Describe what you want to plan…' : 'What should Composer do… (paste an image to attach it)'}
+          aria-label="Composer prompt input"
           value={input()}
           onInput={(e) => {
             const val = e.currentTarget.value;
@@ -1414,12 +1964,13 @@ export default function ComposerPane(props: ComposerPaneProps) {
           rows={3}
         />
 
-        <div class={styles.composerToolbar}>
+        <div class={styles.composerToolbar} role="toolbar" aria-label="Composer actions">
           <Tip label="Attach file or paste image" placement="top">
             <button
               class={styles.editBtn}
               type="button"
               onClick={handleAttachClick}
+              aria-label="Attach file or paste image"
             >
               <Paperclip size={12} />
             </button>
@@ -1430,6 +1981,8 @@ export default function ComposerPane(props: ComposerPaneProps) {
               class={styles.editBtn}
               type="button"
               onClick={() => setShowMemory(!showMemory())}
+              aria-label="Toggle memory context panel"
+              aria-expanded={showMemory()}
             >
               <BookOpen size={12} />
             </button>
@@ -1440,10 +1993,25 @@ export default function ComposerPane(props: ComposerPaneProps) {
               class={styles.editBtn}
               type="button"
               onClick={() => setShowSkills(!showSkills())}
+              aria-label="Toggle skills browser"
+              aria-expanded={showSkills()}
             >
               <Zap size={12} />
             </button>
           </Tip>
+
+          <button
+            class={`${styles.contextPill} ${planMode() ? styles.contextPillActive : ''}`}
+            type="button"
+            onClick={togglePlanMode}
+            disabled={running()}
+            aria-pressed={planMode()}
+            aria-label={planMode() ? 'Plan mode on' : 'Plan mode off'}
+            title={planMode() ? 'Plan mode: describe steps without writing code' : 'Normal mode: execute changes'}
+          >
+            <ListTodo size={11} style={{ 'margin-right': '4px', 'vertical-align': 'middle' }} />
+            Plan
+          </button>
 
           <Select<string>
             value={model()}
@@ -1457,7 +2025,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
               </Select.Item>
             )}
           >
-            <Select.Trigger class={styles.modelSelectTrigger} title="Select Claude model">
+            <Select.Trigger class={styles.modelSelectTrigger} title="Select Claude model" aria-label="Select Claude model">
               <Select.Value<string> class={styles.modelSelectValue}>
                 {(state) => MODELS.find((m) => m.value === state.selectedOption())?.label ?? state.selectedOption()}
               </Select.Value>
@@ -1484,7 +2052,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
               </Select.Item>
             )}
           >
-            <Select.Trigger class={styles.modelSelectTrigger} title="Reasoning effort level">
+            <Select.Trigger class={styles.modelSelectTrigger} title="Reasoning effort level" aria-label="Select reasoning effort level">
               <Select.Value<string> class={styles.modelSelectValue}>
                 {(state) => {
                   const label = EFFORTS.find((e) => e.value === state.selectedOption())?.label ?? state.selectedOption();
@@ -1519,7 +2087,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
               </Select.Item>
             )}
           >
-            <Select.Trigger class={styles.modelSelectTrigger} title="Composer font size">
+            <Select.Trigger class={styles.modelSelectTrigger} title="Composer font size" aria-label="Select font size">
               <Select.Value<string> class={styles.modelSelectValue}>
                 {(state) => `${state.selectedOption()}px`}
               </Select.Value>
@@ -1543,6 +2111,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
               class={styles.stopBtn}
               type="button"
               onClick={() => { composerCancel(paneId()); setRunning(false); }}
+              aria-label="Stop generation"
             >
               <Square size={10} style={{ fill: 'currentColor' }} />
               Stop
@@ -1565,6 +2134,37 @@ export default function ComposerPane(props: ComposerPaneProps) {
           onClose={() => setShowSkills(false)}
         />
       </Show>
+
+      {/* File preview overlay — inline Monaco viewer for clicked file paths */}
+      <Show when={previewPath()}>
+        <div class={styles.filePreviewOverlay} role="dialog" aria-modal="true" aria-label={`File preview: ${previewPath().split('/').pop()}`} onClick={() => setPreviewPath('')}>
+          <div class={styles.filePreviewPanel} onClick={(e) => e.stopPropagation()}>
+            <div class={styles.filePreviewHeader}>
+              <span class={styles.filePreviewTitle} title={previewPath()}>
+                {previewPath().split('/').pop()}
+              </span>
+              <span class={styles.filePreviewPath}>{previewPath()}</span>
+              <button class={styles.filePreviewClose} onClick={() => setPreviewPath('')} aria-label="Close file preview">
+                <X size={14} />
+              </button>
+            </div>
+            <div class={styles.filePreviewBody} style={{ 'font-size': `${composerFontSize()}px` }}>
+              <Show when={previewLoading()}>
+                <div class={styles.filePreviewLoading}>Loading...</div>
+              </Show>
+              <Show when={!previewLoading() && previewPath().endsWith('.md')}>
+                <div
+                  class={styles.filePreviewMarkdown}
+                  innerHTML={DOMPurify.sanitize(marked.parse(previewContent()) as string)}
+                />
+              </Show>
+              <Show when={!previewLoading() && !previewPath().endsWith('.md')}>
+                <pre class={styles.filePreviewCode}><code>{previewContent()}</code></pre>
+              </Show>
+            </div>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 }
@@ -1574,7 +2174,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
 function StrategyChip(props: { name: string; confidence: number; complexity: string; risk: string; blastRadius: number }) {
   const [open, setOpen] = createSignal(false);
   return (
-    <div class={strategyStyles.strategyBlock} onClick={() => setOpen(!open())}>
+    <div class={strategyStyles.strategyBlock} role="button" tabIndex={0} aria-expanded={open()} aria-label={`Strategy: ${props.name}`} onClick={() => setOpen(!open())} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(!open()); } }}>
       <div class={strategyStyles.strategyHeader}>
         <Brain size={11} />
         <Show when={open()} fallback={<ChevronRight size={11} />}>
@@ -1600,61 +2200,35 @@ function ThinkingChip(props: { content: string }) {
   const preview = () => {
     const text = props.content.trim();
     if (!text) return 'Reasoning...';
-    const firstLine = text.split('\n')[0];
-    return firstLine.length > 80 ? firstLine.slice(0, 80) + '…' : firstLine;
+    const flat = text.replace(/\n/g, ' ');
+    return flat.length > 100 ? flat.slice(0, 100) + '…' : flat;
   };
   const lineCount = () => props.content.split('\n').filter(l => l.trim()).length;
   return (
     <div
       class={open() ? toolStatusStyles.thinkingExpanded : toolStatusStyles.thinkingCollapsed}
+      role="button"
+      tabIndex={0}
+      aria-expanded={open()}
+      aria-label="Thinking block"
       onClick={() => setOpen(!open())}
-      style={{ cursor: 'pointer' }}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(!open()); } }}
     >
-      <div style={{ display: 'flex', 'align-items': 'center', gap: '4px', 'min-width': '0' }}>
+      <div class={toolStatusStyles.thinkingHeader}>
         <Brain size={11} style={{ 'flex-shrink': '0' }} />
         <Show when={open()} fallback={<ChevronRight size={11} style={{ 'flex-shrink': '0' }} />}>
           <ChevronDown size={11} style={{ 'flex-shrink': '0' }} />
         </Show>
-        <span style={{ 'font-weight': '500' }}>Thinking</span>
-        <Show when={!open() && props.content}>
-          <span style={{
-            color: 'var(--text-muted, #888)',
-            'font-size': '0.85em',
-            overflow: 'hidden',
-            'text-overflow': 'ellipsis',
-            'white-space': 'nowrap',
-            'min-width': '0',
-          }}>
-            — {preview()}
-          </span>
-        </Show>
+        <span class={toolStatusStyles.thinkingLabel}>Thinking</span>
         <Show when={lineCount() > 1}>
-          <span style={{
-            color: 'var(--text-muted, #666)',
-            'font-size': '0.75em',
-            'flex-shrink': '0',
-          }}>
-            ({lineCount()} lines)
-          </span>
+          <span class={toolStatusStyles.thinkingLineCount}>({lineCount()} lines)</span>
+        </Show>
+        <Show when={!open() && props.content}>
+          <span class={toolStatusStyles.thinkingPreview}>— {preview()}</span>
         </Show>
       </div>
       <Show when={open()}>
-        <pre style={{
-          'margin-top': '6px',
-          'white-space': 'pre-wrap',
-          'word-break': 'break-word',
-          'width': '100%',
-          'padding': '8px 10px',
-          'border-radius': '6px',
-          'background': 'rgba(255, 255, 255, 0.03)',
-          'border': '1px solid rgba(255, 255, 255, 0.06)',
-          'font-size': '11px',
-          'line-height': '1.5',
-          'max-height': '300px',
-          'overflow-y': 'auto',
-        }}>
-          {props.content}
-        </pre>
+        <pre class={toolStatusStyles.thinkingContent}>{props.content}</pre>
       </Show>
     </div>
   );
@@ -1680,6 +2254,7 @@ function ToolCallsSection(props: {
             class={toolStatusStyles.expandToggleBtn}
             type="button"
             onClick={toggleExpandAll}
+            aria-label={expandMode() === 'all' ? 'Collapse all tool calls' : 'Expand all tool calls'}
           >
             {expandMode() === 'all' ? 'Collapse All' : 'Expand All'}
           </button>
@@ -1723,6 +2298,7 @@ const TOOL_ICON_MAP: Record<string, typeof Wrench> = {
   Globe,
   ListTodo,
   FileCode,
+  Zap,
   Wrench,
 };
 
@@ -1733,6 +2309,15 @@ const formatToolInput = (input: string): string => {
   } catch {
     return input;
   }
+};
+
+/** Estimate token count from a string (~4 chars per token). */
+const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
+
+/** Format estimated token count for display (e.g. "~1.2K" or "~42"). */
+const formatEstimatedTokens = (count: number): string => {
+  if (count >= 1000) return `~${(count / 1000).toFixed(1)}K`;
+  return `~${count}`;
 };
 
 function ToolUseChip(props: {
@@ -1757,13 +2342,7 @@ function ToolUseChip(props: {
   const summary = () => extractToolSummary(props.name, props.input);
   const IconComponent = () => TOOL_ICON_MAP[summary().iconName] ?? Wrench;
 
-  const dotClass = () => {
-    switch (props.status) {
-      case 'running': return toolStatusStyles.statusDotRunning;
-      case 'error': return toolStatusStyles.statusDotError;
-      default: return toolStatusStyles.statusDotSuccess;
-    }
-  };
+
 
   const truncatedResult = () => {
     const r = props.result ?? '';
@@ -1779,8 +2358,16 @@ function ToolUseChip(props: {
   };
 
   return (
-    <div class={styles.toolBlock} onClick={handleClick} style={{ cursor: 'pointer' }}>
-      <span class={dotClass()} />
+    <div class={styles.toolBlock} role="button" tabIndex={0} aria-expanded={effectiveOpen()} aria-label={`Tool call: ${props.name}`} onClick={handleClick} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } }} style={{ cursor: 'pointer' }}>
+      <Show when={props.status === 'running'}>
+        <span class={toolStatusStyles.statusDotRunning} />
+      </Show>
+      <Show when={props.status !== 'running' && props.status !== 'error'}>
+        <span class={toolStatusStyles.statusDotSuccess}><Check size={10} stroke-width={3} /></span>
+      </Show>
+      <Show when={props.status === 'error'}>
+        <span class={toolStatusStyles.statusDotError}><X size={10} stroke-width={3} /></span>
+      </Show>
       {(() => {
         const Ic = IconComponent();
         return <Ic size={11} style={{ 'vertical-align': 'middle', 'margin-right': '4px', 'flex-shrink': '0' }} />;
@@ -1795,6 +2382,12 @@ function ToolUseChip(props: {
       </Show>
       <Show when={summary().badge}>
         <span class={toolStatusStyles.toolBadge}>{summary().badge}</span>
+      </Show>
+      <Show when={props.status === 'running'}>
+        <span class={toolStatusStyles.statusLabelRunning}>Running…</span>
+      </Show>
+      <Show when={props.status === 'error'}>
+        <span class={toolStatusStyles.statusLabelError}>Error</span>
       </Show>
       <Show when={effectiveOpen()}>
         <pre style={{
@@ -1844,6 +2437,7 @@ function ToolUseChip(props: {
             <Show when={resultIsTruncated()}>
               <button
                 type="button"
+                aria-label="Show full tool result"
                 onClick={(e) => { e.stopPropagation(); setShowFullResult(true); }}
                 style={{
                   'margin-top': '4px',
@@ -1861,6 +2455,10 @@ function ToolUseChip(props: {
             </Show>
           </div>
         </Show>
+        <div class={toolStatusStyles.tokenEstimate}>
+          {formatEstimatedTokens(estimateTokens(props.input))} in
+          {props.result ? ` / ${formatEstimatedTokens(estimateTokens(props.result))} out` : ''}
+        </div>
       </Show>
     </div>
   );
@@ -1886,7 +2484,7 @@ function ToolGroupChip(props: {
 
   return (
     <div>
-      <div class={toolStatusStyles.toolGroupHeader} onClick={() => setOpen(!open())}>
+      <div class={toolStatusStyles.toolGroupHeader} role="button" tabIndex={0} aria-expanded={effectiveOpen()} aria-label={`Tool group: ${props.group.name}, ${props.group.items.length} calls`} onClick={() => setOpen(!open())} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(!open()); } }}>
         {(() => {
           const Ic = IconComponent();
           return <Ic size={11} style={{ 'flex-shrink': '0' }} />;
@@ -1898,10 +2496,11 @@ function ToolGroupChip(props: {
         <span>({props.group.items.length} calls)</span>
         <Show when={runningCount() > 0}>
           <span class={toolStatusStyles.statusDotRunning} />
+          <span class={toolStatusStyles.statusLabelRunning}>{runningCount()} running</span>
         </Show>
         <Show when={errorCount() > 0}>
-          <span class={toolStatusStyles.statusDotError} />
-          <span style={{ 'font-size': '10px' }}>{errorCount()} failed</span>
+          <span class={toolStatusStyles.statusDotError}><X size={10} stroke-width={3} /></span>
+          <span class={toolStatusStyles.statusLabelError}>{errorCount()} failed</span>
         </Show>
         <Show when={props.group.previewLabels.length > 0 && !effectiveOpen()}>
           <span class={toolStatusStyles.toolNameSep}>—</span>

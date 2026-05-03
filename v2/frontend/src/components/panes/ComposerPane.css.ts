@@ -132,10 +132,10 @@ export const editBtn = style({
   background: 'transparent',
   border: `1px solid ${vars.color.border}`,
   color: vars.color.textSecondary,
-  padding: '3px 10px',
+  padding: '5px 12px',
   borderRadius: vars.radius.sm,
   cursor: 'pointer',
-  fontSize: vars.fontSize.xs,
+  fontSize: vars.fontSize.sm,
   fontWeight: 500,
   transition: `all 150ms ease`,
   ':hover': {
@@ -276,9 +276,9 @@ export const composerToolbar = style({
   display: 'flex',
   alignItems: 'center',
   gap: vars.space.md,
-  fontSize: vars.fontSize.xs,
+  fontSize: vars.fontSize.sm,
   color: vars.color.textSecondary,
-  paddingTop: vars.space.xs,
+  paddingTop: vars.space.sm,
 });
 
 export const grow = style({ flex: 1 });
@@ -288,12 +288,12 @@ export const modelSelectTrigger = style({
   display: 'inline-flex',
   alignItems: 'center',
   gap: vars.space.xs,
-  padding: `3px ${vars.space.md}`,
+  padding: `5px ${vars.space.md}`,
   borderRadius: vars.radius.sm,
   border: `1px solid ${vars.color.border}`,
   background: vars.color.bgTertiary,
   color: vars.color.textPrimary,
-  fontSize: vars.fontSize.xs,
+  fontSize: vars.fontSize.sm,
   fontFamily: vars.font.mono,
   cursor: 'pointer',
   transition: `border-color ${vars.animation.fast} ease`,
@@ -307,7 +307,7 @@ export const modelSelectTrigger = style({
 
 export const modelSelectValue = style({
   fontFamily: vars.font.mono,
-  fontSize: vars.fontSize.xs,
+  fontSize: vars.fontSize.sm,
   color: vars.color.textPrimary,
 });
 
@@ -449,6 +449,26 @@ export const progressLabel = style({
   fontFamily: vars.font.mono,
 });
 
+export const retryBtn = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `3px ${vars.space.md}`,
+  borderRadius: vars.radius.sm,
+  border: `1px solid ${vars.color.accent}`,
+  background: 'transparent',
+  color: vars.color.accent,
+  fontSize: vars.fontSize.xs,
+  fontWeight: 500,
+  cursor: 'pointer',
+  transition: 'background 150ms ease, border-color 150ms ease',
+  ':hover': {
+    background: `color-mix(in srgb, ${vars.color.accent} 12%, transparent)`,
+    borderColor: vars.color.accentHover,
+  },
+});
+
+
 export const emptyState = style({
   margin: 'auto',
   textAlign: 'center',
@@ -465,8 +485,8 @@ export const contextPill = style({
   border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.full,
   color: vars.color.textSecondary,
-  padding: `2px ${vars.space.sm}`,
-  fontSize: vars.fontSize.xs,
+  padding: `4px ${vars.space.md}`,
+  fontSize: vars.fontSize.sm,
   cursor: 'pointer',
   ':hover': {
     color: vars.color.textPrimary,
@@ -654,6 +674,21 @@ globalStyle(`.${assistantText} a`, {
 });
 globalStyle(`.${assistantText} a:hover`, {
   color: vars.color.accentHover,
+});
+
+// Clickable file-path links injected by linkifyFilePaths() post-render.
+globalStyle(`.${assistantText} a.file-link`, {
+  color: vars.color.accent,
+  textDecoration: 'none',
+  fontFamily: vars.font.mono,
+  fontSize: '0.9em',
+  cursor: 'pointer',
+  borderBottom: `1px dashed transparent`,
+  transition: 'border-color 120ms ease, color 120ms ease',
+});
+globalStyle(`.${assistantText} a.file-link:hover`, {
+  color: vars.color.accentHover,
+  borderBottomColor: vars.color.accent,
 });
 
 globalStyle(`.${assistantText} blockquote`, {
@@ -861,6 +896,41 @@ export const sidebarRowDelete = style({
   },
 });
 
+// Small amber badge shown next to sessions that were interrupted by a crash.
+export const sidebarInterruptedBadge = style({
+  flex: '0 0 auto',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 3,
+  padding: '1px 5px',
+  borderRadius: vars.radius.sm,
+  background: vars.color.warningMuted,
+  color: vars.color.warning,
+  fontSize: '9px',
+  fontWeight: 600,
+  lineHeight: '14px',
+  whiteSpace: 'nowrap',
+});
+
+// Banner shown at the top of the sidebar when interrupted sessions exist.
+export const sidebarInterruptedBanner = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `4px ${vars.space.sm}`,
+  margin: `0 ${vars.space.xs} ${vars.space.xs}`,
+  borderRadius: vars.radius.sm,
+  background: vars.color.warningMuted,
+  color: vars.color.warning,
+  fontSize: vars.fontSize.xs,
+  fontWeight: 500,
+  cursor: 'pointer',
+  transition: `background ${vars.animation.fast} ease`,
+  ':hover': {
+    background: `color-mix(in srgb, ${vars.color.warning} 20%, transparent)`,
+  },
+});
+
 export const sidebarEmpty = style({
   margin: 'auto',
   padding: vars.space.lg,
@@ -972,4 +1042,250 @@ export const conflictDismiss = style({
   ':hover': {
     opacity: 1,
   },
+});
+
+// ── Context capacity warning banner ──────────────────────────────────
+// Shown above the composer input area when context window usage is high.
+
+export const contextWarningBanner = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  padding: `${vars.space.sm} ${vars.space.xxl}`,
+  fontSize: vars.fontSize.xs,
+  fontWeight: 500,
+  flexShrink: 0,
+});
+
+export const contextWarningBannerWarn = style({
+  background: vars.color.warningMuted,
+  borderBottom: `1px solid ${vars.color.warning}`,
+  color: vars.color.warning,
+});
+
+export const contextWarningBannerCritical = style({
+  background: vars.color.dangerMuted,
+  borderBottom: `1px solid ${vars.color.danger}`,
+  color: vars.color.danger,
+});
+
+export const contextWarningText = style({
+  flex: 1,
+});
+
+export const contextWarningBtn = style({
+  background: 'transparent',
+  border: `1px solid currentColor`,
+  color: 'inherit',
+  padding: `2px ${vars.space.sm}`,
+  borderRadius: vars.radius.sm,
+  cursor: 'pointer',
+  fontSize: vars.fontSize.xs,
+  fontWeight: 500,
+  flexShrink: 0,
+  ':hover': {
+    background: `color-mix(in srgb, currentColor 15%, transparent)`,
+  },
+  ':disabled': {
+    cursor: 'not-allowed',
+    opacity: 0.5,
+  },
+});
+
+// ── File preview overlay ──────────────────────────────────────────────
+
+export const filePreviewOverlay = style({
+  position: 'absolute',
+  inset: 0,
+  zIndex: 50,
+  background: 'rgba(0, 0, 0, 0.5)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: vars.space.lg,
+});
+
+export const filePreviewPanel = style({
+  background: vars.color.bgPrimary,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  width: '100%',
+  maxWidth: '90%',
+  maxHeight: '90%',
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
+  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+});
+
+export const filePreviewHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  borderBottom: `1px solid ${vars.color.border}`,
+  background: vars.color.bgSecondary,
+});
+
+export const filePreviewTitle = style({
+  fontWeight: 600,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textPrimary,
+  fontFamily: vars.font.mono,
+});
+
+export const filePreviewPath = style({
+  flex: 1,
+  fontSize: '10px',
+  color: vars.color.textDisabled,
+  fontFamily: vars.font.mono,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+});
+
+export const filePreviewClose = style({
+  background: 'transparent',
+  border: 'none',
+  color: vars.color.textSecondary,
+  cursor: 'pointer',
+  padding: vars.space.xs,
+  borderRadius: vars.radius.sm,
+  ':hover': {
+    background: vars.color.bgHover,
+    color: vars.color.textPrimary,
+  },
+});
+
+export const filePreviewBody = style({
+  flex: 1,
+  overflow: 'auto',
+  padding: `${vars.space.lg} ${vars.space.xl}`,
+  minHeight: 300,
+});
+
+export const filePreviewLoading = style({
+  color: vars.color.textDisabled,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.sm,
+  textAlign: 'center',
+  padding: vars.space.xl,
+});
+
+export const filePreviewMarkdown = style({
+  color: vars.color.textPrimary,
+  fontSize: 'inherit',
+  lineHeight: 1.7,
+  fontFamily: vars.font.body,
+});
+
+globalStyle(`.${filePreviewMarkdown} table`, {
+  width: '100%',
+  borderCollapse: 'collapse',
+  marginTop: vars.space.sm,
+  marginBottom: vars.space.sm,
+  fontSize: vars.fontSize.xs,
+});
+globalStyle(`.${filePreviewMarkdown} th, .${filePreviewMarkdown} td`, {
+  border: `1px solid ${vars.color.border}`,
+  padding: `${vars.space.xs} ${vars.space.sm}`,
+  textAlign: 'left',
+});
+globalStyle(`.${filePreviewMarkdown} th`, {
+  background: vars.color.bgSecondary,
+  fontWeight: 600,
+});
+globalStyle(`.${filePreviewMarkdown} tr:nth-child(even)`, {
+  background: `color-mix(in srgb, ${vars.color.bgSecondary} 50%, transparent)`,
+});
+globalStyle(`.${filePreviewMarkdown} code`, {
+  fontFamily: vars.font.mono,
+  fontSize: '0.9em',
+  padding: '1px 4px',
+  borderRadius: vars.radius.sm,
+  background: vars.color.bgTertiary,
+});
+globalStyle(`.${filePreviewMarkdown} pre`, {
+  background: vars.color.bgSecondary,
+  borderRadius: vars.radius.md,
+  padding: vars.space.md,
+  overflow: 'auto',
+  marginTop: vars.space.sm,
+  marginBottom: vars.space.sm,
+});
+globalStyle(`.${filePreviewMarkdown} h1, .${filePreviewMarkdown} h2, .${filePreviewMarkdown} h3`, {
+  marginTop: vars.space.lg,
+  marginBottom: vars.space.sm,
+  color: vars.color.textPrimary,
+});
+globalStyle(`.${filePreviewMarkdown} hr`, {
+  border: 'none',
+  borderTop: `1px solid ${vars.color.border}`,
+  margin: `${vars.space.lg} 0`,
+});
+
+export const filePreviewCode = style({
+  margin: 0,
+  padding: 0,
+  fontSize: 'inherit',
+  fontFamily: vars.font.mono,
+  color: vars.color.textPrimary,
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+});
+
+// ── Search overlay (Cmd+F / Ctrl+F) ─────────────────────────────────
+// Small pill floating at the top-right of the main column, above the feed.
+export const searchOverlay = style({
+  position: 'absolute',
+  top: vars.space.xs,
+  right: vars.space.md,
+  zIndex: 10,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `4px ${vars.space.sm}`,
+  borderRadius: vars.radius.full,
+  border: `1px solid ${vars.color.borderFocus}`,
+  background: `color-mix(in srgb, ${vars.color.bgSecondary} 92%, transparent)`,
+  backdropFilter: 'blur(8px)',
+  boxShadow: vars.shadow.md,
+  color: vars.color.textSecondary,
+  fontSize: vars.fontSize.xs,
+});
+
+export const searchInput = style({
+  width: 180,
+  background: 'transparent',
+  border: 'none',
+  outline: 'none',
+  color: vars.color.textPrimary,
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.xs,
+  '::placeholder': {
+    color: vars.color.textDisabled,
+  },
+});
+
+export const searchClose = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'transparent',
+  border: 'none',
+  color: vars.color.textDisabled,
+  cursor: 'pointer',
+  padding: 2,
+  borderRadius: vars.radius.sm,
+  ':hover': {
+    color: vars.color.textPrimary,
+    background: vars.color.bgHover,
+  },
+});
+
+globalStyle('mark.search-hit', {
+  background: `color-mix(in srgb, ${vars.color.accent} 40%, transparent)`,
+  color: 'inherit',
+  borderRadius: '2px',
+  padding: '0 1px',
 });
