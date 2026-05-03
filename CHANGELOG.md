@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.20](https://github.com/karki011/phantom/compare/v0.1.19...v0.1.20) (2026-05-03)
+
+
+### Features
+
+* **composer:** slash commands, diff fix, auto-accept ([#74](https://github.com/karki011/phantom/issues/74)) ([8dc591b](https://github.com/karki011/phantom/commit/8dc591bb12a9ba97858d93deabd71654e323c5c7))
+
 ## [0.1.19](https://github.com/karki011/phantom/compare/v0.1.18...v0.1.19) (2026-05-02)
 
 

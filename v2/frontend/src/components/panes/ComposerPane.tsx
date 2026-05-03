@@ -809,6 +809,19 @@ export default function ComposerPane(props: ComposerPaneProps) {
       case 'done': case 'error': setActivityLabel(''); break;
     }
 
+    // Update sticky progress label
+    switch (ev.type) {
+      case 'thinking': setActivityLabel('Thinking...'); break;
+      case 'delta': setActivityLabel('Writing response...'); break;
+      case 'tool_use': {
+        const summary = extractToolSummary(ev.tool_name ?? 'tool', ev.tool_input ?? '{}');
+        setActivityLabel(`${ev.tool_name} — ${summary.label}`);
+        break;
+      }
+      case 'tool_result': setActivityLabel('Processing result...'); break;
+      case 'done': case 'error': setActivityLabel(''); break;
+    }
+
     const turnId = ev.turn_id ?? activeTurnId();
     if (!turnId) return;
 
