@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.21](https://github.com/karki011/phantom/compare/v0.1.20...v0.1.21) (2026-05-03)
+
+
+### Features
+
+* **composer:** AI engine integration + Claude Code UX parity ([#76](https://github.com/karki011/phantom/issues/76)) ([7c68344](https://github.com/karki011/phantom/commit/7c6834472880eb8acf2d13362020f99a20d90c99))
+
 ## [0.1.20](https://github.com/karki011/phantom/compare/v0.1.19...v0.1.20) (2026-05-03)
 
 
