@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.23](https://github.com/karki011/phantom/compare/v0.1.22...v0.1.23) (2026-05-03)
+
+
+### Bug Fixes
+
+* **composer:** sub-agent results now render correctly ([#81](https://github.com/karki011/phantom/issues/81)) ([fd9951f](https://github.com/karki011/phantom/commit/fd9951f7c5974430b1d904fbd7d93941ae81525b))
+
 ## [0.1.22](https://github.com/karki011/phantom/compare/v0.1.21...v0.1.22) (2026-05-03)
 
 
