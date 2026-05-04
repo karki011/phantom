@@ -181,6 +181,19 @@ function ComposerMarkdown(props: { text: string; cwd: string; onFileClick?: (abs
     // ── Linkify file paths ──
     linkifyFilePaths(ref);
 
+    // ── External links → system browser (not in-app WebKit navigation) ──
+    ref.querySelectorAll('a[href]').forEach((a) => {
+      if ((a as HTMLElement).dataset.extWired) return;
+      const href = a.getAttribute('href') ?? '';
+      if (!href.startsWith('http://') && !href.startsWith('https://')) return;
+      if (a.classList.contains('file-link')) return;
+      (a as HTMLElement).dataset.extWired = '1';
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        try { (window as any).go?.app?.App?.OpenURL(href); } catch { window.open(href, '_blank'); }
+      });
+    });
+
     // ── Click handlers for file-path links ──
     ref.querySelectorAll('a.file-link').forEach((a) => {
       if ((a as HTMLElement).dataset.wired) return;
@@ -382,6 +395,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
   // as a per-user default (same pattern as noContext).
   const [planMode, setPlanMode] = createSignal(false);
   const [dragOver, setDragOver] = createSignal(false);
+  const [messageQueue, setMessageQueue] = createSignal<string[]>([]);
   const [showMemory, setShowMemory] = createSignal(false);
   const [showSkills, setShowSkills] = createSignal(false);
   const COMPOSER_FONT_SIZES = [11, 12, 13, 14, 15, 16, 18, 20] as const;
@@ -413,6 +427,10 @@ export default function ComposerPane(props: ComposerPaneProps) {
   let searchInputRef: HTMLInputElement | undefined;
 
   const handleSearchKeydown = (e: KeyboardEvent) => {
+    // Only intercept when this Composer pane contains focus — don't
+    // steal Cmd+F from Monaco editor or other panes.
+    const root = feedRef?.closest(`.${styles.root}`);
+    if (!root?.contains(document.activeElement) && document.activeElement !== document.body) return;
     const isMod = e.metaKey || e.ctrlKey;
     if (isMod && e.key === 'f') {
       e.preventDefault();
@@ -432,6 +450,10 @@ export default function ComposerPane(props: ComposerPaneProps) {
     if (e.key === 'Escape' && searchOpen()) {
       e.preventDefault();
       closeSearch();
+    }
+    if (e.key === 'Escape' && !searchOpen() && running()) {
+      e.preventDefault();
+      composerCancel(paneId()).catch(() => {});
     }
   };
 
@@ -1014,6 +1036,13 @@ export default function ComposerPane(props: ComposerPaneProps) {
       // Refresh the Past Sessions sidebar so the just-finished turn moves
       // its session to the top and the cost/turn-count update reflect.
       void refreshSessions();
+      // Drain message queue — send ALL queued messages as a single prompt.
+      const queue = messageQueue();
+      if (queue.length > 0) {
+        setMessageQueue([]);
+        setInput(queue.join('\n\n'));
+        requestAnimationFrame(() => handleSend());
+      }
     }
     scrollToBottom();
   });
@@ -1080,7 +1109,12 @@ export default function ComposerPane(props: ComposerPaneProps) {
   const handleSend = async () => {
     const rawPrompt = input().trim();
     if (!rawPrompt && mentions().length === 0) return;
-    if (running()) return;
+    if (running()) {
+      // Queue the message — it will be sent after the current turn finishes.
+      setMessageQueue(prev => [...prev, rawPrompt]);
+      setInput('');
+      return;
+    }
 
     // Prepend plan-only directive when plan mode is active.
     const prompt = planMode() ? PLAN_MODE_PREFIX + rawPrompt : rawPrompt;
@@ -1975,6 +2009,56 @@ export default function ComposerPane(props: ComposerPaneProps) {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
+        <Show when={messageQueue().length > 0}>
+          <div style={{
+            display: 'flex',
+            'flex-direction': 'column',
+            gap: '4px',
+            padding: 'var(--space-xs) var(--space-sm)',
+            'font-size': `${composerFontSize()}px`,
+            'font-family': 'var(--font-mono)',
+            color: 'var(--color-accent)',
+            'border-left': '2px solid var(--color-accent)',
+            'margin-bottom': 'var(--space-xs)',
+          }}>
+            <div style={{ opacity: '0.6', 'font-size': `${Math.max(composerFontSize() - 2, 9)}px` }}>
+              {messageQueue().length} queued · Escape to cancel current
+            </div>
+            <For each={messageQueue()}>
+              {(msg, i) => (
+                <div style={{
+                  display: 'flex',
+                  'align-items': 'center',
+                  gap: 'var(--space-xs)',
+                  opacity: '0.8',
+                }}>
+                  <span style={{ color: 'var(--color-text-disabled)' }}>{i() + 1}.</span>
+                  <span style={{
+                    overflow: 'hidden',
+                    'text-overflow': 'ellipsis',
+                    'white-space': 'nowrap',
+                    'max-width': '400px',
+                  }}>{msg}</span>
+                  <button
+                    type="button"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--color-text-disabled)',
+                      cursor: 'pointer',
+                      padding: '0',
+                      'margin-left': 'auto',
+                    }}
+                    onClick={() => setMessageQueue(prev => prev.filter((_, idx) => idx !== i()))}
+                    aria-label={`Remove queued message ${i() + 1}`}
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
         <Show when={mentions().length > 0}>
           <div class={styles.mentionRow}>
             <For each={mentions()}>
