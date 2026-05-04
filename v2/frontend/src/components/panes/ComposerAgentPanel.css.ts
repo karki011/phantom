@@ -12,6 +12,11 @@ const spin = keyframes({
   '100%': { transform: 'rotate(360deg)' },
 });
 
+const pulse = keyframes({
+  '0%, 100%': { opacity: 1 },
+  '50%': { opacity: 0.4 },
+});
+
 // ── Panel container ─────────────────────────────────────────────────────
 
 export const panel = style({
@@ -185,6 +190,17 @@ export const statusDone = style({
   flexShrink: 0,
 });
 
+export const statusPending = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 12,
+  height: 12,
+  color: vars.color.warning,
+  flexShrink: 0,
+  animation: `${pulse} 2s ease-in-out infinite`,
+});
+
 export const statusFailed = style({
   display: 'inline-flex',
   alignItems: 'center',
@@ -270,4 +286,20 @@ export const toggleBadge = style({
   justifyContent: 'center',
   padding: '0 3px',
   lineHeight: 1,
+});
+
+// ── Pending-integration hint banner ────────────────────────────────────
+
+export const pendingHint = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: vars.space.xs,
+  padding: `${vars.space.xs} ${vars.space.md}`,
+  fontSize: '11px',
+  fontFamily: vars.font.mono,
+  color: vars.color.warning,
+  background: vars.color.warningMuted,
+  borderTop: `1px solid ${vars.color.divider}`,
+  userSelect: 'none',
 });

@@ -28,6 +28,7 @@ interface AgentPanelProps {
   onClose: () => void;
   pinned: boolean;
   onTogglePin: () => void;
+  sessionIdle?: boolean;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -169,7 +170,10 @@ export default function ComposerAgentPanel(props: AgentPanelProps) {
                   <Show when={agent.status === 'running' || agent.status === 'spawning'}>
                     <span class={styles.statusSpinner} />
                   </Show>
-                  <Show when={agent.status === 'completed'}>
+                  <Show when={agent.status === 'completed' && agent.isBackground && !props.sessionIdle}>
+                    <span class={styles.statusPending}><Check size={10} stroke-width={3} /></span>
+                  </Show>
+                  <Show when={agent.status === 'completed' && !(agent.isBackground && !props.sessionIdle)}>
                     <span class={styles.statusDone}><Check size={10} stroke-width={3} /></span>
                   </Show>
                   <Show when={agent.status === 'failed'}>
@@ -178,7 +182,11 @@ export default function ComposerAgentPanel(props: AgentPanelProps) {
                   <span class={styles.agentDescription} title={agent.description}>
                     {agent.description}
                   </span>
-                  <span class={styles.agentElapsed}>{elapsedFor(agent)}</span>
+                  <span class={styles.agentElapsed}>
+                    {agent.status === 'completed' && agent.isBackground && !props.sessionIdle
+                      ? 'awaiting integration'
+                      : elapsedFor(agent)}
+                  </span>
                 </div>
 
                 {/* Meta row: model badge + subagent type + tokens */}

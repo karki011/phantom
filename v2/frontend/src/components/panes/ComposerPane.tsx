@@ -254,6 +254,7 @@ import {
   type ComposerSessionSummary,
 } from '@/core/bindings/composer';
 import { addTabWithData, renameTabByPane } from '@/core/panes/signals';
+import { composerPaneKind } from '@/core/composer/preferences';
 import { readFileByPath } from '@/core/bindings/editor';
 import { showToast, showWarningToast } from '@/shared/Toast/Toast';
 import { loadPref, setPref } from '@/core/signals/preferences';
@@ -1168,7 +1169,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
 
   const handleNewConversation = async () => {
     if (running() || turns.length > 0) {
-      addTabWithData('composer', `Composer · ${cwd() ? cwd().split('/').pop() : 'new'}`, { cwd: cwd() });
+      addTabWithData(composerPaneKind(), `Composer · ${cwd() ? cwd().split('/').pop() : 'new'}`, { cwd: cwd() });
       return;
     }
     await composerNewConversation(paneId());
@@ -1198,7 +1199,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
   //                    so users can compare two conversations side-by-side.
   const handleSessionRowClick = (s: ComposerSessionSummary, e: MouseEvent) => {
     if (e.metaKey || e.ctrlKey) {
-      addTabWithData('composer', `Composer · ${s.name || basename(s.cwd) || 'session'}`, {
+      addTabWithData(composerPaneKind(), `Composer · ${s.name || basename(s.cwd) || 'session'}`, {
         cwd: s.cwd,
         sessionId: s.session_id,
       });
@@ -1578,7 +1579,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
                       <ContextMenu.Content class={sidebarStyles.contextMenuContent}>
                         <ContextMenu.Item
                           class={sidebarStyles.contextMenuItem}
-                          onSelect={() => addTabWithData('composer', `Composer · ${s.name || basename(s.cwd) || 'session'}`, { cwd: s.cwd, sessionId: s.session_id })}
+                          onSelect={() => addTabWithData(composerPaneKind(), `Composer · ${s.name || basename(s.cwd) || 'session'}`, { cwd: s.cwd, sessionId: s.session_id })}
                         >
                           <Plus size={13} />
                           Open in new tab

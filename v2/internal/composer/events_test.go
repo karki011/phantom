@@ -115,6 +115,17 @@ func TestDecodeEvent_KindClassification(t *testing.T) {
 		subtype string
 		want    EventKind
 	}{
+		// Real Claude CLI protocol
+		{"system init", "system", "init", EventSystemInit},
+		{"system status", "system", "status", EventSystemStatus},
+		{"assistant (no subtype)", "assistant", "", EventAssistant},
+		{"result success", "result", "success", EventResultSuccess},
+		{"result error", "result", "error", EventResultError},
+		{"control_request", "control_request", "", EventControlRequest},
+		{"control_response", "control_response", "", EventControlResponse},
+		{"user replay", "user", "", EventUserReplay},
+		{"stream_event", "stream_event", "", EventStreamEvent},
+		// Legacy subtypes (backward compat)
 		{"assistant message delta", "assistant", "message_delta", EventAssistantMessageDelta},
 		{"assistant message complete", "assistant", "message_complete", EventAssistantMessageComplete},
 		{"thinking delta", "assistant", "thinking_delta", EventThinkingDelta},
@@ -260,5 +271,187 @@ func TestDecodeEvent_ToolInput(t *testing.T) {
 	}
 	if input["file_path"] != "/tmp/foo.go" {
 		t.Errorf("file_path = %q, want %q", input["file_path"], "/tmp/foo.go")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Real Claude CLI protocol tests
+// ---------------------------------------------------------------------------
+
+// TestDecodeEvent_SystemInit verifies the system init message is decoded.
+func TestDecodeEvent_SystemInit(t *testing.T) {
+	raw := `{
+		"type": "system",
+		"subtype": "init",
+		"session_id": "sess_abc123"
+	}`
+
+	ev, err := DecodeEvent([]byte(raw))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ev.Kind != EventSystemInit {
+		t.Errorf("kind = %q, want %q", ev.Kind, EventSystemInit)
+	}
+	if ev.SessionID != "sess_abc123" {
+		t.Errorf("session_id = %q, want %q", ev.SessionID, "sess_abc123")
+	}
+}
+
+// TestDecodeEvent_AssistantMessage verifies complete assistant message decoding.
+func TestDecodeEvent_AssistantMessage(t *testing.T) {
+	raw := `{
+		"type": "assistant",
+		"message": {
+			"role": "assistant",
+			"content": [
+				{"type": "text", "text": "Hello!"},
+				{"type": "tool_use", "id": "tu_123", "name": "Bash", "input": {"command": "ls"}}
+			],
+			"stop_reason": "end_turn"
+		}
+	}`
+
+	ev, err := DecodeEvent([]byte(raw))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ev.Kind != EventAssistant {
+		t.Errorf("kind = %q, want %q", ev.Kind, EventAssistant)
+	}
+	if ev.Message == nil {
+		t.Fatal("message should not be nil")
+	}
+
+	// Verify the message payload round-trips
+	var msg struct {
+		Role    string `json:"role"`
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"content"`
+		StopReason string `json:"stop_reason"`
+	}
+	if err := json.Unmarshal(ev.Message, &msg); err != nil {
+		t.Fatalf("failed to unmarshal message: %v", err)
+	}
+	if msg.Role != "assistant" {
+		t.Errorf("role = %q, want %q", msg.Role, "assistant")
+	}
+	if len(msg.Content) != 2 {
+		t.Fatalf("content length = %d, want 2", len(msg.Content))
+	}
+	if msg.Content[0].Text != "Hello!" {
+		t.Errorf("content[0].text = %q, want %q", msg.Content[0].Text, "Hello!")
+	}
+	if msg.Content[1].Name != "Bash" {
+		t.Errorf("content[1].name = %q, want %q", msg.Content[1].Name, "Bash")
+	}
+}
+
+// TestDecodeEvent_ControlRequest verifies permission control_request decoding.
+func TestDecodeEvent_ControlRequest(t *testing.T) {
+	raw := `{
+		"type": "control_request",
+		"request_id": "req_abc123",
+		"request": {
+			"subtype": "can_use_tool",
+			"tool_name": "Bash",
+			"input": {"command": "rm -rf /tmp/test"},
+			"description": "Delete test directory"
+		}
+	}`
+
+	ev, err := DecodeEvent([]byte(raw))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ev.Kind != EventControlRequest {
+		t.Errorf("kind = %q, want %q", ev.Kind, EventControlRequest)
+	}
+	if ev.RequestID != "req_abc123" {
+		t.Errorf("request_id = %q, want %q", ev.RequestID, "req_abc123")
+	}
+	// tool_name and description extracted from request payload
+	if ev.ToolName != "Bash" {
+		t.Errorf("tool_name = %q, want %q", ev.ToolName, "Bash")
+	}
+	if ev.Description != "Delete test directory" {
+		t.Errorf("description = %q, want %q", ev.Description, "Delete test directory")
+	}
+	if ev.Request == nil {
+		t.Fatal("request should not be nil")
+	}
+}
+
+// TestDecodeEvent_ResultSuccess verifies result success event decoding.
+func TestDecodeEvent_ResultSuccess(t *testing.T) {
+	raw := `{
+		"type": "result",
+		"subtype": "success",
+		"is_error": false,
+		"duration_ms": 1234,
+		"result": "Task completed successfully"
+	}`
+
+	ev, err := DecodeEvent([]byte(raw))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ev.Kind != EventResultSuccess {
+		t.Errorf("kind = %q, want %q", ev.Kind, EventResultSuccess)
+	}
+	if ev.Result != "Task completed successfully" {
+		t.Errorf("result = %q, want %q", ev.Result, "Task completed successfully")
+	}
+	if ev.DurationMs != 1234 {
+		t.Errorf("duration_ms = %d, want %d", ev.DurationMs, 1234)
+	}
+	if ev.IsError {
+		t.Error("is_error should be false")
+	}
+}
+
+// TestDecodeEvent_ResultError verifies result error event decoding.
+func TestDecodeEvent_ResultError(t *testing.T) {
+	raw := `{
+		"type": "result",
+		"subtype": "error",
+		"is_error": true,
+		"duration_ms": 500,
+		"result": "Something went wrong"
+	}`
+
+	ev, err := DecodeEvent([]byte(raw))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ev.Kind != EventResultError {
+		t.Errorf("kind = %q, want %q", ev.Kind, EventResultError)
+	}
+	if !ev.IsError {
+		t.Error("is_error should be true")
+	}
+}
+
+// TestDecodeEvent_UserReplay verifies user replay message decoding.
+func TestDecodeEvent_UserReplay(t *testing.T) {
+	raw := `{
+		"type": "user",
+		"session_id": "",
+		"message": {"role": "user", "content": [{"type": "text", "text": "hello"}]}
+	}`
+
+	ev, err := DecodeEvent([]byte(raw))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ev.Kind != EventUserReplay {
+		t.Errorf("kind = %q, want %q", ev.Kind, EventUserReplay)
+	}
+	if ev.Message == nil {
+		t.Fatal("message should not be nil")
 	}
 }

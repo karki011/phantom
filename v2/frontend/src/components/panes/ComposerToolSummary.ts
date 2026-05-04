@@ -110,6 +110,8 @@ export interface ToolUseEntry {
   status: 'running' | 'done' | 'error';
   result?: string;
   resultIsError?: boolean;
+  /** Optional tool_use_id for store-backed lookup in V2 ToolUseChip. */
+  toolUseId?: string;
 }
 
 export interface ToolGroup {

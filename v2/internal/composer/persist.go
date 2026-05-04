@@ -5,10 +5,7 @@
 // when query patterns stabilise.
 package composer
 
-import (
-	"context"
-	"database/sql"
-)
+import "context"
 
 func (s *Service) insertTurn(ctx context.Context, t *Turn) error {
 	const q = `INSERT INTO composer_turns
@@ -406,5 +403,3 @@ func (s *Service) ClearInterruptedFlag(ctx context.Context, sessionID string) {
 	_, _ = s.writer.ExecContext(ctx, q, sessionID)
 }
 
-// Compile-time guard: ensure sql.DB pointer compiles.
-var _ = (*sql.DB)(nil)
