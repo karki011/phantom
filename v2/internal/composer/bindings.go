@@ -622,21 +622,37 @@ func (b *Bindings) ComposerV2List() []ManagerSessionInfo {
 // ComposerListSessions returns the 50 most recently active sessions from the
 // shared SQLite database. Delegates to V1 Service.ListSessions.
 func (b *Bindings) ComposerListSessions() []SessionSummary {
-	if b.service == nil {
-		log.Warn("composer: ComposerListSessions — service is nil")
+	if b.service == nil || b.ctx == nil {
 		return nil
 	}
-	if b.ctx == nil {
-		log.Warn("composer: ComposerListSessions — ctx is nil")
-		return nil
-	}
-	list, err := b.service.ListSessions(b.ctx)
+	// Query the sessions table (populated by session_watcher from ~/.claude/sessions/)
+	// instead of composer_turns. This matches the Claude extension's approach —
+	// using the CLI's own session data, not our persistence layer.
+	const q = `SELECT id, COALESCE(name, ''), COALESCE(cwd, ''),
+		COALESCE(first_prompt, ''), COALESCE(status, 'completed'),
+		COALESCE(started_at, 0)
+		FROM sessions
+		WHERE id NOT LIKE 'cv2_%'
+		ORDER BY started_at DESC
+		LIMIT 50`
+	rows, err := b.service.writer.QueryContext(b.ctx, q)
 	if err != nil {
-		log.Warn("composer: ComposerListSessions failed", "err", err)
+		log.Warn("composer: ComposerListSessions query failed", "err", err)
 		return nil
 	}
-	log.Info("composer: ComposerListSessions", "count", len(list))
-	return list
+	defer rows.Close()
+	var out []SessionSummary
+	for rows.Next() {
+		var s SessionSummary
+		var status string
+		if err := rows.Scan(&s.SessionID, &s.Name, &s.Cwd, &s.FirstPrompt, &status, &s.LastActivity); err != nil {
+			continue
+		}
+		s.WasInterrupted = status == "error" || status == "interrupted"
+		out = append(out, s)
+	}
+	log.Info("composer: ComposerListSessions", "count", len(out))
+	return out
 }
 
 // ComposerHistoryBySession returns all turns for a session from the DB.
