@@ -1037,14 +1037,23 @@ export const dispatchEvent = (
     case 'compact_boundary':
       return reduceCompactBoundary(setState, state, ev)
     case 'system_status':
-      // Handle task lifecycle events for BG agents
-      console.log('[reducer] system_status event', ev.raw_subtype, ev.raw_type, JSON.stringify(ev).slice(0, 200))
-      if (ev.raw_subtype === 'task_notification') {
-        // BG agent completed — find the matching tool by description/task_id
-        // and mark it complete. The task_notification only has task_id.
+      if (ev.raw_subtype === 'task_notification' && ev.tool_use_id) {
+        // BG agent completed — match by tool_use_id from the event.
+        // Status may already be 'complete' from content_block_stop,
+        // but output is empty — setting it makes statusMapped() show ✓.
+        setState((s) => {
+          const entry = s.toolUses[ev.tool_use_id!]
+          if (entry) {
+            entry.status = 'complete'
+            entry.output = entry.output || '[agent completed]'
+            entry.completedAt = entry.completedAt || Date.now()
+          }
+        })
+      } else if (ev.raw_subtype === 'task_notification' && !ev.tool_use_id) {
+        // Fallback: no tool_use_id, complete all BG agents
         setState((s) => {
           for (const entry of Object.values(s.toolUses)) {
-            if (entry.status === 'running' && !entry.output) {
+            if (!entry.output) {
               const isBg = (entry.input as Record<string, unknown>)?.run_in_background
               if (isBg) {
                 entry.status = 'complete'
