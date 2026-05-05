@@ -17,4 +17,5 @@ func NewONNXEmbedder(_, _ string) (*ONNXEmbedder, error) {
 func (e *ONNXEmbedder) Embed(_ string) ([]float32, error)        { return nil, ErrONNXNotAvailable }
 func (e *ONNXEmbedder) EmbedBatch(_ []string) ([][]float32, error) { return nil, ErrONNXNotAvailable }
 func (e *ONNXEmbedder) Dimensions() int                           { return Dimensions }
+func (e *ONNXEmbedder) IsStub() bool                              { return true }
 func (e *ONNXEmbedder) Close() error                              { return nil }

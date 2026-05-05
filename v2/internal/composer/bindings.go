@@ -254,6 +254,7 @@ func (b *Bindings) startTurn(sessionID string, session *Session, userText string
 		model = "sonnet" // fallback
 	}
 
+	log.Info("composer: v2 startTurn", "sessionID", sessionID, "turnID", turnID, "prompt", userText[:min(len(userText), 50)])
 	if err := b.service.insertTurn(b.ctx, &Turn{
 		ID:        turnID,
 		PaneID:    "v2_" + sessionID,
@@ -582,13 +583,20 @@ func (b *Bindings) ComposerV2List() []ManagerSessionInfo {
 // ComposerListSessions returns the 50 most recently active sessions from the
 // shared SQLite database. Delegates to V1 Service.ListSessions.
 func (b *Bindings) ComposerListSessions() []SessionSummary {
-	if b.service == nil || b.ctx == nil {
+	if b.service == nil {
+		log.Warn("composer: ComposerListSessions — service is nil")
+		return nil
+	}
+	if b.ctx == nil {
+		log.Warn("composer: ComposerListSessions — ctx is nil")
 		return nil
 	}
 	list, err := b.service.ListSessions(b.ctx)
 	if err != nil {
+		log.Warn("composer: ComposerListSessions failed", "err", err)
 		return nil
 	}
+	log.Info("composer: ComposerListSessions", "count", len(list))
 	return list
 }
 

@@ -17,6 +17,10 @@ type Embedder interface {
 	EmbedBatch(texts []string) ([][]float32, error)
 	// Dimensions returns the embedding vector length.
 	Dimensions() int
+	// IsStub reports whether this embedder is a no-op stub. Callers can use
+	// this to skip embedding-dependent work paths early rather than
+	// repeatedly hitting ErrONNXNotAvailable.
+	IsStub() bool
 	// Close releases underlying resources (ONNX session, tokenizer).
 	Close() error
 }
@@ -33,6 +37,7 @@ type StubEmbedder struct{}
 func (s *StubEmbedder) Embed(_ string) ([]float32, error)        { return nil, ErrONNXNotAvailable }
 func (s *StubEmbedder) EmbedBatch(_ []string) ([][]float32, error) { return nil, ErrONNXNotAvailable }
 func (s *StubEmbedder) Dimensions() int                           { return Dimensions }
+func (s *StubEmbedder) IsStub() bool                              { return true }
 func (s *StubEmbedder) Close() error                              { return nil }
 
 // Normalize L2-normalizes a vector in place and returns it.

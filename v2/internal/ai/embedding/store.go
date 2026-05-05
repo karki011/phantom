@@ -64,10 +64,14 @@ func NewVectorStore(db *sql.DB, embedder Embedder) (*VectorStore, error) {
 
 // Store embeds text and persists it as a Memory entry. If a memory with the
 // same (memoryType, sourceID) exists, it is replaced (upsert).
+//
+// When the embedder is unavailable (stub mode), the text is still persisted
+// so it can be re-embedded later, but no vector is stored in the in-memory
+// index (the row is kept in SQLite for future re-indexing).
 func (vs *VectorStore) Store(memoryType, sourceID, text string) error {
 	vec, err := vs.embedder.Embed(text)
 	if err != nil {
-		slog.Debug("embedding: embed failed, storing text without vector", "type", memoryType, "err", err)
+		slog.Debug("embedding: embed skipped (embedder unavailable)", "type", memoryType, "err", err)
 		vec = nil
 	}
 
@@ -98,13 +102,18 @@ func (vs *VectorStore) Store(memoryType, sourceID, text string) error {
 		return fmt.Errorf("insert embedding: %w", err)
 	}
 
-	vs.memories[id] = &Memory{
-		ID:          id,
-		MemoryType:  memoryType,
-		SourceID:    sourceID,
-		TextContent: text,
-		Vector:      vec,
-		CreatedAt:   time.Now(),
+	// Only add to the in-memory search index when we have a valid vector.
+	// Rows without vectors are kept in SQLite for future re-embedding but
+	// cannot participate in cosine similarity search.
+	if len(vec) == Dimensions {
+		vs.memories[id] = &Memory{
+			ID:          id,
+			MemoryType:  memoryType,
+			SourceID:    sourceID,
+			TextContent: text,
+			Vector:      vec,
+			CreatedAt:   time.Now(),
+		}
 	}
 	return nil
 }
@@ -113,7 +122,7 @@ func (vs *VectorStore) Store(memoryType, sourceID, text string) error {
 func (vs *VectorStore) StoreWithTTL(memoryType, sourceID, text string, ttl time.Duration) error {
 	vec, err := vs.embedder.Embed(text)
 	if err != nil {
-		slog.Debug("embedding: embed failed, storing text without vector", "type", memoryType, "err", err)
+		slog.Debug("embedding: embed skipped (embedder unavailable)", "type", memoryType, "err", err)
 		vec = nil
 	}
 
@@ -143,14 +152,17 @@ func (vs *VectorStore) StoreWithTTL(memoryType, sourceID, text string, ttl time.
 		return fmt.Errorf("insert embedding: %w", err)
 	}
 
-	vs.memories[id] = &Memory{
-		ID:          id,
-		MemoryType:  memoryType,
-		SourceID:    sourceID,
-		TextContent: text,
-		Vector:      vec,
-		CreatedAt:   time.Now(),
-		ExpiresAt:   &expiresAt,
+	// Only index in memory when we have a valid vector for cosine search.
+	if len(vec) == Dimensions {
+		vs.memories[id] = &Memory{
+			ID:          id,
+			MemoryType:  memoryType,
+			SourceID:    sourceID,
+			TextContent: text,
+			Vector:      vec,
+			CreatedAt:   time.Now(),
+			ExpiresAt:   &expiresAt,
+		}
 	}
 	return nil
 }
@@ -281,7 +293,7 @@ func (vs *VectorStore) Stats() StoreStats {
 		TotalMemories:  len(vs.memories),
 		ByType:         byType,
 		IndexSize:      len(vs.memories),
-		EmbedderActive: vs.embedder != nil,
+		EmbedderActive: vs.embedder != nil && !vs.embedder.IsStub(),
 	}
 }
 
@@ -309,6 +321,9 @@ func (vs *VectorStore) ensureSchema() error {
 }
 
 // loadAll reads every row from ai_embeddings into the in-memory index.
+// Rows whose vector blob doesn't decode to exactly Dimensions floats are
+// collected and deleted from SQLite in a single batch — these are artefacts
+// of past stub-embedder writes that stored empty blobs.
 // Caller must NOT hold vs.mu.
 func (vs *VectorStore) loadAll() error {
 	rows, err := vs.db.Query(
@@ -319,7 +334,7 @@ func (vs *VectorStore) loadAll() error {
 	}
 	defer rows.Close()
 
-	var skippedDims int
+	var badIDs []string
 	for rows.Next() {
 		var (
 			m         Memory
@@ -336,16 +351,26 @@ func (vs *VectorStore) loadAll() error {
 		}
 		m.Vector = blobToVector(blob)
 		if len(m.Vector) != Dimensions {
-			slog.Debug("embedding: skip row with wrong dimensions", "id", m.ID, "got", len(m.Vector))
-			skippedDims++
+			badIDs = append(badIDs, m.ID)
 			continue
 		}
 		vs.memories[m.ID] = &m
 	}
-	if skippedDims > 0 {
-		slog.Info("embedding: skipped rows with wrong dimensions", "count", skippedDims, "expected", Dimensions)
+	if err := rows.Err(); err != nil {
+		return err
 	}
-	return rows.Err()
+
+	// Purge rows with invalid vectors (0-dim blobs from stub embedder).
+	if len(badIDs) > 0 {
+		slog.Info("embedding: purging rows with invalid vectors",
+			"count", len(badIDs), "expected_dims", Dimensions)
+		for _, id := range badIDs {
+			if _, err := vs.db.Exec("DELETE FROM ai_embeddings WHERE id = ?", id); err != nil {
+				slog.Warn("embedding: failed to purge bad row", "id", id, "err", err)
+			}
+		}
+	}
+	return nil
 }
 
 // vectorToBlob serializes a float32 slice to raw little-endian bytes.
