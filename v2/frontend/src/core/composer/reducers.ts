@@ -996,10 +996,11 @@ export const dispatchEvent = (
     case 'result_error':
       return reduceResult(setState, state, ev)
     case 'system_init':
-      // Capture model identifier from system_init
-      if (ev.model) {
-        setState((s) => { s.model = ev.model! })
-      }
+      // Capture model + Claude session UUID from system_init
+      setState((s) => {
+        if (ev.model) s.model = ev.model!
+        if (ev.session_id) s.sessionId = ev.session_id!
+      })
       break
     case 'enriched_prompt':
       return reduceEnrichedPrompt(setState, state, ev)

@@ -125,6 +125,19 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
   }
 
   const handleResumeSession = (sessionId: string) => {
+    // Check if this session is already open in a tab — just focus it
+    const openIds = listSessionIds()
+    for (const id of openIds) {
+      const store = getSessionStore(id)
+      if (!store) continue
+      const [st] = store
+      // Match by session ID in messages (history has the Claude UUID)
+      // or by the worktree session mapping
+      if (id === sessionId || st.sessionId === sessionId) {
+        setActiveSessionId(id)
+        return
+      }
+    }
     void openNewSession(sessionId)
   }
 
