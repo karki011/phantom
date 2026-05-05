@@ -201,8 +201,8 @@ const ComposerSession: Component<ComposerSessionProps> = (props) => {
     ])
     set('streaming', { msgId: placeholderId, blockIdx: 0 })
 
-    // Update tab label from first user message
-    if (s.messages.length <= 1) {
+    // Update tab label from first user message (or if still default)
+    if (s.messages.length <= 1 || !s.label || s.label.startsWith('cv2_')) {
       const label = text.length > 50 ? text.slice(0, 50) + '…' : text
       set('label', label)
     }

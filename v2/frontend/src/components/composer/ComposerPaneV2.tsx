@@ -59,10 +59,8 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
           effort: initialState.effortLevel || 'high',
           no_context: noContext,
         })
-        if (info?.name) {
-          const entry = getSessionStore(id)
-          if (entry) entry[1]('label', info.name)
-        }
+        // Don't set Pokémon name as label — wait for first user message
+        // to set a descriptive label (handled in ComposerSession.handleSend)
       } catch (err) {
         console.error('[ComposerPaneV2] Failed to open session', id, err)
       }
