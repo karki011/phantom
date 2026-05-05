@@ -633,6 +633,8 @@ func (b *Bindings) ComposerListSessions() []SessionSummary {
 		COALESCE(started_at, 0)
 		FROM sessions
 		WHERE id NOT LIKE 'cv2_%'
+		  AND kind = 'composer'
+		  AND COALESCE(status, '') != 'hidden'
 		ORDER BY started_at DESC
 		LIMIT 50`
 	rows, err := b.service.writer.QueryContext(b.ctx, q)
@@ -673,8 +675,9 @@ func (b *Bindings) ComposerDeleteSession(sessionID string) bool {
 	if b.service == nil || b.ctx == nil {
 		return false
 	}
-	// Delete from sessions table (sidebar source) + composer tables (history)
-	_, _ = b.service.writer.ExecContext(b.ctx, `DELETE FROM sessions WHERE id = ?`, sessionID)
+	// Mark session as hidden (not deleted — session_watcher would re-create it).
+	// Also clean up composer turn/event data.
+	_, _ = b.service.writer.ExecContext(b.ctx, `UPDATE sessions SET status = 'hidden' WHERE id = ?`, sessionID)
 	_ = b.service.deleteSession(b.ctx, sessionID)
 	return true
 }
