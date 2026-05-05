@@ -21,6 +21,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/charmbracelet/log"
+
 	"github.com/subashkarki/phantom-os-v2/internal/namegen"
 )
 
@@ -336,6 +338,11 @@ func (s *Session) readStdout(r io.Reader) {
 		// Silently drop keep_alive pings — no need to forward to handlers.
 		if ev.Kind == EventKeepAlive {
 			continue
+		}
+
+		// Log task lifecycle events for debugging BG agent status
+		if ev.RawSubtype == "task_started" || ev.RawSubtype == "task_progress" || ev.RawSubtype == "task_notification" {
+			log.Info("composer: task event", "subtype", ev.RawSubtype, "kind", ev.Kind, "text", ev.Text[:min(len(ev.Text), 50)])
 		}
 
 		// Route control_response to the pending request channel BEFORE emit.

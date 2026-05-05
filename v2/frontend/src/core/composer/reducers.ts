@@ -831,6 +831,33 @@ export const reduceResult = (
     s.strategy = null // clear per-turn strategy metadata
     s.status = 'idle' // result event = turn complete, session is idle
 
+    // Force-complete any BG agents still running after turn ends.
+    // task_notification events may not arrive in all CLI modes.
+    const bgRunning: string[] = []
+    for (const [id, entry] of Object.entries(s.toolUses)) {
+      if (entry.status === 'running') {
+        const isBg = (entry.input as Record<string, unknown>)?.run_in_background
+        if (isBg) bgRunning.push(id)
+      }
+    }
+    if (bgRunning.length > 0) {
+      console.log('[reducer] result: BG agents still running after turn complete:', bgRunning.length)
+      // Force-complete after short delay via setTimeout outside setState
+      setTimeout(() => {
+        setState((s2) => {
+          for (const id of bgRunning) {
+            const entry = s2.toolUses[id]
+            if (entry && entry.status === 'running') {
+              console.log('[reducer] force-completing BG agent:', id)
+              entry.status = 'complete'
+              entry.output = entry.output || '[turn complete]'
+              entry.completedAt = Date.now()
+            }
+          }
+        })
+      }, 5000)
+    }
+
     // Update session totals from result-level usage
     if (costUsd > 0) s.totalCostUsd += costUsd
     if (inputTokens > 0) s.totalInputTokens += inputTokens
@@ -1011,6 +1038,7 @@ export const dispatchEvent = (
       return reduceCompactBoundary(setState, state, ev)
     case 'system_status':
       // Handle task lifecycle events for BG agents
+      console.log('[reducer] system_status event', ev.raw_subtype, ev.raw_type, JSON.stringify(ev).slice(0, 200))
       if (ev.raw_subtype === 'task_notification') {
         // BG agent completed — find the matching tool by description/task_id
         // and mark it complete. The task_notification only has task_id.
