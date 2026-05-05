@@ -813,18 +813,16 @@ export const reduceResult = (
         }
       }
 
-      // Finalize ALL remaining tool_use entries — the result event means
-      // the turn is complete. For BG agents that never got a tool_result,
-      // set a sentinel output so statusMapped() stops showing spinner.
+      // Finalize non-BG tool_use entries. BG agents may still be running
+      // after result_success — they send task_notification when truly done.
       for (const block of s.messages[targetIdx].content) {
         if (block.type === 'tool_use' && block.toolUseId) {
           const entry = s.toolUses[block.toolUseId]
           if (entry && entry.status === 'running') {
-            entry.status = 'complete'
-          }
-          if (entry && !entry.output) {
-            entry.output = '[turn complete]'
-            entry.completedAt = Date.now()
+            const isBg = (entry.input as Record<string, unknown>)?.run_in_background
+            if (!isBg) {
+              entry.status = 'complete'
+            }
           }
         }
       }
@@ -1012,8 +1010,25 @@ export const dispatchEvent = (
     case 'compact_boundary':
       return reduceCompactBoundary(setState, state, ev)
     case 'system_status':
+      // Handle task lifecycle events for BG agents
+      if (ev.raw_subtype === 'task_notification') {
+        // BG agent completed — find the matching tool by description/task_id
+        // and mark it complete. The task_notification only has task_id.
+        setState((s) => {
+          for (const entry of Object.values(s.toolUses)) {
+            if (entry.status === 'running' && !entry.output) {
+              const isBg = (entry.input as Record<string, unknown>)?.run_in_background
+              if (isBg) {
+                entry.status = 'complete'
+                entry.output = '[agent completed]'
+                entry.completedAt = Date.now()
+              }
+            }
+          }
+        })
+      }
+      break
     case 'user_replay':
-      // Informational — no state changes needed yet
       break
 
     // ── Legacy event kinds (backward compat) ───────────────────────

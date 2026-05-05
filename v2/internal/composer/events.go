@@ -155,6 +155,8 @@ func classifyKind(typ, sub string) EventKind {
 			return EventSystemStatus
 		case "compact_boundary":
 			return EventCompactBoundary
+		case "task_started", "task_progress", "task_notification":
+			return EventSystemStatus // pass through with raw_subtype intact
 		// Legacy subtypes kept for backward compat
 		case "session_resumed":
 			return EventSessionResumed
