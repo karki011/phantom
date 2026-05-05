@@ -63,7 +63,10 @@ type StreamEvent struct {
 	Response   json.RawMessage `json:"response,omitempty"`     // control_response payload
 	RequestID  string          `json:"request_id,omitempty"`   // for control req/resp matching
 	Result     string          `json:"result,omitempty"`       // final text from result message
-	DurationMs int64           `json:"duration_ms,omitempty"`  // from result
+	DurationMs   int64           `json:"duration_ms,omitempty"`    // from result
+	TotalCostUsd float64         `json:"total_cost_usd,omitempty"` // from result
+	InputTokens  int64           `json:"input_tokens,omitempty"`   // from result usage
+	OutputTokens int64           `json:"output_tokens,omitempty"`  // from result usage
 
 	// Inner Anthropic streaming event for stream_event kind.
 	// Passed through so the frontend can handle the full event lifecycle
@@ -109,8 +112,11 @@ type rawEnvelope struct {
 	Request    json.RawMessage `json:"request"`      // control_request payload
 	Response   json.RawMessage `json:"response"`     // control_response payload
 	RequestID  string          `json:"request_id"`   // for control req/resp matching
-	Result     string          `json:"result"`       // final text from result
-	DurationMs int64           `json:"duration_ms"`  // from result
+	Result       string          `json:"result"`         // final text from result
+	DurationMs   int64           `json:"duration_ms"`   // from result
+	TotalCostUsd float64         `json:"total_cost_usd"` // from result
+	InputTokens  int64           `json:"input_tokens"`   // from result usage
+	OutputTokens int64           `json:"output_tokens"`  // from result usage
 
 	// stream_event envelope — wraps an inner Anthropic API streaming event.
 	Event json.RawMessage `json:"event"` // inner event for type=="stream_event"
@@ -250,8 +256,11 @@ func DecodeEvent(line []byte) (StreamEvent, error) {
 		Request:    raw.Request,
 		Response:   raw.Response,
 		RequestID:  raw.RequestID,
-		Result:     raw.Result,
-		DurationMs: raw.DurationMs,
+		Result:       raw.Result,
+		DurationMs:   raw.DurationMs,
+		TotalCostUsd: raw.TotalCostUsd,
+		InputTokens:  raw.InputTokens,
+		OutputTokens: raw.OutputTokens,
 
 		// Pass through raw inner event for stream_event so frontend
 		// can handle the full Anthropic event lifecycle.
