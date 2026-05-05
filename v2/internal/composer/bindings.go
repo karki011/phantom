@@ -12,8 +12,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/charmbracelet/log"
+	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
@@ -62,6 +65,12 @@ type Bindings struct {
 	engineDeps      orchestrator.Dependencies
 	engineDepsSet   bool // true after SetEngineDeps is called
 	indexerResolver IndexerResolver
+
+	// Turn tracking for DB persistence — mirrors V1's per-turn state.
+	turnMu       sync.Mutex
+	turnIDs      map[string]string // sessionID → current turnID
+	turnSeqs     map[string]int    // sessionID → event sequence counter
+	turnTexts    map[string]string // sessionID → accumulated response text
 }
 
 // SetService injects the V1 Service so V2 bindings can access session
@@ -78,8 +87,11 @@ func NewBindings(manager *Manager) *Bindings {
 		log.Warn("composer: failed to create logger", "err", err)
 	}
 	return &Bindings{
-		manager: manager,
-		logger:  logger,
+		manager:   manager,
+		logger:    logger,
+		turnIDs:   make(map[string]string),
+		turnSeqs:  make(map[string]int),
+		turnTexts: make(map[string]string),
 	}
 }
 
@@ -146,6 +158,9 @@ func (b *Bindings) ComposerV2Open(req OpenRequest) (ManagerSessionInfo, error) {
 		if b.ctx != nil {
 			runtime.EventsEmit(b.ctx, channel, ev)
 		}
+
+		// ── DB persistence (fire-and-forget) ──────────────────────
+		b.persistStreamEvent(req.SessionID, ev)
 	}
 
 	info, err := b.manager.Open(req.SessionID, req.CWD, opts, handler)
@@ -166,6 +181,12 @@ func (b *Bindings) ComposerV2Send(req SendRequest) error {
 		return fmt.Errorf("session not found: %s", req.SessionID)
 	}
 
+	// Extract user message text for turn persistence (same parse as tryEnrichAndEmitStrategy).
+	userText := b.extractUserText(req.Content)
+	if userText != "" {
+		b.startTurn(req.SessionID, session, userText)
+	}
+
 	// Attempt AI engine strategy selection + prompt enrichment for user messages.
 	// The enriched content replaces the raw user message with codebase context
 	// and strategy guidance prepended — matching V1's service.go behaviour.
@@ -179,6 +200,160 @@ func (b *Bindings) ComposerV2Send(req SendRequest) error {
 	}
 
 	return session.Send(content)
+}
+
+// extractUserText parses the send payload envelope and returns the first
+// text block from a user message, or "" if not a user message.
+func (b *Bindings) extractUserText(content json.RawMessage) string {
+	type cBlock struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	type msgBody struct {
+		Role    string   `json:"role"`
+		Content []cBlock `json:"content"`
+	}
+	type envelope struct {
+		Type    string  `json:"type"`
+		Message msgBody `json:"message"`
+	}
+
+	var env envelope
+	if err := json.Unmarshal(content, &env); err != nil {
+		return ""
+	}
+	if env.Type != "user" || env.Message.Role != "user" {
+		return ""
+	}
+	for _, block := range env.Message.Content {
+		if block.Type == "text" && block.Text != "" {
+			return block.Text
+		}
+	}
+	return ""
+}
+
+// startTurn inserts a new turn row and ensures the session row exists.
+// Fire-and-forget — errors are logged but never block the send.
+func (b *Bindings) startTurn(sessionID string, session *Session, userText string) {
+	if b.service == nil {
+		return
+	}
+
+	turnID := uuid.New().String()
+	now := time.Now().Unix()
+
+	b.turnMu.Lock()
+	b.turnIDs[sessionID] = turnID
+	b.turnSeqs[sessionID] = 0
+	b.turnTexts[sessionID] = ""
+	b.turnMu.Unlock()
+
+	model := session.opts.Model
+	if model == "" {
+		model = "sonnet" // fallback
+	}
+
+	if err := b.service.insertTurn(b.ctx, &Turn{
+		ID:        turnID,
+		PaneID:    "v2_" + sessionID,
+		SessionID: sessionID,
+		CWD:       session.CWD,
+		Prompt:    userText,
+		Model:     model,
+		Status:    "running",
+		StartedAt: now,
+	}); err != nil {
+		log.Warn("composer: v2 insertTurn failed", "err", err)
+	}
+
+	if err := b.service.ensureSessionRow(b.ctx, sessionID, session.Name, session.CWD, model, userText); err != nil {
+		log.Warn("composer: v2 ensureSessionRow failed", "err", err)
+	}
+}
+
+// persistStreamEvent persists a streaming event to the DB and handles
+// turn completion (result_success, result_error). Fire-and-forget.
+func (b *Bindings) persistStreamEvent(sessionID string, ev StreamEvent) {
+	if b.service == nil {
+		return
+	}
+
+	b.turnMu.Lock()
+	turnID := b.turnIDs[sessionID]
+	b.turnMu.Unlock()
+
+	if turnID == "" {
+		return // no active turn for this session
+	}
+
+	// Persist important event types to composer_events.
+	switch ev.Kind {
+	case EventAssistant, EventToolResult, EventStreamEvent,
+		EventResultSuccess, EventResultError, EventError,
+		EventSystemInit, EventSystemStatus, EventCompactBoundary:
+
+		b.turnMu.Lock()
+		b.turnSeqs[sessionID]++
+		seq := b.turnSeqs[sessionID]
+		b.turnMu.Unlock()
+
+		// Build content from the event for replay.
+		content := ev.Text
+		if content == "" && ev.Result != "" {
+			content = ev.Result
+		}
+		if content == "" && len(ev.Raw) > 0 {
+			content = string(ev.Raw)
+		}
+
+		if err := b.service.insertEvent(b.ctx, &EventRecord{
+			TurnID:    turnID,
+			SessionID: sessionID,
+			Seq:       seq,
+			Type:      ev.RawType,
+			Subtype:   ev.RawSubtype,
+			ToolName:  ev.ToolName,
+			ToolUseID: ev.ToolUseID,
+			Content:   content,
+			CreatedAt: time.Now().Unix(),
+		}); err != nil {
+			log.Debug("composer: v2 persistEvent failed", "type", ev.RawType, "err", err)
+		}
+	}
+
+	// Accumulate response text from assistant/streaming deltas.
+	if ev.Text != "" && (ev.Kind == EventAssistant || ev.Kind == EventStreamEvent) {
+		// Only accumulate text deltas, not thinking deltas.
+		if ev.RawSubtype != "thinking_delta" && ev.RawSubtype != "thinking_start" && ev.RawSubtype != "thinking_complete" {
+			b.turnMu.Lock()
+			b.turnTexts[sessionID] += ev.Text
+			b.turnMu.Unlock()
+		}
+	}
+
+	// Mark turn done on result or error.
+	switch ev.Kind {
+	case EventResultSuccess:
+		b.turnMu.Lock()
+		responseText := b.turnTexts[sessionID]
+		delete(b.turnIDs, sessionID)
+		delete(b.turnSeqs, sessionID)
+		delete(b.turnTexts, sessionID)
+		b.turnMu.Unlock()
+
+		b.service.markTurnDone(b.ctx, turnID, "done", 0, 0, 0, responseText)
+
+	case EventResultError:
+		b.turnMu.Lock()
+		responseText := b.turnTexts[sessionID]
+		delete(b.turnIDs, sessionID)
+		delete(b.turnSeqs, sessionID)
+		delete(b.turnTexts, sessionID)
+		b.turnMu.Unlock()
+
+		b.service.markTurnDone(b.ctx, turnID, "error", 0, 0, 0, responseText)
+	}
 }
 
 // tryEnrichAndEmitStrategy attempts to extract the user message text,
@@ -381,8 +556,21 @@ func (b *Bindings) ComposerV2Stop(sessionID string) {
 }
 
 // ComposerV2Close removes a session from the Manager, stopping it first
-// if still running.
+// if still running. Any in-flight turn is marked as error.
 func (b *Bindings) ComposerV2Close(sessionID string) {
+	// Mark any in-flight turn as error before closing.
+	b.turnMu.Lock()
+	turnID := b.turnIDs[sessionID]
+	responseText := b.turnTexts[sessionID]
+	delete(b.turnIDs, sessionID)
+	delete(b.turnSeqs, sessionID)
+	delete(b.turnTexts, sessionID)
+	b.turnMu.Unlock()
+
+	if turnID != "" && b.service != nil {
+		b.service.markTurnDone(b.ctx, turnID, "error", 0, 0, 0, responseText)
+	}
+
 	b.manager.Close(sessionID)
 }
 

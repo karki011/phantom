@@ -34,7 +34,7 @@ func NewEmbedder() (Embedder, error) {
 
 	embedder, err := NewONNXEmbedder(modelDir, ortLib)
 	if err != nil {
-		slog.Warn("embedding: failed to init ONNX embedder — using stub", "err", err)
+		slog.Info("embedding: failed to init ONNX embedder — using stub", "err", err)
 		return &StubEmbedder{}, nil
 	}
 

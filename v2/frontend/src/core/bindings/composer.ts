@@ -4,6 +4,7 @@
 import { normalize } from './_normalize';
 
 const App = () => (window as any).go?.['app']?.App;
+const V2 = () => (window as any).go?.['composer']?.Bindings;
 
 export interface ComposerMention {
   path: string;
@@ -188,7 +189,7 @@ export interface ComposerSessionSummary {
  */
 export async function composerListSessions(): Promise<ComposerSessionSummary[]> {
   try {
-    const raw = (await App()?.ComposerListSessions()) ?? [];
+    const raw = (await V2()?.ComposerListSessions()) ?? (await App()?.ComposerListSessions()) ?? [];
     return normalize<ComposerSessionSummary[]>(raw);
   } catch {
     return [];
@@ -201,7 +202,7 @@ export async function composerListSessions(): Promise<ComposerSessionSummary[]> 
  */
 export async function composerHistoryBySession(sessionId: string): Promise<ComposerHistoryTurn[]> {
   try {
-    const raw = (await App()?.ComposerHistoryBySession(sessionId)) ?? [];
+    const raw = (await V2()?.ComposerHistoryBySession(sessionId)) ?? (await App()?.ComposerHistoryBySession(sessionId)) ?? [];
     return normalize<ComposerHistoryTurn[]>(raw);
   } catch {
     return [];
@@ -228,6 +229,8 @@ export async function composerResumeSession(paneId: string, sessionId: string): 
  */
 export async function composerDeleteSession(sessionId: string): Promise<boolean> {
   try {
+    const ok = await V2()?.ComposerDeleteSession(sessionId);
+    if (ok !== undefined) return !!ok;
     await App()?.ComposerDeleteSession(sessionId);
     return true;
   } catch {

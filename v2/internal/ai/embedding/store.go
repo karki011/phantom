@@ -319,6 +319,7 @@ func (vs *VectorStore) loadAll() error {
 	}
 	defer rows.Close()
 
+	var skippedDims int
 	for rows.Next() {
 		var (
 			m         Memory
@@ -335,10 +336,14 @@ func (vs *VectorStore) loadAll() error {
 		}
 		m.Vector = blobToVector(blob)
 		if len(m.Vector) != Dimensions {
-			slog.Warn("embedding: skip row with wrong dimensions", "id", m.ID, "got", len(m.Vector))
+			slog.Debug("embedding: skip row with wrong dimensions", "id", m.ID, "got", len(m.Vector))
+			skippedDims++
 			continue
 		}
 		vs.memories[m.ID] = &m
+	}
+	if skippedDims > 0 {
+		slog.Info("embedding: skipped rows with wrong dimensions", "count", skippedDims, "expected", Dimensions)
 	}
 	return rows.Err()
 }
