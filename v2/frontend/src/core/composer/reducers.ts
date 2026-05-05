@@ -813,13 +813,18 @@ export const reduceResult = (
         }
       }
 
-      // Finalize any remaining "running" tool_use entries referenced by
-      // this message — the result event means the turn is complete.
+      // Finalize ALL remaining tool_use entries — the result event means
+      // the turn is complete. For BG agents that never got a tool_result,
+      // set a sentinel output so statusMapped() stops showing spinner.
       for (const block of s.messages[targetIdx].content) {
         if (block.type === 'tool_use' && block.toolUseId) {
           const entry = s.toolUses[block.toolUseId]
           if (entry && entry.status === 'running') {
             entry.status = 'complete'
+          }
+          if (entry && !entry.output) {
+            entry.output = '[turn complete]'
+            entry.completedAt = Date.now()
           }
         }
       }
