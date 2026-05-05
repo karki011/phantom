@@ -91,8 +91,12 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
       }
     }
 
-    // Activate
+    // Activate + scroll to bottom after a tick (DOM needs to render)
     setActiveSessionId(id)
+    requestAnimationFrame(() => {
+      const scrollAreas = document.querySelectorAll('[class*="scrollArea"]')
+      scrollAreas.forEach(el => { el.scrollTop = el.scrollHeight })
+    })
   }
 
   const closeSession = async (id: string) => {

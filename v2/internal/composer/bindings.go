@@ -716,6 +716,50 @@ func (b *Bindings) ComposerListSessions() []SessionSummary {
 		sessions = sessions[:50]
 	}
 
+	// Also include sessions from composer_turns DB (completed sessions whose
+	// CLI process has exited — no longer in ~/.claude/sessions/).
+	if b.service != nil && b.ctx != nil {
+		const dbQ = `SELECT DISTINCT session_id, COALESCE(cwd, ''), COALESCE(prompt, ''),
+			COALESCE(model, ''), MAX(started_at) as last
+			FROM composer_turns
+			WHERE session_id IS NOT NULL AND session_id != '' AND session_id NOT LIKE 'cv2_%'
+			GROUP BY session_id
+			ORDER BY last DESC LIMIT 50`
+		if rows, err := b.service.writer.QueryContext(b.ctx, dbQ); err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var sid, cwd, prompt, model string
+				var lastAt int64
+				if rows.Scan(&sid, &cwd, &prompt, &model, &lastAt) != nil {
+					continue
+				}
+				if _, exists := seen[sid]; exists {
+					continue // already from CLI files
+				}
+				seen[sid] = len(sessions)
+				label := prompt
+				if len(label) > 50 {
+					label = label[:50]
+				}
+				sessions = append(sessions, SessionSummary{
+					SessionID:    sid,
+					Name:         label,
+					Cwd:          cwd,
+					FirstPrompt:  prompt,
+					LastActivity: lastAt,
+				})
+			}
+		}
+	}
+
+	// Re-sort after merging both sources.
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].LastActivity > sessions[j].LastActivity
+	})
+	if len(sessions) > 50 {
+		sessions = sessions[:50]
+	}
+
 	// Enrich with names and first_prompt from the DB (populated by session_watcher).
 	sessions = b.enrichSessionsFromDB(sessions)
 
