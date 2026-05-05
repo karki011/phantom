@@ -46,6 +46,7 @@ interface ComposerSessionSidebarProps {
 export default function ComposerSessionSidebar(props: ComposerSessionSidebarProps) {
   const [collapsed, setCollapsed] = createSignal(true)
   const [sessions, setSessions] = createSignal<ComposerSessionSummary[]>([])
+  const [resumingId, setResumingId] = createSignal<string | null>(null)
 
   const refreshSessions = async () => {
     const list = await composerListSessions()
@@ -80,8 +81,8 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
   // This catches new sessions that were created after the initial mount,
   // as well as sessions whose turn data was just persisted to the DB.
   createEffect(() => {
-    // Read prop reactively so the effect re-runs on change
     const _id = props.activeSessionId
+    setResumingId(null)
     void refreshSessions()
   })
 
@@ -188,12 +189,17 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
                   <div
                     role="listitem"
                     class={`${css.row} ${isActive() ? css.rowActive : ''}`}
-                    onClick={() => props.onResumeSession(s.session_id)}
+                    onClick={() => {
+                      setResumingId(s.session_id)
+                      props.onResumeSession(s.session_id)
+                    }}
                     title={`${s.name ? s.name + '\n' : ''}${s.first_prompt || s.session_id}\n${s.turn_count} turn${s.turn_count !== 1 ? 's' : ''}`}
                   >
                     <div class={css.rowContent}>
-                      <span class={css.rowName}>{displayName()}</span>
-                      <Show when={promptPreview()}>
+                      <span class={css.rowName}>
+                        {resumingId() === s.session_id ? 'Restoring...' : displayName()}
+                      </span>
+                      <Show when={promptPreview() && resumingId() !== s.session_id}>
                         <span class={css.rowPrompt}>{promptPreview()}</span>
                       </Show>
                     </div>
