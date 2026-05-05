@@ -8,9 +8,11 @@ package composer
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -84,6 +86,12 @@ type Session struct {
 	pid       int
 	sessionID string // populated by handshake if RunHandshake is true
 
+	// pendingRequests routes control_response events back to the goroutine
+	// that sent the matching control_request. The map key is request_id.
+	// Protected by pendingMu (separate from the main mu to avoid contention).
+	pendingMu       sync.Mutex
+	pendingRequests map[string]chan StreamEvent
+
 	CreatedAt    time.Time
 	LastActiveAt time.Time
 }
@@ -117,13 +125,14 @@ type pidInfo struct {
 func NewSession(id, cwd string, opts SessionOptions) *Session {
 	now := time.Now()
 	return &Session{
-		ID:           id,
-		CWD:          cwd,
-		Name:         namegen.Generate(),
-		status:       StatusIdle,
-		opts:         opts,
-		CreatedAt:    now,
-		LastActiveAt: now,
+		ID:              id,
+		CWD:             cwd,
+		Name:            namegen.Generate(),
+		status:          StatusIdle,
+		opts:            opts,
+		pendingRequests: make(map[string]chan StreamEvent),
+		CreatedAt:       now,
+		LastActiveAt:    now,
 	}
 }
 
@@ -164,12 +173,13 @@ func (s *Session) emit(ev StreamEvent) {
 // defaultCmdFactory spawns the real `claude` CLI with stream-json I/O.
 func defaultCmdFactory(ctx context.Context, cwd string, opts SessionOptions) *exec.Cmd {
 	args := []string{
-		"--print",
 		"--output-format", "stream-json",
 		"--input-format", "stream-json",
 		"--verbose",
 		"--include-partial-messages",
 		"--replay-user-messages",
+		"--permission-prompt-tool", "stdio",
+		"--no-chrome",
 	}
 	if opts.ClaudeSessionID != "" {
 		args = append(args, "--resume", opts.ClaudeSessionID)
@@ -296,7 +306,8 @@ func (s *Session) Spawn() error {
 }
 
 // readStdout scans stdout line by line, decodes each line as a StreamEvent,
-// and emits it to all registered handlers.
+// and emits it to all registered handlers. Control responses are routed to
+// pending request channels instead of the normal event handlers.
 func (s *Session) readStdout(r io.Reader) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, maxScannerBuf), maxScannerBuf)
@@ -321,6 +332,29 @@ func (s *Session) readStdout(r io.Reader) {
 		s.mu.Lock()
 		s.LastActiveAt = time.Now()
 		s.mu.Unlock()
+
+		// Silently drop keep_alive pings — no need to forward to handlers.
+		if ev.Kind == EventKeepAlive {
+			continue
+		}
+
+		// Route control_response to the pending request channel BEFORE emit.
+		// This prevents the response from leaking into normal event handlers
+		// and ensures the ControlRequest caller sees it immediately.
+		if ev.Kind == EventControlResponse && ev.RequestID != "" {
+			s.pendingMu.Lock()
+			ch, ok := s.pendingRequests[ev.RequestID]
+			if ok {
+				delete(s.pendingRequests, ev.RequestID)
+			}
+			s.pendingMu.Unlock()
+
+			if ok {
+				ch <- ev
+				continue
+			}
+			// No pending request for this ID — fall through to normal emit.
+		}
 
 		s.emit(ev)
 	}
@@ -515,4 +549,126 @@ func (s *Session) removePIDFile() {
 	}
 	path := filepath.Join(s.opts.SessionDir, "pid.json")
 	_ = os.Remove(path)
+}
+
+// ControlRequestTimeout is the maximum time to wait for a control response.
+const ControlRequestTimeout = 10 * time.Second
+
+// generateRequestID returns a 13-character alphanumeric ID matching the
+// format used by the Claude Code VS Code extension.
+func generateRequestID() string {
+	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, 13)
+	for i := range b {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+		b[i] = chars[n.Int64()]
+	}
+	return string(b)
+}
+
+// ControlRequest sends a control_request to the CLI subprocess and blocks
+// until a matching control_response arrives or the timeout expires.
+//
+// Protocol (stdin → CLI):
+//
+//	{"request_id":"abc123","type":"control_request","request":{"subtype":"set_model","model":"opus"}}
+//
+// Protocol (CLI → stdout):
+//
+//	{"type":"control_response","response":{"subtype":"success","request_id":"abc123","response":{...}}}
+//	{"type":"control_response","response":{"subtype":"error","request_id":"abc123","error":"..."}}
+//
+// The returned map is the inner "response" object on success. On error (from
+// the CLI or timeout), a non-nil error is returned.
+func (s *Session) ControlRequest(subtype string, payload map[string]interface{}) (map[string]interface{}, error) {
+	s.mu.RLock()
+	st := s.status
+	s.mu.RUnlock()
+	if st != StatusRunning {
+		return nil, fmt.Errorf("session not running (status=%s)", st)
+	}
+
+	reqID := generateRequestID()
+
+	// Build the request payload: merge subtype into the inner request object.
+	inner := make(map[string]interface{}, len(payload)+1)
+	inner["subtype"] = subtype
+	for k, v := range payload {
+		inner[k] = v
+	}
+
+	envelope := map[string]interface{}{
+		"request_id": reqID,
+		"type":       "control_request",
+		"request":    inner,
+	}
+
+	data, err := json.Marshal(envelope)
+	if err != nil {
+		return nil, fmt.Errorf("marshal control request: %w", err)
+	}
+
+	// Register a pending channel BEFORE writing to stdin to avoid races.
+	ch := make(chan StreamEvent, 1)
+	s.pendingMu.Lock()
+	s.pendingRequests[reqID] = ch
+	s.pendingMu.Unlock()
+
+	// Clean up on any exit path.
+	defer func() {
+		s.pendingMu.Lock()
+		delete(s.pendingRequests, reqID)
+		s.pendingMu.Unlock()
+	}()
+
+	// Send to stdin.
+	if err := s.Send(data); err != nil {
+		return nil, fmt.Errorf("send control request: %w", err)
+	}
+
+	s.logLifecycle(LogInfo, fmt.Sprintf("control_request sent: %s (id=%s)", subtype, reqID), nil)
+
+	// Wait for the matching control_response.
+	select {
+	case ev := <-ch:
+		return s.parseControlResponse(ev, reqID)
+
+	case <-time.After(ControlRequestTimeout):
+		return nil, fmt.Errorf("control request %q timed out after %s (id=%s)", subtype, ControlRequestTimeout, reqID)
+
+	case <-s.done:
+		return nil, fmt.Errorf("session exited while waiting for control response (id=%s)", reqID)
+	}
+}
+
+// parseControlResponse extracts the result from a control_response event.
+// Returns the inner response map on success, or an error if the CLI reported
+// an error subtype.
+func (s *Session) parseControlResponse(ev StreamEvent, reqID string) (map[string]interface{}, error) {
+	if len(ev.Response) == 0 {
+		return nil, fmt.Errorf("empty control_response payload (id=%s)", reqID)
+	}
+
+	// The Response field is the outer "response" object which contains:
+	// {"subtype":"success"|"error", "request_id":"...", "response":{...}, "error":"..."}
+	var resp struct {
+		Subtype   string                 `json:"subtype"`
+		RequestID string                 `json:"request_id"`
+		Response  map[string]interface{} `json:"response"`
+		Error     string                 `json:"error"`
+	}
+	if err := json.Unmarshal(ev.Response, &resp); err != nil {
+		return nil, fmt.Errorf("decode control_response: %w", err)
+	}
+
+	if resp.Subtype == "error" {
+		errMsg := resp.Error
+		if errMsg == "" {
+			errMsg = "unknown control error"
+		}
+		return nil, fmt.Errorf("control request failed: %s (id=%s)", errMsg, reqID)
+	}
+
+	s.logLifecycle(LogInfo, fmt.Sprintf("control_response received: %s (id=%s)", resp.Subtype, reqID), nil)
+	return resp.Response, nil
 }

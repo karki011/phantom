@@ -25,6 +25,7 @@ const (
 	EventSessionStatus            EventKind = "session_status_changed"
 	EventCompactBoundary          EventKind = "compact_boundary"       // context compaction marker
 	EventEnrichedPrompt           EventKind = "enriched_prompt"        // enriched prompt text for UI transparency
+	EventKeepAlive                EventKind = "keep_alive"             // CLI keepalive ping — silently dropped
 	EventUnknown                  EventKind = "unknown"
 
 	// Legacy aliases — kept so old tests compile; map to new kinds internally.
@@ -193,6 +194,8 @@ func classifyKind(typ, sub string) EventKind {
 		return EventStreamEvent
 	case "strategy":
 		return EventStrategy
+	case "keep_alive":
+		return EventKeepAlive
 
 	// ── Legacy types (pre-protocol) ──────────────────────────────────
 	case "tool_use":
@@ -359,6 +362,18 @@ func DecodeEvent(line []byte) (StreamEvent, error) {
 			if len(req.Input) > 0 {
 				ev.ToolInput = req.Input
 			}
+		}
+	}
+
+	// For control_response, the request_id lives inside the nested "response"
+	// object, not at the top level. Extract it so readStdout can route the
+	// event to the pending ControlRequest channel.
+	if ev.Kind == EventControlResponse && ev.RequestID == "" && len(raw.Response) > 0 {
+		var resp struct {
+			RequestID string `json:"request_id"`
+		}
+		if json.Unmarshal(raw.Response, &resp) == nil && resp.RequestID != "" {
+			ev.RequestID = resp.RequestID
 		}
 	}
 

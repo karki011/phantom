@@ -681,3 +681,75 @@ func (b *Bindings) ComposerDeleteSession(sessionID string) bool {
 	_ = b.service.deleteSession(b.ctx, sessionID)
 	return true
 }
+
+// ── Control Request bindings ────────────────────────────────────────────
+// These methods send mid-session control requests to the Claude CLI subprocess
+// using the control_request/control_response protocol. Each wraps
+// Session.ControlRequest with the appropriate subtype and payload.
+
+// ComposerV2SetModel changes the active model mid-session.
+// Example subtypes: "opus", "sonnet", "haiku", or full model IDs.
+func (b *Bindings) ComposerV2SetModel(sessionID, model string) error {
+	session, ok := b.manager.Get(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+	_, err := session.ControlRequest("set_model", map[string]interface{}{
+		"model": model,
+	})
+	return err
+}
+
+// ComposerV2SetThinking adjusts the thinking token budget mid-session.
+// Pass 0 to disable thinking, or a positive value (e.g. 16384) to set the cap.
+func (b *Bindings) ComposerV2SetThinking(sessionID string, maxTokens int) error {
+	session, ok := b.manager.Get(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+	_, err := session.ControlRequest("set_max_thinking_tokens", map[string]interface{}{
+		"max_thinking_tokens": maxTokens,
+	})
+	return err
+}
+
+// ComposerV2SetPermissionMode changes the permission mode mid-session.
+// Valid modes: "ask", "auto", "bypassPermissions".
+func (b *Bindings) ComposerV2SetPermissionMode(sessionID, mode string) error {
+	session, ok := b.manager.Get(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+	_, err := session.ControlRequest("set_permission_mode", map[string]interface{}{
+		"permission_mode": mode,
+	})
+	return err
+}
+
+// ComposerV2GenerateTitle asks the CLI to auto-generate a session title
+// based on conversation context. Returns the generated title string.
+func (b *Bindings) ComposerV2GenerateTitle(sessionID string) (string, error) {
+	session, ok := b.manager.Get(sessionID)
+	if !ok {
+		return "", fmt.Errorf("session not found: %s", sessionID)
+	}
+	resp, err := session.ControlRequest("generate_session_title", map[string]interface{}{})
+	if err != nil {
+		return "", err
+	}
+	if title, ok := resp["title"].(string); ok {
+		return title, nil
+	}
+	return "", nil
+}
+
+// ComposerV2Interrupt sends an interrupt control request to stop the CLI's
+// current processing without killing the session.
+func (b *Bindings) ComposerV2Interrupt(sessionID string) error {
+	session, ok := b.manager.Get(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+	_, err := session.ControlRequest("interrupt", map[string]interface{}{})
+	return err
+}
