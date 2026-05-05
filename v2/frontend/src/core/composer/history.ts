@@ -27,7 +27,9 @@ export const convertHistoryToMessages = (
   const messages: Message[] = []
   const toolUses: Record<string, ToolUseState> = {}
 
-  for (const { turn, edits, events } of turns) {
+  for (const { turn, edits: rawEdits, events: rawEvents } of turns) {
+    const edits = rawEdits ?? []
+    const events = rawEvents ?? []
     // ── User message ────────────────────────────────────────────────
     if (turn.prompt) {
       // Check for enriched_prompt event to attach to user message

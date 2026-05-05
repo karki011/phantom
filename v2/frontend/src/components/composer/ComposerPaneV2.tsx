@@ -75,9 +75,14 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
           const entry = getSessionStore(id)
           if (entry) {
             entry[1]('messages', messages)
-            // Populate toolUses map so ToolUseChip can render history tools
             if (Object.keys(toolUses).length > 0) {
               entry[1]('toolUses', toolUses)
+            }
+            // Set tab label from first user message in history
+            const firstUser = messages.find(m => m.role === 'user')
+            if (firstUser?.content?.[0]?.text) {
+              const text = firstUser.content[0].text
+              entry[1]('label', text.length > 50 ? text.slice(0, 50) + '…' : text)
             }
           }
         }
