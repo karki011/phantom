@@ -106,79 +106,21 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
           </button>
         </div>
 
-        {/* Active V2 sessions — not yet in the V1 DB */}
-        <Show when={listSessionIds().length > 0}>
-          <div class={css.sectionLabel}>
-            <Radio size={10} style={{ 'vertical-align': 'middle', 'margin-right': '4px' }} />
-            Live
-          </div>
-          <div class={css.list} role="list" aria-label="Active sessions">
-            <For each={listSessionIds()}>
-              {(id) => {
-                const store = getSessionStore(id)
-                if (!store) return null
-                const [st] = store
-                const isActive = () => id === props.activeSessionId
-                const displayName = () => st.label || id.slice(0, 8)
-                return (
-                  <div
-                    role="listitem"
-                    class={`${css.row} ${isActive() ? css.rowActive : ''}`}
-                    onClick={() => setActiveSessionId(id)}
-                    title={displayName()}
-                  >
-                    <div class={css.rowContent}>
-                      <span class={css.rowName}>
-                        <span class={css.liveBadge}>LIVE</span>
-                        {displayName()}
-                      </span>
-                    </div>
-                    <div class={css.rowMeta}>
-                      <span class={css.rowTurns}>{st.messages.filter((m) => m.role === 'user').length}t</span>
-                    </div>
-                  </div>
-                )
-              }}
-            </For>
-          </div>
-        </Show>
-
         <div class={css.sectionLabel}>
           <History size={10} style={{ 'vertical-align': 'middle', 'margin-right': '4px' }} />
-          Recents
+          Sessions
         </div>
 
-        {/* Interrupted sessions banner */}
-        <Show when={sessions().some((s) => s.was_interrupted)}>
-          {(() => {
-            const interrupted = () => sessions().filter((s) => s.was_interrupted)
-            const first = () => interrupted()[0]
-            return (
-              <div
-                class={css.interruptedBanner}
-                onClick={() => {
-                  const s = first()
-                  if (s) props.onResumeSession(s.session_id)
-                }}
-                title="Click to resume the most recent interrupted session"
-                role="button"
-              >
-                <AlertTriangle size={12} />
-                <span>{interrupted().length} interrupted — Resume?</span>
-              </div>
-            )
-          })()}
-        </Show>
-
-        <div class={css.list} role="list" aria-label="Session history">
+        <div class={css.list} role="list" aria-label="Sessions">
           <Show
             when={sessions().length > 0}
-            fallback={<div class={css.empty}>No past sessions yet</div>}
+            fallback={<div class={css.empty}>No sessions yet</div>}
           >
             <For each={sessions()}>
               {(s) => {
                 const isActive = () => s.session_id === props.activeSessionId
                 const displayName = () => s.name || 'Untitled'
+                const isLive = () => !s.was_interrupted && s.last_activity > (Date.now() / 1000) - 300
                 const promptPreview = () =>
                   s.first_prompt?.trim()
                     ? s.first_prompt.trim().length > 60
@@ -193,10 +135,22 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
                       setResumingId(s.session_id)
                       props.onResumeSession(s.session_id)
                     }}
-                    title={`${s.name ? s.name + '\n' : ''}${s.first_prompt || s.session_id}\n${s.turn_count} turn${s.turn_count !== 1 ? 's' : ''}`}
+                    title={`${s.name ? s.name + '\n' : ''}${s.first_prompt || s.session_id}`}
                   >
                     <div class={css.rowContent}>
                       <span class={css.rowName}>
+                        <Show when={isLive()}>
+                          <span style={{
+                            display: 'inline-block',
+                            width: '6px',
+                            height: '6px',
+                            'border-radius': '50%',
+                            background: 'var(--success)',
+                            'margin-right': '4px',
+                            animation: 'pulse 2s ease-in-out infinite',
+                            'vertical-align': 'middle',
+                          }} />
+                        </Show>
                         {resumingId() === s.session_id ? 'Restoring...' : displayName()}
                       </span>
                       <Show when={promptPreview() && resumingId() !== s.session_id}>
@@ -209,7 +163,6 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
                       </span>
                     </Show>
                     <div class={css.rowMeta}>
-                      <span class={css.rowTurns}>{s.turn_count}t</span>
                       <span class={css.rowTime}>{relTime(s.last_activity)}</span>
                     </div>
                     <button
