@@ -90,6 +90,8 @@ type App struct {
 	SessionCtrl       *session.Controller
 	Safety            *safety.Service
 	Composer          *composer.Service
+	ComposerV2Mgr     *composer.Manager
+	ComposerV2Bind    *composer.Bindings
 	Gamification      *gamification.Service
 	ConflictTracker   *conflict.Tracker
 	collectorRegistry *collector.Registry
@@ -144,6 +146,12 @@ func (a *App) SetSessionCtrl(c *session.Controller) { a.SessionCtrl = c }
 // SetComposer injects the composer service before Wails calls Startup.
 func (a *App) SetComposer(c *composer.Service) { a.Composer = c }
 
+// SetComposerV2 injects the V2 session manager and its Wails bindings.
+func (a *App) SetComposerV2(mgr *composer.Manager, bindings *composer.Bindings) {
+	a.ComposerV2Mgr = mgr
+	a.ComposerV2Bind = bindings
+}
+
 // SetGamification injects the gamification service before Wails calls Startup.
 func (a *App) SetGamification(g *gamification.Service) { a.Gamification = g }
 
@@ -181,6 +189,11 @@ func (a *App) Startup(ctx context.Context) {
 	a.tuiSessions = make(map[string]*tui.Session)
 	a.prRefresh = make(chan struct{}, 1)
 	a.branchRefresh = make(chan struct{}, 1)
+
+	// Inject Wails context into Composer V2 bindings so EventsEmit works.
+	if a.ComposerV2Bind != nil {
+		a.ComposerV2Bind.SetContext(ctx)
+	}
 
 	// Start WebSocket hub and server.
 	a.wsHub = ws.NewHub()
@@ -234,6 +247,15 @@ func (a *App) Startup(ctx context.Context) {
 	// same strategy selection + decision recording the MCP server already
 	// gives external Claude Code users. Mirrors cmd/phantom-mcp/main.go.
 	a.wireComposerEngine()
+
+	// Wire AI engine context injector into Composer V2 bindings so
+	// user messages are enriched with codebase context and strategy
+	// metadata is emitted to the frontend.
+	if a.ComposerV2Bind != nil && a.ctxInjector != nil {
+		a.ComposerV2Bind.SetContextEnricher(a.ctxInjector)
+		log.Info("app: composer V2 context enricher wired")
+	}
+
 
 	// Initialize the conflict tracker and wire it into the Composer service
 	// so simultaneous panes editing the same repo surface warnings.
@@ -483,6 +505,16 @@ func (a *App) wireComposerEngine() {
 		GlobalPatterns: deps.GlobalPatterns,
 	})
 	log.Info("app: composer engine wired (session memory enabled)")
+
+	// Wire the same orchestrator deps into Composer V2 bindings so
+	// tryEnrichAndEmitStrategy calls orchestrator.Process — the full
+	// pipeline (assessor, strategy registry, knowledge stores) instead
+	// of the lightweight ContextInjector.EnrichForProject.
+	if a.ComposerV2Bind != nil {
+		a.ComposerV2Bind.SetEngineDeps(deps)
+		a.ComposerV2Bind.SetIndexerResolver(a.resolveIndexerForCwd)
+		log.Info("app: composer V2 orchestrator engine wired")
+	}
 }
 
 // resolveIndexerForCwd maps a turn's CWD to the file-graph indexer of the
@@ -899,6 +931,11 @@ func (a *App) doTeardown(persistTerminalState bool) {
 
 	if a.Stream != nil {
 		a.Stream.StopAll()
+	}
+
+	// Stop all Composer V2 sessions before terminals are destroyed.
+	if a.ComposerV2Mgr != nil {
+		a.ComposerV2Mgr.CloseAll()
 	}
 
 	if a.Terminal != nil {

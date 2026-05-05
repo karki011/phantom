@@ -9,6 +9,7 @@ import { zoomIn, zoomOut, zoomReset } from './signals/zoom';
 import { openSettings } from './signals/settings';
 import { toggleQuickOpen } from './signals/quickopen';
 import { toggleComposer } from './signals/composer';
+import { toggleComposerDrawer } from './composer/signals';
 import { toggleCommandPalette } from './signals/command-palette';
 import { openRecipePicker } from './signals/recipes';
 import { activeSessionId, forkSession } from './signals/sessions';
@@ -131,6 +132,13 @@ export function registerKeyboardShortcuts(): () => void {
     if (meta && e.key === 'i') {
       e.preventDefault();
       toggleComposer();
+      return;
+    }
+
+    // Cmd+J: Toggle composer V2 drawer
+    if (meta && e.key === 'j') {
+      e.preventDefault();
+      toggleComposerDrawer();
       return;
     }
 

@@ -35,6 +35,7 @@ func (m *MockEmbedder) EmbedBatch(texts []string) ([][]float32, error) {
 }
 
 func (m *MockEmbedder) Dimensions() int { return m.dim }
+func (m *MockEmbedder) IsStub() bool    { return false }
 func (m *MockEmbedder) Close() error    { return nil }
 
 // deterministicVector produces a normalized float32 vector from a text hash.
@@ -294,6 +295,83 @@ func TestVectorStore_RebuildIndex(t *testing.T) {
 	stats := vs.Stats()
 	if stats.TotalMemories != 2 {
 		t.Errorf("after rebuild: want 2 memories, got %d", stats.TotalMemories)
+	}
+}
+
+func TestVectorStore_StubEmbedder_NoEmptyVectors(t *testing.T) {
+	db := openTestDB(t)
+	stub := &StubEmbedder{}
+	vs, err := NewVectorStore(db, stub)
+	if err != nil {
+		t.Fatalf("NewVectorStore: %v", err)
+	}
+
+	// Store should succeed (text persisted to SQLite) but not add to
+	// in-memory index because the stub produces nil vectors.
+	if err := vs.Store("decision", "d-1", "some decision text"); err != nil {
+		t.Fatalf("Store: %v", err)
+	}
+
+	stats := vs.Stats()
+	if stats.TotalMemories != 0 {
+		t.Errorf("stub embedder should not add to in-memory index: got %d memories", stats.TotalMemories)
+	}
+	if stats.EmbedderActive {
+		t.Error("EmbedderActive should be false for StubEmbedder")
+	}
+
+	// Verify the text row exists in SQLite (for future re-embedding).
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM ai_embeddings").Scan(&count); err != nil {
+		t.Fatalf("count query: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 row in SQLite, got %d", count)
+	}
+}
+
+func TestVectorStore_LoadAll_PurgesBadRows(t *testing.T) {
+	db := openTestDB(t)
+	embedder := NewMockEmbedder()
+
+	// Create the schema.
+	vs, err := NewVectorStore(db, embedder)
+	if err != nil {
+		t.Fatalf("NewVectorStore: %v", err)
+	}
+
+	// Store a valid entry.
+	if err := vs.Store("decision", "d-good", "valid decision"); err != nil {
+		t.Fatalf("Store: %v", err)
+	}
+
+	// Manually insert a bad row with an empty vector blob (simulating
+	// what the stub embedder used to produce before the fix).
+	_, err = db.Exec(
+		"INSERT INTO ai_embeddings (id, memory_type, source_id, text_content, vector) VALUES (?, ?, ?, ?, ?)",
+		"bad-id", "decision", "d-bad", "bad text", []byte{},
+	)
+	if err != nil {
+		t.Fatalf("insert bad row: %v", err)
+	}
+
+	// Rebuild — loadAll should purge the bad row.
+	if err := vs.RebuildIndex(); err != nil {
+		t.Fatalf("RebuildIndex: %v", err)
+	}
+
+	stats := vs.Stats()
+	if stats.TotalMemories != 1 {
+		t.Errorf("expected 1 memory after purge, got %d", stats.TotalMemories)
+	}
+
+	// Verify the bad row was deleted from SQLite.
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM ai_embeddings WHERE id = 'bad-id'").Scan(&count); err != nil {
+		t.Fatalf("count query: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("bad row should have been purged from SQLite, still found %d", count)
 	}
 }
 

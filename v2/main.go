@@ -280,6 +280,17 @@ func main() {
 	composerSvc := composer.NewService(database.Writer, emitFn)
 	a.SetComposer(composerSvc)
 
+	// 8b. Create Composer V2 (multi-session manager + Wails bindings).
+	phantomDir, _ := os.UserHomeDir()
+	phantomDir = filepath.Join(phantomDir, ".phantom-os")
+	composerV2Mgr := composer.NewManager(composer.ManagerOptions{
+		MaxSessions: 8,
+		BaseDir:     filepath.Join(phantomDir, "sessions-v2"),
+	})
+	composerV2Bindings := composer.NewBindings(composerV2Mgr)
+	composerV2Bindings.SetService(composerSvc)
+	a.SetComposerV2(composerV2Mgr, composerV2Bindings)
+
 	// 9. Create safety service (YAML ward rules + audit).
 	home, _ := os.UserHomeDir()
 	wardsDir := filepath.Join(home, ".phantom-os", "wards")
@@ -316,6 +327,7 @@ func main() {
 		OnShutdown:       func(ctx context.Context) { a.Shutdown(ctx) },
 		Bind: []interface{}{
 			a,
+			composerV2Bindings,
 		},
 		Mac: &mac.Options{
 			TitleBar:             mac.TitleBarHiddenInset(),

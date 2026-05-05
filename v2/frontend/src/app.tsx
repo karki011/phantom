@@ -18,6 +18,7 @@ import { initTerminalTheme } from './core/terminal/theme-manager';
 import { initTerminalPrefs } from './core/terminal/registry';
 import { initZoom } from './core/signals/zoom';
 import { initBrightness } from './core/signals/brightness';
+import { loadComposerV2Pref, loadComposerPrefs } from './core/composer/preferences';
 import { OnboardingFlow } from './screens/onboarding';
 import { BootScreen } from './screens/boot';
 import { ShutdownCeremony, ShutdownConfirmModal, type ShutdownStats } from './screens/shutdown';
@@ -47,6 +48,8 @@ import { XPGainFloat, LevelUpCelebration, RankUpCelebration, AchievementToastWat
 import { bootstrapGamification } from './core/signals/gamification';
 import { bootstrapMCPRegistrationListener } from './core/signals/mcp';
 import { AICommandCenter } from './components/ai-command-center/AICommandCenter';
+import ComposerDrawer from './components/composer/ComposerDrawer';
+import ComposerStatusPill from './components/composer/ComposerStatusPill';
 
 export function App() {
   const [ready, setReady] = createSignal(false);
@@ -100,6 +103,9 @@ export function App() {
 
     const gamEnabled = await loadPref('gamification');
     if (gamEnabled === 'true') bootstrapGamification();
+
+    await loadComposerV2Pref();
+    await loadComposerPrefs();
 
     // Load active provider config (for new session commands)
     const { loadActiveProvider } = await import('@/core/signals/active-provider');
@@ -260,6 +266,9 @@ export function App() {
           </Show>
         </div>
       </Show>
+
+      <ComposerDrawer />
+      <ComposerStatusPill />
     </div>
   );
 }

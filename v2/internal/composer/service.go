@@ -25,7 +25,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -324,6 +323,17 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 			}
 			if directive := strings.TrimSpace(result.Output.Text); directive != "" && directive != strings.TrimSpace(args.Prompt) {
 				prompt = directive + "\n\n" + prompt
+			}
+			// Emit enriched prompt event so the frontend can display what
+			// was actually sent to Claude. Fire-and-forget — must never
+			// block the send path.
+			if prompt != args.Prompt {
+				s.emit("composer:event", Event{
+					PaneID:       args.PaneID,
+					TurnID:       turnID,
+					Type:         "enriched_prompt",
+					EnrichedText: prompt,
+				})
 			}
 			log.Info("composer: orchestrator — strategy selected",
 				"strategy", result.Strategy.Name,
@@ -1006,33 +1016,6 @@ func friendlyComposerError(raw string) string {
 	default:
 		return raw
 	}
-}
-
-// writeStreamJSONPrompt sends a user_message as stream-json on stdin, then
-// closes the writer so the CLI knows the message is complete. The message
-// format matches the official Claude Code extension protocol:
-//
-//	{"type":"user_message","content":"<prompt>"}
-func writeStreamJSONPrompt(stdin io.WriteCloser, prompt string) error {
-	msg := struct {
-		Type    string `json:"type"`
-		Content string `json:"content"`
-	}{
-		Type:    "user_message",
-		Content: prompt,
-	}
-	data, err := json.Marshal(msg)
-	if err != nil {
-		_ = stdin.Close()
-		return fmt.Errorf("marshal prompt: %w", err)
-	}
-	// Write the JSON line + newline, then close stdin.
-	data = append(data, '\n')
-	if _, err := stdin.Write(data); err != nil {
-		_ = stdin.Close()
-		return fmt.Errorf("write stdin: %w", err)
-	}
-	return stdin.Close()
 }
 
 // handleContentBlockDelta processes incremental text/thinking chunks from the

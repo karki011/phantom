@@ -18,6 +18,7 @@ const registry: Partial<Record<PaneType, Component<any>>> = {
   // `kind: 'chat'`.
   chat: lazy(() => import('./ChatRedirect')),
   composer: lazy(() => import('./ComposerPane')),
+  'composer-v2': lazy(() => import('../composer/ComposerPaneV2')),
   'markdown-preview': lazy(() => import('./MarkdownPreviewPane')),
   playground: lazy(() => import('./PlaygroundPane')),
 };

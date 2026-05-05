@@ -6,6 +6,7 @@ import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, 
 import { activeWorktreeId } from '@/core/signals/app';
 import { activeProject, activeWorktree } from '@/core/signals/worktrees';
 import { addTabWithData } from '@/core/panes/signals';
+import { composerPaneKind } from '@/core/composer/preferences';
 import { sessions } from '@/core/signals/sessions';
 import { cwdMatchesBidirectional } from '@/core/utils/path-match';
 import { activeProviderCommand, activeProviderLabel } from '@/core/signals/active-provider';
@@ -558,7 +559,7 @@ export default function WorktreeHome() {
             style={{ position: 'relative' }}
             onClick={() => {
               dismissComposerBadge();
-              addTabWithData('composer', 'Composer', {
+              addTabWithData(composerPaneKind(), 'Composer', {
                 cwd: activeWorktree()?.worktree_path ?? '',
                 worktreeId: activeWorktreeId(),
                 workspaceId: activeWorktreeId(),

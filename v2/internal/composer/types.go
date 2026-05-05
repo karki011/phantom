@@ -84,6 +84,10 @@ type Event struct {
 	TaskComplexity     string  `json:"task_complexity,omitempty"`
 	TaskRisk           string  `json:"task_risk,omitempty"`
 	BlastRadius        int     `json:"blast_radius,omitempty"`
+
+	// Enriched prompt text, populated on type=="enriched_prompt".
+	// Sent to the frontend so the UI can display the injected context.
+	EnrichedText string `json:"enriched_text,omitempty"`
 }
 
 // EventRecord is persisted to the composer_events table for session replay.

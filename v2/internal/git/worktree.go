@@ -104,30 +104,44 @@ func Create(ctx context.Context, repoPath, branch, targetDir, baseBranch string)
 // then uses `worktree remove --force`. If that fails, it prunes and removes
 // the directory manually.
 func Remove(ctx context.Context, worktreePath string) error {
-	// Find the main repository
+	// Find the main repository. Try from worktree path first; if the dir
+	// is already gone (user deleted from Finder), walk up the parent to
+	// find a valid git repo for the prune command.
+	var mainRepo string
 	commonDir, err := runGit(ctx, worktreePath, "rev-parse", "--git-common-dir")
-	if err != nil {
-		return fmt.Errorf("cannot find main repository for worktree %s: %w", worktreePath, err)
+	if err == nil {
+		absCommonDir, absErr := filepath.Abs(filepath.Join(worktreePath, commonDir))
+		if absErr == nil {
+			mainRepo = filepath.Dir(absCommonDir)
+		}
 	}
-
-	// Resolve to absolute path and go up one directory (from .git to repo root)
-	absCommonDir, err := filepath.Abs(filepath.Join(worktreePath, commonDir))
-	if err != nil {
-		return fmt.Errorf("cannot resolve common dir path: %w", err)
-	}
-	mainRepo := filepath.Dir(absCommonDir)
-
-	// Try force remove
-	_, removeErr := runGit(ctx, mainRepo, "worktree", "remove", worktreePath, "--force")
-	if removeErr != nil {
-		// Fallback: manual directory removal
-		if err := os.RemoveAll(worktreePath); err != nil {
-			return fmt.Errorf("failed to remove worktree directory %s: %w (original error: %v)", worktreePath, err, removeErr)
+	if mainRepo == "" {
+		// Worktree dir gone — resolve from parent directories.
+		dir := filepath.Dir(worktreePath)
+		for dir != "/" && dir != "." {
+			if cd, e := runGit(ctx, dir, "rev-parse", "--git-common-dir"); e == nil {
+				if abs, ae := filepath.Abs(filepath.Join(dir, cd)); ae == nil {
+					mainRepo = filepath.Dir(abs)
+					break
+				}
+			}
+			dir = filepath.Dir(dir)
 		}
 	}
 
-	// Always prune to clean up stale git worktree metadata
-	_, _ = runGit(ctx, mainRepo, "worktree", "prune")
+	if mainRepo != "" {
+		// Try force remove
+		_, removeErr := runGit(ctx, mainRepo, "worktree", "remove", worktreePath, "--force")
+		if removeErr != nil {
+			// Fallback: manual directory removal
+			_ = os.RemoveAll(worktreePath)
+		}
+		// Always prune to clean up stale git worktree metadata
+		_, _ = runGit(ctx, mainRepo, "worktree", "prune")
+	} else {
+		// Last resort: just remove the directory
+		_ = os.RemoveAll(worktreePath)
+	}
 
 	return nil
 }

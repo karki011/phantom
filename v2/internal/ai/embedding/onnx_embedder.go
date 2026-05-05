@@ -146,6 +146,9 @@ func (e *ONNXEmbedder) EmbedBatch(texts []string) ([][]float32, error) {
 // Dimensions returns the embedding vector length (384).
 func (e *ONNXEmbedder) Dimensions() int { return e.dims }
 
+// IsStub reports false — this is the real ONNX embedder.
+func (e *ONNXEmbedder) IsStub() bool { return false }
+
 // Close releases the ONNX session, tokenizer, and runtime environment.
 func (e *ONNXEmbedder) Close() error {
 	e.mu.Lock()

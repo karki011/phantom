@@ -181,6 +181,19 @@ function ComposerMarkdown(props: { text: string; cwd: string; onFileClick?: (abs
     // ── Linkify file paths ──
     linkifyFilePaths(ref);
 
+    // ── External links → system browser (not in-app WebKit navigation) ──
+    ref.querySelectorAll('a[href]').forEach((a) => {
+      if ((a as HTMLElement).dataset.extWired) return;
+      const href = a.getAttribute('href') ?? '';
+      if (!href.startsWith('http://') && !href.startsWith('https://')) return;
+      if (a.classList.contains('file-link')) return;
+      (a as HTMLElement).dataset.extWired = '1';
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        try { (window as any).go?.app?.App?.OpenURL(href); } catch { window.open(href, '_blank'); }
+      });
+    });
+
     // ── Click handlers for file-path links ──
     ref.querySelectorAll('a.file-link').forEach((a) => {
       if ((a as HTMLElement).dataset.wired) return;
@@ -241,6 +254,7 @@ import {
   type ComposerSessionSummary,
 } from '@/core/bindings/composer';
 import { addTabWithData, renameTabByPane } from '@/core/panes/signals';
+import { composerPaneKind } from '@/core/composer/preferences';
 import { readFileByPath } from '@/core/bindings/editor';
 import { showToast, showWarningToast } from '@/shared/Toast/Toast';
 import { loadPref, setPref } from '@/core/signals/preferences';
@@ -252,6 +266,8 @@ import * as toolStatusStyles from './ComposerToolStatus.css';
 import ComposerMemoryPanel from './ComposerMemoryPanel';
 import ComposerSkillBrowser from './ComposerSkillBrowser';
 import ComposerDiffCard from './ComposerDiffCard';
+import ComposerAgentPanel, { type AgentInfo } from './ComposerAgentPanel';
+import * as agentPanelStyles from './ComposerAgentPanel.css';
 import * as strategyStyles from './ComposerStrategy.css';
 import { extractToolSummary, groupToolCalls, type ToolGroup, type ToolUseEntry } from './ComposerToolSummary';
 import { initWidgets, updateWidget } from '@/core/signals/widgets';
@@ -380,10 +396,31 @@ export default function ComposerPane(props: ComposerPaneProps) {
   // as a per-user default (same pattern as noContext).
   const [planMode, setPlanMode] = createSignal(false);
   const [dragOver, setDragOver] = createSignal(false);
+  const [messageQueue, setMessageQueue] = createSignal<string[]>([]);
   const [showMemory, setShowMemory] = createSignal(false);
   const [showSkills, setShowSkills] = createSignal(false);
   const COMPOSER_FONT_SIZES = [11, 12, 13, 14, 15, 16, 18, 20] as const;
   const [composerFontSize, setComposerFontSize] = createSignal(13);
+
+  // ── Agent status panel ──────────────────────────────────────────────
+  const [agents, setAgents] = createStore<AgentInfo[]>([]);
+  const [showAgentPanel, setShowAgentPanel] = createSignal(false);
+  const [agentPanelPinned, setAgentPanelPinned] = createSignal(false);
+  let agentAutoHideTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const runningAgentCount = () => agents.filter(a => a.status === 'running' || a.status === 'spawning').length;
+
+  // Auto-hide panel 10s after all agents complete (unless pinned).
+  createEffect(() => {
+    const running = runningAgentCount();
+    const total = agents.length;
+    if (agentAutoHideTimer) { clearTimeout(agentAutoHideTimer); agentAutoHideTimer = undefined; }
+    if (total > 0 && running === 0 && showAgentPanel() && !agentPanelPinned()) {
+      agentAutoHideTimer = setTimeout(() => setShowAgentPanel(false), 10_000);
+    }
+  });
+
+  onCleanup(() => { if (agentAutoHideTimer) clearTimeout(agentAutoHideTimer); });
 
   // ── Ctrl+F / Cmd+F search overlay ───────────────────────────────────
   const [searchOpen, setSearchOpen] = createSignal(false);
@@ -391,6 +428,10 @@ export default function ComposerPane(props: ComposerPaneProps) {
   let searchInputRef: HTMLInputElement | undefined;
 
   const handleSearchKeydown = (e: KeyboardEvent) => {
+    // Only intercept when this Composer pane contains focus — don't
+    // steal Cmd+F from Monaco editor or other panes.
+    const root = feedRef?.closest(`.${styles.root}`);
+    if (!root?.contains(document.activeElement) && document.activeElement !== document.body) return;
     const isMod = e.metaKey || e.ctrlKey;
     if (isMod && e.key === 'f') {
       e.preventDefault();
@@ -410,6 +451,10 @@ export default function ComposerPane(props: ComposerPaneProps) {
     if (e.key === 'Escape' && searchOpen()) {
       e.preventDefault();
       closeSearch();
+    }
+    if (e.key === 'Escape' && !searchOpen() && running()) {
+      e.preventDefault();
+      composerCancel(paneId()).catch(() => {});
     }
   };
 
@@ -691,6 +736,8 @@ export default function ComposerPane(props: ComposerPaneProps) {
       setActiveSessionId(sessionId);
       setConflicts([]);
       setConflictDismissed(false);
+      setAgents(reconcile([]));
+      setShowAgentPanel(false);
     });
     const sessionInfo = sessions().find(s => s.session_id === sessionId);
     if (sessionInfo?.name) {
@@ -703,9 +750,16 @@ export default function ComposerPane(props: ComposerPaneProps) {
     applyHistory(history, pending);
   };
 
-  // Cleanup search keyboard listener on pane disposal.
+  // Cleanup on pane disposal (worktree switch, tab close).
   onCleanup(() => {
     document.removeEventListener('keydown', handleSearchKeydown, true);
+    // Cancel any in-flight run so the backend process doesn't become
+    // orphaned when the pane is destroyed (e.g. worktree switch causes
+    // pane remount). Backend's IsRunning() is idempotent — double-cancel
+    // is a no-op.
+    if (running()) {
+      composerCancel(paneId()).catch(() => {});
+    }
   });
 
   // ── Rehydrate full conversation on mount (turns + edits) ─────────────
@@ -861,6 +915,26 @@ export default function ComposerPane(props: ComposerPaneProps) {
           visible: true,
           variant: 'default',
         });
+        // ── Track spawned agents in the Agent Status Panel ──────────
+        if ((ev.tool_name === 'Agent' || ev.tool_name === 'Task') && ev.tool_use_id) {
+          try {
+            const parsed = JSON.parse(ev.tool_input ?? '{}');
+            const agentInfo: AgentInfo = {
+              toolUseId: ev.tool_use_id,
+              description: parsed.description || parsed.prompt || 'agent task',
+              subagentType: parsed.subagent_type || parsed.type || '',
+              model: parsed.model || 'sonnet',
+              isBackground: !!parsed.run_in_background,
+              status: 'running',
+              startedAt: Date.now(),
+              completedAt: 0,
+              result: '',
+              tokenEstimate: 0,
+            };
+            setAgents(produce(draft => { draft.push(agentInfo); }));
+            if (!showAgentPanel()) setShowAgentPanel(true);
+          } catch { /* malformed JSON — skip agent tracking */ }
+        }
         break;
       case 'input_json': {
         const lastTuIdx = turns[idx].toolUses.length - 1;
@@ -884,6 +958,19 @@ export default function ComposerPane(props: ComposerPaneProps) {
             tu.resultIsError = ev.is_error ?? false;
             tu.status = ev.is_error ? 'error' : 'done';
           }));
+        }
+        // ── Update agent status in the Agent Status Panel ──────────
+        if (ev.tool_use_id) {
+          const agentIdx = agents.findIndex(a => a.toolUseId === ev.tool_use_id);
+          if (agentIdx >= 0) {
+            const resultText = (ev.content ?? '').slice(0, 500);
+            setAgents(agentIdx, produce(a => {
+              a.status = ev.is_error ? 'failed' : 'completed';
+              a.completedAt = Date.now();
+              a.result = resultText;
+              a.tokenEstimate = Math.ceil(resultText.length / 4);
+            }));
+          }
         }
         break;
       }
@@ -950,6 +1037,13 @@ export default function ComposerPane(props: ComposerPaneProps) {
       // Refresh the Past Sessions sidebar so the just-finished turn moves
       // its session to the top and the cost/turn-count update reflect.
       void refreshSessions();
+      // Drain message queue — send ALL queued messages as a single prompt.
+      const queue = messageQueue();
+      if (queue.length > 0) {
+        setMessageQueue([]);
+        setInput(queue.join('\n\n'));
+        requestAnimationFrame(() => handleSend());
+      }
     }
     scrollToBottom();
   });
@@ -1016,7 +1110,12 @@ export default function ComposerPane(props: ComposerPaneProps) {
   const handleSend = async () => {
     const rawPrompt = input().trim();
     if (!rawPrompt && mentions().length === 0) return;
-    if (running()) return;
+    if (running()) {
+      // Queue the message — it will be sent after the current turn finishes.
+      setMessageQueue(prev => [...prev, rawPrompt]);
+      setInput('');
+      return;
+    }
 
     // Prepend plan-only directive when plan mode is active.
     const prompt = planMode() ? PLAN_MODE_PREFIX + rawPrompt : rawPrompt;
@@ -1070,7 +1169,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
 
   const handleNewConversation = async () => {
     if (running() || turns.length > 0) {
-      addTabWithData('composer', `Composer · ${cwd() ? cwd().split('/').pop() : 'new'}`, { cwd: cwd() });
+      addTabWithData(composerPaneKind(), `Composer · ${cwd() ? cwd().split('/').pop() : 'new'}`, { cwd: cwd() });
       return;
     }
     await composerNewConversation(paneId());
@@ -1083,6 +1182,8 @@ export default function ComposerPane(props: ComposerPaneProps) {
       setActiveSessionId('');
       setConflicts([]);
       setConflictDismissed(false);
+      setAgents(reconcile([]));
+      setShowAgentPanel(false);
     });
   };
 
@@ -1098,7 +1199,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
   //                    so users can compare two conversations side-by-side.
   const handleSessionRowClick = (s: ComposerSessionSummary, e: MouseEvent) => {
     if (e.metaKey || e.ctrlKey) {
-      addTabWithData('composer', `Composer · ${s.name || basename(s.cwd) || 'session'}`, {
+      addTabWithData(composerPaneKind(), `Composer · ${s.name || basename(s.cwd) || 'session'}`, {
         cwd: s.cwd,
         sessionId: s.session_id,
       });
@@ -1133,6 +1234,8 @@ export default function ComposerPane(props: ComposerPaneProps) {
         setInput('');
         setConflicts([]);
         setConflictDismissed(false);
+        setAgents(reconcile([]));
+        setShowAgentPanel(false);
       });
     }
     showToast('Deleted', 'Session removed.');
@@ -1476,7 +1579,7 @@ export default function ComposerPane(props: ComposerPaneProps) {
                       <ContextMenu.Content class={sidebarStyles.contextMenuContent}>
                         <ContextMenu.Item
                           class={sidebarStyles.contextMenuItem}
-                          onSelect={() => addTabWithData('composer', `Composer · ${s.name || basename(s.cwd) || 'session'}`, { cwd: s.cwd, sessionId: s.session_id })}
+                          onSelect={() => addTabWithData(composerPaneKind(), `Composer · ${s.name || basename(s.cwd) || 'session'}`, { cwd: s.cwd, sessionId: s.session_id })}
                         >
                           <Plus size={13} />
                           Open in new tab
@@ -1907,6 +2010,56 @@ export default function ComposerPane(props: ComposerPaneProps) {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
+        <Show when={messageQueue().length > 0}>
+          <div style={{
+            display: 'flex',
+            'flex-direction': 'column',
+            gap: '4px',
+            padding: 'var(--space-xs) var(--space-sm)',
+            'font-size': `${composerFontSize()}px`,
+            'font-family': 'var(--font-mono)',
+            color: 'var(--color-accent)',
+            'border-left': '2px solid var(--color-accent)',
+            'margin-bottom': 'var(--space-xs)',
+          }}>
+            <div style={{ opacity: '0.6', 'font-size': `${Math.max(composerFontSize() - 2, 9)}px` }}>
+              {messageQueue().length} queued · Escape to cancel current
+            </div>
+            <For each={messageQueue()}>
+              {(msg, i) => (
+                <div style={{
+                  display: 'flex',
+                  'align-items': 'center',
+                  gap: 'var(--space-xs)',
+                  opacity: '0.8',
+                }}>
+                  <span style={{ color: 'var(--color-text-disabled)' }}>{i() + 1}.</span>
+                  <span style={{
+                    overflow: 'hidden',
+                    'text-overflow': 'ellipsis',
+                    'white-space': 'nowrap',
+                    'max-width': '400px',
+                  }}>{msg}</span>
+                  <button
+                    type="button"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--color-text-disabled)',
+                      cursor: 'pointer',
+                      padding: '0',
+                      'margin-left': 'auto',
+                    }}
+                    onClick={() => setMessageQueue(prev => prev.filter((_, idx) => idx !== i()))}
+                    aria-label={`Remove queued message ${i() + 1}`}
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
         <Show when={mentions().length > 0}>
           <div class={styles.mentionRow}>
             <For each={mentions()}>
@@ -2005,6 +2158,22 @@ export default function ComposerPane(props: ComposerPaneProps) {
               aria-expanded={showSkills()}
             >
               <Zap size={12} />
+            </button>
+          </Tip>
+
+          <Tip label="Agent status panel" placement="top">
+            <button
+              class={styles.editBtn}
+              type="button"
+              onClick={() => setShowAgentPanel(!showAgentPanel())}
+              aria-label="Toggle agent status panel"
+              aria-expanded={showAgentPanel()}
+              style={{ position: 'relative' }}
+            >
+              <Bot size={12} />
+              <Show when={runningAgentCount() > 0}>
+                <span class={agentPanelStyles.toggleBadge}>{runningAgentCount()}</span>
+              </Show>
             </button>
           </Tip>
 
@@ -2140,6 +2309,16 @@ export default function ComposerPane(props: ComposerPaneProps) {
           cwd={cwd()}
           onInvoke={handleSkillInvoke}
           onClose={() => setShowSkills(false)}
+        />
+      </Show>
+
+      {/* Agent status right rail — auto-shows on agent spawn, toggled from toolbar. */}
+      <Show when={showAgentPanel()}>
+        <ComposerAgentPanel
+          agents={[...agents]}
+          onClose={() => setShowAgentPanel(false)}
+          pinned={agentPanelPinned()}
+          onTogglePin={() => setAgentPanelPinned(!agentPanelPinned())}
         />
       </Show>
 

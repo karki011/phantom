@@ -8,6 +8,7 @@
 // `chat`, this and its PaneRegistry entry can be removed.
 
 import { addTabWithData, closePane } from '@/core/panes/signals';
+import { composerPaneKind } from '@/core/composer/preferences';
 
 interface ChatRedirectProps {
   paneId?: string;
@@ -17,7 +18,7 @@ interface ChatRedirectProps {
 
 export default function ChatRedirect(props: ChatRedirectProps) {
   const handleOpenComposer = () => {
-    addTabWithData('composer', 'Composer', {
+    addTabWithData(composerPaneKind(), 'Composer', {
       cwd: props.cwd ?? '',
       workspaceId: props.workspaceId ?? '',
     });
