@@ -673,5 +673,8 @@ func (b *Bindings) ComposerDeleteSession(sessionID string) bool {
 	if b.service == nil || b.ctx == nil {
 		return false
 	}
-	return b.service.deleteSession(b.ctx, sessionID) == nil
+	// Delete from sessions table (sidebar source) + composer tables (history)
+	_, _ = b.service.writer.ExecContext(b.ctx, `DELETE FROM sessions WHERE id = ?`, sessionID)
+	_ = b.service.deleteSession(b.ctx, sessionID)
+	return true
 }
