@@ -125,6 +125,9 @@ export const rowMeta = style({
   alignItems: 'center',
   gap: vars.space.xs,
   flexShrink: 0,
+  selectors: {
+    [`${row}:hover &`]: { opacity: 0 },
+  },
 })
 
 export const rowTime = style({
