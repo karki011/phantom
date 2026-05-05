@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -619,41 +620,170 @@ func (b *Bindings) ComposerV2List() []ManagerSessionInfo {
 	return b.manager.List()
 }
 
-// ComposerListSessions returns the 50 most recently active sessions from the
-// shared SQLite database. Delegates to V1 Service.ListSessions.
+// cliSessionFile is the JSON shape written by the Claude CLI to
+// ~/.claude/sessions/<pid>.json. Fields are optional — the CLI writes
+// them progressively as the session evolves.
+type cliSessionFile struct {
+	PID       int64  `json:"pid"`
+	SessionID string `json:"sessionId"`
+	CWD       string `json:"cwd"`
+	StartedAt int64  `json:"startedAt"` // milliseconds since epoch
+	UpdatedAt int64  `json:"updatedAt"` // milliseconds since epoch
+	Status    string `json:"status"`
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+}
+
+// ComposerListSessions reads the Claude CLI's own session files from
+// ~/.claude/sessions/ (the same source the VSCode extension uses) and
+// enriches them with names/first_prompt from the local DB. This avoids
+// the timing issues that made the DB-only approach unreliable — the CLI
+// files are the ground truth for active sessions.
 func (b *Bindings) ComposerListSessions() []SessionSummary {
-	if b.service == nil || b.ctx == nil {
-		return nil
-	}
-	// Query the sessions table (populated by session_watcher from ~/.claude/sessions/)
-	// instead of composer_turns. This matches the Claude extension's approach —
-	// using the CLI's own session data, not our persistence layer.
-	const q = `SELECT id, COALESCE(name, ''), COALESCE(cwd, ''),
-		COALESCE(first_prompt, ''), COALESCE(status, 'completed'),
-		COALESCE(started_at, 0)
-		FROM sessions
-		WHERE id NOT LIKE 'cv2_%'
-		  AND kind = 'composer'
-		  AND COALESCE(status, '') != 'hidden'
-		ORDER BY started_at DESC
-		LIMIT 50`
-	rows, err := b.service.writer.QueryContext(b.ctx, q)
+	home, err := os.UserHomeDir()
 	if err != nil {
-		log.Warn("composer: ComposerListSessions query failed", "err", err)
+		log.Warn("composer: ComposerListSessions cannot resolve home dir", "err", err)
 		return nil
 	}
-	defer rows.Close()
-	var out []SessionSummary
-	for rows.Next() {
-		var s SessionSummary
-		var status string
-		if err := rows.Scan(&s.SessionID, &s.Name, &s.Cwd, &s.FirstPrompt, &status, &s.LastActivity); err != nil {
+	sessionsDir := filepath.Join(home, ".claude", "sessions")
+
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		// Directory doesn't exist yet — not an error, just no sessions.
+		if os.IsNotExist(err) {
+			return nil
+		}
+		log.Warn("composer: ComposerListSessions readdir failed", "err", err)
+		return nil
+	}
+
+	// Deduplicate by sessionID — multiple PID files can reference the same
+	// session (e.g. after a CLI restart). Keep the one with the latest activity.
+	seen := make(map[string]int) // sessionID → index in sessions slice
+	var sessions []SessionSummary
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
 		}
-		s.WasInterrupted = status == "error" || status == "interrupted"
-		out = append(out, s)
+		data, err := os.ReadFile(filepath.Join(sessionsDir, entry.Name()))
+		if err != nil {
+			continue // file may have been removed between ReadDir and ReadFile
+		}
+
+		var info cliSessionFile
+		if json.Unmarshal(data, &info) != nil || info.SessionID == "" {
+			continue
+		}
+
+		// Use updatedAt for recency; fall back to startedAt.
+		activityMs := info.UpdatedAt
+		if activityMs == 0 {
+			activityMs = info.StartedAt
+		}
+		activitySec := activityMs / 1000
+
+		if idx, exists := seen[info.SessionID]; exists {
+			// Keep the entry with the most recent activity.
+			if activitySec > sessions[idx].LastActivity {
+				sessions[idx].LastActivity = activitySec
+				if info.Name != "" {
+					sessions[idx].Name = info.Name
+				}
+				if info.CWD != "" {
+					sessions[idx].Cwd = info.CWD
+				}
+			}
+			continue
+		}
+
+		seen[info.SessionID] = len(sessions)
+		sessions = append(sessions, SessionSummary{
+			SessionID:    info.SessionID,
+			Name:         info.Name,
+			Cwd:          info.CWD,
+			LastActivity: activitySec,
+		})
 	}
-	log.Info("composer: ComposerListSessions", "count", len(out))
+
+	// Sort by last activity descending (most recent first).
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].LastActivity > sessions[j].LastActivity
+	})
+
+	// Cap at 50.
+	if len(sessions) > 50 {
+		sessions = sessions[:50]
+	}
+
+	// Enrich with names and first_prompt from the DB (populated by session_watcher).
+	sessions = b.enrichSessionsFromDB(sessions)
+
+	log.Info("composer: ComposerListSessions", "count", len(sessions))
+	return sessions
+}
+
+// enrichSessionsFromDB looks up each session in the local SQLite DB to fill
+// in Name and FirstPrompt when the CLI file didn't provide them. Also filters
+// out sessions the user has hidden. Gracefully skips enrichment if the DB is
+// unavailable.
+func (b *Bindings) enrichSessionsFromDB(sessions []SessionSummary) []SessionSummary {
+	if b.service == nil || b.ctx == nil || len(sessions) == 0 {
+		return sessions
+	}
+
+	// Build a set of session IDs to look up in one query.
+	placeholders := make([]string, len(sessions))
+	for i, s := range sessions {
+		placeholders[i] = "'" + strings.ReplaceAll(s.SessionID, "'", "''") + "'"
+	}
+	q := fmt.Sprintf(
+		`SELECT id, COALESCE(name, ''), COALESCE(first_prompt, ''), COALESCE(status, '')
+		 FROM sessions WHERE id IN (%s)`,
+		strings.Join(placeholders, ","),
+	)
+
+	rows, err := b.service.writer.QueryContext(b.ctx, q)
+	if err != nil {
+		log.Debug("composer: enrichSessionsFromDB query failed", "err", err)
+		return sessions
+	}
+	defer rows.Close()
+
+	type dbRow struct {
+		name        string
+		firstPrompt string
+		status      string
+	}
+	lookup := make(map[string]dbRow)
+	for rows.Next() {
+		var id, name, prompt, status string
+		if rows.Scan(&id, &name, &prompt, &status) == nil {
+			lookup[id] = dbRow{name: name, firstPrompt: prompt, status: status}
+		}
+	}
+
+	// Apply DB data and filter out hidden sessions.
+	out := sessions[:0]
+	for i := range sessions {
+		row, ok := lookup[sessions[i].SessionID]
+		if ok {
+			// Skip sessions the user has dismissed.
+			if row.status == "hidden" {
+				continue
+			}
+			// CLI file name takes precedence; DB fills the gap.
+			if sessions[i].Name == "" && row.name != "" {
+				sessions[i].Name = row.name
+			}
+			if row.firstPrompt != "" {
+				sessions[i].FirstPrompt = row.firstPrompt
+			}
+			sessions[i].WasInterrupted = row.status == "error" || row.status == "interrupted"
+		}
+		out = append(out, sessions[i])
+	}
+
 	return out
 }
 
