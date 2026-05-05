@@ -33,6 +33,7 @@ export const virtualItem = style({
 export const streamingBar = style({
   position: 'sticky',
   bottom: 0,
+  marginTop: '-180px',
   display: 'flex',
   alignItems: 'center',
   gap: vars.space.sm,
