@@ -306,17 +306,25 @@ func (b *Bindings) persistStreamEvent(sessionID string, session *Session, ev Str
 		return // no active turn for this session
 	}
 
-	// When the CLI handshake completes (system_init), the real Claude session
-	// UUID becomes available. Update the turn and session rows that were
-	// inserted with the fallback internal ID.
-	if ev.Kind == EventSystemInit && claudeSessionID != sessionID && claudeSessionID != "" {
-		const fixQ = `UPDATE composer_turns SET session_id = ? WHERE id = ? AND session_id = ?`
-		if _, err := b.service.writer.ExecContext(b.ctx, fixQ, claudeSessionID, turnID, sessionID); err != nil {
-			log.Debug("composer: v2 fixup turn session_id failed", "err", err)
+	// When system_init arrives, it carries the real Claude session UUID in
+	// ev.SessionID. Update the turn and session rows that were inserted with
+	// the fallback internal ID. Also set it on the session object for future use.
+	if ev.Kind == EventSystemInit && ev.SessionID != "" && ev.SessionID != sessionID {
+		realID := ev.SessionID
+		if session != nil {
+			session.mu.Lock()
+			session.sessionID = realID
+			session.mu.Unlock()
 		}
-		// Also fix the sessions table row
-		b.service.ensureSessionRow(b.ctx, claudeSessionID, session.Name, session.CWD, session.opts.Model, "")
-		log.Info("composer: v2 session ID fixup", "from", sessionID, "to", claudeSessionID)
+		claudeSessionID = realID
+		const fixQ = `UPDATE composer_turns SET session_id = ? WHERE session_id = ?`
+		if res, err := b.service.writer.ExecContext(b.ctx, fixQ, realID, sessionID); err != nil {
+			log.Debug("composer: v2 fixup turn session_id failed", "err", err)
+		} else {
+			n, _ := res.RowsAffected()
+			log.Info("composer: v2 session ID fixup", "from", sessionID, "to", realID, "rows", n)
+		}
+		b.service.ensureSessionRow(b.ctx, realID, session.Name, session.CWD, session.opts.Model, "")
 	}
 
 	// Persist important event types to composer_events.
