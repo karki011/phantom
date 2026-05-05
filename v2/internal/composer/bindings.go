@@ -160,7 +160,8 @@ func (b *Bindings) ComposerV2Open(req OpenRequest) (ManagerSessionInfo, error) {
 		}
 
 		// ── DB persistence (fire-and-forget) ──────────────────────
-		b.persistStreamEvent(req.SessionID, ev)
+		sess, _ := b.manager.Get(req.SessionID)
+		b.persistStreamEvent(req.SessionID, sess, ev)
 	}
 
 	info, err := b.manager.Open(req.SessionID, req.CWD, opts, handler)
@@ -240,6 +241,14 @@ func (b *Bindings) startTurn(sessionID string, session *Session, userText string
 		return
 	}
 
+	// Use the Claude CLI session UUID for DB persistence, not the frontend's
+	// internal session key (cv2_xxx). The CLI UUID is what --resume expects
+	// and what the sessions table uses.
+	claudeSessionID := session.SessionID()
+	if claudeSessionID == "" {
+		claudeSessionID = sessionID // fallback before handshake completes
+	}
+
 	turnID := uuid.New().String()
 	now := time.Now().Unix()
 
@@ -251,14 +260,14 @@ func (b *Bindings) startTurn(sessionID string, session *Session, userText string
 
 	model := session.opts.Model
 	if model == "" {
-		model = "sonnet" // fallback
+		model = "sonnet"
 	}
 
-	log.Info("composer: v2 startTurn", "sessionID", sessionID, "turnID", turnID, "prompt", userText[:min(len(userText), 50)])
+	log.Info("composer: v2 startTurn", "internalID", sessionID, "claudeID", claudeSessionID, "turnID", turnID, "prompt", userText[:min(len(userText), 50)])
 	if err := b.service.insertTurn(b.ctx, &Turn{
 		ID:        turnID,
 		PaneID:    "v2_" + sessionID,
-		SessionID: sessionID,
+		SessionID: claudeSessionID,
 		CWD:       session.CWD,
 		Prompt:    userText,
 		Model:     model,
@@ -268,16 +277,25 @@ func (b *Bindings) startTurn(sessionID string, session *Session, userText string
 		log.Warn("composer: v2 insertTurn failed", "err", err)
 	}
 
-	if err := b.service.ensureSessionRow(b.ctx, sessionID, session.Name, session.CWD, model, userText); err != nil {
+	if err := b.service.ensureSessionRow(b.ctx, claudeSessionID, session.Name, session.CWD, model, userText); err != nil {
 		log.Warn("composer: v2 ensureSessionRow failed", "err", err)
 	}
 }
 
 // persistStreamEvent persists a streaming event to the DB and handles
 // turn completion (result_success, result_error). Fire-and-forget.
-func (b *Bindings) persistStreamEvent(sessionID string, ev StreamEvent) {
+func (b *Bindings) persistStreamEvent(sessionID string, session *Session, ev StreamEvent) {
 	if b.service == nil {
 		return
+	}
+
+	// Use Claude CLI UUID for DB, not frontend internal ID
+	claudeSessionID := ""
+	if session != nil {
+		claudeSessionID = session.SessionID()
+	}
+	if claudeSessionID == "" {
+		claudeSessionID = sessionID
 	}
 
 	b.turnMu.Lock()
@@ -310,7 +328,7 @@ func (b *Bindings) persistStreamEvent(sessionID string, ev StreamEvent) {
 
 		if err := b.service.insertEvent(b.ctx, &EventRecord{
 			TurnID:    turnID,
-			SessionID: sessionID,
+			SessionID: claudeSessionID,
 			Seq:       seq,
 			Type:      ev.RawType,
 			Subtype:   ev.RawSubtype,
