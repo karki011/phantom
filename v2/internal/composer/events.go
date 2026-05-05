@@ -4,6 +4,7 @@ package composer
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 type EventKind string
@@ -94,6 +95,7 @@ type rawEnvelope struct {
 	ToolName     string          `json:"tool_name"`
 	ToolInput    json.RawMessage `json:"tool_input"`
 	Output       string          `json:"output"`
+	Content      json.RawMessage `json:"content"`    // tool_result content (string or array of blocks)
 	IsError      bool            `json:"is_error"`
 	Description  string          `json:"description"`
 	SessionID    string          `json:"session_id"`
@@ -258,6 +260,33 @@ func DecodeEvent(line []byte) (StreamEvent, error) {
 		var cb contentBlock
 		if err := json.Unmarshal(raw.ContentBlock, &cb); err == nil && cb.Text != "" {
 			ev.Text = cb.Text
+		}
+	}
+
+	// Extract tool_result content — the CLI sends "content" (string or array of
+	// blocks) but the rawEnvelope maps "output" separately. Populate ToolOutput
+	// from whichever field has data so the frontend reducer can update the chip.
+	if ev.Kind == EventToolResult && ev.ToolOutput == "" && len(raw.Content) > 0 {
+		var contentStr string
+		if json.Unmarshal(raw.Content, &contentStr) == nil {
+			ev.ToolOutput = contentStr
+		} else {
+			var blocks []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			}
+			if json.Unmarshal(raw.Content, &blocks) == nil {
+				var parts []string
+				for _, b := range blocks {
+					if b.Type == "text" {
+						parts = append(parts, b.Text)
+					}
+				}
+				ev.ToolOutput = strings.Join(parts, "\n")
+			}
+		}
+		if len(ev.ToolOutput) > 50000 {
+			ev.ToolOutput = ev.ToolOutput[:50000] + "\n... (truncated)"
 		}
 	}
 

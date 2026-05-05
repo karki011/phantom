@@ -59,6 +59,24 @@ const ToolUseChip: Component<ToolUseChipProps> = (props) => {
     return state.toolUses[props.toolUseId];
   });
 
+  const BG_TOOL_NAMES = new Set(['Agent', 'Task', 'agent', 'task'])
+
+  // For BG agent tools: content_block_stop marks 'complete' but agent is
+  // still running. Show spinner until tool_result arrives (output non-empty).
+  const statusMapped = createMemo((): ToolUseStatus => {
+    const tu = toolUse()
+    if (!tu) return 'running'
+    if (
+      tu.status === 'complete' &&
+      BG_TOOL_NAMES.has(tu.toolName) &&
+      (tu.input as Record<string, unknown>)?.run_in_background &&
+      !tu.output
+    ) {
+      return 'running'
+    }
+    return tu.status
+  });
+
   const effectiveOpen = () => {
     const mode = props.expandMode ?? 'individual';
     if (mode === 'all') return true;
@@ -110,15 +128,15 @@ const ToolUseChip: Component<ToolUseChipProps> = (props) => {
           style={{ cursor: 'pointer' }}
         >
           {/* Status dot */}
-          <Show when={tu().status === 'running'}>
+          <Show when={statusMapped() === 'running'}>
             <span class={css.statusDotRunning} />
           </Show>
-          <Show when={tu().status === 'complete'}>
+          <Show when={statusMapped() === 'complete'}>
             <span class={css.statusDotSuccess}>
               <Check size={10} stroke-width={3} />
             </span>
           </Show>
-          <Show when={tu().status === 'error'}>
+          <Show when={statusMapped() === 'error'}>
             <span class={css.statusDotError}>
               <X size={10} stroke-width={3} />
             </span>
@@ -154,10 +172,10 @@ const ToolUseChip: Component<ToolUseChipProps> = (props) => {
           </Show>
 
           {/* Running / Error labels */}
-          <Show when={tu().status === 'running'}>
+          <Show when={statusMapped() === 'running'}>
             <span class={css.statusLabelRunning}>Running…</span>
           </Show>
-          <Show when={tu().status === 'error'}>
+          <Show when={statusMapped() === 'error'}>
             <span class={css.statusLabelError}>Error</span>
           </Show>
 

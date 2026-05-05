@@ -19,7 +19,7 @@ import SearchOverlay from './SearchOverlay'
 import ContextGauge from './ContextGauge'
 import ContextInfoPanel from './ContextInfoPanel'
 import ComposerAgentPanel, { type AgentInfo } from '../panes/ComposerAgentPanel'
-import { toggleBadge as toggleBadgeCss, pendingHint as pendingHintCss } from '../panes/ComposerAgentPanel.css'
+import { toggleBadge as toggleBadgeCss, pendingHint as pendingHintCss, statusSpinner as spinnerCss } from '../panes/ComposerAgentPanel.css'
 import { Bot } from 'lucide-solid'
 
 interface ComposerSessionProps {
@@ -102,13 +102,21 @@ const ComposerSession: Component<ComposerSessionProps> = (props) => {
     for (const [id, tu] of Object.entries(toolUses) as [string, ToolUseState][]) {
       if (!AGENT_TOOL_NAMES.has(tu.toolName)) continue
       const input = tu.input ?? {}
+      const isBg = Boolean(input.run_in_background)
+      // BG agents: content_block_stop marks tool_use as 'complete' but the
+      // actual agent is still running. Keep status as 'running' until
+      // tool_result arrives (tu.output is non-empty).
+      let agentStatus = toolUseStatusToAgentStatus(tu.status)
+      if (isBg && tu.status === 'complete' && !tu.output) {
+        agentStatus = 'running'
+      }
       agents.push({
         toolUseId: id,
         description: (input.description as string) ?? (input.prompt as string)?.slice(0, 120) ?? tu.toolName,
         subagentType: (input.subagent_type as string) ?? (input.type as string) ?? '',
         model: (input.model as string) ?? '',
-        isBackground: Boolean(input.run_in_background),
-        status: toolUseStatusToAgentStatus(tu.status),
+        isBackground: isBg,
+        status: agentStatus,
         startedAt: tu.startedAt,
         completedAt: tu.completedAt ?? 0,
         result: tu.output ?? '',
@@ -417,6 +425,19 @@ const ComposerSession: Component<ComposerSessionProps> = (props) => {
                 onScrollRef={(el) => { messageListRef = el }}
                 onRetry={s().streaming === null ? handleRetry : undefined}
               />
+
+              {/* Indicator: BG agents still working while Claude is idle */}
+              <Show when={
+                s().streaming === null &&
+                runningAgentCount() > 0
+              }>
+                <div class={pendingHintCss} style={{ display: 'flex', 'align-items': 'center', 'justify-content': 'center', gap: '8px' }}>
+                  <span class={spinnerCss} />
+                  {runningAgentCount() === 1
+                    ? '1 agent working in the background...'
+                    : `${runningAgentCount()} agents working in the background...`}
+                </div>
+              </Show>
 
               {/* Hint: BG agents done but results not yet integrated */}
               <Show when={

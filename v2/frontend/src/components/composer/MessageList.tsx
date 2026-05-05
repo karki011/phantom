@@ -169,13 +169,13 @@ const MessageList: Component<MessageListProps> = (props) => {
             </For>
           </div>
         </Show>
+        <Show when={props.isStreaming}>
+          <div class={s.streamingBar}>
+            <span class={s.streamingDot} />
+            <span>{props.currentTool ? `Running: ${props.currentTool}` : 'Claude is thinking...'}</span>
+          </div>
+        </Show>
       </div>
-      <Show when={props.isStreaming}>
-        <div class={s.streamingBar}>
-          <span class={s.streamingDot} />
-          <span>{props.currentTool ? `Running: ${props.currentTool}` : 'Claude is thinking...'}</span>
-        </div>
-      </Show>
       <Show when={showJump() && !props.isStreaming}>
         <div class={s.jumpPill} onClick={scrollToBottom}>
           Jump to latest

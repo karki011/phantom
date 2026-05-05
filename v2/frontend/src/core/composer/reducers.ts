@@ -178,7 +178,7 @@ export const reduceToolUseComplete = (
     const entry = s.toolUses[toolId]
     if (entry) {
       entry.status = isError ? 'error' : 'complete'
-      entry.output = ev.tool_output ?? ''
+      entry.output = ev.tool_output ?? ev.text ?? (ev as any).content ?? ''
       entry.isError = isError
       entry.completedAt = Date.now()
     }
@@ -1019,6 +1019,7 @@ export const dispatchEvent = (
     case 'tool_use_start':
       return reduceToolUseStart(setState, state, ev)
     case 'tool_use_complete':
+    case 'tool_result':
       return reduceToolUseComplete(setState, state, ev)
     case 'permission_request':
       return reducePermissionRequest(setState, state, ev)
