@@ -119,7 +119,11 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
             <For each={sessions()}>
               {(s) => {
                 const isActive = () => s.session_id === props.activeSessionId
-                const displayName = () => s.name || 'Untitled'
+                const displayName = () => {
+                  const prompt = s.first_prompt?.trim()
+                  if (prompt) return prompt.length > 50 ? prompt.slice(0, 50) + '…' : prompt
+                  return s.name || 'Untitled'
+                }
                 const isLive = () => !s.was_interrupted && s.last_activity > (Date.now() / 1000) - 300
                 const promptPreview = () =>
                   s.first_prompt?.trim()
@@ -153,9 +157,6 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
                         </Show>
                         {resumingId() === s.session_id ? 'Restoring...' : displayName()}
                       </span>
-                      <Show when={promptPreview() && resumingId() !== s.session_id}>
-                        <span class={css.rowPrompt}>{promptPreview()}</span>
-                      </Show>
                     </div>
                     <Show when={s.was_interrupted}>
                       <span class={css.interruptedBadge} title="Session interrupted">
