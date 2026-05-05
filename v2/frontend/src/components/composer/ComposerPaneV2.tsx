@@ -153,8 +153,19 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
       <ComposerSessionSidebar
         onNewSession={() => openNewSession()}
         onResumeSession={handleResumeSession}
+        onCloseSession={(claudeId) => {
+          // Find and close the open tab matching this Claude UUID
+          for (const id of listSessionIds()) {
+            const store = getSessionStore(id)
+            if (!store) continue
+            const [st] = store
+            if (st.sessionId === claudeId || id === claudeId) {
+              void closeSession(id)
+              return
+            }
+          }
+        }}
         onActiveSessionDeleted={() => {
-          // The deleted session was the one being viewed — close it
           const id = activeSessionId()
           if (id) void closeSession(id)
         }}

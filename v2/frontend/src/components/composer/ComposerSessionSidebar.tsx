@@ -36,6 +36,8 @@ interface ComposerSessionSidebarProps {
   onResumeSession: (sessionId: string) => void
   /** Called when a past session is deleted and was the active one */
   onActiveSessionDeleted?: () => void
+  /** Called to close an open tab matching a session (by Claude UUID) */
+  onCloseSession?: (claudeSessionId: string) => void
   /** The currently active session id (for highlighting) */
   activeSessionId?: string | null
 }
@@ -63,11 +65,9 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
     e.stopPropagation()
     const ok = await composerDeleteSession(s.session_id)
     if (ok) {
-      const wasActive = s.session_id === props.activeSessionId
       setSessions((prev) => prev.filter((row) => row.session_id !== s.session_id))
-      if (wasActive) {
-        props.onActiveSessionDeleted?.()
-      }
+      // Close matching open tab + kill CLI process
+      props.onCloseSession?.(s.session_id)
     }
   }
 
