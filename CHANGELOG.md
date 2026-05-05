@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.24](https://github.com/karki011/phantom/compare/v0.1.23...v0.1.24) (2026-05-05)
+
+
+### Features
+
+* **composer-v2:** streaming fixes, AI engine injection, agent panel, session management ([#83](https://github.com/karki011/phantom/issues/83)) ([4482a5c](https://github.com/karki011/phantom/commit/4482a5c78839f03fac92bc536d8eca91eafbdb0e))
+
 ## [0.1.23](https://github.com/karki011/phantom/compare/v0.1.22...v0.1.23) (2026-05-03)
 
 
