@@ -826,6 +826,7 @@ export const reduceResult = (
     }
     s.streaming = null
     s.strategy = null // clear per-turn strategy metadata
+    s.status = 'idle' // result event = turn complete, session is idle
 
     // Update session totals from result-level usage
     if (costUsd > 0) s.totalCostUsd += costUsd

@@ -288,6 +288,7 @@ func main() {
 		BaseDir:     filepath.Join(phantomDir, "sessions-v2"),
 	})
 	composerV2Bindings := composer.NewBindings(composerV2Mgr)
+	composerV2Bindings.SetService(composerSvc)
 	a.SetComposerV2(composerV2Mgr, composerV2Bindings)
 
 	// 9. Create safety service (YAML ward rules + audit).

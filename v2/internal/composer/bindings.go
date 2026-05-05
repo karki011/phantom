@@ -53,6 +53,7 @@ type Bindings struct {
 	manager  *Manager
 	logger   *ComposerLogger
 	enricher ContextEnricher // optional AI engine context injector
+	service  *Service        // V1 Service for DB queries (ListSessions, History)
 
 	// engineDeps provides the full orchestrator pipeline (assessor, strategy
 	// registry, knowledge stores) for strategy selection. When set,
@@ -61,6 +62,12 @@ type Bindings struct {
 	engineDeps      orchestrator.Dependencies
 	engineDepsSet   bool // true after SetEngineDeps is called
 	indexerResolver IndexerResolver
+}
+
+// SetService injects the V1 Service so V2 bindings can access session
+// history and listing from the shared SQLite database.
+func (b *Bindings) SetService(svc *Service) {
+	b.service = svc
 }
 
 // NewBindings creates a Bindings instance backed by the given Manager.
@@ -382,4 +389,38 @@ func (b *Bindings) ComposerV2Close(sessionID string) {
 // ComposerV2List returns info for all active sessions.
 func (b *Bindings) ComposerV2List() []ManagerSessionInfo {
 	return b.manager.List()
+}
+
+// ComposerListSessions returns the 50 most recently active sessions from the
+// shared SQLite database. Delegates to V1 Service.ListSessions.
+func (b *Bindings) ComposerListSessions() []SessionSummary {
+	if b.service == nil || b.ctx == nil {
+		return nil
+	}
+	list, err := b.service.ListSessions(b.ctx)
+	if err != nil {
+		return nil
+	}
+	return list
+}
+
+// ComposerHistoryBySession returns all turns for a session from the DB.
+// Delegates to V1 Service.HistoryBySession.
+func (b *Bindings) ComposerHistoryBySession(sessionID string) []HistoryTurn {
+	if b.service == nil || b.ctx == nil {
+		return nil
+	}
+	turns, err := b.service.HistoryBySession(b.ctx, sessionID)
+	if err != nil {
+		return nil
+	}
+	return turns
+}
+
+// ComposerDeleteSession removes all data for a session from the DB.
+func (b *Bindings) ComposerDeleteSession(sessionID string) bool {
+	if b.service == nil || b.ctx == nil {
+		return false
+	}
+	return b.service.deleteSession(b.ctx, sessionID) == nil
 }
