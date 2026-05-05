@@ -306,6 +306,19 @@ func (b *Bindings) persistStreamEvent(sessionID string, session *Session, ev Str
 		return // no active turn for this session
 	}
 
+	// When the CLI handshake completes (system_init), the real Claude session
+	// UUID becomes available. Update the turn and session rows that were
+	// inserted with the fallback internal ID.
+	if ev.Kind == EventSystemInit && claudeSessionID != sessionID && claudeSessionID != "" {
+		const fixQ = `UPDATE composer_turns SET session_id = ? WHERE id = ? AND session_id = ?`
+		if _, err := b.service.writer.ExecContext(b.ctx, fixQ, claudeSessionID, turnID, sessionID); err != nil {
+			log.Debug("composer: v2 fixup turn session_id failed", "err", err)
+		}
+		// Also fix the sessions table row
+		b.service.ensureSessionRow(b.ctx, claudeSessionID, session.Name, session.CWD, session.opts.Model, "")
+		log.Info("composer: v2 session ID fixup", "from", sessionID, "to", claudeSessionID)
+	}
+
 	// Persist important event types to composer_events.
 	switch ev.Kind {
 	case EventAssistant, EventToolResult, EventStreamEvent,
