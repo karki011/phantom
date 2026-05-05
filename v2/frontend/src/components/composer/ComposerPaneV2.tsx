@@ -70,6 +70,7 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
     if (resumeId) {
       try {
         const history = await composerHistoryBySession(resumeId)
+        console.log('[ComposerPaneV2] rehydrate', resumeId, 'turns:', history.length)
         if (history.length > 0) {
           const { messages, toolUses } = convertHistoryToMessages(history)
           const entry = getSessionStore(id)

@@ -839,8 +839,10 @@ func (b *Bindings) ComposerHistoryBySession(sessionID string) []HistoryTurn {
 	}
 	turns, err := b.service.HistoryBySession(b.ctx, sessionID)
 	if err != nil {
+		log.Warn("composer: HistoryBySession failed", "sessionID", sessionID, "err", err)
 		return nil
 	}
+	log.Info("composer: HistoryBySession", "sessionID", sessionID, "turns", len(turns))
 	return turns
 }
 
