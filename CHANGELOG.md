@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.26](https://github.com/karki011/phantom/compare/v0.1.25...v0.1.26) (2026-05-06)
+
+
+### Bug Fixes
+
+* concurrent map writes crash in planCache ([#89](https://github.com/karki011/phantom/issues/89)) ([629fc30](https://github.com/karki011/phantom/commit/629fc30bd760da4b1831085b9093366cc93a2275))
+
 ## [0.1.25](https://github.com/karki011/phantom/compare/v0.1.24...v0.1.25) (2026-05-06)
 
 
