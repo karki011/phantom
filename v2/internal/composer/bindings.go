@@ -708,6 +708,21 @@ func (b *Bindings) ComposerListSessions() []SessionSummary {
 		})
 	}
 
+	// Enrich CLI sessions with ai-title from JSONL project files.
+	// The Name field from ~/.claude/sessions/ is a Pokémon name — not useful.
+	projectDir := b.claudeProjectDir()
+	if projectDir != "" {
+		for i := range sessions {
+			if sessions[i].FirstPrompt != "" {
+				continue
+			}
+			jsonlPath := filepath.Join(projectDir, sessions[i].SessionID+".jsonl")
+			if title := extractAITitle(jsonlPath); title != "" {
+				sessions[i].FirstPrompt = title
+			}
+		}
+	}
+
 	// Sort by last activity descending (most recent first).
 	sort.Slice(sessions, func(i, j int) bool {
 		return sessions[i].LastActivity > sessions[j].LastActivity
@@ -1078,6 +1093,42 @@ func extractAITitle(path string) string {
 		var ev aiTitleEvent
 		if json.Unmarshal(line, &ev) == nil && ev.Type == "ai-title" && ev.AITitle != "" {
 			return ev.AITitle
+		}
+	}
+	return ""
+}
+
+// claudeProjectDir returns the ~/.claude/projects/{path}/ directory for the
+// first CWD found in active CLI sessions, or "" if unavailable.
+func (b *Bindings) claudeProjectDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	sessionsDir := filepath.Join(home, ".claude", "sessions")
+	entries, _ := os.ReadDir(sessionsDir)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(sessionsDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		var info cliSessionFile
+		if json.Unmarshal(data, &info) == nil && info.CWD != "" {
+			var buf strings.Builder
+			for _, ch := range info.CWD {
+				if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' {
+					buf.WriteRune(ch)
+				} else {
+					buf.WriteByte('-')
+				}
+			}
+			dir := filepath.Join(home, ".claude", "projects", buf.String())
+			if _, err := os.Stat(dir); err == nil {
+				return dir
+			}
 		}
 	}
 	return ""

@@ -81,9 +81,9 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
         source: 'cli' as const,
       }))
 
-    // Build a set of UUIDs that are already open as tabs — these should
-    // not appear as separate sidebar entries (they'd create duplicates
-    // because --resume creates a new session UUID).
+    // Build a set of UUIDs that are already open as tabs so we can
+    // deduplicate: if a session appears from BOTH CLI and JSONL sources
+    // (--resume creates a new UUID), keep only one entry.
     const openUUIDs = new Set<string>()
     for (const tabId of listSessionIds()) {
       const store = getSessionStore(tabId)
@@ -93,9 +93,27 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
       if (st.resumeId) openUUIDs.add(st.resumeId)
     }
 
-    // Merge and sort by last_activity descending, cap at 50.
-    let merged = [...phantomList, ...jsonlSessions]
-      .filter((s) => !openUUIDs.has(s.session_id))
+    // Deduplicate: if a CLI session's UUID matches an open tab's sessionId
+    // (new UUID from --resume), remove it — the JSONL entry (original UUID)
+    // or the tab itself covers it. But keep sessions that match via resumeId
+    // so the original entry stays visible.
+    const merged = [...phantomList, ...jsonlSessions]
+      .filter((s) => {
+        // Keep if this is the original resumeId (user expects to see it)
+        if (openUUIDs.has(s.session_id)) {
+          // Check if this UUID is a NEW session spawned by --resume
+          // (its UUID matches an open tab's sessionId but NOT its resumeId)
+          for (const tabId of listSessionIds()) {
+            const store = getSessionStore(tabId)
+            if (!store) continue
+            const [st] = store
+            if (st.sessionId === s.session_id && st.resumeId && st.resumeId !== s.session_id) {
+              return false // new CLI session — hide, the original JSONL entry covers it
+            }
+          }
+        }
+        return true
+      })
     merged.sort((a, b) => b.last_activity - a.last_activity)
     if (merged.length > 50) merged = merged.slice(0, 50)
 
