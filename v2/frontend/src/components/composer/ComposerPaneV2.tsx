@@ -30,6 +30,15 @@ const ComposerV2 = () => (window as any).go?.['composer']?.Bindings
 const generateSessionId = (): string =>
   `cv2_${Date.now()}`
 
+const sanitizeLabel = (raw: string): string => {
+  let text = raw
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (text.startsWith('/')) text = text.slice(1)
+  return text.length > 50 ? text.slice(0, 50) + '…' : text
+}
+
 export default function ComposerPaneV2(props: ComposerPaneV2Props) {
   const openNewSession = async (resumeId?: string) => {
     const id = generateSessionId()
@@ -88,8 +97,7 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
           }
           const firstUser = messages.find(m => m.role === 'user')
           if (firstUser?.content?.[0]?.text) {
-            const text = firstUser.content[0].text
-            entry[1]('label', text.length > 50 ? text.slice(0, 50) + '…' : text)
+            entry[1]('label', sanitizeLabel(firstUser.content[0].text))
           }
         } else if (entry) {
           // No Phantom DB history — try reading from Claude CLI JSONL
@@ -105,8 +113,7 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
             entry[1]('messages', msgs)
             const firstUser = jsonlMessages.find(m => m.role === 'user')
             if (firstUser) {
-              const text = firstUser.content
-              entry[1]('label', text.length > 50 ? text.slice(0, 50) + '…' : text)
+              entry[1]('label', sanitizeLabel(firstUser.content))
             }
           }
         }

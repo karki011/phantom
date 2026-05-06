@@ -196,9 +196,9 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
               {(s) => {
                 const isActive = () => s.session_id === props.activeSessionId
                 const displayName = () => {
-                  const prompt = s.first_prompt?.trim()
-                  if (prompt) return prompt.length > 50 ? prompt.slice(0, 50) + '…' : prompt
-                  return s.name || 'Untitled'
+                  const raw = (s.first_prompt || s.name || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+                  if (raw.startsWith('/')) return raw.slice(1, 51) || 'Untitled'
+                  return raw ? (raw.length > 50 ? raw.slice(0, 50) + '…' : raw) : 'Untitled'
                 }
                 const isLive = () => !s.was_interrupted && s.last_activity > (Date.now() / 1000) - 300
                 const promptPreview = () =>
