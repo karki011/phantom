@@ -1,7 +1,7 @@
 // Author: Subash Karki
 
 import { createSignal, createEffect, onMount, For, Show } from 'solid-js'
-import { History, Plus, ChevronLeft, ChevronRight, AlertTriangle, X, Terminal } from 'lucide-solid'
+import { History, Plus, ChevronLeft, ChevronRight, AlertTriangle, X } from 'lucide-solid'
 import {
   composerListSessions,
   composerDeleteSession,
@@ -239,20 +239,6 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
                         </Show>
                         {resumingId() === s.session_id ? 'Restoring...' : displayName()}
                       </span>
-                      <Show when={s.source === 'cli'}>
-                        <span
-                          title="Started outside Phantom (terminal / VS Code / Claude Desktop)"
-                          style={{
-                            display: 'inline-flex',
-                            'align-items': 'center',
-                            'margin-left': '4px',
-                            color: 'var(--textSecondary, #888)',
-                            'flex-shrink': '0',
-                          }}
-                        >
-                          <Terminal size={9} />
-                        </span>
-                      </Show>
                     </div>
                     <Show when={s.was_interrupted}>
                       <span class={css.interruptedBadge} title="Session interrupted">
