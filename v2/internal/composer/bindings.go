@@ -883,6 +883,25 @@ func (b *Bindings) ComposerDeleteSession(sessionID string) bool {
 	// Also clean up composer turn/event data.
 	_, _ = b.service.writer.ExecContext(b.ctx, `UPDATE sessions SET status = 'hidden' WHERE id = ?`, sessionID)
 	_ = b.service.deleteSession(b.ctx, sessionID)
+
+	// Delete the JSONL transcript from ~/.claude/projects/{path}/ so the
+	// session doesn't reappear in the sidebar from the JSONL scanner.
+	if home, err := os.UserHomeDir(); err == nil {
+		projectsDir := filepath.Join(home, ".claude", "projects")
+		if entries, err := os.ReadDir(projectsDir); err == nil {
+			for _, dir := range entries {
+				if !dir.IsDir() {
+					continue
+				}
+				jsonlPath := filepath.Join(projectsDir, dir.Name(), sessionID+".jsonl")
+				if err := os.Remove(jsonlPath); err == nil {
+					log.Info("composer: deleted JSONL transcript", "session_id", sessionID, "path", jsonlPath)
+					break
+				}
+			}
+		}
+	}
+
 	return true
 }
 
