@@ -9,7 +9,7 @@ import { isFullscreen, initFullscreenDetection, stopFullscreenDetection } from '
 import { bootstrapSessions } from './core/signals/sessions';
 import { bootstrapWards } from './core/signals/wards';
 import { bootstrapProjects } from './core/signals/projects';
-import { bootstrapApp, activeTopTab, activeWorktreeId } from './core/signals/app';
+import { bootstrapApp, activeTopTab, activeWorktreeId, restoreActiveTopTab } from './core/signals/app';
 import { worktreeMap, bootstrapWorktrees } from './core/signals/worktrees';
 import { loadPref, getPref } from './core/signals/preferences';
 import { startTour } from './core/tour/tour';
@@ -26,7 +26,8 @@ import { playSound } from './core/audio/engine';
 import { WindowDragStrip } from './components/layout/WindowDragStrip';
 import { WorktreeSidebar, RightSidebar } from './components/sidebar';
 import { Workspace } from './components/panes/Workspace';
-import { switchWorkspace } from './core/panes/signals';
+import { switchWorkspace, bootstrapWorkspaceStates } from './core/panes/signals';
+import { switchComposerWorkspace } from './core/composer/store';
 import { registerKeyboardShortcuts } from './core/keyboard';
 import { WelcomePage } from './components/WelcomePage';
 import { waitForWails } from './core/bindings/ready';
@@ -34,6 +35,7 @@ import { ToastRegion } from './shared/Toast/Toast';
 import { SettingsDialog } from './shared/SettingsDialog/SettingsDialog';
 import { QuickOpen } from './shared/QuickOpen/QuickOpen';
 import { CommandPalette } from './shared/CommandPalette';
+import { WorktreeSwitcher } from './shared/WorktreeSwitcher';
 import { RecipePicker } from './shared/RecipePicker';
 import { McpManagerDialog } from './shared/McpManagerDialog';
 import { ApprovalModal } from './shared/ApprovalModal/ApprovalModal';
@@ -86,12 +88,19 @@ export function App() {
     bootstrapSessions();
     bootstrapProjects();
 
+    // Restore persisted activeTopTab before first render
+    await restoreActiveTopTab();
+
     // Toast surfaces for MCP self-heal failures (issue #10). Listener stays
     // active for the life of the app — registered before self-heal can fire
     // since the Go side's selfHealMCPRegistration runs in a goroutine kicked
     // off at Startup. Any race here is benign: the toast is informational and
     // self-heal also runs on every subsequent boot.
     bootstrapMCPRegistrationListener();
+
+    // Pre-populate in-memory stateCache from DB so switching worktrees
+    // is instant even for worktrees not yet visited this session.
+    await bootstrapWorkspaceStates();
 
     // Restore the last-active worktree BEFORE flipping ready=true so the
     // initial render lands on the workspace instead of flashing WelcomePage.
@@ -125,7 +134,17 @@ export function App() {
 
   createEffect(() => {
     const wtId = activeWorktreeId();
-    if (wtId) untrack(() => switchWorkspace(wtId));
+    if (wtId) untrack(async () => {
+      // bootstrapWorkspaceStates (called in onMount before bootstrapWorktrees)
+      // pre-populates stateCache from DB so switchWorkspace restores the saved
+      // layout automatically via the stateCache branch.
+      //
+      // switchWorkspace is always called so that previousWorktreeId / currentWorktreeId
+      // bookkeeping stays correct. It will either restore from stateCache or
+      // create the default Home tab when no state is saved.
+      switchWorkspace(wtId);
+      switchComposerWorkspace(wtId);
+    });
   });
 
   createEffect(() => {
@@ -215,6 +234,7 @@ export function App() {
       <AICommandCenter />
       <QuickOpen />
       <CommandPalette />
+      <WorktreeSwitcher />
       <RecipePicker />
       <McpManagerDialog />
       <DocsScreen />

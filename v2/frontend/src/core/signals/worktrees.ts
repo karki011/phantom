@@ -8,6 +8,7 @@ import { activeWorktreeId, setActiveWorktreeId } from './app';
 import { listWorktrees, createWorktree, removeWorktree, getAllWorktreeStatus } from '../bindings';
 import { setPref, loadPref } from './preferences';
 import { clearWorktreeCache } from '../panes/signals';
+import { pushMru, initMru, pruneMru } from './worktree-mru';
 import type { Workspace, WorktreeStatus } from '../types';
 
 // Worktree data per project (keyed by project id)
@@ -19,10 +20,19 @@ const [statusMap, setStatusMap] = createSignal<Record<string, WorktreeStatus>>({
 // Sidebar UI state
 const [expandedProjects, setExpandedProjects] = createSignal<Set<string>>(new Set());
 const [leftSidebarWidth, setLeftSidebarWidth] = createSignal(260);
-const [leftSidebarCollapsed, setLeftSidebarCollapsed] = createSignal(false);
+const [_leftSidebarCollapsed, _setLeftSidebarCollapsed] = createSignal(false);
 // True while the user is dragging the resize handle — used to pause the
 // collapse/expand width animation so per-pixel drag doesn't ease.
 const [isLeftResizing, setIsLeftResizing] = createSignal(false);
+
+// Read accessor — same shape as createSignal
+const leftSidebarCollapsed = _leftSidebarCollapsed;
+
+// Persisted setter — writes through to prefs so collapsed state survives restarts
+function setLeftSidebarCollapsed(value: boolean): void {
+  _setLeftSidebarCollapsed(value);
+  setPref('sidebar_collapsed', String(value)).catch(() => {});
+}
 const [sidebarSearch, setSidebarSearch] = createSignal('');
 
 // Which project is showing the inline create input
@@ -73,6 +83,13 @@ export async function loadProjectWorktrees(projectId: string): Promise<void> {
 export async function refreshAllWorktrees(): Promise<void> {
   const allProjects = projects();
   await Promise.all(allProjects.map((p) => loadProjectWorktrees(p.id)));
+
+  // Prune stale MRU entries after each full refresh
+  const allIds = new Set<string>();
+  for (const wts of Object.values(worktreeMap())) {
+    for (const wt of wts) allIds.add(wt.id);
+  }
+  pruneMru(allIds);
 }
 
 // Refresh per-worktree git status (staged/unstaged/untracked counts, ahead/behind)
@@ -122,6 +139,11 @@ export async function bootstrapWorktrees(): Promise<void> {
   console.log('[worktrees] bootstrapping, projects:', projects().length);
   await refreshAllWorktrees();
   console.log('[worktrees] bootstrap complete, worktreeMap:', worktreeMap());
+  const seedIds: string[] = [];
+  for (const wts of Object.values(worktreeMap())) {
+    for (const wt of wts) seedIds.push(wt.id);
+  }
+  await initMru(seedIds);
 
   // Initial status load + low-frequency poll (every 15s) so dirty-file badges
   // stay reasonably fresh even if fsnotify misses an event. The `git:status`
@@ -137,6 +159,10 @@ export async function bootstrapWorktrees(): Promise<void> {
     const parsed = parseInt(savedWidth, 10);
     if (!Number.isNaN(parsed)) setLeftSidebarWidth(parsed);
   }
+
+  // Restore sidebar collapsed state
+  const savedCollapsed = await loadPref('sidebar_collapsed');
+  if (savedCollapsed === 'true') _setLeftSidebarCollapsed(true);
 
   // Restore last-active worktree if it still exists. If the saved id is
   // stale (worktree removed between sessions, malformed pref), try to fall
@@ -253,6 +279,7 @@ export function setAllProjectsExpanded(shouldExpand: boolean): void {
 // Select the active worktree, persist, and auto-expand its parent project
 export function selectWorktree(worktreeId: string): void {
   setActiveWorktreeId(worktreeId);
+  pushMru(worktreeId);
   setPref('active_worktree_id', worktreeId);
 
   // Auto-expand the parent project when selecting a worktree, and persist
