@@ -61,6 +61,7 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
       composerListSessions(),
       cwd ? listClaudeProjectSessions(cwd) : Promise.resolve([]),
     ])
+    console.log('[Sidebar] phantom:', phantomList.length, 'jsonl:', jsonlList.length, 'cwd:', cwd)
 
     // Build lookup of session IDs already present from Phantom/CLI source.
     const knownIds = new Set(phantomList.map((s) => s.session_id))
@@ -115,7 +116,8 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
         return true
       })
     merged.sort((a, b) => b.last_activity - a.last_activity)
-    if (merged.length > 50) merged = merged.slice(0, 50)
+    if (merged.length > 50) merged.length = 50
+    console.log('[Sidebar] merged:', merged.length, merged.map(s => `${s.session_id.slice(0,8)} "${s.first_prompt || s.name}"`))
 
     if (!cwd) {
       setSessions(merged)
@@ -125,6 +127,7 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
       if (!s.cwd) return true
       return s.cwd === cwd || s.cwd.startsWith(cwd + '/')
     })
+    console.log('[Sidebar] after cwd filter:', filtered.length)
     setSessions(filtered)
   }
 
