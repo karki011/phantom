@@ -12,7 +12,7 @@ import {
 import { composerNoContext } from '@/core/composer/preferences'
 import { connectSession, disconnectSession } from '@/core/composer/bridge'
 import { closePane } from '@/core/panes/signals'
-import { composerHistoryBySession } from '@/core/bindings/composer'
+import { composerHistoryBySession, readSessionJSONL } from '@/core/bindings/composer'
 import { convertHistoryToMessages } from '@/core/composer/history'
 import ComposerSubTabs from './ComposerSubTabs'
 import ComposerSession from './ComposerSession'
@@ -74,23 +74,38 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
       }
     }
 
-    // Rehydrate past conversation so the user sees old messages immediately
+    // Rehydrate past conversation so the user sees old messages immediately.
+    // Try Phantom's own DB first, fall back to Claude CLI JSONL files.
     if (resumeId) {
       try {
         const history = await composerHistoryBySession(resumeId)
-        console.log('[ComposerPaneV2] rehydrate', resumeId, 'turns:', history.length)
-        if (history.length > 0) {
+        const entry = getSessionStore(id)
+        if (history.length > 0 && entry) {
           const { messages, toolUses } = convertHistoryToMessages(history)
-          const entry = getSessionStore(id)
-          if (entry) {
-            entry[1]('messages', messages)
-            if (Object.keys(toolUses).length > 0) {
-              entry[1]('toolUses', toolUses)
-            }
-            // Set tab label from first user message in history
-            const firstUser = messages.find(m => m.role === 'user')
-            if (firstUser?.content?.[0]?.text) {
-              const text = firstUser.content[0].text
+          entry[1]('messages', messages)
+          if (Object.keys(toolUses).length > 0) {
+            entry[1]('toolUses', toolUses)
+          }
+          const firstUser = messages.find(m => m.role === 'user')
+          if (firstUser?.content?.[0]?.text) {
+            const text = firstUser.content[0].text
+            entry[1]('label', text.length > 50 ? text.slice(0, 50) + '…' : text)
+          }
+        } else if (entry) {
+          // No Phantom DB history — try reading from Claude CLI JSONL
+          const jsonlMessages = await readSessionJSONL(props.cwd, resumeId)
+          if (jsonlMessages.length > 0) {
+            const msgs = jsonlMessages.map((m, i) => ({
+              id: `jsonl_${i}`,
+              role: m.role as 'user' | 'assistant',
+              content: [{ type: 'text' as const, text: m.content, status: 'complete' as const }],
+              status: 'complete' as const,
+              timestamp: new Date(m.timestamp).getTime() || Date.now(),
+            }))
+            entry[1]('messages', msgs)
+            const firstUser = jsonlMessages.find(m => m.role === 'user')
+            if (firstUser) {
+              const text = firstUser.content
               entry[1]('label', text.length > 50 ? text.slice(0, 50) + '…' : text)
             }
           }

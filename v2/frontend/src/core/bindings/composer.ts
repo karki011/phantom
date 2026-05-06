@@ -220,6 +220,20 @@ export async function listClaudeProjectSessions(cwd: string): Promise<ClaudeProj
   }
 }
 
+export interface JSONLMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+export async function readSessionJSONL(cwd: string, sessionId: string): Promise<JSONLMessage[]> {
+  try {
+    return (await V2()?.ReadSessionJSONL(cwd, sessionId)) ?? []
+  } catch {
+    return []
+  }
+}
+
 /**
  * Fetch every turn (with edits) belonging to the given claude session_id —
  * used to rehydrate a pane that resumed a session it didn't originally own.

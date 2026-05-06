@@ -1082,3 +1082,101 @@ func extractAITitle(path string) string {
 	}
 	return ""
 }
+
+// JSONLMessage is a user or assistant message extracted from a Claude session JSONL.
+type JSONLMessage struct {
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	Timestamp string `json:"timestamp"`
+}
+
+// ReadSessionJSONL reads a Claude session JSONL file and returns user + assistant
+// text messages for rehydrating the composer UI.
+func (b *Bindings) ReadSessionJSONL(cwd, sessionID string) []JSONLMessage {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+
+	var pathBuf strings.Builder
+	for _, ch := range cwd {
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' {
+			pathBuf.WriteRune(ch)
+		} else {
+			pathBuf.WriteByte('-')
+		}
+	}
+	path := filepath.Join(home, ".claude", "projects", pathBuf.String(), sessionID+".jsonl")
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	type jsonlEntry struct {
+		Type      string      `json:"type"`
+		Message   interface{} `json:"message"`
+		Timestamp string      `json:"timestamp"`
+	}
+
+	var messages []JSONLMessage
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 256*1024), 256*1024)
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var entry jsonlEntry
+		if json.Unmarshal(line, &entry) != nil {
+			continue
+		}
+
+		if entry.Type != "user" && entry.Type != "assistant" {
+			continue
+		}
+
+		var text string
+		switch msg := entry.Message.(type) {
+		case string:
+			text = msg
+		case map[string]interface{}:
+			if content, ok := msg["content"]; ok {
+				switch c := content.(type) {
+				case string:
+					text = c
+				case []interface{}:
+					for _, block := range c {
+						if bm, ok := block.(map[string]interface{}); ok {
+							if bm["type"] == "text" {
+								if t, ok := bm["text"].(string); ok {
+									text += t + "\n"
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
+		}
+
+		role := "user"
+		if entry.Type == "assistant" {
+			role = "assistant"
+		}
+		messages = append(messages, JSONLMessage{
+			Role:      role,
+			Content:   text,
+			Timestamp: entry.Timestamp,
+		})
+	}
+
+	return messages
+}
