@@ -8,7 +8,7 @@ import {
   listClaudeProjectSessions,
   type ComposerSessionSummary,
 } from '@/core/bindings/composer'
-import { listSessionIds, getSessionStore, setActiveSessionId } from '@/core/composer/store'
+import { listSessionIds, getSessionStore } from '@/core/composer/store'
 import { loadPref, setPref } from '@/core/signals/preferences'
 import * as css from './ComposerSessionSidebar.css'
 
@@ -33,8 +33,8 @@ const relTime = (unixSec: number): string => {
 interface ComposerSessionSidebarProps {
   /** Called when user wants to start a fresh session */
   onNewSession: () => void
-  /** Called when user clicks a past session to resume it */
-  onResumeSession: (sessionId: string) => void
+  /** Called when user clicks a past session to resume it. Returns true if an existing tab was focused. */
+  onResumeSession: (sessionId: string) => boolean
   /** Called when a past session is deleted and was the active one */
   onActiveSessionDeleted?: () => void
   /** Called to close an open tab matching a session (by Claude UUID) */
@@ -61,7 +61,6 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
       composerListSessions(),
       cwd ? listClaudeProjectSessions(cwd) : Promise.resolve([]),
     ])
-    console.log('[Sidebar] phantom:', phantomList.length, 'jsonl:', jsonlList.length, 'cwd:', cwd)
 
     // Build lookup of session IDs already present from Phantom/CLI source.
     const knownIds = new Set(phantomList.map((s) => s.session_id))
@@ -117,8 +116,6 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
       })
     merged.sort((a, b) => b.last_activity - a.last_activity)
     if (merged.length > 50) merged.length = 50
-    console.log('[Sidebar] merged:', merged.length, merged.map(s => `${s.session_id.slice(0,8)} "${s.first_prompt || s.name}"`))
-
     if (!cwd) {
       setSessions(merged)
       return
@@ -127,7 +124,6 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
       if (!s.cwd) return true
       return s.cwd === cwd || s.cwd.startsWith(cwd + '/')
     })
-    console.log('[Sidebar] after cwd filter:', filtered.length)
     setSessions(filtered)
   }
 
@@ -214,8 +210,16 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
                     role="listitem"
                     class={`${css.row} ${isActive() ? css.rowActive : ''}`}
                     onClick={() => {
-                      setResumingId(s.session_id)
-                      props.onResumeSession(s.session_id)
+                      // Already the active session — do nothing
+                      if (s.session_id === props.activeSessionId) return
+
+                      const matched = props.onResumeSession(s.session_id)
+                      // Only show "Restoring..." when opening a new tab (no match found).
+                      // If an existing tab was focused, the active session changes
+                      // immediately and no loading state is needed.
+                      if (!matched) {
+                        setResumingId(s.session_id)
+                      }
                     }}
                     title={`${s.name ? s.name + '\n' : ''}${s.first_prompt || s.session_id}`}
                   >

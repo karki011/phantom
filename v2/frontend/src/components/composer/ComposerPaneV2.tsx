@@ -159,22 +159,19 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
     }
   }
 
-  const handleResumeSession = (sessionId: string) => {
+  const handleResumeSession = (sessionId: string): boolean => {
     const openIds = listSessionIds()
-    console.log('[Resume] looking for', sessionId, 'in', openIds.length, 'open tabs')
     for (const id of openIds) {
       const store = getSessionStore(id)
       if (!store) continue
       const [st] = store
-      console.log('[Resume]   tab', id, 'sessionId=', st.sessionId, 'resumeId=', st.resumeId)
       if (id === sessionId || st.sessionId === sessionId || st.resumeId === sessionId) {
-        console.log('[Resume]   MATCH — focusing', id)
         setActiveSessionId(id)
-        return
+        return true
       }
     }
-    console.log('[Resume]   NO MATCH — opening new session')
     void openNewSession(sessionId)
+    return false
   }
 
   // Derive the Claude UUID for the active session so the sidebar can highlight it.
