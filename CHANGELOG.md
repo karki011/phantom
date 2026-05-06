@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.25](https://github.com/karki011/phantom/compare/v0.1.24...v0.1.25) (2026-05-06)
+
+
+### Features
+
+* keyboard-first navigation, composer resilience, and crash recovery ([#85](https://github.com/karki011/phantom/issues/85)) ([189e530](https://github.com/karki011/phantom/commit/189e530eef1c2b92412522c885bb23238b6cf374))
+
 ## [0.1.24](https://github.com/karki011/phantom/compare/v0.1.23...v0.1.24) (2026-05-05)
 
 
