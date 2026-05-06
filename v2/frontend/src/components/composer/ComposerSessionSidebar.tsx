@@ -81,18 +81,28 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
         source: 'cli' as const,
       }))
 
-    // Hide any session that's already open as a tab (by sessionId or resumeId).
-    const openUUIDs = new Set<string>()
+    // Track which UUIDs are open as tabs — used to hide DUPLICATE entries
+    // (e.g. a new CLI session spawned by --resume), not the originals.
+    const tabSessionIds = new Set<string>()
+    const tabResumeIds = new Set<string>()
     for (const tabId of listSessionIds()) {
       const store = getSessionStore(tabId)
       if (!store) continue
       const [st] = store
-      if (st.sessionId && !st.sessionId.startsWith('cv2_')) openUUIDs.add(st.sessionId)
-      if (st.resumeId) openUUIDs.add(st.resumeId)
+      if (st.sessionId && !st.sessionId.startsWith('cv2_')) tabSessionIds.add(st.sessionId)
+      if (st.resumeId) tabResumeIds.add(st.resumeId)
     }
 
+    // Keep all sessions EXCEPT new CLI sessions spawned by --resume
+    // (their UUID is in tabSessionIds but NOT in tabResumeIds — meaning
+    // it's the new UUID, not the original sidebar entry).
     const merged = [...phantomList, ...jsonlSessions]
-      .filter((s) => !openUUIDs.has(s.session_id))
+      .filter((s) => {
+        if (tabSessionIds.has(s.session_id) && !tabResumeIds.has(s.session_id)) {
+          return false
+        }
+        return true
+      })
     merged.sort((a, b) => b.last_activity - a.last_activity)
     if (merged.length > 50) merged.length = 50
     if (!cwd) {
