@@ -125,6 +125,10 @@ type SessionSummary struct {
 	TotalCost      float64 `json:"total_cost"`
 	Cwd            string  `json:"cwd"`              // first non-empty cwd seen
 	WasInterrupted bool    `json:"was_interrupted"`  // true if any turn in this session was interrupted by a crash
+	// Source identifies where this session record came from.
+	// "phantom" = Phantom composer DB; "cli" = ~/.claude/sessions/ file
+	// written by Claude CLI (terminal, VS Code, Claude Desktop, etc.).
+	Source         string  `json:"source"`
 }
 
 // SendArgs is the Wails-binding payload for ComposerSend.

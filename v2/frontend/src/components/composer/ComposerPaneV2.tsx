@@ -192,6 +192,7 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
           if (id) void closeSession(id)
         }}
         activeSessionId={activeClaudeSessionId()}
+        cwd={props.cwd}
       />
       <div class={css.mainColumn}>
         <ComposerSubTabs onNew={() => openNewSession()} onClose={closeSession} />

@@ -180,6 +180,8 @@ export interface ComposerSessionSummary {
   total_cost: number;
   cwd: string;
   was_interrupted: boolean; // true if session was interrupted by a crash/force-quit
+  /** Where the session originated: "phantom" (composer DB) or "cli" (terminal/VS Code/Claude Desktop) */
+  source: 'phantom' | 'cli' | '';
 }
 
 /**

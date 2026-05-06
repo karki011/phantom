@@ -703,6 +703,7 @@ func (b *Bindings) ComposerListSessions() []SessionSummary {
 			Name:         info.Name,
 			Cwd:          info.CWD,
 			LastActivity: activitySec,
+			Source:       "cli",
 		})
 	}
 
@@ -747,6 +748,7 @@ func (b *Bindings) ComposerListSessions() []SessionSummary {
 					Cwd:          cwd,
 					FirstPrompt:  prompt,
 					LastActivity: lastAt,
+					Source:       "phantom",
 				})
 			}
 		}
