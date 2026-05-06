@@ -372,6 +372,28 @@ const ComposerSession: Component<ComposerSessionProps> = (props) => {
             <>
               <ComposerStatusStrip state={s()} />
 
+              {/* Session metrics bar */}
+              <div style={{
+                display: 'flex',
+                'align-items': 'center',
+                'justify-content': 'center',
+                gap: '6px',
+                padding: '3px 12px',
+                'border-bottom': '1px solid var(--divider)',
+                'font-family': 'var(--font-mono)',
+                'font-size': '11px',
+                color: 'var(--text-disabled)',
+                'user-select': 'none',
+              }}>
+                <span>Turn {s().messages.filter(m => m.role === 'user').length}</span>
+                <span style={{ opacity: 0.4 }}>·</span>
+                <span>{(s().totalInputTokens / 1000).toFixed(1)}k in / {(s().totalOutputTokens / 1000).toFixed(1)}k out</span>
+                <span style={{ opacity: 0.4 }}>|</span>
+                <span style={{ color: 'var(--accent)' }}>Session: ${s().totalCostUsd.toFixed(4)}</span>
+                <span style={{ opacity: 0.4 }}>·</span>
+                <span>{((s().totalInputTokens + s().totalOutputTokens) / 1000).toFixed(1)}k tok</span>
+              </div>
+
               {/* Agent panel toggle — visible when agents exist but panel is closed */}
               <Show when={agentInfos().length > 0 && !agentPanelOpen()}>
                 <div style={{
