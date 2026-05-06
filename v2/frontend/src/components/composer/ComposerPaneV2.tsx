@@ -161,15 +161,19 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
 
   const handleResumeSession = (sessionId: string) => {
     const openIds = listSessionIds()
+    console.log('[Resume] looking for', sessionId, 'in', openIds.length, 'open tabs')
     for (const id of openIds) {
       const store = getSessionStore(id)
       if (!store) continue
       const [st] = store
+      console.log('[Resume]   tab', id, 'sessionId=', st.sessionId, 'resumeId=', st.resumeId)
       if (id === sessionId || st.sessionId === sessionId || st.resumeId === sessionId) {
+        console.log('[Resume]   MATCH — focusing', id)
         setActiveSessionId(id)
         return
       }
     }
+    console.log('[Resume]   NO MATCH — opening new session')
     void openNewSession(sessionId)
   }
 
@@ -185,12 +189,7 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
     return st.resumeId ?? (st.sessionId?.startsWith('cv2_') ? null : st.sessionId) ?? null
   })
 
-  // Auto-open first session on mount
-  onMount(() => {
-    if (listSessionIds().length === 0) {
-      openNewSession()
-    }
-  })
+  // Don't auto-open — let the user pick from the sidebar or click "+ New chat"
 
   return (
     <div class={css.paneRoot}>
