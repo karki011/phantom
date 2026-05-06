@@ -24,6 +24,18 @@ const sessionStores = new Map<string, StoreTuple>()
 const [sessionIds, setSessionIds] = createSignal<string[]>([])
 
 // ---------------------------------------------------------------------------
+// Per-worktree session cache — mirrors the pane stateCache pattern
+// ---------------------------------------------------------------------------
+
+interface WorktreeComposerState {
+  stores: Map<string, StoreTuple>
+  activeId: string | null
+}
+
+const sessionCache = new Map<string, WorktreeComposerState>()
+let previousComposerWorktreeId: string | null = null
+
+// ---------------------------------------------------------------------------
 // Default state factory
 // ---------------------------------------------------------------------------
 
@@ -32,6 +44,7 @@ export const createDefaultState = (
   worktreeId: string
 ): ComposerState => ({
   sessionId,
+  resumeId: null,
   worktreeId,
   messages: [],
   toolUses: {},
@@ -92,4 +105,45 @@ export const [activeSessionId, setActiveSessionId] = createSignal<
 export const getActiveStore = (): StoreTuple | null => {
   const id = activeSessionId()
   return id ? getSessionStore(id) : null
+}
+
+// ---------------------------------------------------------------------------
+// Worktree switching — save/restore session state per worktree
+// ---------------------------------------------------------------------------
+
+/**
+ * Call this whenever the active worktree changes.
+ *
+ * - Saves current sessionStores + activeSessionId under the previous worktree.
+ * - Restores cached state for the incoming worktree (or starts fresh).
+ * - Does NOT disconnect bridges — Go-side sessions keep running in the background.
+ */
+export const switchComposerWorkspace = (worktreeId: string): void => {
+  if (previousComposerWorktreeId === worktreeId) return
+
+  // Save current state under the previous worktree
+  if (previousComposerWorktreeId) {
+    sessionCache.set(previousComposerWorktreeId, {
+      stores: new Map(sessionStores),
+      activeId: activeSessionId(),
+    })
+  }
+  previousComposerWorktreeId = worktreeId
+
+  // Clear the live map so it doesn't bleed into the new worktree's view
+  sessionStores.clear()
+
+  const cached = sessionCache.get(worktreeId)
+  if (cached) {
+    // Restore the saved session stores into the live map
+    for (const [id, tuple] of cached.stores) {
+      sessionStores.set(id, tuple)
+    }
+    setSessionIds(Array.from(sessionStores.keys()))
+    setActiveSessionId(cached.activeId)
+  } else {
+    // Fresh worktree — no sessions yet
+    setSessionIds([])
+    setActiveSessionId(null)
+  }
 }

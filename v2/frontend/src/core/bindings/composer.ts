@@ -180,6 +180,8 @@ export interface ComposerSessionSummary {
   total_cost: number;
   cwd: string;
   was_interrupted: boolean; // true if session was interrupted by a crash/force-quit
+  /** Where the session originated: "phantom" (composer DB) or "cli" (terminal/VS Code/Claude Desktop) */
+  source: 'phantom' | 'cli' | '';
 }
 
 /**
@@ -193,6 +195,42 @@ export async function composerListSessions(): Promise<ComposerSessionSummary[]> 
     return normalize<ComposerSessionSummary[]>(raw);
   } catch {
     return [];
+  }
+}
+
+export interface ClaudeProjectSession {
+  session_id: string;
+  title: string;
+  last_activity: number; // unix seconds
+  size: number; // file size in bytes
+}
+
+/**
+ * List up to 50 historical sessions from ~/.claude/projects/{cwd}/ JSONL
+ * transcript files. Supplements composerListSessions() with sessions that
+ * were started outside Phantom (CLI, VS Code, Claude Desktop) and are no
+ * longer present in ~/.claude/sessions/.
+ */
+export async function listClaudeProjectSessions(cwd: string): Promise<ClaudeProjectSession[]> {
+  try {
+    const raw = (await V2()?.ListClaudeProjectSessions(cwd)) ?? (await App()?.ListClaudeProjectSessions(cwd)) ?? [];
+    return normalize<ClaudeProjectSession[]>(raw);
+  } catch {
+    return [];
+  }
+}
+
+export interface JSONLMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+export async function readSessionJSONL(cwd: string, sessionId: string): Promise<JSONLMessage[]> {
+  try {
+    return (await V2()?.ReadSessionJSONL(cwd, sessionId)) ?? []
+  } catch {
+    return []
   }
 }
 

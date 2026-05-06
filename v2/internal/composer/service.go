@@ -659,7 +659,23 @@ func (s *Service) DeleteSession(ctx context.Context, sessionID string) error {
 // Internal — run loop
 // ---------------------------------------------------------------------------
 
+// readTimeoutDuration is the maximum time the scan loop may go without
+// receiving any output from the Claude CLI before the watchdog kills the
+// child process. 120 s is generous enough to cover slow tool calls and
+// extended thinking, but short enough to surface a hung TCP connection.
+const readTimeoutDuration = 120 * time.Second
+
 func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessionID string, isResume bool, turnID, prompt, decisionID string) {
+	// Wrap ctx in a cancellable child so the watchdog can cancel the child
+	// process independently of the outer (user-facing) cancellation path.
+	runCtx, runCancel := context.WithCancel(ctx)
+	defer runCancel()
+
+	// Replace ctx with the cancellable child throughout this function so
+	// exec.CommandContext and the existing cancel-check at cmd.Wait both
+	// behave correctly when the watchdog fires.
+	ctx = runCtx
+
 	defer func() {
 		s.mu.Lock()
 		delete(s.runs, args.PaneID)
@@ -828,7 +844,28 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	// Watchdog: if stdout goes silent for readTimeoutDuration the Claude CLI
+	// TCP connection has likely dropped. Cancel the context to kill the child
+	// process and unblock scanner.Scan, then let the existing cmd.Wait error
+	// handling emit an error event to the frontend.
+	watchdog := time.NewTimer(readTimeoutDuration)
+	defer watchdog.Stop()
+	go func() {
+		select {
+		case <-watchdog.C:
+			log.Warn("composer: watchdog timeout — killing hung process",
+				"pane_id", args.PaneID,
+				"timeout", readTimeoutDuration,
+			)
+			runCancel()
+		case <-ctx.Done():
+			// Normal exit or external cancellation — watchdog not needed.
+		}
+	}()
+
 	for scanner.Scan() {
+		watchdog.Reset(readTimeoutDuration)
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
 			continue

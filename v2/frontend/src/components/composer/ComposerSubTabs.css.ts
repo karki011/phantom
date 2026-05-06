@@ -97,3 +97,38 @@ export const addButton = style({
     color: vars.color.textPrimary,
   },
 })
+
+export const contextMenuContent = style({
+  backgroundColor: vars.color.bgTertiary,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+  padding: `${vars.space.xs} 0`,
+  boxShadow: vars.shadow.md,
+  minWidth: '180px',
+  zIndex: 100,
+  outline: 'none',
+})
+
+export const contextMenuItem = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  padding: `${vars.space.xs} ${vars.space.md}`,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textPrimary,
+  cursor: 'pointer',
+  outline: 'none',
+  transition: `background ${vars.animation.fast} ease`,
+  ':hover': {
+    backgroundColor: vars.color.bgHover,
+  },
+  ':focus-visible': {
+    backgroundColor: vars.color.bgHover,
+  },
+})
+
+export const contextMenuSeparator = style({
+  height: '1px',
+  backgroundColor: vars.color.divider,
+  margin: `${vars.space.xs} 0`,
+})

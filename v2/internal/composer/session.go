@@ -307,6 +307,11 @@ func (s *Session) Spawn() error {
 	return nil
 }
 
+// readStdoutTimeout is the maximum time readStdout may go without receiving
+// any output from the Claude CLI before the watchdog cancels the session.
+// Declared as a var (not const) so tests can override it with a shorter value.
+var readStdoutTimeout = 120 * time.Second
+
 // readStdout scans stdout line by line, decodes each line as a StreamEvent,
 // and emits it to all registered handlers. Control responses are routed to
 // pending request channels instead of the normal event handlers.
@@ -314,7 +319,26 @@ func (s *Session) readStdout(r io.Reader) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, maxScannerBuf), maxScannerBuf)
 
+	// Watchdog: if stdout goes silent for readStdoutTimeout the Claude CLI
+	// TCP connection has likely dropped. Cancel the context to kill the child
+	// process and unblock scanner.Scan.
+	watchdog := time.NewTimer(readStdoutTimeout)
+	defer watchdog.Stop()
+	go func() {
+		select {
+		case <-watchdog.C:
+			log.Warn("composer: session watchdog timeout — killing hung process",
+				"session_id", s.ID,
+				"timeout", readStdoutTimeout,
+			)
+			s.cancel()
+		case <-s.ctx.Done():
+			// Normal exit or external cancellation — watchdog not needed.
+		}
+	}()
+
 	for scanner.Scan() {
+		watchdog.Reset(readStdoutTimeout)
 		line := scanner.Bytes()
 		if len(line) == 0 {
 			continue

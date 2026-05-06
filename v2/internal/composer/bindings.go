@@ -6,6 +6,7 @@
 package composer
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -703,7 +704,33 @@ func (b *Bindings) ComposerListSessions() []SessionSummary {
 			Name:         info.Name,
 			Cwd:          info.CWD,
 			LastActivity: activitySec,
+			Source:       "cli",
 		})
+	}
+
+	// Enrich ALL sessions with ai-title from JSONL project files.
+	// The Name field from ~/.claude/sessions/ is a Pokémon name — not useful.
+	// Derive the project dir from each session's CWD individually.
+	for i := range sessions {
+		if sessions[i].FirstPrompt != "" {
+			continue
+		}
+		cwd := sessions[i].Cwd
+		if cwd == "" {
+			continue
+		}
+		var cwdBuf strings.Builder
+		for _, ch := range cwd {
+			if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' {
+				cwdBuf.WriteRune(ch)
+			} else {
+				cwdBuf.WriteByte('-')
+			}
+		}
+		jsonlPath := filepath.Join(home, ".claude", "projects", cwdBuf.String(), sessions[i].SessionID+".jsonl")
+		if title := extractAITitle(jsonlPath); title != "" {
+			sessions[i].FirstPrompt = title
+		}
 	}
 
 	// Sort by last activity descending (most recent first).
@@ -747,6 +774,7 @@ func (b *Bindings) ComposerListSessions() []SessionSummary {
 					Cwd:          cwd,
 					FirstPrompt:  prompt,
 					LastActivity: lastAt,
+					Source:       "phantom",
 				})
 			}
 		}
@@ -855,6 +883,25 @@ func (b *Bindings) ComposerDeleteSession(sessionID string) bool {
 	// Also clean up composer turn/event data.
 	_, _ = b.service.writer.ExecContext(b.ctx, `UPDATE sessions SET status = 'hidden' WHERE id = ?`, sessionID)
 	_ = b.service.deleteSession(b.ctx, sessionID)
+
+	// Delete the JSONL transcript from ~/.claude/projects/{path}/ so the
+	// session doesn't reappear in the sidebar from the JSONL scanner.
+	if home, err := os.UserHomeDir(); err == nil {
+		projectsDir := filepath.Join(home, ".claude", "projects")
+		if entries, err := os.ReadDir(projectsDir); err == nil {
+			for _, dir := range entries {
+				if !dir.IsDir() {
+					continue
+				}
+				jsonlPath := filepath.Join(projectsDir, dir.Name(), sessionID+".jsonl")
+				if err := os.Remove(jsonlPath); err == nil {
+					log.Info("composer: deleted JSONL transcript", "session_id", sessionID, "path", jsonlPath)
+					break
+				}
+			}
+		}
+	}
+
 	return true
 }
 
@@ -928,4 +975,308 @@ func (b *Bindings) ComposerV2Interrupt(sessionID string) error {
 	}
 	_, err := session.ControlRequest("interrupt", map[string]interface{}{})
 	return err
+}
+
+// ClaudeProjectSession is one entry from the ~/.claude/projects/{path}/ JSONL
+// history. It is returned by ListClaudeProjectSessions.
+type ClaudeProjectSession struct {
+	SessionID    string `json:"session_id"`
+	Title        string `json:"title"`
+	LastActivity int64  `json:"last_activity"` // unix seconds
+	Size         int64  `json:"size"`          // file size in bytes
+}
+
+// ListClaudeProjectSessions scans ~/.claude/projects/{cwd-as-path}/ for
+// *.jsonl session transcript files and returns a summary of the 50 most
+// recent ones, sorted by file mtime descending.
+//
+// Only top-level JSONL files are scanned — UUID sub-directories that contain
+// sub-agent transcripts are skipped entirely. At most the first 50 lines of
+// each file are read to locate the optional "ai-title" event; the rest of the
+// transcript is not loaded into memory.
+func (b *Bindings) ListClaudeProjectSessions(cwd string) []ClaudeProjectSession {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Warn("composer: ListClaudeProjectSessions cannot resolve home dir", "err", err)
+		return nil
+	}
+
+	// Convert CWD to the Claude projects directory path.
+	// Claude CLI replaces every non-alphanumeric character (except -) with -.
+	// e.g. /Users/subash.karki/CZ/feature-web-apps → -Users-subash-karki-CZ-feature-web-apps
+	var buf strings.Builder
+	for _, ch := range cwd {
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' {
+			buf.WriteRune(ch)
+		} else {
+			buf.WriteByte('-')
+		}
+	}
+	projectDir := filepath.Join(home, ".claude", "projects", buf.String())
+
+	entries, err := os.ReadDir(projectDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		log.Warn("composer: ListClaudeProjectSessions readdir failed", "err", err, "dir", projectDir)
+		return nil
+	}
+
+	type candidate struct {
+		id    string
+		mtime int64
+		path  string
+	}
+	var candidates []candidate
+	cutoff := time.Now().Add(-24 * time.Hour).Unix()
+
+	for _, entry := range entries {
+		// Skip sub-directories (sub-agent UUID dirs).
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".jsonl") {
+			continue
+		}
+		id := strings.TrimSuffix(name, ".jsonl")
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		// Skip absurdly large files.
+		if info.Size() > 100*1024*1024 {
+			continue
+		}
+		// Only include sessions from the last 24 hours.
+		if info.ModTime().Unix() < cutoff {
+			continue
+		}
+		candidates = append(candidates, candidate{
+			id:    id,
+			mtime: info.ModTime().Unix(),
+			path:  filepath.Join(projectDir, name),
+		})
+	}
+
+	// Sort by mtime descending, cap at 50.
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].mtime > candidates[j].mtime
+	})
+	if len(candidates) > 50 {
+		candidates = candidates[:50]
+	}
+
+	// For each candidate, read at most 50 lines looking for ai-title.
+	results := make([]ClaudeProjectSession, 0, len(candidates))
+	for _, c := range candidates {
+		title := extractAITitle(c.path)
+		info, err := os.Stat(c.path)
+		var size int64
+		if err == nil {
+			size = info.Size()
+		}
+		results = append(results, ClaudeProjectSession{
+			SessionID:    c.id,
+			Title:        title,
+			LastActivity: c.mtime,
+			Size:         size,
+		})
+	}
+
+	log.Info("composer: ListClaudeProjectSessions", "cwd", cwd, "count", len(results))
+	return results
+}
+
+// extractAITitle reads a JSONL file looking for an ai-title event.
+// Falls back to the first user message if no ai-title is found.
+func extractAITitle(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	type aiTitleEvent struct {
+		Type    string `json:"type"`
+		AITitle string `json:"aiTitle"`
+	}
+	type userMsgEvent struct {
+		Type    string      `json:"type"`
+		Message interface{} `json:"message"`
+	}
+
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 128*1024), 128*1024)
+	lines := 0
+	firstUserMsg := ""
+	for scanner.Scan() {
+		lines++
+		if lines > 200 {
+			break
+		}
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		lineStr := string(line)
+		if strings.Contains(lineStr, "ai-title") {
+			var ev aiTitleEvent
+			if json.Unmarshal(line, &ev) == nil && ev.Type == "ai-title" && ev.AITitle != "" {
+				return ev.AITitle
+			}
+		}
+		if firstUserMsg == "" && strings.Contains(lineStr, `"type":"user"`) {
+			var um userMsgEvent
+			if json.Unmarshal(line, &um) == nil && um.Type == "user" {
+				switch msg := um.Message.(type) {
+				case string:
+					firstUserMsg = msg
+				case map[string]interface{}:
+					if c, ok := msg["content"].(string); ok {
+						firstUserMsg = c
+					}
+				}
+				if len(firstUserMsg) > 80 {
+					firstUserMsg = firstUserMsg[:80] + "…"
+				}
+			}
+		}
+	}
+	return firstUserMsg
+}
+
+// claudeProjectDir returns the ~/.claude/projects/{path}/ directory for the
+// first CWD found in active CLI sessions, or "" if unavailable.
+func (b *Bindings) claudeProjectDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	sessionsDir := filepath.Join(home, ".claude", "sessions")
+	entries, _ := os.ReadDir(sessionsDir)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(sessionsDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		var info cliSessionFile
+		if json.Unmarshal(data, &info) == nil && info.CWD != "" {
+			var buf strings.Builder
+			for _, ch := range info.CWD {
+				if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' {
+					buf.WriteRune(ch)
+				} else {
+					buf.WriteByte('-')
+				}
+			}
+			dir := filepath.Join(home, ".claude", "projects", buf.String())
+			if _, err := os.Stat(dir); err == nil {
+				return dir
+			}
+		}
+	}
+	return ""
+}
+
+// JSONLMessage is a user or assistant message extracted from a Claude session JSONL.
+type JSONLMessage struct {
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	Timestamp string `json:"timestamp"`
+}
+
+// ReadSessionJSONL reads a Claude session JSONL file and returns user + assistant
+// text messages for rehydrating the composer UI.
+func (b *Bindings) ReadSessionJSONL(cwd, sessionID string) []JSONLMessage {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+
+	var pathBuf strings.Builder
+	for _, ch := range cwd {
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' {
+			pathBuf.WriteRune(ch)
+		} else {
+			pathBuf.WriteByte('-')
+		}
+	}
+	path := filepath.Join(home, ".claude", "projects", pathBuf.String(), sessionID+".jsonl")
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	type jsonlEntry struct {
+		Type      string      `json:"type"`
+		Message   interface{} `json:"message"`
+		Timestamp string      `json:"timestamp"`
+	}
+
+	var messages []JSONLMessage
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 256*1024), 256*1024)
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var entry jsonlEntry
+		if json.Unmarshal(line, &entry) != nil {
+			continue
+		}
+
+		if entry.Type != "user" && entry.Type != "assistant" {
+			continue
+		}
+
+		var text string
+		switch msg := entry.Message.(type) {
+		case string:
+			text = msg
+		case map[string]interface{}:
+			if content, ok := msg["content"]; ok {
+				switch c := content.(type) {
+				case string:
+					text = c
+				case []interface{}:
+					for _, block := range c {
+						if bm, ok := block.(map[string]interface{}); ok {
+							if bm["type"] == "text" {
+								if t, ok := bm["text"].(string); ok {
+									text += t + "\n"
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
+		}
+
+		role := "user"
+		if entry.Type == "assistant" {
+			role = "assistant"
+		}
+		messages = append(messages, JSONLMessage{
+			Role:      role,
+			Content:   text,
+			Timestamp: entry.Timestamp,
+		})
+	}
+
+	return messages
 }

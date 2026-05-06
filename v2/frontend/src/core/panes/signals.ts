@@ -8,6 +8,58 @@ import { createMemo, createSignal, type Accessor } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import { activeWorktreeId } from '@/core/signals/app';
 import { worktreeMap } from '@/core/signals/worktrees';
+
+// ---------------------------------------------------------------------------
+// Crash recovery — persist workspace state to disk via Go bindings
+// ---------------------------------------------------------------------------
+
+const App = () => (window as any).go?.app?.App;
+
+const SAVE_DEBOUNCE_MS = 1_000;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+// Track which worktree owns the current workspace so mutations can reference it
+// without needing to read the reactive signal (avoids Solid tracking in non-reactive context).
+let currentWorktreeId: string | null = null;
+
+function saveWorkspaceState(worktreeId: string): void {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const state = JSON.parse(JSON.stringify(workspace));
+    App()?.SaveWorkspaceState(worktreeId, JSON.stringify(state)).catch(() => {});
+  }, SAVE_DEBOUNCE_MS);
+}
+
+export async function restoreWorkspaceState(worktreeId: string): Promise<boolean> {
+  try {
+    const stateJSON = await App()?.GetWorkspaceState(worktreeId);
+    if (!stateJSON) return false;
+    const restored: WorkspaceState = JSON.parse(stateJSON);
+    if (!restored.tabs?.length) return false;
+    setWorkspace(restored);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function bootstrapWorkspaceStates(): Promise<void> {
+  try {
+    const allStates: Record<string, string> | undefined = await App()?.GetAllWorkspaceStates();
+    if (!allStates) return;
+    for (const [worktreeId, stateJSON] of Object.entries(allStates)) {
+      try {
+        const state: WorkspaceState = JSON.parse(stateJSON);
+        if (state.tabs?.length) {
+          stateCache.set(worktreeId, state);
+        }
+      } catch {
+        // skip malformed entries
+      }
+    }
+  } catch {
+    // backend may not have this method yet — silently ignore
+  }
+}
 import type { WorkspaceState, Tab, PaneType, PaneLeaf, LayoutNode } from './types';
 import {
   uid,
@@ -89,9 +141,13 @@ let previousWorktreeId: string | null = null;
 export function switchWorkspace(worktreeId: string): void {
   // Save current state under the PREVIOUS worktree before switching
   if (previousWorktreeId && previousWorktreeId !== worktreeId) {
-    stateCache.set(previousWorktreeId, JSON.parse(JSON.stringify(workspace)));
+    const cached = JSON.parse(JSON.stringify(workspace));
+    stateCache.set(previousWorktreeId, cached);
+    // Persist to disk so the state survives crashes
+    App()?.SaveWorkspaceState(previousWorktreeId, JSON.stringify(cached)).catch(() => {});
   }
   previousWorktreeId = worktreeId;
+  currentWorktreeId = worktreeId;
 
   const cached = stateCache.get(worktreeId);
   if (cached) {
@@ -140,6 +196,7 @@ export function addTab(paneType: PaneType = 'terminal'): void {
   const tab = makeTab(paneType);
   setWorkspace(produce((s) => { s.tabs.push(tab); }));
   queueMicrotask(() => setWorkspace('activeTabId', tab.id));
+  if (currentWorktreeId) saveWorkspaceState(currentWorktreeId);
 }
 
 /**
@@ -159,6 +216,7 @@ export function addTabWithData(
   }
   setWorkspace(produce((s) => { s.tabs.push(tab); }));
   queueMicrotask(() => setWorkspace('activeTabId', tab.id));
+  if (currentWorktreeId) saveWorkspaceState(currentWorktreeId);
   return paneId;
 }
 
@@ -189,16 +247,28 @@ export function removeTab(tabId: string): void {
     }),
   );
 
+  if (currentWorktreeId) saveWorkspaceState(currentWorktreeId);
+
   // Kill PTYs and clean up xterm instances for all terminal panes in the removed tab.
   for (const paneId of terminalPaneIds) {
     destroyXtermSession(paneId);
     void destroyTerminal(paneId);
     disposePaneSubscription(paneId);
   }
+
+  // Cancel any in-flight composer sessions for the removed tab.
+  for (const pane of Object.values(tab?.panes ?? {})) {
+    if (pane.kind === 'composer' || pane.kind === 'composer-v2') {
+      import('@/core/bindings/composer').then(({ composerCancel }) => {
+        composerCancel(pane.id).catch(() => {});
+      });
+    }
+  }
 }
 
 export function setActiveTab(tabId: string): void {
   setWorkspace('activeTabId', tabId);
+  if (currentWorktreeId) saveWorkspaceState(currentWorktreeId);
 }
 
 export function renameTabByPane(paneId: string, label: string): void {
@@ -264,6 +334,8 @@ export function closePane(paneId: string): void {
     }),
   );
 
+  if (currentWorktreeId) saveWorkspaceState(currentWorktreeId);
+
   // If the closed pane was a terminal, clean up xterm and kill its PTY.
   if (paneKind === 'terminal') {
     destroyXtermSession(paneId);
@@ -307,6 +379,7 @@ export function splitPane(
       tab.activePaneId = newPane.id;
     }),
   );
+  if (currentWorktreeId) saveWorkspaceState(currentWorktreeId);
 }
 
 export function resizeSplit(path: number[], percentage: number): void {
@@ -317,6 +390,7 @@ export function resizeSplit(path: number[], percentage: number): void {
       tab.layout = updateSplitAtPath(tab.layout, path, percentage);
     }),
   );
+  if (currentWorktreeId) saveWorkspaceState(currentWorktreeId);
 }
 
 // ---------------------------------------------------------------------------
@@ -325,6 +399,7 @@ export function resizeSplit(path: number[], percentage: number): void {
 
 export function clearWorktreeCache(worktreeId: string): void {
   stateCache.delete(worktreeId);
+  App()?.DeleteWorkspaceState(worktreeId).catch(() => {});
 }
 
 // ---------------------------------------------------------------------------

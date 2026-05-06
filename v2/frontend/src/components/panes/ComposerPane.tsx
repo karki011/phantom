@@ -750,7 +750,6 @@ export default function ComposerPane(props: ComposerPaneProps) {
     applyHistory(history, pending);
   };
 
-  // Cleanup on pane disposal (worktree switch, tab close).
   onCleanup(() => {
     document.removeEventListener('keydown', handleSearchKeydown, true);
     // Cancel any in-flight run so the backend process doesn't become

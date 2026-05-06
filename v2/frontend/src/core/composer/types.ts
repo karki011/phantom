@@ -194,6 +194,7 @@ export interface StrategyInfo {
 
 export interface ComposerState {
   sessionId: string | null
+  resumeId: string | null
   worktreeId: string | null
   messages: Message[]
   toolUses: Record<string, ToolUseState>

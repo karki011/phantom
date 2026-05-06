@@ -1,13 +1,14 @@
 // Author: Subash Karki
 
 import { createSignal, createEffect, onMount, For, Show } from 'solid-js'
-import { History, Plus, ChevronLeft, ChevronRight, AlertTriangle, X, Radio } from 'lucide-solid'
+import { History, Plus, ChevronLeft, ChevronRight, AlertTriangle, X } from 'lucide-solid'
 import {
   composerListSessions,
   composerDeleteSession,
+  listClaudeProjectSessions,
   type ComposerSessionSummary,
 } from '@/core/bindings/composer'
-import { listSessionIds, getSessionStore, setActiveSessionId } from '@/core/composer/store'
+import { listSessionIds, getSessionStore } from '@/core/composer/store'
 import { loadPref, setPref } from '@/core/signals/preferences'
 import * as css from './ComposerSessionSidebar.css'
 
@@ -32,14 +33,16 @@ const relTime = (unixSec: number): string => {
 interface ComposerSessionSidebarProps {
   /** Called when user wants to start a fresh session */
   onNewSession: () => void
-  /** Called when user clicks a past session to resume it */
-  onResumeSession: (sessionId: string) => void
+  /** Called when user clicks a past session to resume it. Returns true if an existing tab was focused. */
+  onResumeSession: (sessionId: string) => boolean
   /** Called when a past session is deleted and was the active one */
   onActiveSessionDeleted?: () => void
   /** Called to close an open tab matching a session (by Claude UUID) */
   onCloseSession?: (claudeSessionId: string) => void
   /** The currently active session id (for highlighting) */
   activeSessionId?: string | null
+  /** Current worktree CWD — used to filter sessions to only those for this project */
+  cwd?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -51,8 +54,66 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
   const [resumingId, setResumingId] = createSignal<string | null>(null)
 
   const refreshSessions = async () => {
-    const list = await composerListSessions()
-    setSessions(list)
+    const cwd = props.cwd
+
+    // Fetch both sources in parallel.
+    const [phantomList, jsonlList] = await Promise.all([
+      composerListSessions(),
+      cwd ? listClaudeProjectSessions(cwd) : Promise.resolve([]),
+    ])
+
+    // Build lookup of session IDs already present from Phantom/CLI source.
+    const knownIds = new Set(phantomList.map((s) => s.session_id))
+
+    // Convert JSONL sessions to ComposerSessionSummary shape, skipping duplicates.
+    const jsonlSessions: ComposerSessionSummary[] = jsonlList
+      .filter((s) => !knownIds.has(s.session_id))
+      .map((s) => ({
+        session_id: s.session_id,
+        name: s.title || 'Untitled',
+        first_pane_id: '',
+        first_prompt: s.title || '',
+        turn_count: 0,
+        last_activity: s.last_activity,
+        total_cost: 0,
+        cwd: cwd || '',
+        was_interrupted: false,
+        source: 'cli' as const,
+      }))
+
+    // Track which UUIDs are open as tabs — used to hide DUPLICATE entries
+    // (e.g. a new CLI session spawned by --resume), not the originals.
+    const tabSessionIds = new Set<string>()
+    const tabResumeIds = new Set<string>()
+    for (const tabId of listSessionIds()) {
+      const store = getSessionStore(tabId)
+      if (!store) continue
+      const [st] = store
+      if (st.sessionId && !st.sessionId.startsWith('cv2_')) tabSessionIds.add(st.sessionId)
+      if (st.resumeId) tabResumeIds.add(st.resumeId)
+    }
+
+    // Keep all sessions EXCEPT new CLI sessions spawned by --resume
+    // (their UUID is in tabSessionIds but NOT in tabResumeIds — meaning
+    // it's the new UUID, not the original sidebar entry).
+    const merged = [...phantomList, ...jsonlSessions]
+      .filter((s) => {
+        if (tabSessionIds.has(s.session_id) && !tabResumeIds.has(s.session_id)) {
+          return false
+        }
+        return true
+      })
+    merged.sort((a, b) => b.last_activity - a.last_activity)
+    if (merged.length > 50) merged.length = 50
+    if (!cwd) {
+      setSessions(merged)
+      return
+    }
+    const filtered = merged.filter((s) => {
+      if (!s.cwd) return true
+      return s.cwd === cwd || s.cwd.startsWith(cwd + '/')
+    })
+    setSessions(filtered)
   }
 
   const toggle = () => {
@@ -120,9 +181,11 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
               {(s) => {
                 const isActive = () => s.session_id === props.activeSessionId
                 const displayName = () => {
-                  const prompt = s.first_prompt?.trim()
-                  if (prompt) return prompt.length > 50 ? prompt.slice(0, 50) + '…' : prompt
-                  return s.name || 'Untitled'
+                  const raw = (s.first_prompt || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+                  if (raw.startsWith('/')) return raw.slice(1, 51) || 'New session'
+                  if (raw) return raw.length > 50 ? raw.slice(0, 50) + '…' : raw
+                  const d = new Date(s.last_activity * 1000)
+                  return `Session at ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
                 }
                 const isLive = () => !s.was_interrupted && s.last_activity > (Date.now() / 1000) - 300
                 const promptPreview = () =>
@@ -136,8 +199,16 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
                     role="listitem"
                     class={`${css.row} ${isActive() ? css.rowActive : ''}`}
                     onClick={() => {
-                      setResumingId(s.session_id)
-                      props.onResumeSession(s.session_id)
+                      // Already the active session — do nothing
+                      if (s.session_id === props.activeSessionId) return
+
+                      const matched = props.onResumeSession(s.session_id)
+                      // Only show "Restoring..." when opening a new tab (no match found).
+                      // If an existing tab was focused, the active session changes
+                      // immediately and no loading state is needed.
+                      if (!matched) {
+                        setResumingId(s.session_id)
+                      }
                     }}
                     title={`${s.name ? s.name + '\n' : ''}${s.first_prompt || s.session_id}`}
                   >
