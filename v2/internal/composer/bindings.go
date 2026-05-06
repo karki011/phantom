@@ -708,18 +708,28 @@ func (b *Bindings) ComposerListSessions() []SessionSummary {
 		})
 	}
 
-	// Enrich CLI sessions with ai-title from JSONL project files.
+	// Enrich ALL sessions with ai-title from JSONL project files.
 	// The Name field from ~/.claude/sessions/ is a Pokémon name — not useful.
-	projectDir := b.claudeProjectDir()
-	if projectDir != "" {
-		for i := range sessions {
-			if sessions[i].FirstPrompt != "" {
-				continue
+	// Derive the project dir from each session's CWD individually.
+	for i := range sessions {
+		if sessions[i].FirstPrompt != "" {
+			continue
+		}
+		cwd := sessions[i].Cwd
+		if cwd == "" {
+			continue
+		}
+		var cwdBuf strings.Builder
+		for _, ch := range cwd {
+			if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' {
+				cwdBuf.WriteRune(ch)
+			} else {
+				cwdBuf.WriteByte('-')
 			}
-			jsonlPath := filepath.Join(projectDir, sessions[i].SessionID+".jsonl")
-			if title := extractAITitle(jsonlPath); title != "" {
-				sessions[i].FirstPrompt = title
-			}
+		}
+		jsonlPath := filepath.Join(home, ".claude", "projects", cwdBuf.String(), sessions[i].SessionID+".jsonl")
+		if title := extractAITitle(jsonlPath); title != "" {
+			sessions[i].FirstPrompt = title
 		}
 	}
 
@@ -1060,8 +1070,8 @@ func (b *Bindings) ListClaudeProjectSessions(cwd string) []ClaudeProjectSession 
 	return results
 }
 
-// extractAITitle reads at most 50 lines from a JSONL file looking for an
-// {"type":"ai-title","aiTitle":"..."} event. Returns the title or "".
+// extractAITitle reads a JSONL file looking for an ai-title event.
+// Falls back to the first user message if no ai-title is found.
 func extractAITitle(path string) string {
 	f, err := os.Open(path)
 	if err != nil {
@@ -1073,29 +1083,49 @@ func extractAITitle(path string) string {
 		Type    string `json:"type"`
 		AITitle string `json:"aiTitle"`
 	}
+	type userMsgEvent struct {
+		Type    string      `json:"type"`
+		Message interface{} `json:"message"`
+	}
 
 	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 64*1024), 64*1024)
+	scanner.Buffer(make([]byte, 128*1024), 128*1024)
 	lines := 0
+	firstUserMsg := ""
 	for scanner.Scan() {
 		lines++
-		if lines > 50 {
+		if lines > 200 {
 			break
 		}
 		line := scanner.Bytes()
 		if len(line) == 0 {
 			continue
 		}
-		// Fast pre-check before JSON unmarshal.
-		if !strings.Contains(string(line), "ai-title") {
-			continue
+		lineStr := string(line)
+		if strings.Contains(lineStr, "ai-title") {
+			var ev aiTitleEvent
+			if json.Unmarshal(line, &ev) == nil && ev.Type == "ai-title" && ev.AITitle != "" {
+				return ev.AITitle
+			}
 		}
-		var ev aiTitleEvent
-		if json.Unmarshal(line, &ev) == nil && ev.Type == "ai-title" && ev.AITitle != "" {
-			return ev.AITitle
+		if firstUserMsg == "" && strings.Contains(lineStr, `"type":"user"`) {
+			var um userMsgEvent
+			if json.Unmarshal(line, &um) == nil && um.Type == "user" {
+				switch msg := um.Message.(type) {
+				case string:
+					firstUserMsg = msg
+				case map[string]interface{}:
+					if c, ok := msg["content"].(string); ok {
+						firstUserMsg = c
+					}
+				}
+				if len(firstUserMsg) > 80 {
+					firstUserMsg = firstUserMsg[:80] + "…"
+				}
+			}
 		}
 	}
-	return ""
+	return firstUserMsg
 }
 
 // claudeProjectDir returns the ~/.claude/projects/{path}/ directory for the
