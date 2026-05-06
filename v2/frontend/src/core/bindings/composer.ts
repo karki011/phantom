@@ -198,6 +198,28 @@ export async function composerListSessions(): Promise<ComposerSessionSummary[]> 
   }
 }
 
+export interface ClaudeProjectSession {
+  session_id: string;
+  title: string;
+  last_activity: number; // unix seconds
+  size: number; // file size in bytes
+}
+
+/**
+ * List up to 50 historical sessions from ~/.claude/projects/{cwd}/ JSONL
+ * transcript files. Supplements composerListSessions() with sessions that
+ * were started outside Phantom (CLI, VS Code, Claude Desktop) and are no
+ * longer present in ~/.claude/sessions/.
+ */
+export async function listClaudeProjectSessions(cwd: string): Promise<ClaudeProjectSession[]> {
+  try {
+    const raw = (await V2()?.ListClaudeProjectSessions(cwd)) ?? (await App()?.ListClaudeProjectSessions(cwd)) ?? [];
+    return normalize<ClaudeProjectSession[]>(raw);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Fetch every turn (with edits) belonging to the given claude session_id —
  * used to rehydrate a pane that resumed a session it didn't originally own.

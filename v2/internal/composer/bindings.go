@@ -6,6 +6,7 @@
 package composer
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -930,4 +931,146 @@ func (b *Bindings) ComposerV2Interrupt(sessionID string) error {
 	}
 	_, err := session.ControlRequest("interrupt", map[string]interface{}{})
 	return err
+}
+
+// ClaudeProjectSession is one entry from the ~/.claude/projects/{path}/ JSONL
+// history. It is returned by ListClaudeProjectSessions.
+type ClaudeProjectSession struct {
+	SessionID    string `json:"session_id"`
+	Title        string `json:"title"`
+	LastActivity int64  `json:"last_activity"` // unix seconds
+	Size         int64  `json:"size"`          // file size in bytes
+}
+
+// ListClaudeProjectSessions scans ~/.claude/projects/{cwd-as-path}/ for
+// *.jsonl session transcript files and returns a summary of the 50 most
+// recent ones, sorted by file mtime descending.
+//
+// Only top-level JSONL files are scanned — UUID sub-directories that contain
+// sub-agent transcripts are skipped entirely. At most the first 50 lines of
+// each file are read to locate the optional "ai-title" event; the rest of the
+// transcript is not loaded into memory.
+func (b *Bindings) ListClaudeProjectSessions(cwd string) []ClaudeProjectSession {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Warn("composer: ListClaudeProjectSessions cannot resolve home dir", "err", err)
+		return nil
+	}
+
+	// Convert CWD to the Claude projects directory path.
+	// e.g. /Users/foo/CZ/feature-web-apps → ~/.claude/projects/-Users-foo-CZ-feature-web-apps/
+	pathKey := strings.ReplaceAll(cwd, "/", "-")
+	projectDir := filepath.Join(home, ".claude", "projects", pathKey)
+
+	entries, err := os.ReadDir(projectDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		log.Warn("composer: ListClaudeProjectSessions readdir failed", "err", err, "dir", projectDir)
+		return nil
+	}
+
+	type candidate struct {
+		id    string
+		mtime int64
+		path  string
+	}
+	var candidates []candidate
+	cutoff := time.Now().Add(-24 * time.Hour).Unix()
+
+	for _, entry := range entries {
+		// Skip sub-directories (sub-agent UUID dirs).
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".jsonl") {
+			continue
+		}
+		id := strings.TrimSuffix(name, ".jsonl")
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		// Skip absurdly large files.
+		if info.Size() > 100*1024*1024 {
+			continue
+		}
+		// Only include sessions from the last 24 hours.
+		if info.ModTime().Unix() < cutoff {
+			continue
+		}
+		candidates = append(candidates, candidate{
+			id:    id,
+			mtime: info.ModTime().Unix(),
+			path:  filepath.Join(projectDir, name),
+		})
+	}
+
+	// Sort by mtime descending, cap at 50.
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].mtime > candidates[j].mtime
+	})
+	if len(candidates) > 50 {
+		candidates = candidates[:50]
+	}
+
+	// For each candidate, read at most 50 lines looking for ai-title.
+	results := make([]ClaudeProjectSession, 0, len(candidates))
+	for _, c := range candidates {
+		title := extractAITitle(c.path)
+		info, err := os.Stat(c.path)
+		var size int64
+		if err == nil {
+			size = info.Size()
+		}
+		results = append(results, ClaudeProjectSession{
+			SessionID:    c.id,
+			Title:        title,
+			LastActivity: c.mtime,
+			Size:         size,
+		})
+	}
+
+	log.Info("composer: ListClaudeProjectSessions", "cwd", cwd, "count", len(results))
+	return results
+}
+
+// extractAITitle reads at most 50 lines from a JSONL file looking for an
+// {"type":"ai-title","aiTitle":"..."} event. Returns the title or "".
+func extractAITitle(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	type aiTitleEvent struct {
+		Type    string `json:"type"`
+		AITitle string `json:"aiTitle"`
+	}
+
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 64*1024), 64*1024)
+	lines := 0
+	for scanner.Scan() {
+		lines++
+		if lines > 50 {
+			break
+		}
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		// Fast pre-check before JSON unmarshal.
+		if !strings.Contains(string(line), "ai-title") {
+			continue
+		}
+		var ev aiTitleEvent
+		if json.Unmarshal(line, &ev) == nil && ev.Type == "ai-title" && ev.AITitle != "" {
+			return ev.AITitle
+		}
+	}
+	return ""
 }

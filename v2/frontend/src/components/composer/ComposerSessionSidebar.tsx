@@ -5,6 +5,7 @@ import { History, Plus, ChevronLeft, ChevronRight, AlertTriangle, X, Terminal } 
 import {
   composerListSessions,
   composerDeleteSession,
+  listClaudeProjectSessions,
   type ComposerSessionSummary,
 } from '@/core/bindings/composer'
 import { listSessionIds, getSessionStore, setActiveSessionId } from '@/core/composer/store'
@@ -53,14 +54,44 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
   const [resumingId, setResumingId] = createSignal<string | null>(null)
 
   const refreshSessions = async () => {
-    const list = await composerListSessions()
     const cwd = props.cwd
+
+    // Fetch both sources in parallel.
+    const [phantomList, jsonlList] = await Promise.all([
+      composerListSessions(),
+      cwd ? listClaudeProjectSessions(cwd) : Promise.resolve([]),
+    ])
+
+    // Build lookup of session IDs already present from Phantom/CLI source.
+    const knownIds = new Set(phantomList.map((s) => s.session_id))
+
+    // Convert JSONL sessions to ComposerSessionSummary shape, skipping duplicates.
+    const jsonlSessions: ComposerSessionSummary[] = jsonlList
+      .filter((s) => !knownIds.has(s.session_id))
+      .map((s) => ({
+        session_id: s.session_id,
+        name: s.title || 'Untitled',
+        first_pane_id: '',
+        first_prompt: s.title || '',
+        turn_count: 0,
+        last_activity: s.last_activity,
+        total_cost: 0,
+        cwd: cwd || '',
+        was_interrupted: false,
+        source: 'cli' as const,
+      }))
+
+    // Merge and sort by last_activity descending, cap at 50.
+    let merged = [...phantomList, ...jsonlSessions]
+    merged.sort((a, b) => b.last_activity - a.last_activity)
+    if (merged.length > 50) merged = merged.slice(0, 50)
+
     if (!cwd) {
-      setSessions(list)
+      setSessions(merged)
       return
     }
-    // Show sessions whose cwd matches or is a subdirectory of the current worktree.
-    const filtered = list.filter((s) => {
+    // Filter to sessions for this project's CWD.
+    const filtered = merged.filter((s) => {
       if (!s.cwd) return true // unknown cwd — include it
       return s.cwd === cwd || s.cwd.startsWith(cwd + '/')
     })
