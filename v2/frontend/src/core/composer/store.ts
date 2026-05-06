@@ -44,6 +44,7 @@ export const createDefaultState = (
   worktreeId: string
 ): ComposerState => ({
   sessionId,
+  resumeId: null,
   worktreeId,
   messages: [],
   toolUses: {},

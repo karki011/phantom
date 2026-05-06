@@ -38,10 +38,12 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
     // Initialise store entry — reads persisted preferences for initial values
     const [initialState, setInitialState] = getOrCreateSessionStore(id, props.worktreeId)
 
-    // If resuming a past session, pre-set the Claude UUID immediately so
-    // handleResumeSession can match this tab before any system_init event fires.
+    // If resuming a past session, pre-set both sessionId and resumeId so
+    // handleResumeSession can match this tab. system_init may overwrite
+    // sessionId with a new UUID, but resumeId is stable.
     if (resumeId) {
       setInitialState('sessionId', resumeId)
+      setInitialState('resumeId', resumeId)
     }
 
     // Wire up stream bridge BEFORE starting Go process to avoid race
@@ -136,15 +138,12 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
   }
 
   const handleResumeSession = (sessionId: string) => {
-    // Check if this session is already open in a tab — just focus it
     const openIds = listSessionIds()
     for (const id of openIds) {
       const store = getSessionStore(id)
       if (!store) continue
       const [st] = store
-      // Match by session ID in messages (history has the Claude UUID)
-      // or by the worktree session mapping
-      if (id === sessionId || st.sessionId === sessionId) {
+      if (id === sessionId || st.sessionId === sessionId || st.resumeId === sessionId) {
         setActiveSessionId(id)
         return
       }
@@ -161,8 +160,7 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
     const store = getSessionStore(id)
     if (!store) return null
     const [st] = store
-    // st.sessionId is the Claude UUID after our fix; fall back to null if still internal
-    return st.sessionId?.startsWith('cv2_') ? null : st.sessionId ?? null
+    return st.resumeId ?? (st.sessionId?.startsWith('cv2_') ? null : st.sessionId) ?? null
   })
 
   // Auto-open first session on mount
@@ -183,7 +181,7 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
             const store = getSessionStore(id)
             if (!store) continue
             const [st] = store
-            if (st.sessionId === claudeId || id === claudeId) {
+            if (st.sessionId === claudeId || st.resumeId === claudeId || id === claudeId) {
               void closeSession(id)
               return
             }
