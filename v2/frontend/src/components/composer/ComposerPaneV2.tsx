@@ -39,6 +39,7 @@ const sanitizeLabel = (raw: string): string => {
   return text.length > 50 ? text.slice(0, 50) + '…' : text
 }
 
+
 export default function ComposerPaneV2(props: ComposerPaneV2Props) {
   const openNewSession = async (resumeId?: string) => {
     const id = generateSessionId()
@@ -187,6 +188,7 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
   })
 
   // Don't auto-open — let the user pick from the sidebar or click "+ New chat"
+
 
   return (
     <div class={css.paneRoot}>

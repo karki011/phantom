@@ -752,6 +752,13 @@ export default function ComposerPane(props: ComposerPaneProps) {
 
   onCleanup(() => {
     document.removeEventListener('keydown', handleSearchKeydown, true);
+    // Cancel any in-flight run so the backend process doesn't become
+    // orphaned when the pane is destroyed (e.g. worktree switch causes
+    // pane remount). Backend's IsRunning() is idempotent — double-cancel
+    // is a no-op.
+    if (running()) {
+      composerCancel(paneId()).catch(() => {});
+    }
   });
 
   // ── Rehydrate full conversation on mount (turns + edits) ─────────────
