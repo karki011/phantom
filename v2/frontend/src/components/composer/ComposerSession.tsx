@@ -377,21 +377,23 @@ const ComposerSession: Component<ComposerSessionProps> = (props) => {
                 display: 'flex',
                 'align-items': 'center',
                 'justify-content': 'center',
-                gap: '6px',
-                padding: '3px 12px',
+                gap: '8px',
+                padding: '4px 12px',
                 'border-bottom': '1px solid var(--divider)',
                 'font-family': 'var(--font-mono)',
                 'font-size': '11px',
-                color: 'var(--text-disabled)',
+                color: 'var(--text-secondary)',
                 'user-select': 'none',
               }}>
+                <span style={{ opacity: 0.5 }}>|</span>
                 <span>Turn {s().messages.filter(m => m.role === 'user').length}</span>
-                <span style={{ opacity: 0.4 }}>·</span>
-                <span>{(s().totalInputTokens / 1000).toFixed(1)}k in / {(s().totalOutputTokens / 1000).toFixed(1)}k out</span>
-                <span style={{ opacity: 0.4 }}>|</span>
+                <span style={{ opacity: 0.5 }}>·</span>
+                <span>{s().totalInputTokens.toLocaleString()} in / {s().totalOutputTokens.toLocaleString()} out</span>
+                <span style={{ opacity: 0.5 }}>|</span>
                 <span style={{ color: 'var(--accent)' }}>Session: ${s().totalCostUsd.toFixed(4)}</span>
-                <span style={{ opacity: 0.4 }}>·</span>
-                <span>{((s().totalInputTokens + s().totalOutputTokens) / 1000).toFixed(1)}k tok</span>
+                <span style={{ opacity: 0.5 }}>·</span>
+                <span>{(s().totalInputTokens + s().totalOutputTokens).toLocaleString()} tok</span>
+                <span style={{ opacity: 0.5 }}>|</span>
               </div>
 
               {/* Agent panel toggle — visible when agents exist but panel is closed */}

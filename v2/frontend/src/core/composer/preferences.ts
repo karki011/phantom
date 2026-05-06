@@ -29,11 +29,11 @@ const setPref = async (key: string, value: string): Promise<void> => {
 // ---------------------------------------------------------------------------
 
 const V2_ENABLED_KEY = 'composer.useV2'
-const [composerV2Enabled, setComposerV2Signal] = createSignal(false)
+const [composerV2Enabled, setComposerV2Signal] = createSignal(true)
 
 export async function loadComposerV2Pref(): Promise<void> {
   const saved = await getPref(V2_ENABLED_KEY)
-  if (saved === 'true') setComposerV2Signal(true)
+  if (saved === 'false') setComposerV2Signal(false)
 }
 
 export async function setComposerV2Enabled(enabled: boolean): Promise<void> {
