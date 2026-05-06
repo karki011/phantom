@@ -81,8 +81,21 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
         source: 'cli' as const,
       }))
 
+    // Build a set of UUIDs that are already open as tabs — these should
+    // not appear as separate sidebar entries (they'd create duplicates
+    // because --resume creates a new session UUID).
+    const openUUIDs = new Set<string>()
+    for (const tabId of listSessionIds()) {
+      const store = getSessionStore(tabId)
+      if (!store) continue
+      const [st] = store
+      if (st.sessionId && !st.sessionId.startsWith('cv2_')) openUUIDs.add(st.sessionId)
+      if (st.resumeId) openUUIDs.add(st.resumeId)
+    }
+
     // Merge and sort by last_activity descending, cap at 50.
     let merged = [...phantomList, ...jsonlSessions]
+      .filter((s) => !openUUIDs.has(s.session_id))
     merged.sort((a, b) => b.last_activity - a.last_activity)
     if (merged.length > 50) merged = merged.slice(0, 50)
 
@@ -90,9 +103,8 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
       setSessions(merged)
       return
     }
-    // Filter to sessions for this project's CWD.
     const filtered = merged.filter((s) => {
-      if (!s.cwd) return true // unknown cwd — include it
+      if (!s.cwd) return true
       return s.cwd === cwd || s.cwd.startsWith(cwd + '/')
     })
     setSessions(filtered)
