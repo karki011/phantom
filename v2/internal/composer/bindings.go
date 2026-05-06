@@ -958,9 +958,17 @@ func (b *Bindings) ListClaudeProjectSessions(cwd string) []ClaudeProjectSession 
 	}
 
 	// Convert CWD to the Claude projects directory path.
-	// e.g. /Users/foo/CZ/feature-web-apps → ~/.claude/projects/-Users-foo-CZ-feature-web-apps/
-	pathKey := strings.ReplaceAll(cwd, "/", "-")
-	projectDir := filepath.Join(home, ".claude", "projects", pathKey)
+	// Claude CLI replaces every non-alphanumeric character (except -) with -.
+	// e.g. /Users/subash.karki/CZ/feature-web-apps → -Users-subash-karki-CZ-feature-web-apps
+	var buf strings.Builder
+	for _, ch := range cwd {
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' {
+			buf.WriteRune(ch)
+		} else {
+			buf.WriteByte('-')
+		}
+	}
+	projectDir := filepath.Join(home, ".claude", "projects", buf.String())
 
 	entries, err := os.ReadDir(projectDir)
 	if err != nil {
