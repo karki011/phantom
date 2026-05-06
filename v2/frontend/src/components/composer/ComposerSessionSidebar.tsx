@@ -228,14 +228,16 @@ export default function ComposerSessionSidebar(props: ComposerSessionSidebarProp
                         </Show>
                         {resumingId() === s.session_id ? 'Restoring...' : displayName()}
                       </span>
-                    </div>
-                    <Show when={s.was_interrupted}>
-                      <span class={css.interruptedBadge} title="Session interrupted">
-                        <AlertTriangle size={8} />
-                      </span>
-                    </Show>
-                    <div class={css.rowMeta}>
-                      <span class={css.rowTime}>{relTime(s.last_activity)}</span>
+                      <Show when={s.was_interrupted}>
+                        <span class={css.interruptedBadge} title="Session interrupted">
+                          <AlertTriangle size={8} />
+                        </span>
+                      </Show>
+                      <span style={{
+                        'font-size': '10px',
+                        color: 'var(--text-disabled)',
+                        'margin-top': '1px',
+                      }}>{relTime(s.last_activity)} ago</span>
                     </div>
                     <button
                       class={css.deleteBtn}

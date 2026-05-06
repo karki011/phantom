@@ -2,6 +2,10 @@
 // Author: Subash Karki
 
 import { createSignal, createEffect, onMount, onCleanup, Show, untrack } from 'solid-js';
+
+window.addEventListener('error', (e) => {
+  if (e.message?.includes('ResizeObserver')) e.stopImmediatePropagation();
+});
 import { shadowMonarchDarkTheme } from './styles/theme.css';
 import * as styles from './styles/app.css';
 import * as shellStyles from './styles/app-shell.css';
