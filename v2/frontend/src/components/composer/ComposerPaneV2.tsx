@@ -1,6 +1,6 @@
 // Author: Subash Karki
 
-import { onMount, Show } from 'solid-js'
+import { onMount, Show, createMemo } from 'solid-js'
 import {
   activeSessionId,
   setActiveSessionId,
@@ -36,7 +36,13 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
     const bindings = ComposerV2()
 
     // Initialise store entry — reads persisted preferences for initial values
-    const [initialState] = getOrCreateSessionStore(id, props.worktreeId)
+    const [initialState, setInitialState] = getOrCreateSessionStore(id, props.worktreeId)
+
+    // If resuming a past session, pre-set the Claude UUID immediately so
+    // handleResumeSession can match this tab before any system_init event fires.
+    if (resumeId) {
+      setInitialState('sessionId', resumeId)
+    }
 
     // Wire up stream bridge BEFORE starting Go process to avoid race
     connectSession(id, props.worktreeId)
@@ -146,6 +152,19 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
     void openNewSession(sessionId)
   }
 
+  // Derive the Claude UUID for the active session so the sidebar can highlight it.
+  // st.sessionId starts as cv2_XXXX but is overwritten with the Claude UUID either
+  // immediately (on resume open) or when the first system_init event fires.
+  const activeClaudeSessionId = createMemo(() => {
+    const id = activeSessionId()
+    if (!id) return null
+    const store = getSessionStore(id)
+    if (!store) return null
+    const [st] = store
+    // st.sessionId is the Claude UUID after our fix; fall back to null if still internal
+    return st.sessionId?.startsWith('cv2_') ? null : st.sessionId ?? null
+  })
+
   // Auto-open first session on mount
   onMount(() => {
     if (listSessionIds().length === 0) {
@@ -174,7 +193,7 @@ export default function ComposerPaneV2(props: ComposerPaneV2Props) {
           const id = activeSessionId()
           if (id) void closeSession(id)
         }}
-        activeSessionId={activeSessionId()}
+        activeSessionId={activeClaudeSessionId()}
       />
       <div class={css.mainColumn}>
         <ComposerSubTabs onNew={() => openNewSession()} onClose={closeSession} />

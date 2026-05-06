@@ -4,6 +4,7 @@ package app
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -15,12 +16,23 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+// ErrWorkspaceGone is returned by resolveWorkspacePath when the workspace row
+// no longer exists in the DB (deleted externally or stale ID on startup).
+// Callers that poll or fire on reactive signals should log at Debug and
+// return a graceful empty value instead of surfacing a user-visible error.
+var ErrWorkspaceGone = errors.New("workspace gone")
+
 // resolveWorkspacePath returns the filesystem repo path for a workspace.
 // Branch-type workspaces use the project's RepoPath; worktree-type use WorktreePath.
+// Returns ErrWorkspaceGone (wrapped) when the DB row is missing — callers should
+// treat this as a transient no-op, not an application error.
 func (a *App) resolveWorkspacePath(workspaceId string) (string, error) {
 	q := db.New(a.DB.Reader)
 	ws, err := q.GetWorkspace(a.ctx, workspaceId)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("%w: %s", ErrWorkspaceGone, workspaceId)
+		}
 		return "", fmt.Errorf("workspace %s not found: %w", workspaceId, err)
 	}
 	if ws.Type == "branch" {
@@ -59,6 +71,10 @@ func (a *App) GitPull(workspaceId string) error {
 	log.Info("app/GitPull: called", "workspaceId", workspaceId)
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GitPull: workspace gone, skipping", "workspaceId", workspaceId)
+			return nil
+		}
 		log.Error("app/GitPull: resolve failed", "workspaceId", workspaceId, "err", err)
 		return err
 	}
@@ -76,6 +92,10 @@ func (a *App) GitPush(workspaceId string) error {
 	log.Info("app/GitPush: called", "workspaceId", workspaceId)
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GitPush: workspace gone, skipping", "workspaceId", workspaceId)
+			return nil
+		}
 		log.Error("app/GitPush: resolve failed", "workspaceId", workspaceId, "err", err)
 		return err
 	}
@@ -142,6 +162,10 @@ func (a *App) GitStage(workspaceId string, paths []string) error {
 	log.Info("app/GitStage: called", "workspaceId", workspaceId, "count", len(paths))
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GitStage: workspace gone, skipping", "workspaceId", workspaceId)
+			return nil
+		}
 		log.Error("app/GitStage: resolve failed", "workspaceId", workspaceId, "err", err)
 		return err
 	}
@@ -159,6 +183,10 @@ func (a *App) GitStageAll(workspaceId string) error {
 	log.Info("app/GitStageAll: called", "workspaceId", workspaceId)
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GitStageAll: workspace gone, skipping", "workspaceId", workspaceId)
+			return nil
+		}
 		log.Error("app/GitStageAll: resolve failed", "workspaceId", workspaceId, "err", err)
 		return err
 	}
@@ -176,6 +204,10 @@ func (a *App) GitUnstage(workspaceId string, paths []string) error {
 	log.Info("app/GitUnstage: called", "workspaceId", workspaceId, "count", len(paths))
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GitUnstage: workspace gone, skipping", "workspaceId", workspaceId)
+			return nil
+		}
 		log.Error("app/GitUnstage: resolve failed", "workspaceId", workspaceId, "err", err)
 		return err
 	}
@@ -193,6 +225,10 @@ func (a *App) GitCommit(workspaceId, message string) error {
 	log.Info("app/GitCommit: called", "workspaceId", workspaceId, "message", message)
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GitCommit: workspace gone, skipping", "workspaceId", workspaceId)
+			return nil
+		}
 		log.Error("app/GitCommit: resolve failed", "workspaceId", workspaceId, "err", err)
 		return err
 	}
@@ -210,6 +246,10 @@ func (a *App) GitDiscard(workspaceId string, paths []string) error {
 	log.Info("app/GitDiscard: called", "workspaceId", workspaceId, "count", len(paths))
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GitDiscard: workspace gone, skipping", "workspaceId", workspaceId)
+			return nil
+		}
 		log.Error("app/GitDiscard: resolve failed", "workspaceId", workspaceId, "err", err)
 		return err
 	}
@@ -284,6 +324,10 @@ func (a *App) GetWorkspaceStatus(workspaceId string) *git.RepoStatus {
 	log.Info("app/GetWorkspaceStatus: called", "workspaceId", workspaceId)
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GetWorkspaceStatus: workspace gone, returning nil", "workspaceId", workspaceId)
+			return nil
+		}
 		log.Error("app/GetWorkspaceStatus: resolve error", "workspaceId", workspaceId, "err", err)
 		return nil
 	}
@@ -325,6 +369,10 @@ func (a *App) RefreshWorkspaceStatus(workspaceId string) *git.RepoStatus {
 	log.Info("app/RefreshWorkspaceStatus: called", "workspaceId", workspaceId)
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/RefreshWorkspaceStatus: workspace gone, returning nil", "workspaceId", workspaceId)
+			return nil
+		}
 		log.Error("app/RefreshWorkspaceStatus: resolve error", "workspaceId", workspaceId, "err", err)
 		return nil
 	}
@@ -345,6 +393,10 @@ func (a *App) GetWorkspaceChanges(workspaceId string) []git.FileStatus {
 	log.Info("app/GetWorkspaceChanges: called", "workspaceId", workspaceId)
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GetWorkspaceChanges: workspace gone, returning empty", "workspaceId", workspaceId)
+			return []git.FileStatus{}
+		}
 		log.Error("app/GetWorkspaceChanges: resolve failed", "workspaceId", workspaceId, "err", err)
 		return []git.FileStatus{}
 	}
@@ -388,6 +440,10 @@ func (a *App) GenerateCommitMessage(workspaceId string) (string, error) {
 	log.Info("app/GenerateCommitMessage: called", "workspaceId", workspaceId)
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GenerateCommitMessage: workspace gone, skipping", "workspaceId", workspaceId)
+			return "", nil
+		}
 		log.Error("app/GenerateCommitMessage: resolve failed", "err", err)
 		return "", err
 	}
@@ -426,12 +482,20 @@ func (a *App) GetWorkspaceCommitLog(workspaceId string, limit int) []git.CommitI
 	q := db.New(a.DB.Reader)
 	ws, err := q.GetWorkspace(a.ctx, workspaceId)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Debug("app/GetWorkspaceCommitLog: workspace gone, returning empty", "workspaceId", workspaceId)
+			return []git.CommitInfo{}
+		}
 		log.Error("app/GetWorkspaceCommitLog: workspace not found", "workspaceId", workspaceId, "err", err)
 		return []git.CommitInfo{}
 	}
 
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GetWorkspaceCommitLog: workspace gone, returning empty", "workspaceId", workspaceId)
+			return []git.CommitInfo{}
+		}
 		log.Error("app/GetWorkspaceCommitLog: resolve failed", "workspaceId", workspaceId, "err", err)
 		return []git.CommitInfo{}
 	}
@@ -486,6 +550,10 @@ func (a *App) ListWorkspaceFiles(workspaceId string) []git.FileEntry {
 	log.Info("app/ListWorkspaceFiles: called", "workspaceId", workspaceId)
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/ListWorkspaceFiles: workspace gone, returning empty", "workspaceId", workspaceId)
+			return []git.FileEntry{}
+		}
 		log.Error("app/ListWorkspaceFiles: resolve failed", "workspaceId", workspaceId, "err", err)
 		return []git.FileEntry{}
 	}
@@ -513,6 +581,10 @@ func (a *App) SearchWorkspaceFiles(workspaceId string, query string) []git.FileE
 	log.Info("app/SearchWorkspaceFiles: called", "workspaceId", workspaceId, "query", query)
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/SearchWorkspaceFiles: workspace gone, returning empty", "workspaceId", workspaceId)
+			return []git.FileEntry{}
+		}
 		log.Error("app/SearchWorkspaceFiles: resolve failed", "workspaceId", workspaceId, "err", err)
 		return []git.FileEntry{}
 	}
@@ -551,6 +623,10 @@ func (a *App) ListWorkspaceDir(workspaceId, relativePath string) []git.FileEntry
 	log.Info("app/ListWorkspaceDir: called", "workspaceId", workspaceId, "relativePath", relativePath)
 	repoPath, err := a.resolveWorkspacePath(workspaceId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/ListWorkspaceDir: workspace gone, returning empty", "workspaceId", workspaceId)
+			return []git.FileEntry{}
+		}
 		log.Error("app/ListWorkspaceDir: resolve failed", "workspaceId", workspaceId, "err", err)
 		return []git.FileEntry{}
 	}

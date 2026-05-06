@@ -1,7 +1,7 @@
 // Phantom — Live server log lines for the header drawer
 // Author: Subash Karki
 
-import { createEffect, createSignal, onCleanup, type Accessor, type JSX } from 'solid-js';
+import { For, createEffect, createSignal, onCleanup, type Accessor, type JSX } from 'solid-js';
 import { getRecentAppLogs } from '@/core/bindings/applog';
 import * as styles from './AppBackendLogDrawer.css';
 
@@ -9,9 +9,75 @@ export interface AppBackendLogDrawerProps {
   open: Accessor<boolean>;
 }
 
+type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'default';
+
+interface ParsedLine {
+  timestamp: string;
+  level: LogLevel;
+  levelLabel: string;
+  message: string;
+}
+
+/** Strip ANSI escape sequences (e.g. \x1B[1;38;5;86m or bare [32m variants). */
+const stripAnsi = (str: string): string =>
+  str.replace(/\x1B\[[0-9;]*[a-zA-Z]|\[[\d;]*m/g, '');
+
+/** Extract HH:MM:SS from common timestamp formats, or return '' if none found. */
+const extractTime = (raw: string): string => {
+  // ISO-8601: 2006-01-02T15:04:05 / 2006-01-02 15:04:05
+  const isoMatch = raw.match(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/);
+  if (isoMatch) return isoMatch[0].slice(-8); // HH:MM:SS
+  // Bare time: 15:04:05 at start of line
+  const bareMatch = raw.match(/^\d{2}:\d{2}:\d{2}/);
+  if (bareMatch) return bareMatch[0];
+  return '';
+};
+
+/** Detect the log level from the cleaned line text. */
+const detectLevel = (line: string): { level: LogLevel; label: string } => {
+  const upper = line.toUpperCase();
+  if (/\bERROR\b|\bERRO\b|\bFATAL\b/.test(upper)) return { level: 'error', label: 'ERR' };
+  if (/\bWARN(ING)?\b/.test(upper)) return { level: 'warn', label: 'WRN' };
+  if (/\bINFO?\b|\bINF\b/.test(upper)) return { level: 'info', label: 'INF' };
+  if (/\bDEBUG\b|\bDBG\b|\bTRACE\b/.test(upper)) return { level: 'debug', label: 'DBG' };
+  return { level: 'default', label: '' };
+};
+
+/** Parse one raw log line into its displayable parts. */
+const parseLine = (raw: string): ParsedLine => {
+  const clean = stripAnsi(raw);
+  const timestamp = extractTime(clean);
+  const { level, label } = detectLevel(clean);
+
+  // Strip the full timestamp from the message to avoid repetition
+  const message = clean
+    .replace(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?/, '')
+    .replace(/^\d{2}:\d{2}:\d{2}\s*/, '')
+    .replace(/\b(ERROR|ERRO|FATAL|WARN(?:ING)?|INFO?|INF|DEBUG|DBG|TRACE)\b/i, '')
+    .trim();
+
+  return { timestamp, level, levelLabel: label, message };
+};
+
+const levelBadgeStyle: Record<LogLevel, string> = {
+  error: styles.logLevelError,
+  warn: styles.logLevelWarn,
+  info: styles.logLevelInfo,
+  debug: styles.logLevelDebug,
+  default: styles.logLevelDefault,
+};
+
+const messageStyle: Record<LogLevel, string> = {
+  error: styles.logMessageError,
+  warn: styles.logMessageWarn,
+  info: styles.logMessage,
+  debug: styles.logMessage,
+  default: styles.logMessage,
+};
+
 export function AppBackendLogDrawer(props: AppBackendLogDrawerProps): JSX.Element {
   const [logLines, setLogLines] = createSignal<string[]>([]);
-  let logPreEl: HTMLPreElement | undefined;
+  let logContainerEl: HTMLDivElement | undefined;
 
   const pull = async () => {
     setLogLines(await getRecentAppLogs(50));
@@ -26,7 +92,7 @@ export function AppBackendLogDrawer(props: AppBackendLogDrawerProps): JSX.Elemen
 
   createEffect(() => {
     logLines();
-    const el = logPreEl;
+    const el = logContainerEl;
     if (el) {
       requestAnimationFrame(() => {
         el.scrollTop = el.scrollHeight;
@@ -39,14 +105,35 @@ export function AppBackendLogDrawer(props: AppBackendLogDrawerProps): JSX.Elemen
       <p class={styles.hint}>
         Last 50 lines · refreshes every 2s while open · pin the header so clicks outside do not close this drawer
       </p>
-      <pre
-        class={styles.pre}
+      <div
+        class={styles.logContainer}
         ref={(el) => {
-          logPreEl = el ?? undefined;
+          logContainerEl = el ?? undefined;
         }}
       >
-        {logLines().length > 0 ? logLines().join('\n') : 'No log lines yet.'}
-      </pre>
+        {logLines().length === 0 ? (
+          <span class={styles.logEmpty}>No log lines yet.</span>
+        ) : (
+          <For each={logLines()}>
+            {(raw) => {
+              const parsed = parseLine(raw);
+              return (
+                <div class={styles.logLine}>
+                  {parsed.timestamp && (
+                    <span class={styles.logTimestamp}>{parsed.timestamp}</span>
+                  )}
+                  {parsed.levelLabel && (
+                    <span class={levelBadgeStyle[parsed.level]}>{parsed.levelLabel}</span>
+                  )}
+                  <span class={messageStyle[parsed.level]}>
+                    {parsed.message || raw.trim()}
+                  </span>
+                </div>
+              );
+            }}
+          </For>
+        )}
+      </div>
     </div>
   );
 }

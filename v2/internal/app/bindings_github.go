@@ -3,6 +3,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/charmbracelet/log"
@@ -59,6 +60,10 @@ func (a *App) GetPrStatusForWorkspace(worktreeId string) *git.PrStatus {
 	log.Info("app/GetPrStatusForWorkspace: called", "worktreeId", worktreeId)
 	repoPath, branch, err := a.resolveRepoBranch(worktreeId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GetPrStatusForWorkspace: workspace gone, returning nil", "worktreeId", worktreeId)
+			return nil
+		}
 		log.Error("app/GetPrStatusForWorkspace: resolve failed", "err", err)
 		return nil
 	}
@@ -75,6 +80,10 @@ func (a *App) GetCiRunsForWorkspace(worktreeId string) []git.CiRun {
 	log.Info("app/GetCiRunsForWorkspace: called", "worktreeId", worktreeId)
 	repoPath, branch, err := a.resolveRepoBranch(worktreeId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GetCiRunsForWorkspace: workspace gone, returning nil", "worktreeId", worktreeId)
+			return nil
+		}
 		log.Error("app/GetCiRunsForWorkspace: resolve failed", "err", err)
 		return nil
 	}
@@ -92,6 +101,10 @@ func (a *App) GetCiRunsForBranch(worktreeId string, branch string) []git.CiRun {
 	log.Info("app/GetCiRunsForBranch: called", "worktreeId", worktreeId, "branch", branch)
 	repoPath, err := a.resolveWorkspacePath(worktreeId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GetCiRunsForBranch: workspace gone, returning nil", "worktreeId", worktreeId)
+			return nil
+		}
 		log.Error("app/GetCiRunsForBranch: resolve failed", "err", err)
 		return nil
 	}
@@ -111,6 +124,10 @@ func (a *App) GetFailedSteps(worktreeId string, checkURL string) []git.FailedSte
 	log.Info("app/GetFailedSteps: called", "worktreeId", worktreeId)
 	repoPath, err := a.resolveWorkspacePath(worktreeId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GetFailedSteps: workspace gone, returning empty", "worktreeId", worktreeId)
+			return []git.FailedStep{}
+		}
 		log.Error("app/GetFailedSteps: resolve failed", "err", err)
 		return []git.FailedStep{}
 	}
@@ -134,6 +151,10 @@ func (a *App) CreatePrWithAIForWorkspace(worktreeId string, draft bool) *git.PrS
 	log.Info("app/CreatePrWithAIForWorkspace: called", "worktreeId", worktreeId, "draft", draft)
 	repoPath, branch, err := a.resolveRepoBranch(worktreeId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/CreatePrWithAIForWorkspace: workspace gone, skipping", "worktreeId", worktreeId)
+			return nil
+		}
 		log.Error("app/CreatePrWithAIForWorkspace: resolve failed", "err", err)
 		return nil
 	}
@@ -164,6 +185,10 @@ func (a *App) GetBranchCommits(worktreeId string, branchOnly bool) []git.CommitI
 
 	repoPath, err := a.resolveWorkspacePath(worktreeId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GetBranchCommits: workspace gone, returning empty", "worktreeId", worktreeId)
+			return []git.CommitInfo{}
+		}
 		log.Error("app/GetBranchCommits: resolve failed", "worktreeId", worktreeId, "err", err)
 		return []git.CommitInfo{}
 	}
@@ -199,6 +224,10 @@ func (a *App) ListOpenPrsForWorkspace(worktreeId string, limit int) []git.PrStat
 	log.Info("app/ListOpenPrsForWorkspace: called", "worktreeId", worktreeId, "limit", limit)
 	repoPath, branch, err := a.resolveRepoBranch(worktreeId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/ListOpenPrsForWorkspace: workspace gone, returning empty", "worktreeId", worktreeId)
+			return []git.PrStatus{}
+		}
 		log.Error("app/ListOpenPrsForWorkspace: resolve failed", "err", err)
 		return []git.PrStatus{}
 	}
@@ -216,6 +245,10 @@ func (a *App) GetCheckAnnotations(worktreeId string, checkName string) []git.Che
 	log.Info("app/GetCheckAnnotations: called", "worktreeId", worktreeId, "checkName", checkName)
 	repoPath, branch, err := a.resolveRepoBranch(worktreeId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GetCheckAnnotations: workspace gone, returning empty", "worktreeId", worktreeId)
+			return []git.CheckAnnotation{}
+		}
 		log.Error("app/GetCheckAnnotations: resolve failed", "err", err)
 		return []git.CheckAnnotation{}
 	}
@@ -237,6 +270,10 @@ func (a *App) GetRepoMergeConfigForWorkspace(worktreeId string) *git.RepoMergeCo
 	log.Info("app/GetRepoMergeConfigForWorkspace: called", "worktreeId", worktreeId)
 	repoPath, err := a.resolveWorkspacePath(worktreeId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GetRepoMergeConfigForWorkspace: workspace gone, returning nil", "worktreeId", worktreeId)
+			return nil
+		}
 		log.Error("app/GetRepoMergeConfigForWorkspace: resolve failed", "err", err)
 		return nil
 	}
@@ -253,6 +290,10 @@ func (a *App) MergePrForWorkspace(worktreeId, method string, autoMerge, deleteBr
 
 	repoPath, branch, err := a.resolveRepoBranch(worktreeId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/MergePrForWorkspace: workspace gone, skipping", "worktreeId", worktreeId)
+			return ""
+		}
 		return fmt.Sprintf("workspace not found: %v", err)
 	}
 
@@ -300,6 +341,10 @@ func (a *App) DisableAutoMergeForWorkspace(worktreeId string) string {
 	log.Info("app/DisableAutoMergeForWorkspace: called", "worktreeId", worktreeId)
 	repoPath, branch, err := a.resolveRepoBranch(worktreeId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/DisableAutoMergeForWorkspace: workspace gone, skipping", "worktreeId", worktreeId)
+			return ""
+		}
 		return fmt.Sprintf("workspace not found: %v", err)
 	}
 	if err := git.DisableAutoMerge(a.ctx, repoPath, branch); err != nil {
@@ -319,6 +364,10 @@ func (a *App) PostMergeCleanupForWorkspace(worktreeId string) string {
 	log.Info("app/PostMergeCleanupForWorkspace: called", "worktreeId", worktreeId)
 	repoPath, branch, err := a.resolveRepoBranch(worktreeId)
 	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/PostMergeCleanupForWorkspace: workspace gone, skipping", "worktreeId", worktreeId)
+			return ""
+		}
 		return fmt.Sprintf("workspace not found: %v", err)
 	}
 	baseBranch := resolveBaseBranch(a, worktreeId, repoPath)

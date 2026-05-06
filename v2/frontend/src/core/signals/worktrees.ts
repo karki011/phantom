@@ -5,7 +5,7 @@ import { createSignal, createMemo } from 'solid-js';
 import { onWailsEvent } from '../events';
 import { projects, bootstrapProjects, refreshProjects } from './projects';
 import { activeWorktreeId, setActiveWorktreeId } from './app';
-import { listWorktrees, createWorktree, removeWorktree, getAllWorktreeStatus } from '../bindings';
+import { listWorktrees, createWorktree, removeWorktree, getAllWorktreeStatus, watchWorktree } from '../bindings';
 import { setPref, loadPref } from './preferences';
 import { clearWorktreeCache } from '../panes/signals';
 import { pushMru, initMru, pruneMru } from './worktree-mru';
@@ -324,6 +324,10 @@ export async function removeWorktreeById(
 ): Promise<boolean> {
   const isActive = activeWorktreeId() === worktreeId;
 
+  // Stop the GitHub poller BEFORE switching or deleting so in-flight goroutine
+  // callbacks don't fire against the about-to-be-deleted workspace row.
+  watchWorktree('').catch(() => {});
+
   // Switch away BEFORE removing so no stale callbacks fire against the deleted worktree
   if (isActive) {
     const projectWorktrees = worktreeMap()[projectId] ?? [];
@@ -345,6 +349,14 @@ export async function removeWorktreeById(
   }
   clearWorktreeCache(worktreeId);
   await loadProjectWorktrees(projectId);
+
+  // Prune stale MRU entries now that the worktree is gone
+  const allIds = new Set<string>();
+  for (const wts of Object.values(worktreeMap())) {
+    for (const wt of wts) allIds.add(wt.id);
+  }
+  pruneMru(allIds);
+
   return true;
 }
 
