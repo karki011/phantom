@@ -21,6 +21,137 @@ export const hint = style({
   flexShrink: 0,
 });
 
+// ── Search / filter bar ────────────────────────────────────────────────────
+
+export const searchBar = style({
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: '8px',
+  padding: '6px 10px',
+  borderBottom: `1px solid ${vars.color.border}`,
+  backgroundColor: vars.color.bgSecondary,
+  borderRadius: `${vars.radius.md} ${vars.radius.md} 0 0`,
+  border: `1px solid ${vars.color.border}`,
+  borderBottomWidth: 0,
+  flexShrink: 0,
+});
+
+export const searchInputWrapper = style({
+  position: 'relative',
+  display: 'flex',
+  alignItems: 'center',
+  flex: 1,
+});
+
+export const searchInput = style({
+  flex: 1,
+  background: 'rgba(255,255,255,0.05)',
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: '6px',
+  padding: '4px 28px 4px 8px',
+  fontFamily: vars.font.mono,
+  fontSize: '11px',
+  color: vars.color.textPrimary,
+  outline: 'none',
+  width: '100%',
+  boxSizing: 'border-box',
+  ':focus': {
+    borderColor: vars.color.accent,
+    background: 'rgba(255,255,255,0.08)',
+  },
+  '::placeholder': {
+    color: vars.color.textDisabled,
+  },
+});
+
+export const clearButton = style({
+  position: 'absolute',
+  right: '6px',
+  width: '18px',
+  height: '18px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'none',
+  border: 'none',
+  color: vars.color.textDisabled,
+  cursor: 'pointer',
+  fontSize: '14px',
+  lineHeight: 1,
+  padding: 0,
+  borderRadius: '3px',
+  ':hover': {
+    color: vars.color.textPrimary,
+  },
+});
+
+export const filterPills = style({
+  display: 'flex',
+  flexDirection: 'row',
+  gap: '4px',
+  flexShrink: 0,
+});
+
+export const pill = style({
+  padding: '2px 7px',
+  borderRadius: '10px',
+  fontFamily: vars.font.mono,
+  fontSize: '10px',
+  fontWeight: 600,
+  letterSpacing: '0.04em',
+  border: `1px solid ${vars.color.border}`,
+  background: 'none',
+  color: vars.color.textDisabled,
+  cursor: 'pointer',
+  lineHeight: 1.4,
+  ':hover': {
+    color: vars.color.textSecondary,
+    borderColor: vars.color.textDisabled,
+  },
+});
+
+export const pillActive = style({
+  background: vars.color.accent,
+  color: '#fff',
+  borderColor: vars.color.accent,
+});
+
+export const pillActiveError = style({
+  background: vars.color.danger,
+  color: '#fff',
+  borderColor: vars.color.danger,
+});
+
+export const pillActiveWarn = style({
+  background: vars.color.warning,
+  color: '#000',
+  borderColor: vars.color.warning,
+});
+
+export const pillActiveInfo = style({
+  background: vars.color.info,
+  color: '#fff',
+  borderColor: vars.color.info,
+});
+
+export const pillActiveDebug = style({
+  background: vars.color.textDisabled,
+  color: vars.color.bgSecondary,
+  borderColor: vars.color.textDisabled,
+});
+
+export const matchCount = style({
+  fontFamily: vars.font.mono,
+  fontSize: '10px',
+  color: vars.color.textDisabled,
+  marginLeft: 'auto',
+  flexShrink: 0,
+  userSelect: 'none',
+});
+
+// ── Log content ────────────────────────────────────────────────────────────
+
 export const logContainer = style({
   margin: 0,
   flex: 1,
@@ -32,7 +163,7 @@ export const logContainer = style({
   lineHeight: 1.55,
   backgroundColor: vars.color.bgSecondary,
   border: `1px solid ${vars.color.border}`,
-  borderRadius: vars.radius.md,
+  borderRadius: `0 0 ${vars.radius.md} ${vars.radius.md}`,
   scrollbarWidth: 'thin',
   scrollbarColor: `${vars.color.border} transparent`,
 });

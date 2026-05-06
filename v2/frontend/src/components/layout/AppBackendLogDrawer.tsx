@@ -1,7 +1,7 @@
 // Phantom — Live server log lines for the header drawer
 // Author: Subash Karki
 
-import { For, createEffect, createSignal, onCleanup, type Accessor, type JSX } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, type Accessor, type JSX } from 'solid-js';
 import { getRecentAppLogs } from '@/core/bindings/applog';
 import * as styles from './AppBackendLogDrawer.css';
 
@@ -75,12 +75,24 @@ const messageStyle: Record<LogLevel, string> = {
   default: styles.logMessage,
 };
 
+type LevelFilter = 'all' | 'error' | 'warn' | 'info' | 'debug';
+
+const LEVEL_PILLS: { id: LevelFilter; label: string }[] = [
+  { id: 'all', label: 'ALL' },
+  { id: 'error', label: 'ERR' },
+  { id: 'warn', label: 'WRN' },
+  { id: 'info', label: 'INF' },
+  { id: 'debug', label: 'DBG' },
+];
+
 export function AppBackendLogDrawer(props: AppBackendLogDrawerProps): JSX.Element {
   const [logLines, setLogLines] = createSignal<string[]>([]);
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const [levelFilter, setLevelFilter] = createSignal<LevelFilter>('all');
   let logContainerEl: HTMLDivElement | undefined;
 
   const pull = async () => {
-    setLogLines(await getRecentAppLogs(50));
+    setLogLines(await getRecentAppLogs(200));
   };
 
   createEffect(() => {
@@ -90,8 +102,35 @@ export function AppBackendLogDrawer(props: AppBackendLogDrawerProps): JSX.Elemen
     onCleanup(() => clearInterval(id));
   });
 
+  const allParsedLines = createMemo(() => logLines().map(parseLine));
+
+  const filteredLines = createMemo(() => {
+    let lines = allParsedLines();
+
+    const level = levelFilter();
+    if (level !== 'all') {
+      lines = lines.filter((l) => l.level === level);
+    }
+
+    const q = searchQuery().toLowerCase().trim();
+    if (q) {
+      lines = lines.filter(
+        (l) =>
+          l.message.toLowerCase().includes(q) ||
+          l.level.toLowerCase().includes(q) ||
+          l.timestamp.includes(q),
+      );
+    }
+
+    return lines;
+  });
+
+  // Only auto-scroll when not filtering (so user can read filtered results)
   createEffect(() => {
     logLines();
+    const q = searchQuery();
+    const level = levelFilter();
+    if (q || level !== 'all') return;
     const el = logContainerEl;
     if (el) {
       requestAnimationFrame(() => {
@@ -103,34 +142,87 @@ export function AppBackendLogDrawer(props: AppBackendLogDrawerProps): JSX.Elemen
   return (
     <div class={styles.root}>
       <p class={styles.hint}>
-        Last 50 lines · refreshes every 2s while open · pin the header so clicks outside do not close this drawer
+        Last 200 lines · refreshes every 2s while open · pin the header so clicks outside do not close this drawer
       </p>
+
+      {/* Search + filter bar */}
+      <div class={styles.searchBar}>
+        <div class={styles.searchInputWrapper}>
+          <input
+            class={styles.searchInput}
+            type="text"
+            placeholder="Filter logs..."
+            value={searchQuery()}
+            onInput={(e) => setSearchQuery(e.currentTarget.value)}
+            spellcheck={false}
+          />
+          <Show when={searchQuery().length > 0}>
+            <button
+              class={styles.clearButton}
+              type="button"
+              onClick={() => setSearchQuery('')}
+              title="Clear filter"
+            >
+              ×
+            </button>
+          </Show>
+        </div>
+
+        <div class={styles.filterPills}>
+          <For each={LEVEL_PILLS}>
+            {(pill) => {
+              const isActive = () => levelFilter() === pill.id;
+              const pillClass = () => {
+                if (!isActive()) return styles.pill;
+                if (pill.id === 'error') return `${styles.pill} ${styles.pillActiveError}`;
+                if (pill.id === 'warn') return `${styles.pill} ${styles.pillActiveWarn}`;
+                if (pill.id === 'info') return `${styles.pill} ${styles.pillActiveInfo}`;
+                if (pill.id === 'debug') return `${styles.pill} ${styles.pillActiveDebug}`;
+                return `${styles.pill} ${styles.pillActive}`;
+              };
+              return (
+                <button
+                  class={pillClass()}
+                  type="button"
+                  onClick={() => setLevelFilter(pill.id)}
+                >
+                  {pill.label}
+                </button>
+              );
+            }}
+          </For>
+        </div>
+
+        <span class={styles.matchCount}>
+          {filteredLines().length} / {allParsedLines().length}
+        </span>
+      </div>
+
       <div
         class={styles.logContainer}
         ref={(el) => {
           logContainerEl = el ?? undefined;
         }}
       >
-        {logLines().length === 0 ? (
-          <span class={styles.logEmpty}>No log lines yet.</span>
+        {filteredLines().length === 0 ? (
+          <span class={styles.logEmpty}>
+            {allParsedLines().length === 0 ? 'No log lines yet.' : 'No lines match filter.'}
+          </span>
         ) : (
-          <For each={logLines()}>
-            {(raw) => {
-              const parsed = parseLine(raw);
-              return (
-                <div class={styles.logLine}>
-                  {parsed.timestamp && (
-                    <span class={styles.logTimestamp}>{parsed.timestamp}</span>
-                  )}
-                  {parsed.levelLabel && (
-                    <span class={levelBadgeStyle[parsed.level]}>{parsed.levelLabel}</span>
-                  )}
-                  <span class={messageStyle[parsed.level]}>
-                    {parsed.message || raw.trim()}
-                  </span>
-                </div>
-              );
-            }}
+          <For each={filteredLines()}>
+            {(parsed) => (
+              <div class={styles.logLine}>
+                {parsed.timestamp && (
+                  <span class={styles.logTimestamp}>{parsed.timestamp}</span>
+                )}
+                {parsed.levelLabel && (
+                  <span class={levelBadgeStyle[parsed.level]}>{parsed.levelLabel}</span>
+                )}
+                <span class={messageStyle[parsed.level]}>
+                  {parsed.message || '—'}
+                </span>
+              </div>
+            )}
           </For>
         )}
       </div>
