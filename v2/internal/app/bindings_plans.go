@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -38,9 +39,10 @@ type planCacheEntry struct {
 	fetchedAt time.Time
 }
 
-// planCache is an in-memory cache keyed by worktreePath.
-// Concurrent access is safe because Wails bindings are called from the JS
-// thread sequentially; no mutex is needed for single-threaded callers.
+// planCacheMu protects planCache from concurrent map writes.
+// Wails dispatches binding calls in separate goroutines.
+var planCacheMu sync.Mutex
+
 var planCache = map[string]*planCacheEntry{}
 
 // GetPlansForWorktree scans all known plan directories and returns plans
@@ -50,6 +52,9 @@ var planCache = map[string]*planCacheEntry{}
 // Local project plans are always included (they are already project-scoped).
 // Results are cached per worktreePath for planCacheTTL.
 func (a *App) GetPlansForWorktree(worktreePath, repoPath, branchName string) []PlanFile {
+	planCacheMu.Lock()
+	defer planCacheMu.Unlock()
+
 	if entry, ok := planCache[worktreePath]; ok {
 		if time.Since(entry.fetchedAt) < planCacheTTL {
 			return entry.plans
