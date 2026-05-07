@@ -327,25 +327,8 @@ type FileEntry struct {
 // It skips .git and gitignored entries, and is not recursive — the frontend handles lazy loading.
 // Directories receive a git status badge if any child file has a status.
 func ListDirectory(ctx context.Context, repoPath, dirPath string) ([]FileEntry, error) {
-	// Build status map from porcelain output.
-	statusMap := make(map[string]string)
-	out, err := runGit(ctx, repoPath, "status", "--porcelain")
-	if err == nil && out != "" {
-		for _, line := range strings.Split(out, "\n") {
-			if len(line) < 4 {
-				continue
-			}
-			xy := strings.TrimSpace(line[:2])
-			filePath := strings.TrimSpace(line[3:])
-			// Rename format: "oldpath -> newpath"
-			if idx := strings.Index(filePath, " -> "); idx >= 0 {
-				filePath = filePath[idx+4:]
-			}
-			if xy != "" {
-				statusMap[filePath] = xy
-			}
-		}
-	}
+	// Build status map from cached porcelain output (2s TTL).
+	statusMap := getCachedStatus(ctx, repoPath)
 
 	// Compute relative directory path for building relative entry paths.
 	relDir, _ := filepath.Rel(repoPath, dirPath)

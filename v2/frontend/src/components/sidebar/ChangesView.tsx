@@ -1,7 +1,7 @@
 // Phantom — Git changes view with staged/unstaged collapsible sections
 // Author: Subash Karki
 
-import { createSignal, createEffect, on, For, Show } from 'solid-js';
+import { createSignal, createEffect, on, onCleanup, For, Show } from 'solid-js';
 import { Collapsible } from '@kobalte/core/collapsible';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { TextField } from '@kobalte/core/text-field';
@@ -258,6 +258,7 @@ export function ChangesView() {
       refreshStatus();
     }, 250);
   });
+  onCleanup(() => { if (gitStatusTimer) clearTimeout(gitStatusTimer); });
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
