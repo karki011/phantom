@@ -224,8 +224,7 @@ func (b *Bindings) ComposerV2Send(req SendRequest) error {
 	}
 
 	// Reset the watchdog before enrichment so the CLI subprocess isn't killed
-	// while we're preparing the enriched prompt (enrichment can take 5-15s for
-	// long prompts with many code identifiers).
+	// while we're preparing the enriched prompt.
 	session.ResetWatchdog()
 
 	// Attempt AI engine strategy selection + prompt enrichment for user messages.
@@ -447,9 +446,11 @@ func (b *Bindings) persistStreamEvent(sessionID string, session *Session, ev Str
 // ContextInjector when orchestrator deps are not wired. Errors are silently
 // ignored so the send always succeeds even if the engine is unavailable.
 func (b *Bindings) tryEnrichAndEmitStrategy(session *Session, req SendRequest) json.RawMessage {
-	// Cap total enrichment time to prevent the watchdog race. If enrichment
-	// takes longer than this, fall through to sending the raw prompt.
-	enrichCtx, enrichCancel := context.WithTimeout(b.ctx, 15*time.Second)
+	// Cap total enrichment time to keep first-token latency low. If
+	// enrichment takes longer than this, fall through to sending the raw
+	// prompt. 2s is enough for warm caches; cold vector-store queries
+	// gracefully degrade to unenriched prompts.
+	enrichCtx, enrichCancel := context.WithTimeout(b.ctx, 2*time.Second)
 	defer enrichCancel()
 
 	// Parse the send payload to extract user message text.
