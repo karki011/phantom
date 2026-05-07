@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.33](https://github.com/karki011/phantom/compare/v0.1.32...v0.1.33) (2026-05-07)
+
+
+### Bug Fixes
+
+* run orchestrator.Process in goroutine so 2s timeout actually fires ([#105](https://github.com/karki011/phantom/issues/105)) ([d38ca73](https://github.com/karki011/phantom/commit/d38ca73027b6b1075eaada09732a008895046cf8))
+* use DetectClaudeBinary in V2 session spawn for production PATH ([#107](https://github.com/karki011/phantom/issues/107)) ([70fd74b](https://github.com/karki011/phantom/commit/70fd74b9eb6237e4ab62c78bf6916f9d63f7fad7))
+
 ## [0.1.32](https://github.com/karki011/phantom/compare/v0.1.31...v0.1.32) (2026-05-07)
 
 
