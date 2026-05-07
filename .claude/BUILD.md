@@ -57,7 +57,7 @@ bash apps/desktop/create-release.sh
 This interactive script:
 1. Prompts for a version bump (patch / minor / major)
 2. Updates `package.json`, commits, and creates a `desktop-v*.*.*` tag
-3. Pushes the tag to remote (dual push: `karki011/Phantom-OS` + `HMK-Solutions/Phantom-OS`)
+3. Pushes the tag to remote (dual push: `karki011/Phantom-OS` + `karki011/phantom`)
 4. Monitors CI progress until both arch builds complete
 
 **Tag format**: `desktop-v1.2.3` — pushing this tag triggers the GitHub Actions workflow.
@@ -86,7 +86,7 @@ This deletes and re-creates the tag at HEAD, then force-pushes it to re-trigger 
 
 Once a user has installed PhantomOS, subsequent releases are delivered automatically. The app uses `electron-updater` to check GitHub Releases on startup, downloads new DMGs in the background, and prompts the user to restart to apply.
 
-The `publish` config in `electron-builder.yml` points to `HMK-Solutions/Phantom-OS`.
+The `publish` config in `electron-builder.yml` points to `karki011/phantom`.
 
 #### GitHub Pages
 

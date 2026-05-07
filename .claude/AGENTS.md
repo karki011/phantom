@@ -89,8 +89,8 @@ Animations use CSS keyframes injected at runtime: `ceremony-breathe`, `ceremony-
 - **Trigger**: Pushing a `desktop-v*.*.*` tag fires the GitHub Actions workflow.
 - **What it does**: Builds arm64 + x64 DMGs in parallel on macOS runners, codesigns, notarizes, and uploads to GitHub Releases.
 - **Required GitHub Secrets**: `MAC_CERTIFICATE`, `MAC_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`.
-- **Dual push remote**: `origin` pushes to both `karki011/Phantom-OS` and `HMK-Solutions/Phantom-OS`.
-- `electron-builder.yml` uses `target: default` (per-arch, not universal) with `publish` config for `HMK-Solutions/Phantom-OS`.
+- **Dual push remote**: `origin` pushes to both `karki011/Phantom-OS` and `karki011/phantom`.
+- `electron-builder.yml` uses `target: default` (per-arch, not universal) with `publish` config for `karki011/phantom`.
 
 ### Release Process
 
