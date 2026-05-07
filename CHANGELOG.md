@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.34](https://github.com/karki011/phantom/compare/v0.1.33...v0.1.34) (2026-05-07)
+
+
+### Bug Fixes
+
+* augment PATH for production .app subprocess environment ([#108](https://github.com/karki011/phantom/issues/108)) ([b43acbc](https://github.com/karki011/phantom/commit/b43acbcb20ba180b6884b53e58e76416f0f78ed4))
+
 ## [0.1.33](https://github.com/karki011/phantom/compare/v0.1.32...v0.1.33) (2026-05-07)
 
 
