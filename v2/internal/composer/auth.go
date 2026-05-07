@@ -50,13 +50,22 @@ func NewAuthCoordinator(m *Manager) *AuthCoordinator {
 	return &AuthCoordinator{
 		manager: m,
 		ProbeCmd: func(ctx context.Context) *exec.Cmd {
-			// Use `auth status` to check token validity without
-			// hitting the API. Fast (~100ms) and exits 0 when logged in.
-			return exec.CommandContext(ctx, "claude", "auth", "status")
+			bin, err := DetectClaudeBinary()
+			if err != nil {
+				bin = "claude"
+			}
+			cmd := exec.CommandContext(ctx, bin, "auth", "status")
+			cmd.Env = AugmentedEnv()
+			return cmd
 		},
 		RefreshCmd: func(ctx context.Context) *exec.Cmd {
-			// Use `auth login` to re-authenticate when the token is invalid.
-			return exec.CommandContext(ctx, "claude", "auth", "login")
+			bin, err := DetectClaudeBinary()
+			if err != nil {
+				bin = "claude"
+			}
+			cmd := exec.CommandContext(ctx, bin, "auth", "login")
+			cmd.Env = AugmentedEnv()
+			return cmd
 		},
 	}
 }

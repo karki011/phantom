@@ -79,6 +79,22 @@ func DetectClaudeBinary() (string, error) {
 	)
 }
 
+// AugmentedEnv returns the current environment with candidatePaths prepended
+// to PATH. Production .app bundles get a minimal PATH from macOS; this
+// ensures the claude subprocess (and its children) can find node, bun, git,
+// and other tools that live in user-local or Homebrew directories.
+func AugmentedEnv() []string {
+	env := os.Environ()
+	extra := strings.Join(candidatePaths, ":")
+	for i, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			env[i] = "PATH=" + extra + ":" + e[5:]
+			return env
+		}
+	}
+	return append(env, "PATH="+extra+":/usr/bin:/bin:/usr/sbin:/sbin")
+}
+
 // GetCLIVersion runs `claude --version` and extracts the semver string.
 // It enforces a 2-second timeout to avoid hanging on broken installs.
 func GetCLIVersion(binaryPath string) (string, error) {
