@@ -11,7 +11,7 @@ import (
 )
 
 const createTerminalSession = `-- name: CreateTerminalSession :exec
-INSERT INTO terminal_sessions (
+INSERT OR REPLACE INTO terminal_sessions (
     pane_id, worktree_id, project_id, session_id, shell, cwd, env,
     cols, rows, scrollback, status,
     started_at, last_active_at, ended_at
@@ -121,9 +121,20 @@ func (q *Queries) GetTerminalForRestore(ctx context.Context, paneID string) (Get
 	return i, err
 }
 
+const getTerminalSerializedState = `-- name: GetTerminalSerializedState :one
+SELECT serialized_state FROM terminal_sessions WHERE pane_id = ?
+`
+
+func (q *Queries) GetTerminalSerializedState(ctx context.Context, paneID string) (sql.NullString, error) {
+	row := q.db.QueryRowContext(ctx, getTerminalSerializedState, paneID)
+	var serialized_state sql.NullString
+	err := row.Scan(&serialized_state)
+	return serialized_state, err
+}
+
 const getTerminalSession = `-- name: GetTerminalSession :one
 
-SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE pane_id = ?
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id, serialized_state FROM terminal_sessions WHERE pane_id = ?
 `
 
 // terminal.sql - CRUD operations for terminal_sessions table
@@ -146,12 +157,13 @@ func (q *Queries) GetTerminalSession(ctx context.Context, paneID string) (Termin
 		&i.EndedAt,
 		&i.SessionID,
 		&i.ProjectID,
+		&i.SerializedState,
 	)
 	return i, err
 }
 
 const getTerminalsBySessionId = `-- name: GetTerminalsBySessionId :many
-SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE session_id = ?
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id, serialized_state FROM terminal_sessions WHERE session_id = ?
 `
 
 func (q *Queries) GetTerminalsBySessionId(ctx context.Context, sessionID sql.NullString) ([]TerminalSession, error) {
@@ -178,6 +190,7 @@ func (q *Queries) GetTerminalsBySessionId(ctx context.Context, sessionID sql.Nul
 			&i.EndedAt,
 			&i.SessionID,
 			&i.ProjectID,
+			&i.SerializedState,
 		); err != nil {
 			return nil, err
 		}
@@ -206,7 +219,7 @@ func (q *Queries) LinkTerminalToSession(ctx context.Context, arg LinkTerminalToS
 }
 
 const listActiveTerminals = `-- name: ListActiveTerminals :many
-SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE status = 'active' ORDER BY started_at DESC
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id, serialized_state FROM terminal_sessions WHERE status = 'active' ORDER BY started_at DESC
 `
 
 func (q *Queries) ListActiveTerminals(ctx context.Context) ([]TerminalSession, error) {
@@ -233,6 +246,7 @@ func (q *Queries) ListActiveTerminals(ctx context.Context) ([]TerminalSession, e
 			&i.EndedAt,
 			&i.SessionID,
 			&i.ProjectID,
+			&i.SerializedState,
 		); err != nil {
 			return nil, err
 		}
@@ -248,7 +262,7 @@ func (q *Queries) ListActiveTerminals(ctx context.Context) ([]TerminalSession, e
 }
 
 const listRecentlyEndedTerminals = `-- name: ListRecentlyEndedTerminals :many
-SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE status = 'ended' AND ended_at >= ? ORDER BY ended_at DESC
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id, serialized_state FROM terminal_sessions WHERE status = 'ended' AND ended_at >= ? ORDER BY ended_at DESC
 `
 
 func (q *Queries) ListRecentlyEndedTerminals(ctx context.Context, endedAt sql.NullInt64) ([]TerminalSession, error) {
@@ -275,6 +289,7 @@ func (q *Queries) ListRecentlyEndedTerminals(ctx context.Context, endedAt sql.Nu
 			&i.EndedAt,
 			&i.SessionID,
 			&i.ProjectID,
+			&i.SerializedState,
 		); err != nil {
 			return nil, err
 		}
@@ -290,7 +305,7 @@ func (q *Queries) ListRecentlyEndedTerminals(ctx context.Context, endedAt sql.Nu
 }
 
 const listTerminalsByProject = `-- name: ListTerminalsByProject :many
-SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE project_id = ? AND status = 'active' ORDER BY started_at DESC
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id, serialized_state FROM terminal_sessions WHERE project_id = ? AND status = 'active' ORDER BY started_at DESC
 `
 
 func (q *Queries) ListTerminalsByProject(ctx context.Context, projectID sql.NullString) ([]TerminalSession, error) {
@@ -317,6 +332,7 @@ func (q *Queries) ListTerminalsByProject(ctx context.Context, projectID sql.Null
 			&i.EndedAt,
 			&i.SessionID,
 			&i.ProjectID,
+			&i.SerializedState,
 		); err != nil {
 			return nil, err
 		}
@@ -332,7 +348,7 @@ func (q *Queries) ListTerminalsByProject(ctx context.Context, projectID sql.Null
 }
 
 const listTerminalsByWorktree = `-- name: ListTerminalsByWorktree :many
-SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE worktree_id = ? AND status = 'active' ORDER BY started_at DESC
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id, serialized_state FROM terminal_sessions WHERE worktree_id = ? AND status = 'active' ORDER BY started_at DESC
 `
 
 func (q *Queries) ListTerminalsByWorktree(ctx context.Context, worktreeID sql.NullString) ([]TerminalSession, error) {
@@ -359,6 +375,7 @@ func (q *Queries) ListTerminalsByWorktree(ctx context.Context, worktreeID sql.Nu
 			&i.EndedAt,
 			&i.SessionID,
 			&i.ProjectID,
+			&i.SerializedState,
 		); err != nil {
 			return nil, err
 		}
@@ -374,7 +391,7 @@ func (q *Queries) ListTerminalsByWorktree(ctx context.Context, worktreeID sql.Nu
 }
 
 const listUnlinkedActiveTerminals = `-- name: ListUnlinkedActiveTerminals :many
-SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE status = 'active' AND session_id IS NULL
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id, serialized_state FROM terminal_sessions WHERE status = 'active' AND session_id IS NULL
 `
 
 func (q *Queries) ListUnlinkedActiveTerminals(ctx context.Context) ([]TerminalSession, error) {
@@ -401,6 +418,7 @@ func (q *Queries) ListUnlinkedActiveTerminals(ctx context.Context) ([]TerminalSe
 			&i.EndedAt,
 			&i.SessionID,
 			&i.ProjectID,
+			&i.SerializedState,
 		); err != nil {
 			return nil, err
 		}
@@ -416,7 +434,7 @@ func (q *Queries) ListUnlinkedActiveTerminals(ctx context.Context) ([]TerminalSe
 }
 
 const listUnlinkedActiveTerminalsByWorktree = `-- name: ListUnlinkedActiveTerminalsByWorktree :many
-SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id FROM terminal_sessions WHERE worktree_id = ? AND status = 'active' AND session_id IS NULL ORDER BY started_at DESC
+SELECT pane_id, worktree_id, shell, cwd, env, cols, "rows", scrollback, status, started_at, last_active_at, ended_at, session_id, project_id, serialized_state FROM terminal_sessions WHERE worktree_id = ? AND status = 'active' AND session_id IS NULL ORDER BY started_at DESC
 `
 
 func (q *Queries) ListUnlinkedActiveTerminalsByWorktree(ctx context.Context, worktreeID sql.NullString) ([]TerminalSession, error) {
@@ -443,6 +461,7 @@ func (q *Queries) ListUnlinkedActiveTerminalsByWorktree(ctx context.Context, wor
 			&i.EndedAt,
 			&i.SessionID,
 			&i.ProjectID,
+			&i.SerializedState,
 		); err != nil {
 			return nil, err
 		}
@@ -544,15 +563,4 @@ type UpdateTerminalSerializedStateParams struct {
 func (q *Queries) UpdateTerminalSerializedState(ctx context.Context, arg UpdateTerminalSerializedStateParams) error {
 	_, err := q.db.ExecContext(ctx, updateTerminalSerializedState, arg.SerializedState, arg.LastActiveAt, arg.PaneID)
 	return err
-}
-
-const getTerminalSerializedState = `-- name: GetTerminalSerializedState :one
-SELECT serialized_state FROM terminal_sessions WHERE pane_id = ?
-`
-
-func (q *Queries) GetTerminalSerializedState(ctx context.Context, paneID string) (sql.NullString, error) {
-	row := q.db.QueryRowContext(ctx, getTerminalSerializedState, paneID)
-	var serialized_state sql.NullString
-	err := row.Scan(&serialized_state)
-	return serialized_state, err
 }
