@@ -94,6 +94,8 @@ export function createSession(
     letterSpacing: userPrefs.letterSpacing ?? 0.2,
     cursorBlink: true,
     cursorStyle: 'bar',
+    macOptionIsMeta: true,
+    macOptionClickForcesSelection: true,
     allowTransparency: true,
     theme: opts?.theme ?? {},
     scrollback: 500,
