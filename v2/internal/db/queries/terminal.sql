@@ -8,7 +8,7 @@ SELECT * FROM terminal_sessions WHERE pane_id = ?;
 SELECT * FROM terminal_sessions WHERE status = 'active' ORDER BY started_at DESC;
 
 -- name: CreateTerminalSession :exec
-INSERT INTO terminal_sessions (
+INSERT OR REPLACE INTO terminal_sessions (
     pane_id, worktree_id, project_id, session_id, shell, cwd, env,
     cols, rows, scrollback, status,
     started_at, last_active_at, ended_at

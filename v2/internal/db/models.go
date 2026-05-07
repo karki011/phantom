@@ -28,6 +28,97 @@ type ActivityLog struct {
 	Provider  string         `json:"provider"`
 }
 
+type AiDecision struct {
+	ID         string          `json:"id"`
+	Goal       string          `json:"goal"`
+	StrategyID string          `json:"strategy_id"`
+	Confidence sql.NullFloat64 `json:"confidence"`
+	Complexity sql.NullString  `json:"complexity"`
+	Risk       sql.NullString  `json:"risk"`
+	CreatedAt  sql.NullTime    `json:"created_at"`
+}
+
+type AiEmbedding struct {
+	ID          string       `json:"id"`
+	MemoryType  string       `json:"memory_type"`
+	SourceID    string       `json:"source_id"`
+	TextContent string       `json:"text_content"`
+	Vector      []byte       `json:"vector"`
+	CreatedAt   sql.NullTime `json:"created_at"`
+	ExpiresAt   sql.NullTime `json:"expires_at"`
+}
+
+type AiOutcome struct {
+	ID            string         `json:"id"`
+	DecisionID    sql.NullString `json:"decision_id"`
+	Success       int64          `json:"success"`
+	FailureReason sql.NullString `json:"failure_reason"`
+	CreatedAt     sql.NullTime   `json:"created_at"`
+	Phase         string         `json:"phase"`
+}
+
+type ChatConversation struct {
+	ID          string         `json:"id"`
+	WorkspaceID sql.NullString `json:"workspace_id"`
+	Title       string         `json:"title"`
+	Model       sql.NullString `json:"model"`
+	CreatedAt   int64          `json:"created_at"`
+	UpdatedAt   int64          `json:"updated_at"`
+}
+
+type ChatMessage struct {
+	ID             string         `json:"id"`
+	ConversationID sql.NullString `json:"conversation_id"`
+	WorkspaceID    sql.NullString `json:"workspace_id"`
+	Role           string         `json:"role"`
+	Content        string         `json:"content"`
+	Model          sql.NullString `json:"model"`
+	CreatedAt      int64          `json:"created_at"`
+}
+
+type ComposerEdit struct {
+	ID           string         `json:"id"`
+	TurnID       string         `json:"turn_id"`
+	PaneID       string         `json:"pane_id"`
+	Path         string         `json:"path"`
+	OldContent   sql.NullString `json:"old_content"`
+	NewContent   sql.NullString `json:"new_content"`
+	LinesAdded   int64          `json:"lines_added"`
+	LinesRemoved int64          `json:"lines_removed"`
+	Status       string         `json:"status"`
+	CreatedAt    int64          `json:"created_at"`
+	DecidedAt    sql.NullInt64  `json:"decided_at"`
+}
+
+type ComposerEvent struct {
+	ID        int64          `json:"id"`
+	TurnID    string         `json:"turn_id"`
+	SessionID string         `json:"session_id"`
+	Seq       int64          `json:"seq"`
+	Type      string         `json:"type"`
+	Subtype   sql.NullString `json:"subtype"`
+	ToolName  sql.NullString `json:"tool_name"`
+	ToolUseID sql.NullString `json:"tool_use_id"`
+	Content   sql.NullString `json:"content"`
+	CreatedAt int64          `json:"created_at"`
+}
+
+type ComposerTurn struct {
+	ID             string         `json:"id"`
+	PaneID         string         `json:"pane_id"`
+	SessionID      string         `json:"session_id"`
+	Cwd            string         `json:"cwd"`
+	Prompt         string         `json:"prompt"`
+	Model          string         `json:"model"`
+	Status         string         `json:"status"`
+	InputTokens    int64          `json:"input_tokens"`
+	OutputTokens   int64          `json:"output_tokens"`
+	CostUsd        float64        `json:"cost_usd"`
+	StartedAt      int64          `json:"started_at"`
+	CompletedAt    sql.NullInt64  `json:"completed_at"`
+	ResponseText   sql.NullString `json:"response_text"`
+	WasInterrupted int64          `json:"was_interrupted"`
+}
 
 type CustomRecipe struct {
 	ID          string         `json:"id"`
@@ -65,6 +156,13 @@ type DailyStat struct {
 	TotalCommits      sql.NullInt64  `json:"total_commits"`
 	PrCount           sql.NullInt64  `json:"pr_count"`
 	TopFiles          sql.NullString `json:"top_files"`
+}
+
+type ExtractionOffset struct {
+	SessionID       string `json:"session_id"`
+	ByteOffset      int64  `json:"byte_offset"`
+	EventCount      int64  `json:"event_count"`
+	LastExtractedAt int64  `json:"last_extracted_at"`
 }
 
 type GraphEdge struct {
@@ -194,6 +292,7 @@ type Session struct {
 	ToolSummary         sql.NullString `json:"tool_summary"`
 	Keywords            sql.NullString `json:"keywords"`
 	ParentSessionID     sql.NullString `json:"parent_session_id"`
+	SessionProfile      sql.NullString `json:"session_profile"`
 }
 
 type SessionEvent struct {
@@ -227,20 +326,21 @@ type Task struct {
 }
 
 type TerminalSession struct {
-	PaneID       string         `json:"pane_id"`
-	WorktreeID   sql.NullString `json:"worktree_id"`
-	Shell        sql.NullString `json:"shell"`
-	Cwd          sql.NullString `json:"cwd"`
-	Env          sql.NullString `json:"env"`
-	Cols         sql.NullInt64  `json:"cols"`
-	Rows         sql.NullInt64  `json:"rows"`
-	Scrollback   sql.NullString `json:"scrollback"`
-	Status       sql.NullString `json:"status"`
-	StartedAt    sql.NullInt64  `json:"started_at"`
-	LastActiveAt sql.NullInt64  `json:"last_active_at"`
-	EndedAt      sql.NullInt64  `json:"ended_at"`
-	SessionID    sql.NullString `json:"session_id"`
-	ProjectID    sql.NullString `json:"project_id"`
+	PaneID          string         `json:"pane_id"`
+	WorktreeID      sql.NullString `json:"worktree_id"`
+	Shell           sql.NullString `json:"shell"`
+	Cwd             sql.NullString `json:"cwd"`
+	Env             sql.NullString `json:"env"`
+	Cols            sql.NullInt64  `json:"cols"`
+	Rows            sql.NullInt64  `json:"rows"`
+	Scrollback      sql.NullString `json:"scrollback"`
+	Status          sql.NullString `json:"status"`
+	StartedAt       sql.NullInt64  `json:"started_at"`
+	LastActiveAt    sql.NullInt64  `json:"last_active_at"`
+	EndedAt         sql.NullInt64  `json:"ended_at"`
+	SessionID       sql.NullString `json:"session_id"`
+	ProjectID       sql.NullString `json:"project_id"`
+	SerializedState sql.NullString `json:"serialized_state"`
 }
 
 type UserPreference struct {
