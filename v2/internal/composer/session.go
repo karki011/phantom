@@ -237,7 +237,12 @@ func defaultCmdFactory(ctx context.Context, cwd string, opts SessionOptions) *ex
 		args = append(args, "--setting-sources", "")
 	}
 
-	cmd := exec.CommandContext(ctx, "claude", args...)
+	bin, err := DetectClaudeBinary()
+	if err != nil {
+		log.Warn("composer: claude CLI not found, falling back to bare 'claude'", "err", err)
+		bin = "claude"
+	}
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = cwd
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	return cmd
