@@ -546,11 +546,30 @@ func (b *Bindings) tryEnrichAndEmitStrategy(session *Session, req SendRequest) j
 			}
 		}
 
-		result, err := orchestrator.Process(enrichCtx, turnDeps, orchestrator.ProcessInput{
-			Goal:        userText,
-			CWD:         session.CWD,
-			ActiveFiles: activeFiles,
-		})
+		type orchResult struct {
+			result *orchestrator.ProcessResult
+			err    error
+		}
+		orchCh := make(chan orchResult, 1)
+		go func() {
+			r, e := orchestrator.Process(enrichCtx, turnDeps, orchestrator.ProcessInput{
+				Goal:        userText,
+				CWD:         session.CWD,
+				ActiveFiles: activeFiles,
+			})
+			orchCh <- orchResult{r, e}
+		}()
+
+		var result *orchestrator.ProcessResult
+		var err error
+		select {
+		case or := <-orchCh:
+			result, err = or.result, or.err
+		case <-enrichCtx.Done():
+			log.Warn("composer: orchestrator timed out, sending unenriched prompt")
+			return nil
+		}
+
 		if err == nil && result != nil && result.Strategy.Name != "" {
 			log.Info("composer: orchestrator result", "strategy", result.Strategy.Name, "confidence", result.Confidence, "complexity", result.TaskContext.Complexity, "risk", result.TaskContext.Risk, "blast_radius", result.Context.BlastRadius)
 
