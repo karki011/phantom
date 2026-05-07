@@ -376,6 +376,10 @@ func (a *App) DomReady(ctx context.Context) {
 
 func (a *App) handleGitWatcherEvents() {
 	for event := range a.gitWatcher.Events() {
+		// Invalidate the git status cache so the next ListDirectory call
+		// picks up fresh data instead of stale porcelain output.
+		git.InvalidateAllStatusCaches()
+
 		switch event.Type {
 		case git.GitEventBranchChanged:
 			wailsRuntime.EventsEmit(a.ctx, EventGitBranchChanged)
