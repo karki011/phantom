@@ -100,6 +100,10 @@ type App struct {
 	ctxProvider *graphctx.ContextProvider
 	ctxInjector *strategies.ContextInjector
 
+	// strategyEventCh fans out strategy selection events to the monitor TUI.
+	strategyEventCh   chan tui.StrategyEvent
+	strategyEventOnce sync.Once
+
 	// File graph indexers — one per project, started in background during Startup.
 	fileIndexers   map[string]*filegraph.Indexer // project ID → indexer
 	fileIndexersMu sync.RWMutex
@@ -510,9 +514,23 @@ func (a *App) wireComposerEngine() {
 	// tryEnrichAndEmitStrategy calls orchestrator.Process — the full
 	// pipeline (assessor, strategy registry, knowledge stores) instead
 	// of the lightweight ContextInjector.EnrichForProject.
+	if a.apiServer != nil {
+		a.apiServer.SetOrchestratorDeps(&deps)
+	}
+
 	if a.ComposerV2Bind != nil {
 		a.ComposerV2Bind.SetEngineDeps(deps)
 		a.ComposerV2Bind.SetIndexerResolver(a.resolveIndexerForCwd)
+		a.ComposerV2Bind.SetStrategyCallback(func(name string, confidence float64, complexity, risk string, blastRadius int) {
+			a.EmitStrategyEvent(tui.StrategyEvent{
+				StrategyName: name,
+				Confidence:   confidence,
+				Complexity:   complexity,
+				Risk:         risk,
+				BlastRadius:  blastRadius,
+				Timestamp:    time.Now(),
+			})
+		})
 		log.Info("app: composer V2 orchestrator engine wired")
 	}
 }

@@ -96,6 +96,17 @@ type Session struct {
 
 	CreatedAt    time.Time
 	LastActiveAt time.Time
+
+	watchdog *time.Timer // exposed so callers can reset before long operations
+}
+
+// ResetWatchdog extends the watchdog deadline. Called before long operations
+// (like enrichment) to prevent the watchdog from killing a session that is
+// actively being prepared for input.
+func (s *Session) ResetWatchdog() {
+	if s.watchdog != nil {
+		s.watchdog.Reset(readStdoutTimeout)
+	}
 }
 
 // SessionID returns the CLI-reported session ID (set by handshake).
@@ -323,6 +334,7 @@ func (s *Session) readStdout(r io.Reader) {
 	// TCP connection has likely dropped. Cancel the context to kill the child
 	// process and unblock scanner.Scan.
 	watchdog := time.NewTimer(readStdoutTimeout)
+	s.watchdog = watchdog
 	defer watchdog.Stop()
 	go func() {
 		select {

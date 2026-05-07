@@ -69,8 +69,8 @@ export function TaskOverlay(props: TaskOverlayProps) {
     onCleanup(() => clearInterval(interval));
   });
 
-  onWailsEvent('task:created', refreshTasks);
-  onWailsEvent('task:updated', refreshTasks);
+  onWailsEvent('task:new', refreshTasks);
+  onWailsEvent('task:update', refreshTasks);
   onWailsEvent('task:stream_created', refreshTasks);
   onWailsEvent('task:stream_updated', refreshTasks);
 
@@ -199,8 +199,8 @@ export function TaskOverlay(props: TaskOverlayProps) {
             </Collapsible.Content>
           </Collapsible>
         }>
-          <button class={styles.badge} onClick={() => setMinimized(false)}>
-            <ListTodo size={10} />
+          <button class={styles.badge} onClick={() => setMinimized(false)} title={`${completed()}/${total()} tasks${allPlans().length > 0 ? ' · plan active' : ''}`}>
+            <ListTodo size={9} />
             <span>{completed()}/{total()}</span>
             <Show when={allPlans().length > 0}>
               <span class={styles.planDot} />

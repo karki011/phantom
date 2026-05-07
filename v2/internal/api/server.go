@@ -22,6 +22,7 @@ import (
 
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/knowledge"
+	"github.com/subashkarki/phantom-os-v2/internal/ai/orchestrator"
 )
 
 // DefaultPort is the port hooks expect.
@@ -59,6 +60,10 @@ type ServerDeps struct {
 	// surface an event to the frontend (e.g. Wails EventsEmit). The API
 	// package has no Wails dependency — the caller wires the bridge.
 	OnEvent func(name string, data any)
+
+	// OrchestratorDeps provides the strategy pipeline for the /api/orchestrator/assess
+	// endpoint. When nil, the endpoint returns 503.
+	OrchestratorDeps *orchestrator.Dependencies
 }
 
 // hookHealthEntry records the last health report from a hook.
@@ -108,6 +113,12 @@ type HookRelayEvent struct {
 	CWD          string         `json:"cwd"`
 	Timestamp    int64          `json:"timestamp"`
 	Parsed       map[string]any `json:"parsed,omitempty"`
+}
+
+// SetOrchestratorDeps injects orchestrator deps after construction. The API
+// server starts before the composer engine is wired, so deps arrive late.
+func (s *Server) SetOrchestratorDeps(deps *orchestrator.Dependencies) {
+	s.deps.OrchestratorDeps = deps
 }
 
 // NewServer creates a new API server with the given port and dependencies.
@@ -192,6 +203,7 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("POST /api/orchestrator/record-feedback", s.handleRecordFeedback)
 	s.mux.HandleFunc("POST /api/orchestrator/check-retry", s.handleCheckRetry)
 	s.mux.HandleFunc("GET /api/orchestrator/{projectId}/history", s.handleOrchestratorHistory)
+	s.mux.HandleFunc("POST /api/orchestrator/assess", s.handleOrchestratorAssess)
 
 	// Verification (for post-edit-verifier hook)
 	s.mux.HandleFunc("POST /api/verify/queue", s.handleVerifyQueue)
@@ -635,6 +647,47 @@ func (s *Server) handleCheckRetry(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"failed_approaches": approaches,
 		"suggestion":        suggestion,
+	})
+}
+
+func (s *Server) handleOrchestratorAssess(w http.ResponseWriter, r *http.Request) {
+	if s.deps.OrchestratorDeps == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "orchestrator not available"})
+		return
+	}
+
+	var req struct {
+		Goal        string   `json:"goal"`
+		CWD         string   `json:"cwd"`
+		ActiveFiles []string `json:"activeFiles"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Goal == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "goal is required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	result, err := orchestrator.Process(ctx, *s.deps.OrchestratorDeps, orchestrator.ProcessInput{
+		Goal:        req.Goal,
+		CWD:         req.CWD,
+		ActiveFiles: req.ActiveFiles,
+	})
+	if err != nil {
+		slog.Warn("orchestrator assess failed", "err", err)
+		writeJSON(w, http.StatusOK, map[string]string{"strategy": "direct", "complexity": "simple", "risk": "low"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"strategy":    result.Strategy.Name,
+		"confidence":  result.Confidence,
+		"complexity":  result.TaskContext.Complexity,
+		"risk":        result.TaskContext.Risk,
+		"blastRadius": result.Context.BlastRadius,
+		"fileCount":   result.TaskContext.FileCount,
+		"reason":      result.Strategy.Reason,
 	})
 }
 
