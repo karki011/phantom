@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.32](https://github.com/karki011/phantom/compare/v0.1.31...v0.1.32) (2026-05-07)
+
+
+### Bug Fixes
+
+* use INSERT OR REPLACE for terminal_sessions to prevent UNIQUE constraint error ([#103](https://github.com/karki011/phantom/issues/103)) ([c5cb758](https://github.com/karki011/phantom/commit/c5cb7587ae130f8c3ccd3733762adf4179f55e70))
+
 ## [0.1.31](https://github.com/karki011/phantom/compare/v0.1.30...v0.1.31) (2026-05-07)
 
 
