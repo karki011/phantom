@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.31](https://github.com/karki011/phantom/compare/v0.1.30...v0.1.31) (2026-05-07)
+
+
+### Bug Fixes
+
+* reduce V2 bindings enrichment timeout from 15s to 2s ([#101](https://github.com/karki011/phantom/issues/101)) ([9bd3e3a](https://github.com/karki011/phantom/commit/9bd3e3a9818db3df83729887655b18d2daebc3fc))
+
 ## [0.1.30](https://github.com/karki011/phantom/compare/v0.1.29...v0.1.30) (2026-05-07)
 
 
