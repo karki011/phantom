@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.28](https://github.com/karki011/phantom/compare/v0.1.27...v0.1.28) (2026-05-07)
+
+
+### Bug Fixes
+
+* sidebar performance, sticky scroll removal, event listener cleanup ([#93](https://github.com/karki011/phantom/issues/93)) ([3ab888b](https://github.com/karki011/phantom/commit/3ab888b7a164ef01db96840aa0b91d99d631deb8))
+
 ## [0.1.27](https://github.com/karki011/phantom/compare/v0.1.26...v0.1.27) (2026-05-07)
 
 
