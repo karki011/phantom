@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.29](https://github.com/karki011/phantom/compare/v0.1.28...v0.1.29) (2026-05-07)
+
+
+### Bug Fixes
+
+* async orchestrator enrichment to eliminate composer "thinking" stall ([#96](https://github.com/karki011/phantom/issues/96)) ([62598b6](https://github.com/karki011/phantom/commit/62598b6e1a54902a1da4bc6ec412f2e1d4b903b3))
+
 ## [0.1.28](https://github.com/karki011/phantom/compare/v0.1.27...v0.1.28) (2026-05-07)
 
 
