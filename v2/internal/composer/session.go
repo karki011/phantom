@@ -244,6 +244,7 @@ func defaultCmdFactory(ctx context.Context, cwd string, opts SessionOptions) *ex
 	}
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = cwd
+	cmd.Env = AugmentedEnv()
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	return cmd
 }
