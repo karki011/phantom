@@ -419,23 +419,49 @@ func mentionPaths(mentions []Mention, cwd string) []string {
 // Exported so callers outside the package (e.g. the Playground binding) can
 // reuse the same symbol-inference logic without duplicating it.
 func InferFilesFromPrompt(ix *filegraph.Indexer, prompt string) []string {
-	words := regexp.MustCompile(`\b([A-Z][a-zA-Z0-9]{2,}|[a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]*)\b`).FindAllString(prompt, -1)
-	if len(words) == 0 {
+	rawWords := regexp.MustCompile(`\b([A-Z][a-zA-Z0-9]{2,}|[a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]*)\b`).FindAllString(prompt, -1)
+	if len(rawWords) == 0 {
 		return nil
+	}
+
+	// Deduplicate words to prevent redundant grep calls on repeated identifiers.
+	wordSeen := make(map[string]struct{}, len(rawWords))
+	var words []string
+	for _, w := range rawWords {
+		if _, ok := wordSeen[w]; ok {
+			continue
+		}
+		wordSeen[w] = struct{}{}
+		words = append(words, w)
+	}
+	// Cap at 20 unique words to bound grep time on long code-heavy prompts.
+	if len(words) > 20 {
+		words = words[:20]
 	}
 
 	seen := make(map[string]struct{})
 	var files []string
 
-	// Phase 1: graph symbol declarations (case-insensitive, instant).
+	// Phase 1: graph symbol declarations (case-insensitive).
+	// Cap results to prevent explosion when common identifiers (String, Output,
+	// Comment) match thousands of node_modules files.
 	g := ix.Graph()
 	for _, w := range words {
+		if len(files) >= 50 {
+			break
+		}
 		for _, node := range g.SymbolLookupFold(w) {
+			if strings.Contains(node.Path, "node_modules") {
+				continue
+			}
 			if _, ok := seen[node.Path]; ok {
 				continue
 			}
 			seen[node.Path] = struct{}{}
 			files = append(files, node.Path)
+			if len(files) >= 50 {
+				break
+			}
 		}
 	}
 
@@ -454,7 +480,7 @@ func InferFilesFromPrompt(ix *filegraph.Indexer, prompt string) []string {
 			}
 			for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 				line = strings.TrimSpace(line)
-				if line == "" {
+				if line == "" || strings.Contains(line, "node_modules") {
 					continue
 				}
 				if _, ok := seen[line]; ok {

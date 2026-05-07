@@ -622,7 +622,6 @@ export default function TerminalPane(props: TerminalPaneProps) {
       onDrop={handleTerminalDrop}
     >
       <div class={termStyles.terminalContainer} ref={containerRef!} />
-      <TaskOverlay sessionId={derivedSessionId()} worktreePath={props.cwd ?? ''} />
       {/* Cmd+P command palette — mounts a popover when paletteOpen() is true. */}
       <Show when={paletteOpen()}>
         {(_) => {

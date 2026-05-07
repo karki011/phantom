@@ -10,7 +10,10 @@ import {
 } from 'lucide-solid';
 
 // === Pane signals ===
-import { addTab, splitPane, activePaneId, switchWorkspace, focusOrCreateTab } from '@/core/panes/signals';
+import { addTab, addTabWithData, splitPane, activePaneId, switchWorkspace, focusOrCreateTab } from '@/core/panes/signals';
+
+// === Terminal bindings ===
+import { runBubbleteaProgram } from '@/core/bindings/terminal';
 
 // === App signals ===
 import { setActiveTopTab, activeWorktreeId } from '@/core/signals/app';
@@ -300,6 +303,19 @@ const SESSION_ACTIONS: CommandAction[] = [
     icon: Plug,
     keywords: ['mcp', 'model context protocol', 'servers', 'phantom-ai', 'integration', 'plugin'],
     execute: () => openMcpManager(),
+  },
+  {
+    id: 'session:strategy-monitor',
+    label: 'Open Strategy Monitor',
+    category: 'Session',
+    icon: Sparkles,
+    keywords: ['strategy', 'monitor', 'ai', 'engine', 'assessment', 'performance', 'tui'],
+    execute: async () => {
+      const sessionId = await runBubbleteaProgram('strategy_monitor', {});
+      if (sessionId) {
+        addTabWithData('tui', 'Strategy Monitor', { sessionId });
+      }
+    },
   },
   {
     id: 'session:fork',

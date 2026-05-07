@@ -117,3 +117,31 @@ func (ps *PerformanceStore) Load(db *sql.DB) error {
 	}
 	return rows.Err()
 }
+
+// StrategyStats is a public snapshot of a strategy's performance at a
+// given complexity tier. Used by TUI monitors and dashboards.
+type StrategyStats struct {
+	StrategyID string
+	Complexity TaskComplexity
+	Successes  int
+	Total      int
+}
+
+// GetStats returns a snapshot of all performance records. The returned
+// slice is safe to read without holding a lock.
+func (ps *PerformanceStore) GetStats() []StrategyStats {
+	ps.mu.RLock()
+	defer ps.mu.RUnlock()
+	var out []StrategyStats
+	for sid, complexityMap := range ps.records {
+		for comp, r := range complexityMap {
+			out = append(out, StrategyStats{
+				StrategyID: sid,
+				Complexity: comp,
+				Successes:  r.successes,
+				Total:      r.total,
+			})
+		}
+	}
+	return out
+}

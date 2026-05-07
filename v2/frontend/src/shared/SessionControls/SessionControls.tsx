@@ -59,8 +59,8 @@ export function SessionControls(props: Props) {
     { defer: false }
   ));
   const refreshTasks = () => { getSessionTasks(props.session.id).then(setTasks); };
-  onWailsEvent('task:updated', refreshTasks);
-  onWailsEvent('task:created', refreshTasks);
+  onWailsEvent('task:new', refreshTasks);
+  onWailsEvent('task:update', refreshTasks);
   onWailsEvent('task:stream_created', refreshTasks);
   onWailsEvent('task:stream_updated', refreshTasks);
   onWailsEvent<{ sessionId: string }>('plan:started', (data) => {

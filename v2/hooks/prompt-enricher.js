@@ -40,11 +40,9 @@ process.stdin.on('end', async () => {
         }
       }
     }
-    if (paths.length === 0) process.exit(0);
-
-    // Query graph for each file
+    // Query graph for each file (only when paths found)
     const results = [];
-    for (const file of paths.slice(0, 3)) {
+    for (const file of paths.length > 0 ? paths.slice(0, 3) : []) {
       try {
         const res = await fetch(`${API}/api/graph/auto/context?file=${encodeURIComponent(file)}`);
         if (res.ok) {
@@ -57,13 +55,43 @@ process.stdin.on('end', async () => {
       }
     }
 
+    // Strategy assessment (runs on every prompt, not just file mentions)
+    let strategy = null;
+    try {
+      const assessRes = await fetch(`${API}/api/orchestrator/assess`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          goal: message,
+          cwd: data?.cwd || '',
+          activeFiles: paths,
+        }),
+        signal: AbortSignal.timeout(4000),
+      });
+      if (assessRes.ok) strategy = await assessRes.json();
+    } catch {
+      /* orchestrator unavailable — continue with graph context only */
+    }
+
+    const parts = [];
+
+    if (strategy && strategy.strategy !== 'direct') {
+      parts.push(
+        `<phantom-strategy>\nSelected strategy: ${strategy.strategy} (${Math.round((strategy.confidence || 0) * 100)}% confidence)\nComplexity: ${strategy.complexity} | Risk: ${strategy.risk} | Blast radius: ${strategy.blastRadius || 0} files\n${strategy.reason ? `Reason: ${strategy.reason}` : ''}\n</phantom-strategy>`,
+      );
+    }
+
     if (results.length > 0) {
       const ctx = results
         .map((r) => `  File: ${r.file}\n  Dependencies: ${r.deps.join(', ')}`)
         .join('\n');
-      process.stdout.write(
+      parts.push(
         `<phantom-context>\nFiles mentioned in your message have these dependencies:\n${ctx}\nConsider calling phantom_before_edit for full blast radius analysis before making changes.\n</phantom-context>`,
       );
+    }
+
+    if (parts.length > 0) {
+      process.stdout.write(parts.join('\n'));
     }
 
     // Report health (fire-and-forget)

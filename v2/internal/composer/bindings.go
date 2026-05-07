@@ -68,11 +68,20 @@ type Bindings struct {
 	engineDepsSet   bool // true after SetEngineDeps is called
 	indexerResolver IndexerResolver
 
+	// onStrategySelected is called after each strategy selection. Used by the
+	// strategy monitor TUI to receive real-time events.
+	onStrategySelected func(name string, confidence float64, complexity, risk string, blastRadius int)
+
 	// Turn tracking for DB persistence — mirrors V1's per-turn state.
 	turnMu       sync.Mutex
 	turnIDs      map[string]string // sessionID → current turnID
 	turnSeqs     map[string]int    // sessionID → event sequence counter
 	turnTexts    map[string]string // sessionID → accumulated response text
+}
+
+// SetStrategyCallback registers a function called after each strategy selection.
+func (b *Bindings) SetStrategyCallback(fn func(name string, confidence float64, complexity, risk string, blastRadius int)) {
+	b.onStrategySelected = fn
 }
 
 // SetService injects the V1 Service so V2 bindings can access session
@@ -123,6 +132,30 @@ func (b *Bindings) SetEngineDeps(deps orchestrator.Dependencies) {
 // belongs to. Mirrors V1's service.go indexerResolver.
 func (b *Bindings) SetIndexerResolver(resolver IndexerResolver) {
 	b.indexerResolver = resolver
+}
+
+// GetPerformanceStore returns the performance store for strategy monitoring.
+func (b *Bindings) GetPerformanceStore() *strategies.PerformanceStore {
+	if !b.engineDepsSet {
+		return nil
+	}
+	return b.engineDeps.Performance
+}
+
+// GetRegistry returns the strategy registry for introspection.
+func (b *Bindings) GetRegistry() *strategies.Registry {
+	if !b.engineDepsSet {
+		return nil
+	}
+	return b.engineDeps.Registry
+}
+
+// GetAutoTune returns the auto-tune tracker for monitoring.
+func (b *Bindings) GetAutoTune() *strategies.ThresholdTracker {
+	if !b.engineDepsSet {
+		return nil
+	}
+	return b.engineDeps.AutoTune
 }
 
 // resolveIndexer returns the file-graph indexer for a CWD, or nil.
@@ -190,6 +223,11 @@ func (b *Bindings) ComposerV2Send(req SendRequest) error {
 		b.startTurn(req.SessionID, session, userText)
 	}
 
+	// Reset the watchdog before enrichment so the CLI subprocess isn't killed
+	// while we're preparing the enriched prompt (enrichment can take 5-15s for
+	// long prompts with many code identifiers).
+	session.ResetWatchdog()
+
 	// Attempt AI engine strategy selection + prompt enrichment for user messages.
 	// The enriched content replaces the raw user message with codebase context
 	// and strategy guidance prepended — matching V1's service.go behaviour.
@@ -201,6 +239,9 @@ func (b *Bindings) ComposerV2Send(req SendRequest) error {
 	} else {
 		log.Debug("composer: AI engine skipped", "ctx", b.ctx != nil, "engineDeps", b.engineDepsSet, "enricher", b.enricher != nil)
 	}
+
+	// Reset again after enrichment so the CLI has a full 120s to process.
+	session.ResetWatchdog()
 
 	return session.Send(content)
 }
@@ -406,6 +447,11 @@ func (b *Bindings) persistStreamEvent(sessionID string, session *Session, ev Str
 // ContextInjector when orchestrator deps are not wired. Errors are silently
 // ignored so the send always succeeds even if the engine is unavailable.
 func (b *Bindings) tryEnrichAndEmitStrategy(session *Session, req SendRequest) json.RawMessage {
+	// Cap total enrichment time to prevent the watchdog race. If enrichment
+	// takes longer than this, fall through to sending the raw prompt.
+	enrichCtx, enrichCancel := context.WithTimeout(b.ctx, 15*time.Second)
+	defer enrichCancel()
+
 	// Parse the send payload to extract user message text.
 	type contentBlock struct {
 		Type string `json:"type"`
@@ -483,16 +529,23 @@ func (b *Bindings) tryEnrichAndEmitStrategy(session *Session, req SendRequest) j
 		// multi-file refactor.
 		var activeFiles []string
 		if resolvedIndexer != nil {
-			if inferred := InferFilesFromPrompt(resolvedIndexer, userText); len(inferred) > 0 {
-				activeFiles = append(activeFiles, inferred...)
-				log.Info("composer: symbol inference",
-					"symbols_found", len(inferred),
-					"files", inferred,
-				)
+			inferCh := make(chan []string, 1)
+			go func() { inferCh <- InferFilesFromPrompt(resolvedIndexer, userText) }()
+			select {
+			case inferred := <-inferCh:
+				if len(inferred) > 0 {
+					activeFiles = append(activeFiles, inferred...)
+					log.Info("composer: symbol inference",
+						"symbols_found", len(inferred),
+						"files", inferred,
+					)
+				}
+			case <-enrichCtx.Done():
+				log.Warn("composer: symbol inference timed out, proceeding without active files")
 			}
 		}
 
-		result, err := orchestrator.Process(b.ctx, turnDeps, orchestrator.ProcessInput{
+		result, err := orchestrator.Process(enrichCtx, turnDeps, orchestrator.ProcessInput{
 			Goal:        userText,
 			CWD:         session.CWD,
 			ActiveFiles: activeFiles,
@@ -515,6 +568,10 @@ func (b *Bindings) tryEnrichAndEmitStrategy(session *Session, req SendRequest) j
 				b.logger.LogEvent(req.SessionID, ev)
 			}
 			runtime.EventsEmit(b.ctx, channel, ev)
+
+			if b.onStrategySelected != nil {
+				b.onStrategySelected(result.Strategy.Name, result.Confidence, result.TaskContext.Complexity, result.TaskContext.Risk, result.Context.BlastRadius)
+			}
 
 			// Inject the enriched directive into the message envelope —
 			// prepend it to the user's raw text so Claude sees strategy

@@ -73,6 +73,46 @@ func (a *App) RunBubbleteaProgram(programType string, args map[string]string) (s
 		}
 		model = tui.NewRecipeRunnerAdapter(title, command, nil, cwd)
 
+	case "strategy_monitor":
+		eventCh := a.getOrCreateStrategyEventCh()
+		var perfEntries []tui.PerformanceEntry
+		var autoTuneStatus tui.AutoTuneStatus
+		var stratNames []string
+
+		if a.ComposerV2Bind != nil {
+			if perfStore := a.ComposerV2Bind.GetPerformanceStore(); perfStore != nil {
+				for _, s := range perfStore.GetStats() {
+					perfEntries = append(perfEntries, tui.PerformanceEntry{
+						StrategyID: s.StrategyID,
+						Successes:  s.Successes,
+						Total:      s.Total,
+					})
+				}
+			}
+			if reg := a.ComposerV2Bind.GetRegistry(); reg != nil {
+				for _, info := range reg.GetAll() {
+					stratNames = append(stratNames, info.Name)
+				}
+			}
+			if tracker := a.ComposerV2Bind.GetAutoTune(); tracker != nil {
+				cfg := tracker.GetConfig()
+				autoTuneStatus = tui.AutoTuneStatus{
+					DecisionCount:     tracker.GetDecisionCount(),
+					NextRecalibrate:   50 - (tracker.GetDecisionCount() % 50),
+					SimpleThreshold:   cfg.SimpleMaxFiles,
+					ModerateThreshold: cfg.ModerateMaxFiles,
+					ComplexThreshold:  cfg.ComplexMaxFiles,
+				}
+			}
+		}
+
+		model = tui.NewStrategyMonitor(tui.StrategyMonitorConfig{
+			Events:      eventCh,
+			Performance: perfEntries,
+			AutoTune:    autoTuneStatus,
+			Strategies:  stratNames,
+		})
+
 	case "ward_manager":
 		var wardRules []tui.WardRule
 		if a.Safety != nil {
@@ -173,6 +213,28 @@ func (a *App) RunBubbleteaProgram(programType string, args map[string]string) (s
 	a.tuiSessionsMu.Unlock()
 
 	return sessionID, nil
+}
+
+// getOrCreateStrategyEventCh lazily initialises the buffered channel that
+// fans out strategy selection events from the composer to the monitor TUI.
+func (a *App) getOrCreateStrategyEventCh() chan tui.StrategyEvent {
+	a.strategyEventOnce.Do(func() {
+		a.strategyEventCh = make(chan tui.StrategyEvent, 16)
+	})
+	return a.strategyEventCh
+}
+
+// EmitStrategyEvent pushes a strategy event to the monitor TUI channel.
+// Non-blocking — drops the event if no monitor is listening or the buffer
+// is full. Called by the composer bindings after strategy selection.
+func (a *App) EmitStrategyEvent(ev tui.StrategyEvent) {
+	if a.strategyEventCh == nil {
+		return
+	}
+	select {
+	case a.strategyEventCh <- ev:
+	default:
+	}
 }
 
 // WriteBubbleteaProgram forwards user input (from xterm.js) to the running
