@@ -270,70 +270,65 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 		prompt = aiEngineDirective + "\n\n" + prompt
 	}
 
-	// Route through Phantom's AI engine: pick a strategy, gather graph
-	// context, record a decision. Skipped entirely in NoContext mode (the
-	// user explicitly asked for no workspace awareness) or when the engine
-	// isn't wired. The orchestrator returns a deterministic enriched prompt
-	// in result.Output.Text — we prepend it as a directive prelude so the
-	// CLI sees strategy guidance before the user's raw goal.
-	var decisionID string
+	// Fire the orchestrator asynchronously so the Claude CLI can start
+	// immediately. The enrichment result is delivered via channel; s.run
+	// waits up to enrichmentTimeout before falling through with the
+	// unenriched prompt. This eliminates the "thinking..." stall caused by
+	// synchronous DB + vector-store queries.
+	var enrichCh chan *enrichmentResult
 	if !args.NoContext {
-		// Resolve the per-turn file-graph indexer from cwd. The base deps
-		// are immutable across turns; we only overlay Indexer here so each
-		// Send sees the correct project graph (the user can switch active
-		// worktrees mid-session).
-		turnDeps := s.engineDeps
-		var resolvedIndexer *filegraph.Indexer
-		if s.indexerResolver != nil && args.CWD != "" {
-			resolvedIndexer = s.indexerResolver(args.CWD)
+		enrichCh = make(chan *enrichmentResult, 1)
+		go func() {
+			turnDeps := s.engineDeps
+			var resolvedIndexer *filegraph.Indexer
+			if s.indexerResolver != nil && args.CWD != "" {
+				resolvedIndexer = s.indexerResolver(args.CWD)
+				if resolvedIndexer != nil {
+					turnDeps.Indexer = resolvedIndexer
+				}
+			}
+
+			activeFiles := mentionPaths(args.Mentions, args.CWD)
 			if resolvedIndexer != nil {
-				turnDeps.Indexer = resolvedIndexer
+				if inferred := InferFilesFromPrompt(resolvedIndexer, args.Prompt); len(inferred) > 0 {
+					activeFiles = append(activeFiles, inferred...)
+					log.Info("composer: symbol inference",
+						"symbols_found", len(inferred),
+						"files", inferred,
+					)
+				}
 			}
-		}
 
-		// Build ActiveFiles from explicit @file mentions + auto-detected
-		// symbols in the prompt. Without this, blast radius is always 0
-		// and the orchestrator can't differentiate a simple question from
-		// a multi-file refactor.
-		activeFiles := mentionPaths(args.Mentions, args.CWD)
-		if resolvedIndexer != nil {
-			if inferred := InferFilesFromPrompt(resolvedIndexer, args.Prompt); len(inferred) > 0 {
-				activeFiles = append(activeFiles, inferred...)
-				log.Info("composer: symbol inference",
-					"symbols_found", len(inferred),
-					"files", inferred,
-				)
+			log.Debug("composer: orchestrator — entering Process (async)",
+				"pane_id", args.PaneID,
+				"cwd", args.CWD,
+				"has_indexer", resolvedIndexer != nil,
+				"has_registry", turnDeps.Registry != nil,
+				"has_decisions", turnDeps.Decisions != nil,
+				"active_files", len(activeFiles),
+			)
+			result, err := orchestrator.Process(ctx, turnDeps, orchestrator.ProcessInput{
+				Goal:        args.Prompt,
+				CWD:         args.CWD,
+				ActiveFiles: activeFiles,
+			})
+			if err != nil {
+				log.Warn("composer: orchestrator process failed", "err", err)
+				enrichCh <- nil
+				return
 			}
-		}
+			if result == nil {
+				log.Warn("composer: orchestrator returned nil result (no error)")
+				enrichCh <- nil
+				return
+			}
 
-		log.Debug("composer: orchestrator — entering Process",
-			"pane_id", args.PaneID,
-			"cwd", args.CWD,
-			"has_indexer", resolvedIndexer != nil,
-			"has_registry", turnDeps.Registry != nil,
-			"has_decisions", turnDeps.Decisions != nil,
-			"active_files", len(activeFiles),
-		)
-		if result, err := orchestrator.Process(ctx, turnDeps, orchestrator.ProcessInput{
-			Goal:        args.Prompt,
-			ActiveFiles: activeFiles,
-		}); err == nil && result != nil {
+			er := &enrichmentResult{}
 			if result.Learning != nil {
-				decisionID = result.Learning.DecisionID
+				er.DecisionID = result.Learning.DecisionID
 			}
 			if directive := strings.TrimSpace(result.Output.Text); directive != "" && directive != strings.TrimSpace(args.Prompt) {
-				prompt = directive + "\n\n" + prompt
-			}
-			// Emit enriched prompt event so the frontend can display what
-			// was actually sent to Claude. Fire-and-forget — must never
-			// block the send path.
-			if prompt != args.Prompt {
-				s.emit("composer:event", Event{
-					PaneID:       args.PaneID,
-					TurnID:       turnID,
-					Type:         "enriched_prompt",
-					EnrichedText: prompt,
-				})
+				er.DirectivePrefix = directive
 			}
 			log.Info("composer: orchestrator — strategy selected",
 				"strategy", result.Strategy.Name,
@@ -342,10 +337,7 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 				"risk", result.TaskContext.Risk,
 				"blast_radius", result.Context.BlastRadius,
 			)
-			// Emit strategy metadata so the frontend can render it as a
-			// collapsible chip in the turn. Fires once per turn, before
-			// the CLI run starts.
-			s.emit("composer:event", Event{
+			er.StrategyEvent = &Event{
 				PaneID:             args.PaneID,
 				TurnID:             turnID,
 				Type:               "strategy",
@@ -354,12 +346,9 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 				TaskComplexity:     result.TaskContext.Complexity,
 				TaskRisk:           result.TaskContext.Risk,
 				BlastRadius:        result.Context.BlastRadius,
-			})
-		} else if err != nil {
-			log.Warn("composer: orchestrator process failed", "err", err)
-		} else {
-			log.Warn("composer: orchestrator returned nil result (no error)")
-		}
+			}
+			enrichCh <- er
+		}()
 	} else {
 		log.Debug("composer: orchestrator skipped — NoContext mode")
 	}
@@ -386,7 +375,7 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 	s.runs[args.PaneID] = cancel
 	s.mu.Unlock()
 
-	go s.run(runCtx, cliPath, args, sessionID, isResume, turnID, prompt, decisionID)
+	go s.run(runCtx, cliPath, args, sessionID, isResume, turnID, prompt, enrichCh)
 	return turnID, nil
 }
 
@@ -691,7 +680,20 @@ func (s *Service) DeleteSession(ctx context.Context, sessionID string) error {
 // extended thinking, but short enough to surface a hung TCP connection.
 const readTimeoutDuration = 120 * time.Second
 
-func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessionID string, isResume bool, turnID, prompt, decisionID string) {
+// enrichmentTimeout caps how long s.run waits for the async orchestrator
+// before falling through with the unenriched prompt. Keep it short — the
+// whole point is to unblock first-token latency.
+const enrichmentTimeout = 2 * time.Second
+
+// enrichmentResult carries the orchestrator output from the async goroutine
+// to s.run. A nil value means the orchestrator either failed or timed out.
+type enrichmentResult struct {
+	DirectivePrefix string
+	DecisionID      string
+	StrategyEvent   *Event
+}
+
+func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessionID string, isResume bool, turnID, prompt string, enrichCh <-chan *enrichmentResult) {
 	// Wrap ctx in a cancellable child so the watchdog can cancel the child
 	// process independently of the outer (user-facing) cancellation path.
 	runCtx, runCancel := context.WithCancel(ctx)
@@ -707,6 +709,37 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		delete(s.runs, args.PaneID)
 		s.mu.Unlock()
 	}()
+
+	// Wait for the async orchestrator enrichment (capped at enrichmentTimeout).
+	// If the orchestrator finishes in time, prepend its directive and use its
+	// decisionID. Otherwise fall through with the original prompt.
+	var decisionID string
+	if enrichCh != nil {
+		select {
+		case er := <-enrichCh:
+			if er != nil {
+				if er.DirectivePrefix != "" {
+					prompt = er.DirectivePrefix + "\n\n" + prompt
+					s.emit("composer:event", Event{
+						PaneID:       args.PaneID,
+						TurnID:       turnID,
+						Type:         "enriched_prompt",
+						EnrichedText: prompt,
+					})
+				}
+				decisionID = er.DecisionID
+				if er.StrategyEvent != nil {
+					s.emit("composer:event", *er.StrategyEvent)
+				}
+			}
+		case <-time.After(enrichmentTimeout):
+			log.Warn("composer: orchestrator enrichment timed out, using unenriched prompt",
+				"pane_id", args.PaneID, "timeout", enrichmentTimeout)
+		case <-ctx.Done():
+			return
+		}
+	}
+
 	// Close the learning loop: after every Composer turn (success, error, or
 	// cancel) run the project verifier and write the outcome to ai_outcomes.
 	// Async + best-effort — must never block the next user prompt.
