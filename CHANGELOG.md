@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.27](https://github.com/karki011/phantom/compare/v0.1.26...v0.1.27) (2026-05-07)
+
+
+### Features
+
+* strategy monitor TUI, hook enrichment, composer watchdog fix ([#91](https://github.com/karki011/phantom/issues/91)) ([1608e1e](https://github.com/karki011/phantom/commit/1608e1e263bec1660550ec7e21d5c364ef4626ad))
+
 ## [0.1.26](https://github.com/karki011/phantom/compare/v0.1.25...v0.1.26) (2026-05-06)
 
 
