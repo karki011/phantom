@@ -310,6 +310,28 @@ func (tt *ThresholdTracker) LoadThresholds(db *sql.DB) error {
 	tt.mu.Lock()
 	defer tt.mu.Unlock()
 
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS ai_thresholds (
+		key TEXT PRIMARY KEY,
+		value INTEGER NOT NULL
+	)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS ai_threshold_history (
+		key TEXT NOT NULL,
+		seq INTEGER NOT NULL,
+		value INTEGER NOT NULL,
+		PRIMARY KEY(key, seq)
+	)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS ai_threshold_records (
+		key TEXT PRIMARY KEY,
+		correct INTEGER NOT NULL,
+		total INTEGER NOT NULL
+	)`); err != nil {
+		return err
+	}
+
 	// Load config values
 	rows, err := db.Query(`SELECT key, value FROM ai_thresholds`)
 	if err != nil {

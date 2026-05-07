@@ -94,6 +94,15 @@ func (ps *PerformanceStore) Save(db *sql.DB) error {
 
 // Load restores performance records from SQLite.
 func (ps *PerformanceStore) Load(db *sql.DB) error {
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS ai_performance (
+		strategy_id TEXT NOT NULL,
+		complexity TEXT NOT NULL,
+		successes INTEGER NOT NULL,
+		total INTEGER NOT NULL,
+		PRIMARY KEY(strategy_id, complexity)
+	)`); err != nil {
+		return err
+	}
 	rows, err := db.Query(`SELECT strategy_id, complexity, successes, total FROM ai_performance`)
 	if err != nil {
 		return err

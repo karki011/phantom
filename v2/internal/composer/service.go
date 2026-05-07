@@ -111,6 +111,10 @@ type Service struct {
 	// Claude system prompt on the first turn of new sessions. Optional — nil
 	// means no memory injection (pre-existing behaviour preserved).
 	memoryBuilder *SessionMemoryBuilder
+
+	// claudeBin caches the resolved path to the claude CLI binary so we
+	// don't re-run exec.LookPath on every Send call.
+	claudeBin string
 }
 
 // NewService constructs a Composer service. emit should be wired to
@@ -202,10 +206,19 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 		}
 	}
 
-	cliPath, err := ResolveClaudeBin()
-	if err != nil {
-		s.emit("composer:event", Event{PaneID: args.PaneID, Type: "error", Content: "claude CLI not found in PATH"})
-		return "", fmt.Errorf("composer: claude CLI not found: %w", err)
+	s.mu.Lock()
+	cliPath := s.claudeBin
+	s.mu.Unlock()
+	if cliPath == "" {
+		resolved, err := ResolveClaudeBin()
+		if err != nil {
+			s.emit("composer:event", Event{PaneID: args.PaneID, Type: "error", Content: "claude CLI not found in PATH"})
+			return "", fmt.Errorf("composer: claude CLI not found: %w", err)
+		}
+		cliPath = resolved
+		s.mu.Lock()
+		s.claudeBin = cliPath
+		s.mu.Unlock()
 	}
 
 	// Cancel any in-flight run for this pane (one run per pane).

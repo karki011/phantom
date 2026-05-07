@@ -12,11 +12,6 @@ Built by [Subash Karki](https://github.com/karki011)
 
 Phantom collapses your terminal, code editor, AI composer, git diff viewer, journal, and markdown preview into a single tabbed pane system — so you stop alt-tabbing between iTerm, VS Code, ChatGPT, and your git client and just work in one place. It's built on Wails (Go + SolidJS) for native performance, watches your filesystem in real time, routes every git call through a hardened wrapper to keep state sane, and ships with a first-class AI engine that's hook-aware and MCP-channel-ready — meaning the AI can see what you're editing, what changed, and what you ran, then act on it.
 
-## Status
-
-- **Platform:** macOS only (Apple Silicon + Intel — universal binary)
-- **Version:** 0.1.9
-- **Distribution:** Signed with Apple Developer ID + notarized + stapled (no Gatekeeper prompts)
 
 ## Platform support
 
