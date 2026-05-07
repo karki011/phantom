@@ -446,12 +446,8 @@ func (b *Bindings) persistStreamEvent(sessionID string, session *Session, ev Str
 // ContextInjector when orchestrator deps are not wired. Errors are silently
 // ignored so the send always succeeds even if the engine is unavailable.
 func (b *Bindings) tryEnrichAndEmitStrategy(session *Session, req SendRequest) json.RawMessage {
-	// Cap total enrichment time to keep first-token latency low. If
-	// enrichment takes longer than this, fall through to sending the raw
-	// prompt. 2s is enough for warm caches; cold vector-store queries
-	// gracefully degrade to unenriched prompts.
-	enrichCtx, enrichCancel := context.WithTimeout(b.ctx, 2*time.Second)
-	defer enrichCancel()
+	// Timeouts for enrichment stages are set per-step below (inference
+	// 500ms, orchestrator 2s) so one slow step can't starve the others.
 
 	// Parse the send payload to extract user message text.
 	type contentBlock struct {
@@ -524,12 +520,11 @@ func (b *Bindings) tryEnrichAndEmitStrategy(session *Session, req SendRequest) j
 			turnDeps.Indexer = resolvedIndexer
 		}
 
-		// Build ActiveFiles from symbol inference — mirrors V1 service.go
-		// lines 298-306. Without this, blast radius is always 0 and the
-		// orchestrator can't differentiate a simple question from a
-		// multi-file refactor.
+		// Symbol inference gets its own 500ms cap so it can't starve
+		// the orchestrator. Best-effort — empty activeFiles is fine.
 		var activeFiles []string
 		if resolvedIndexer != nil {
+			inferCtx, inferCancel := context.WithTimeout(b.ctx, 500*time.Millisecond)
 			inferCh := make(chan []string, 1)
 			go func() { inferCh <- InferFilesFromPrompt(resolvedIndexer, userText) }()
 			select {
@@ -541,10 +536,15 @@ func (b *Bindings) tryEnrichAndEmitStrategy(session *Session, req SendRequest) j
 						"files", inferred,
 					)
 				}
-			case <-enrichCtx.Done():
+			case <-inferCtx.Done():
 				log.Warn("composer: symbol inference timed out, proceeding without active files")
 			}
+			inferCancel()
 		}
+
+		// Orchestrator gets its own 2s budget, independent of inference.
+		orchCtx, orchCancel := context.WithTimeout(b.ctx, 2*time.Second)
+		defer orchCancel()
 
 		type orchResult struct {
 			result *orchestrator.ProcessResult
@@ -552,7 +552,7 @@ func (b *Bindings) tryEnrichAndEmitStrategy(session *Session, req SendRequest) j
 		}
 		orchCh := make(chan orchResult, 1)
 		go func() {
-			r, e := orchestrator.Process(enrichCtx, turnDeps, orchestrator.ProcessInput{
+			r, e := orchestrator.Process(orchCtx, turnDeps, orchestrator.ProcessInput{
 				Goal:        userText,
 				CWD:         session.CWD,
 				ActiveFiles: activeFiles,
@@ -565,7 +565,7 @@ func (b *Bindings) tryEnrichAndEmitStrategy(session *Session, req SendRequest) j
 		select {
 		case or := <-orchCh:
 			result, err = or.result, or.err
-		case <-enrichCtx.Done():
+		case <-orchCtx.Done():
 			log.Warn("composer: orchestrator timed out, sending unenriched prompt")
 			return nil
 		}
