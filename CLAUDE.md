@@ -27,8 +27,8 @@
 - **CI iteration**: `bash scripts/retag-and-push.sh` — re-creates the tag at HEAD to re-trigger the workflow without a version bump.
 - **Auto-updater**: Installed apps check GitHub Releases via `electron-updater` and auto-download updates.
 - **GitHub Pages**: Landing page at `docs/index.html` with smart arch-detection downloads.
-- **Dual push remote**: `origin` pushes to both `karki011/Phantom-OS` and `HMK-Solutions/Phantom-OS`.
-- `electron-builder.yml` uses `target: default` (per-arch, not universal) with `publish` config pointing to `HMK-Solutions/Phantom-OS`.
+- **Dual push remote**: `origin` pushes to both `karki011/Phantom-OS` and `karki011/phantom`.
+- `electron-builder.yml` uses `target: default` (per-arch, not universal) with `publish` config pointing to `karki011/phantom`.
 
 ## Server Resilience
 - DB init is wrapped in try-catch; on failure the server runs in degraded mode (503 for DB-dependent routes).
