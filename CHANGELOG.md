@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.30](https://github.com/karki011/phantom/compare/v0.1.29...v0.1.30) (2026-05-07)
+
+
+### Bug Fixes
+
+* enable macOptionIsMeta so Shift+Enter works like real terminal ([#100](https://github.com/karki011/phantom/issues/100)) ([78ab19e](https://github.com/karki011/phantom/commit/78ab19ea85093296dbfda771aae0abd0c81746b3))
+* ensure AI tables exist on load and cache claude CLI path ([#98](https://github.com/karki011/phantom/issues/98)) ([d60d884](https://github.com/karki011/phantom/commit/d60d884987abc0b47a091056e255982bff740cb2))
+
 ## [0.1.29](https://github.com/karki011/phantom/compare/v0.1.28...v0.1.29) (2026-05-07)
 
 
