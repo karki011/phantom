@@ -1,7 +1,9 @@
 // Author: Subash Karki
 
 import type {
+  ChipData,
   ComposerState,
+  SessionLifecycle,
   SessionStatus,
   StreamEvent,
   ContentBlock,
@@ -831,6 +833,9 @@ export const reduceResult = (
     s.strategy = null // clear per-turn strategy metadata
     s.status = 'idle' // result event = turn complete, session is idle
 
+    // Remove active status chips — they are ephemeral per-turn indicators
+    s.chips = s.chips.filter((c) => c.category !== 'status' || c.status !== 'active')
+
     // Force-complete any BG agents still running after turn ends.
     // task_notification events may not arrive in all CLI modes.
     const bgRunning: string[] = []
@@ -1001,6 +1006,32 @@ export const reduceCompactBoundary = (
   })
 }
 
+export const reduceChipEvent = (
+  setState: SetState,
+  _state: ComposerState,
+  ev: StreamEvent
+): void => {
+  const chip = ev.data as ChipData
+  if (!chip || !chip.source) return
+  const id = `${chip.source}-${Date.now()}`
+  setState((s) => {
+    s.chips.push({ ...chip, id, expandable: true })
+  })
+}
+
+export const reduceLifecycleEvent = (
+  setState: SetState,
+  _state: ComposerState,
+  ev: StreamEvent
+): void => {
+  const lifecycle = (ev.data as { lifecycle?: SessionLifecycle })?.lifecycle
+  if (lifecycle) {
+    setState((s) => {
+      s.lifecycle = lifecycle
+    })
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Master dispatcher
 // ---------------------------------------------------------------------------
@@ -1088,6 +1119,10 @@ export const dispatchEvent = (
       return reduceError(setState, state, ev)
     case 'session_status_changed':
       return reduceSessionStatus(setState, state, ev)
+    case 'chip_event':
+      return reduceChipEvent(setState, state, ev)
+    case 'lifecycle_event':
+      return reduceLifecycleEvent(setState, state, ev)
     // Silently ignore unhandled event kinds
     default:
       break

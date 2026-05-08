@@ -8,7 +8,7 @@ import { produce } from 'solid-js/store'
 import { getOrCreateSessionStore } from './store'
 import { dispatchEvent } from './reducers'
 import { refreshGlobalSignals } from './signals'
-import type { StreamEvent } from './types'
+import type { ChipData, StreamEvent } from './types'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,7 +23,12 @@ interface WailsEventListener {
 // Module state
 // ---------------------------------------------------------------------------
 
-const listeners = new Map<string, WailsEventListener>()
+interface SessionListeners {
+  main: WailsEventListener
+  chip: WailsEventListener
+}
+
+const listeners = new Map<string, SessionListeners>()
 
 // ---------------------------------------------------------------------------
 // Runtime accessor
@@ -61,7 +66,20 @@ export const connectSession = (sessionId: string, worktreeId: string): void => {
     refreshGlobalSignals()
   })
 
-  listeners.set(sessionId, { channel, unsub })
+  const chipChannel = `composer:chip:${sessionId}`
+  const chipUnsub = runtime.EventsOn(chipChannel, (...args: unknown[]) => {
+    const chipData = args[0] as ChipData
+    if (!chipData || !chipData.source) return
+    const id = `${chipData.source}-${Date.now()}`
+    setStore(produce((s) => {
+      s.chips.push({ ...chipData, id, expandable: true })
+    }))
+  })
+
+  listeners.set(sessionId, {
+    main: { channel, unsub },
+    chip: { channel: chipChannel, unsub: chipUnsub },
+  })
 }
 
 /**
@@ -71,7 +89,8 @@ export const disconnectSession = (sessionId: string): void => {
   const entry = listeners.get(sessionId)
   if (!entry) return
 
-  entry.unsub()
+  entry.main.unsub()
+  entry.chip.unsub()
   listeners.delete(sessionId)
 }
 

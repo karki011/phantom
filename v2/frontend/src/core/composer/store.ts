@@ -2,7 +2,7 @@
 
 import { createSignal } from 'solid-js'
 import { createStore, type SetStoreFunction } from 'solid-js/store'
-import type { ComposerState } from './types'
+import type { ChipData, ComposerState, SessionLifecycle } from './types'
 import {
   composerModel,
   composerPermissionMode,
@@ -63,6 +63,8 @@ export const createDefaultState = (
   totalCostUsd: 0,
   contextUsedPct: 0,
   model: composerModel(),
+  chips: [] as ChipData[],
+  lifecycle: 'active' as SessionLifecycle,
 })
 
 // ---------------------------------------------------------------------------

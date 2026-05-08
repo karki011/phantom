@@ -34,6 +34,8 @@ export type EventKind =
   | 'session_resumed'
   | 'system_info'
   | 'cancelled'
+  | 'chip_event'
+  | 'lifecycle_event'
 
 export interface StreamEvent {
   kind: EventKind
@@ -70,6 +72,8 @@ export interface StreamEvent {
   task_complexity?: string          // "simple" | "moderate" | "complex" | "critical"
   task_risk?: string                // "low" | "medium" | "high" | "critical"
   blast_radius?: number             // number of affected files
+  // Chip/lifecycle event fields
+  data?: unknown                    // chip_event and lifecycle_event payloads
 }
 
 /** Shape of the assistant message from CLI's `"type":"assistant"` events. */
@@ -192,6 +196,20 @@ export interface StrategyInfo {
   blastRadius: number      // number of affected files
 }
 
+export interface ChipData {
+  id: string
+  category: 'context' | 'activity' | 'status'
+  label: string
+  status: 'success' | 'warning' | 'error' | 'active' | 'neutral'
+  source: string
+  timing: number
+  tokens: number
+  expandable: boolean
+  expandedContent?: string
+}
+
+export type SessionLifecycle = 'active' | 'hibernated' | 'resuming' | 'archived'
+
 export interface ComposerState {
   sessionId: string | null
   resumeId: string | null
@@ -213,6 +231,8 @@ export interface ComposerState {
   totalCostUsd: number
   contextUsedPct: number
   model: string
+  chips: ChipData[]
+  lifecycle: SessionLifecycle
 }
 
 export interface SessionListEntry {
@@ -235,4 +255,10 @@ export interface OpenSessionRequest {
 export interface SendMessageRequest {
   session_id: string
   content: unknown
+  editor_context?: {
+    file_path: string | null
+    selection: string | null
+    cursor: string | null
+    language: string | null
+  }
 }
