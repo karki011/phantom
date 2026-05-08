@@ -10,7 +10,9 @@ import {
   setComposerFontSize,
   setComposerNoContext,
 } from '@/core/composer/preferences'
-import type { ComposerMode, PermissionMode, EffortLevel, ToolUseState } from '@/core/composer/types'
+import type { ComposerMode, PermissionMode, EffortLevel, ToolUseState, ChipData } from '@/core/composer/types'
+import { ContextChipBar } from './chips/ContextChipBar'
+import { SessionLifecycleChip } from './chips/SessionLifecycleChip'
 import MessageList from './MessageList'
 import ComposerStatusStrip from './ComposerStatusStrip'
 import { ComposerInput } from './input/ComposerInput'
@@ -210,6 +212,15 @@ const ComposerSession: Component<ComposerSessionProps> = (props) => {
     // Prepend plan-only directive when plan mode is active (matches V1).
     const prompt = s.mode === 'plan' ? PLAN_MODE_PREFIX + text : text
 
+    // Include editor context (active file, selection, cursor) if available
+    const ec = s.editorContext
+    const editorCtx = ec ? {
+      file_path: ec.filePath,
+      selection: ec.selection,
+      cursor: ec.cursor,
+      language: ec.language,
+    } : undefined
+
     try {
       await bindings.ComposerV2Send({
         session_id: props.sessionId,
@@ -222,6 +233,7 @@ const ComposerSession: Component<ComposerSessionProps> = (props) => {
           },
           parent_tool_use_id: null,
         },
+        editor_context: editorCtx,
       })
     } catch (err) {
       console.error('[ComposerSession] Send failed', err)
@@ -372,6 +384,18 @@ const ComposerSession: Component<ComposerSessionProps> = (props) => {
             <>
               <ComposerStatusStrip state={s()} />
 
+              {/* Session lifecycle chip — shows hibernated/resuming/archived state */}
+              <Show when={s().lifecycle !== 'active'}>
+                <div style={{
+                  display: 'flex',
+                  'align-items': 'center',
+                  padding: '2px 12px',
+                  'border-bottom': '1px solid var(--divider)',
+                }}>
+                  <SessionLifecycleChip lifecycle={s().lifecycle} />
+                </div>
+              </Show>
+
               {/* Session metrics bar */}
               <div style={{
                 display: 'flex',
@@ -441,6 +465,7 @@ const ComposerSession: Component<ComposerSessionProps> = (props) => {
                 messages={s().messages}
                 fontSize={s().fontSize}
                 isStreaming={s().streaming !== null}
+                chips={s().chips}
                 currentTool={(() => {
                   const tools = Object.values(s().toolUses)
                   const running = tools.find((t) => t.status === 'running')

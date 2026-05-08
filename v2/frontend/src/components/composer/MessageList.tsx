@@ -2,7 +2,7 @@
 
 import { For, Show, createSignal, createEffect, createMemo, type Component } from 'solid-js';
 import { createVirtualizer } from '@tanstack/solid-virtual';
-import type { Message } from '@/core/composer/types';
+import type { Message, ChipData } from '@/core/composer/types';
 import MessageBubble from './MessageBubble';
 import * as s from './MessageList.css';
 
@@ -12,6 +12,8 @@ interface MessageListProps {
   fontSize?: number;
   /** Whether Claude is currently streaming a response */
   isStreaming?: boolean;
+  /** Session-level chips passed through to MessageBubble for context display */
+  chips?: ChipData[];
   /** Current tool being used (for streaming status bar) */
   currentTool?: string;
   /** Expose the scroll container ref for search overlay DOM walking */
@@ -111,6 +113,7 @@ const MessageList: Component<MessageListProps> = (props) => {
                   <MessageBubble
                     message={message}
                     prevRole={idx() > 0 ? props.messages[idx() - 1].role : undefined}
+                    chips={props.chips}
                     onRetry={
                       idx() === props.messages.length - 1 &&
                       message.content.some((b) => b.type === 'error')
@@ -153,6 +156,7 @@ const MessageList: Component<MessageListProps> = (props) => {
                           <MessageBubble
                             message={msg()}
                             prevRole={virtualItem.index > 0 ? props.messages[virtualItem.index - 1]?.role : undefined}
+                            chips={props.chips}
                             onRetry={
                               virtualItem.index === props.messages.length - 1 &&
                               msg().content.some((b) => b.type === 'error')

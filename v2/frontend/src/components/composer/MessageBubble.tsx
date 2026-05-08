@@ -1,19 +1,22 @@
 // Author: Subash Karki
 
 import { For, Show, Switch, Match, type Component } from 'solid-js';
-import type { Message } from '@/core/composer/types';
+import type { Message, ChipData } from '@/core/composer/types';
 import TextBlock from './blocks/TextBlock';
 import ThinkingBlock from './blocks/ThinkingBlock';
 import ErrorBlock from './blocks/ErrorBlock';
 import { ToolUseChip } from './blocks/ToolUseCard';
 import StrategyChip from './StrategyChip';
 import EnrichedPromptChip from './EnrichedPromptChip';
+import { ContextChipBar } from './chips/ContextChipBar';
 import TurnMetrics from './TurnMetrics';
 import * as s from './MessageBubble.css';
 
 interface MessageBubbleProps {
   message: Message;
   prevRole?: string;
+  /** Session-level chips — ContextChipBar renders context chips above user messages */
+  chips?: ChipData[];
   onRetry?: () => void;
 }
 
@@ -41,6 +44,11 @@ const MessageBubble: Component<MessageBubbleProps> = (props) => {
       </Show>
       <Show when={props.message.role === 'assistant' && props.prevRole !== 'assistant'}>
         <span class={s.assistantLabel}>ASSISTANT</span>
+      </Show>
+
+      {/* Context chips — shown above user messages when context was attached */}
+      <Show when={props.message.role === 'user' && props.chips && props.chips.length > 0}>
+        <ContextChipBar chips={props.chips!} />
       </Show>
 
       {/* Per-turn strategy chip — shown inline above assistant content */}
