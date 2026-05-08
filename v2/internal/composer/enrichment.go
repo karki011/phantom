@@ -224,7 +224,7 @@ func assembleOutput(results map[string]collectorOutcome, input EnrichmentInput) 
 // buildChip generates a ChipEvent for a single source based on its result.
 func buildChip(source string, ir collectorOutcome) ChipEvent {
 	chip := ChipEvent{
-		Category: "enrichment",
+		Category: "context",
 		Source:   source,
 		Tokens:   ir.result.Tokens,
 	}
