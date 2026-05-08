@@ -131,6 +131,37 @@ type SessionSummary struct {
 	Source         string  `json:"source"`
 }
 
+// EditorContext captures the active editor state at the time a turn is
+// submitted — file path, selection, cursor position, and language ID.
+// It is injected into the prompt as additional context when present.
+type EditorContext struct {
+	FilePath  string `json:"file_path"`
+	Selection string `json:"selection"`
+	Cursor    string `json:"cursor"`
+	Language  string `json:"language"`
+}
+
+// ChipEvent represents a discrete activity chip emitted during a turn,
+// such as a tool call, a file write, or a strategy selection.
+type ChipEvent struct {
+	Category string `json:"category"`
+	Label    string `json:"label"`
+	Status   string `json:"status"`
+	Source   string `json:"source"`
+	Timing   int64  `json:"timing"`
+	Tokens   int    `json:"tokens"`
+}
+
+// SessionLifecycle describes the current state of a composer session.
+type SessionLifecycle string
+
+const (
+	LifecycleActive     SessionLifecycle = "active"
+	LifecycleHibernated SessionLifecycle = "hibernated"
+	LifecycleResuming   SessionLifecycle = "resuming"
+	LifecycleArchived   SessionLifecycle = "archived"
+)
+
 // SendArgs is the Wails-binding payload for ComposerSend.
 //
 // NoContext, when true, runs the turn in a fresh temp directory with

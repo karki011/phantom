@@ -48,8 +48,9 @@ type OpenRequest struct {
 
 // SendRequest is the payload the frontend sends to write to a session's stdin.
 type SendRequest struct {
-	SessionID string          `json:"session_id"`
-	Content   json.RawMessage `json:"content"`
+	SessionID     string          `json:"session_id"`
+	Content       json.RawMessage `json:"content"`
+	EditorContext *EditorContext  `json:"editor_context,omitempty"`
 }
 
 // Bindings bridges the Manager to Wails event system.
