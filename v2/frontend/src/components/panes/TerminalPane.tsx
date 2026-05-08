@@ -214,13 +214,32 @@ export default function TerminalPane(props: TerminalPaneProps) {
     document.body.appendChild(fileTooltip);
     onCleanup(() => fileTooltip.remove());
 
+    // Collect the full logical line (joining wrapped segments) so long
+    // paths that span multiple buffer rows are detected correctly.
+    const extractLogicalLine = (y: number) => {
+      const buf = session.terminal.buffer.active;
+      let startY = y;
+      while (startY > 0) {
+        const prev = buf.getLine(startY);
+        if (!prev || !prev.isWrapped) break;
+        startY--;
+      }
+      const segments: string[] = [];
+      const cols = session.terminal.cols;
+      for (let i = startY; i < buf.length; i++) {
+        const row = buf.getLine(i);
+        if (!row) break;
+        if (i > startY && !row.isWrapped) break;
+        segments.push(row.translateToString(true));
+      }
+      return { text: segments.join(''), startY, cols };
+    };
+
     session.terminal.registerLinkProvider({
       provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void) {
-        const line = session.terminal.buffer.active.getLine(bufferLineNumber);
-        if (!line) { callback(undefined); return; }
-        const text = line.translateToString();
+        const { text, startY, cols } = extractLogicalLine(bufferLineNumber);
+        if (!text) { callback(undefined); return; }
 
-        // Skip lines that are purely URLs (already handled by WebLinksAddon)
         if (/^\s*https?:\/\//.test(text.trim())) { callback(undefined); return; }
 
         const links: ILink[] = [];
@@ -229,51 +248,44 @@ export default function TerminalPane(props: TerminalPaneProps) {
         while ((match = FILE_PATH_REGEX.exec(text)) !== null) {
           const fullMatch = match[0];
 
-          // Skip if this looks like a URL fragment
           const before = text.slice(Math.max(0, match.index - 8), match.index);
           if (/https?:\/\//.test(before)) continue;
 
-          // Extract line:column suffix if present
           const lineColMatch = fullMatch.match(/^(.+?)(?::(\d+)(?::(\d+))?)?$/);
           if (!lineColMatch) continue;
           const pathPart = lineColMatch[1];
           const lineNum = lineColMatch[2] ? parseInt(lineColMatch[2], 10) : undefined;
           const colNum = lineColMatch[3] ? parseInt(lineColMatch[3], 10) : undefined;
 
-          // Validate extension
           const extMatch = pathPart.match(/\.(\w+)$/);
           if (!extMatch || !FILE_EXTENSIONS.has(extMatch[1])) continue;
 
-          const startX = match.index + 1; // xterm uses 1-based columns
+          // Map character offset in the joined string back to buffer y/x
+          const matchStart = match.index;
+          const matchEnd = matchStart + fullMatch.length;
+          const startRow = startY + Math.floor(matchStart / cols);
+          const startCol = (matchStart % cols) + 1;
+          const endRow = startY + Math.floor((matchEnd - 1) / cols);
+          const endCol = ((matchEnd - 1) % cols) + 2;
+
           links.push({
             range: {
-              start: { x: startX, y: bufferLineNumber },
-              end: { x: startX + fullMatch.length, y: bufferLineNumber },
+              start: { x: startCol, y: startRow },
+              end: { x: endCol, y: endRow },
             },
             text: fullMatch,
-            decorations: {
-              pointerCursor: true,
-              underline: true,
-            },
+            decorations: { pointerCursor: true, underline: true },
             activate: (_event: MouseEvent, _text: string) => {
-              // Resolve path relative to terminal's cwd
               let filePath = pathPart;
               const cwd = session.cwd || props.cwd || '';
 
-              if (filePath.startsWith('./')) {
-                filePath = filePath.slice(2);
-              }
-              // Relative paths get resolved against cwd
+              if (filePath.startsWith('./')) filePath = filePath.slice(2);
               if (!filePath.startsWith('/') && !filePath.startsWith('~')) {
                 filePath = cwd ? `${cwd.replace(/\/$/, '')}/${filePath}` : filePath;
               }
-              // Expand ~ to the user's home directory (derive from cwd or fall back)
               if (filePath.startsWith('~/')) {
-                // cwd is typically /Users/<name>/... — extract home from it
                 const homeMatch = cwd.match(/^(\/(?:Users|home)\/[^/]+)/);
-                if (homeMatch) {
-                  filePath = filePath.replace(/^~/, homeMatch[1]);
-                }
+                if (homeMatch) filePath = filePath.replace(/^~/, homeMatch[1]);
               }
 
               openFileInEditor({
