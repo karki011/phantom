@@ -98,6 +98,10 @@ type Session struct {
 	LastActiveAt time.Time
 
 	watchdog *time.Timer // exposed so callers can reset before long operations
+
+	lifecycle     SessionLifecycle
+	hibernateUUID string
+	hibernateCWD  string
 }
 
 // ResetWatchdog extends the watchdog deadline. Called before long operations
@@ -114,6 +118,77 @@ func (s *Session) SessionID() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.sessionID
+}
+
+// Lifecycle returns the current SessionLifecycle state of this session.
+// Defaults to LifecycleActive if the field has not been set.
+func (s *Session) Lifecycle() SessionLifecycle {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.lifecycle == "" {
+		return LifecycleActive
+	}
+	return s.lifecycle
+}
+
+// HibernateUUID returns the Claude session UUID saved at hibernate time.
+func (s *Session) HibernateUUID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.hibernateUUID
+}
+
+// Hibernate saves the current Claude session UUID and terminates the
+// subprocess gracefully (SIGTERM, then SIGKILL after 5 s).
+// The session can be resumed later via Resume().
+func (s *Session) Hibernate() error {
+	s.mu.Lock()
+	s.hibernateUUID = s.sessionID
+	s.hibernateCWD = s.CWD
+	s.lifecycle = LifecycleHibernated
+	s.mu.Unlock()
+
+	if s.cmd != nil && s.cmd.Process != nil {
+		if s.stdin != nil {
+			_ = s.stdin.Close()
+		}
+		_ = s.cmd.Process.Signal(syscall.SIGTERM)
+
+		go func() {
+			timer := time.NewTimer(5 * time.Second)
+			defer timer.Stop()
+			select {
+			case <-s.done:
+				// exited cleanly
+			case <-timer.C:
+				if s.cmd != nil && s.cmd.Process != nil {
+					_ = s.cmd.Process.Kill()
+				}
+			}
+		}()
+	}
+
+	return nil
+}
+
+// Resume transitions a hibernated session back to active and prepares it
+// for a new Spawn call with the saved --resume UUID.
+func (s *Session) Resume(ctx context.Context, handlers []EventHandler) error {
+	s.mu.Lock()
+	s.lifecycle = LifecycleResuming
+	resumeID := s.hibernateUUID
+	s.mu.Unlock()
+
+	if resumeID == "" {
+		return fmt.Errorf("no hibernated session UUID to resume")
+	}
+
+	s.mu.Lock()
+	s.lifecycle = LifecycleActive
+	s.hibernateUUID = ""
+	s.mu.Unlock()
+
+	return nil
 }
 
 // logLifecycle is a nil-safe helper that writes a lifecycle log entry.
@@ -345,11 +420,17 @@ func (s *Session) readStdout(r io.Reader) {
 	go func() {
 		select {
 		case <-watchdog.C:
-			log.Warn("composer: session watchdog timeout — killing hung process",
+			log.Warn("composer: session watchdog timeout — hibernating session",
 				"session_id", s.ID,
 				"timeout", readStdoutTimeout,
 			)
-			s.cancel()
+			if err := s.Hibernate(); err != nil {
+				log.Error("composer: failed to hibernate, killing",
+					"session_id", s.ID,
+					"error", err,
+				)
+				s.cancel()
+			}
 		case <-s.ctx.Done():
 			// Normal exit or external cancellation — watchdog not needed.
 		}
