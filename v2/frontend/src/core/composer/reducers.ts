@@ -35,6 +35,54 @@ const findStreamingMsgIdx = (state: ComposerState): number => {
   return state.messages.findIndex((m) => m.id === state.streaming!.msgId)
 }
 
+function createActivityChip(
+  source: string,
+  label: string,
+  status: ChipData['status'],
+  timing?: number,
+  expandedContent?: string
+): ChipData {
+  return {
+    id: `activity-${source}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    category: 'activity',
+    label,
+    status,
+    source,
+    timing: timing ?? 0,
+    tokens: 0,
+    expandable: !!expandedContent,
+    expandedContent,
+  }
+}
+
+function formatToolLabel(toolName: string): string {
+  const toolLabels: Record<string, string> = {
+    Read: 'Reading',
+    Edit: 'Editing',
+    Write: 'Writing',
+    Bash: 'Running',
+    Grep: 'Searching',
+    Glob: 'Searching',
+    LS: 'Listing',
+    Task: 'Sub-agent',
+    Agent: 'Sub-agent',
+    WebSearch: 'Searching web',
+    WebFetch: 'Fetching',
+  }
+  if (toolLabels[toolName]) return toolLabels[toolName]
+  if (toolName.startsWith('mcp__')) {
+    const parts = toolName.split('__')
+    const tool = parts[2] || toolName
+    return `MCP: ${tool}`
+  }
+  return toolName
+}
+
+function basename(filePath: string): string {
+  const parts = filePath.split('/')
+  return parts[parts.length - 1] || filePath
+}
+
 // ---------------------------------------------------------------------------
 // Reducers
 // ---------------------------------------------------------------------------
@@ -165,6 +213,10 @@ export const reduceToolUseStart = (
       }
       s.messages[idx].content.push(block)
     }
+
+    // Emit active activity chip for this tool invocation (legacy path)
+    const toolLabel = formatToolLabel(ev.tool_name ?? '')
+    s.chips.push(createActivityChip(`tool-${toolId}`, `${toolLabel}...`, 'active'))
   })
 }
 
@@ -183,6 +235,46 @@ export const reduceToolUseComplete = (
       entry.output = ev.tool_output ?? ev.text ?? (ev as any).content ?? ''
       entry.isError = isError
       entry.completedAt = Date.now()
+
+      // Update the active activity chip for this tool (legacy path)
+      const timing = entry.completedAt && entry.startedAt
+        ? entry.completedAt - entry.startedAt
+        : 0
+      let label = formatToolLabel(entry.toolName)
+      const input = entry.input || {}
+      if (entry.toolName === 'Read' && (input as Record<string, unknown>).file_path) {
+        label = `Reading: ${basename(String((input as Record<string, unknown>).file_path))}`
+      } else if (entry.toolName === 'Edit' && (input as Record<string, unknown>).file_path) {
+        label = `Editing: ${basename(String((input as Record<string, unknown>).file_path))}`
+      } else if (entry.toolName === 'Write' && (input as Record<string, unknown>).file_path) {
+        label = `Writing: ${basename(String((input as Record<string, unknown>).file_path))}`
+      } else if (entry.toolName === 'Bash' && (input as Record<string, unknown>).command) {
+        const cmd = String((input as Record<string, unknown>).command)
+        label = `Running: ${cmd.length > 40 ? cmd.slice(0, 40) + '...' : cmd}`
+      } else if (
+        (entry.toolName === 'Grep' || entry.toolName === 'Glob') &&
+        (input as Record<string, unknown>).pattern
+      ) {
+        label = `Searching: "${(input as Record<string, unknown>).pattern}"`
+      }
+
+      const chipIdx = s.chips.findIndex(
+        (c: ChipData) => c.source === `tool-${toolId}` && c.status === 'active'
+      )
+      if (chipIdx >= 0) {
+        s.chips[chipIdx] = {
+          ...s.chips[chipIdx],
+          label,
+          status: entry.isError ? 'error' : 'success',
+          timing,
+          expandable: true,
+          expandedContent: entry.output
+            ? entry.output.length > 500
+              ? entry.output.slice(0, 500) + '...'
+              : entry.output
+            : undefined,
+        }
+      }
     }
 
     // Update corresponding content block status
@@ -433,6 +525,10 @@ export const reduceStreamEvent = (
       break
     case 'thinking_start':
       handleStreamBlockStart(setState, state, 'thinking')
+      // Emit active thinking activity chip (timing stores start timestamp for duration calc)
+      setState((s) => {
+        s.chips.push(createActivityChip('thinking', 'Thinking...', 'active', Date.now()))
+      })
       break
     case 'text_start':
     case 'content_block_start':
@@ -591,6 +687,10 @@ const handleStreamToolUseStart = (
         blockIdx: s.messages[msgIdx].content.length - 1,
       }
     }
+
+    // Emit active activity chip for this tool invocation
+    const toolLabel = formatToolLabel(ev.tool_name ?? '')
+    s.chips.push(createActivityChip(`tool-${toolId}`, `${toolLabel}...`, 'active'))
   })
 }
 
@@ -710,6 +810,67 @@ const handleStreamBlockStop = (
           // tool results separately, but the content block stop
           // means the assistant finished emitting the tool_use.
           entry.status = 'complete'
+
+          // Update the active activity chip for this tool to show completion
+          const timing = entry.completedAt && entry.startedAt
+            ? entry.completedAt - entry.startedAt
+            : 0
+          let label = formatToolLabel(entry.toolName)
+          const input = entry.input || {}
+          if (entry.toolName === 'Read' && (input as Record<string, unknown>).file_path) {
+            label = `Reading: ${basename(String((input as Record<string, unknown>).file_path))}`
+          } else if (entry.toolName === 'Edit' && (input as Record<string, unknown>).file_path) {
+            label = `Editing: ${basename(String((input as Record<string, unknown>).file_path))}`
+          } else if (entry.toolName === 'Write' && (input as Record<string, unknown>).file_path) {
+            label = `Writing: ${basename(String((input as Record<string, unknown>).file_path))}`
+          } else if (entry.toolName === 'Bash' && (input as Record<string, unknown>).command) {
+            const cmd = String((input as Record<string, unknown>).command)
+            label = `Running: ${cmd.length > 40 ? cmd.slice(0, 40) + '...' : cmd}`
+          } else if (
+            (entry.toolName === 'Grep' || entry.toolName === 'Glob') &&
+            (input as Record<string, unknown>).pattern
+          ) {
+            label = `Searching: "${(input as Record<string, unknown>).pattern}"`
+          }
+
+          const chipIdx = s.chips.findIndex(
+            (c: ChipData) => c.source === `tool-${block.toolUseId}` && c.status === 'active'
+          )
+          if (chipIdx >= 0) {
+            s.chips[chipIdx] = {
+              ...s.chips[chipIdx],
+              label,
+              status: entry.isError ? 'error' : 'success',
+              timing,
+              expandable: true,
+              expandedContent: entry.output
+                ? entry.output.length > 500
+                  ? entry.output.slice(0, 500) + '...'
+                  : entry.output
+                : undefined,
+            }
+          }
+        }
+      }
+
+      // For thinking blocks, update the active thinking chip to show completion
+      if (block.type === 'thinking') {
+        const chipIdx = s.chips.findIndex(
+          (c: ChipData) => c.source === 'thinking' && c.status === 'active'
+        )
+        if (chipIdx >= 0) {
+          const startTime = s.chips[chipIdx].timing || Date.now()
+          const duration = Date.now() - startTime
+          s.chips[chipIdx] = {
+            ...s.chips[chipIdx],
+            label: `Thinking: ${(duration / 1000).toFixed(1)}s`,
+            status: 'success',
+            timing: duration,
+            expandable: block.text.length > 0,
+            expandedContent: block.text.length > 500
+              ? block.text.slice(0, 500) + '...'
+              : block.text || undefined,
+          }
         }
       }
     }
