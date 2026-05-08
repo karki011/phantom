@@ -11,8 +11,7 @@ import {
   setComposerNoContext,
 } from '@/core/composer/preferences'
 import type { ComposerMode, PermissionMode, EffortLevel, ToolUseState, ChipData } from '@/core/composer/types'
-import { ContextChipBar } from './chips/ContextChipBar'
-import { SessionLifecycleChip } from './chips/SessionLifecycleChip'
+import { StatusChipStrip } from './chips/StatusChipStrip'
 import MessageList from './MessageList'
 import ComposerStatusStrip from './ComposerStatusStrip'
 import { ComposerInput } from './input/ComposerInput'
@@ -384,41 +383,11 @@ const ComposerSession: Component<ComposerSessionProps> = (props) => {
             <>
               <ComposerStatusStrip state={s()} />
 
-              {/* Session lifecycle chip — shows hibernated/resuming/archived state */}
-              <Show when={s().lifecycle !== 'active'}>
-                <div style={{
-                  display: 'flex',
-                  'align-items': 'center',
-                  padding: '2px 12px',
-                  'border-bottom': '1px solid var(--divider)',
-                }}>
-                  <SessionLifecycleChip lifecycle={s().lifecycle} />
-                </div>
-              </Show>
-
-              {/* Session metrics bar */}
-              <div style={{
-                display: 'flex',
-                'align-items': 'center',
-                'justify-content': 'center',
-                gap: '8px',
-                padding: '4px 12px',
-                'border-bottom': '1px solid var(--divider)',
-                'font-family': 'var(--font-mono)',
-                'font-size': '11px',
-                color: 'var(--text-secondary)',
-                'user-select': 'none',
-              }}>
-                <span style={{ opacity: 0.5 }}>|</span>
-                <span>Turn {s().messages.filter(m => m.role === 'user').length}</span>
-                <span style={{ opacity: 0.5 }}>·</span>
-                <span>{s().totalInputTokens.toLocaleString()} in / {s().totalOutputTokens.toLocaleString()} out</span>
-                <span style={{ opacity: 0.5 }}>|</span>
-                <span style={{ color: 'var(--accent)' }}>Session: ${s().totalCostUsd.toFixed(4)}</span>
-                <span style={{ opacity: 0.5 }}>·</span>
-                <span>{(s().totalInputTokens + s().totalOutputTokens).toLocaleString()} tok</span>
-                <span style={{ opacity: 0.5 }}>|</span>
-              </div>
+              {/* Status chip strip — session metrics + lifecycle */}
+              <StatusChipStrip
+                state={s()}
+                turnCount={s().messages.filter((m) => m.role === 'user').length}
+              />
 
               {/* Agent panel toggle — visible when agents exist but panel is closed */}
               <Show when={agentInfos().length > 0 && !agentPanelOpen()}>

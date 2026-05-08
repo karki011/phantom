@@ -9,6 +9,7 @@ import { ToolUseChip } from './blocks/ToolUseCard';
 import StrategyChip from './StrategyChip';
 import EnrichedPromptChip from './EnrichedPromptChip';
 import { ContextChipBar } from './chips/ContextChipBar';
+import { ActivityChipBar } from './chips/ActivityChipBar';
 import TurnMetrics from './TurnMetrics';
 import * as s from './MessageBubble.css';
 
@@ -92,6 +93,11 @@ const MessageBubble: Component<MessageBubbleProps> = (props) => {
       {/* Enriched prompt chip — shows injected context on user messages */}
       <Show when={props.message.role === 'user' && props.message.enrichedPrompt}>
         {(text) => <EnrichedPromptChip text={text()} />}
+      </Show>
+
+      {/* Activity chips — shown after assistant content blocks */}
+      <Show when={props.message.role === 'assistant' && props.chips && props.chips.length > 0}>
+        <ActivityChipBar chips={props.chips!} />
       </Show>
 
       {/* Per-turn metrics — shown after each completed assistant message */}
