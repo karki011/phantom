@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.36](https://github.com/karki011/phantom/compare/v0.1.35...v0.1.36) (2026-05-08)
+
+
+### Features
+
+* composer enhancements — types, enrichment, hibernate, budget ([#114](https://github.com/karki011/phantom/issues/114)) ([4e37018](https://github.com/karki011/phantom/commit/4e37018f20d547e4c8609f6e8c27258aba396678))
+
 ## [0.1.35](https://github.com/karki011/phantom/compare/v0.1.34...v0.1.35) (2026-05-08)
 
 
