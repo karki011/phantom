@@ -112,7 +112,7 @@ func NewBindings(manager *Manager) *Bindings {
 		turnSeqs:  make(map[string]int),
 		turnTexts: make(map[string]string),
 		enrichmentPipeline: &EnrichmentPipeline{
-			Timeout: 500 * time.Millisecond,
+			Timeout: 2500 * time.Millisecond,
 		},
 	}
 }

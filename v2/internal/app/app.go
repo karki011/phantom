@@ -492,6 +492,21 @@ func (a *App) wireComposerEngine() {
 
 	deps.GapDetector = strategies.NewGapDetector()
 
+	// Wire strategy registry with all 7 strategies so the orchestrator does
+	// not have to rebuild a default on every turn.
+	reg := strategies.NewRegistry()
+	reg.Register(strategies.NewDirectStrategy(), 10)
+	reg.Register(strategies.NewDecomposeStrategy(), 5)
+	reg.Register(strategies.NewAdvisorStrategy(), 6)
+	reg.Register(strategies.NewSelfRefineStrategy(), 4)
+	reg.Register(strategies.NewTreeOfThoughtStrategy(), 3)
+	reg.Register(strategies.NewDebateStrategy(), 7)
+	reg.Register(strategies.NewGraphOfThoughtStrategy(), 8)
+	if perf != nil {
+		reg.SetPerformanceStore(perf)
+	}
+	deps.Registry = reg
+
 	// Wire GlobalPatternStore for cross-project pattern awareness.
 	home, _ := os.UserHomeDir()
 	aiEngineDir := filepath.Join(home, branding.ConfigDirName, "ai-engine")
