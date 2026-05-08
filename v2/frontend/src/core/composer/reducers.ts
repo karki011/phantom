@@ -1,6 +1,7 @@
 // Author: Subash Karki
 
 import type {
+  AssistantMessage,
   ChipData,
   ComposerState,
   SessionLifecycle,
@@ -344,14 +345,15 @@ export const reduceAssistantMessage = (
   let msg = ev.message
   if (typeof msg === 'string') {
     try {
-      msg = JSON.parse(msg)
+      msg = JSON.parse(msg) as AssistantMessage
     } catch {
       return
     }
   }
-  if (!msg?.content) return
+  const parsed = msg as AssistantMessage
+  if (!parsed?.content) return
 
-  const blocks: ContentBlock[] = msg.content.map((block: AssistantContentBlock) => {
+  const blocks: ContentBlock[] = parsed.content.map((block: AssistantContentBlock) => {
     switch (block.type) {
       case 'text':
         return { type: 'text' as const, text: block.text, status: 'complete' as const }
@@ -370,20 +372,19 @@ export const reduceAssistantMessage = (
   })
 
   // Also register tool_use entries in toolUses map
-  const toolUseBlocks = msg.content.filter(
+  const toolUseBlocks = parsed.content.filter(
     (b: AssistantContentBlock) => b.type === 'tool_use'
   )
 
   // Extract usage metrics from the assistant message
-  const usage = msg.usage
+  const usage = parsed.usage
     ? {
-        input_tokens: msg.usage.input_tokens ?? 0,
-        output_tokens: msg.usage.output_tokens ?? 0,
+        input_tokens: parsed.usage.input_tokens ?? 0,
+        output_tokens: parsed.usage.output_tokens ?? 0,
       }
     : undefined
 
-  // Determine if this is a final (complete) message or a partial snapshot.
-  const isFinal = !!msg.stop_reason
+  const isFinal = !!parsed.stop_reason
 
   setState((s) => {
     // Find existing assistant message to update in-place.
