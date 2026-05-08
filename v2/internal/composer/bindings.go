@@ -73,6 +73,10 @@ type Bindings struct {
 	// strategy monitor TUI to receive real-time events.
 	onStrategySelected func(name string, confidence float64, complexity, risk string, blastRadius int)
 
+	// enrichmentPipeline runs all configured context collectors in parallel
+	// with a shared timeout budget, replacing the monolithic tryEnrichAndEmitStrategy.
+	enrichmentPipeline *EnrichmentPipeline
+
 	// Turn tracking for DB persistence — mirrors V1's per-turn state.
 	turnMu       sync.Mutex
 	turnIDs      map[string]string // sessionID → current turnID
@@ -89,6 +93,9 @@ func (b *Bindings) SetStrategyCallback(fn func(name string, confidence float64, 
 // history and listing from the shared SQLite database.
 func (b *Bindings) SetService(svc *Service) {
 	b.service = svc
+
+	// Re-wire collectors — the memory collector depends on the service.
+	b.wireEnrichmentCollectors()
 }
 
 // NewBindings creates a Bindings instance backed by the given Manager.
@@ -104,6 +111,9 @@ func NewBindings(manager *Manager) *Bindings {
 		turnIDs:   make(map[string]string),
 		turnSeqs:  make(map[string]int),
 		turnTexts: make(map[string]string),
+		enrichmentPipeline: &EnrichmentPipeline{
+			Timeout: 500 * time.Millisecond,
+		},
 	}
 }
 
@@ -126,6 +136,112 @@ func (b *Bindings) SetContextEnricher(enricher ContextEnricher) {
 func (b *Bindings) SetEngineDeps(deps orchestrator.Dependencies) {
 	b.engineDeps = deps
 	b.engineDepsSet = true
+
+	// Wire enrichment pipeline collectors now that we have orchestrator deps.
+	b.wireEnrichmentCollectors()
+}
+
+// wireEnrichmentCollectors configures the enrichment pipeline's collector
+// functions using the current engine deps and service. Called from SetEngineDeps
+// and SetService so collectors are wired as soon as their deps are available.
+func (b *Bindings) wireEnrichmentCollectors() {
+	if b.enrichmentPipeline == nil {
+		return
+	}
+
+	// Strategy collector: wraps orchestrator.Process with symbol inference.
+	if b.engineDepsSet {
+		b.enrichmentPipeline.StrategyCollector = func(ctx context.Context, input EnrichmentInput) collectorResult {
+			turnDeps := b.engineDeps
+			resolvedIndexer := b.resolveIndexer(input.CWD)
+			if resolvedIndexer != nil {
+				turnDeps.Indexer = resolvedIndexer
+			}
+
+			// Symbol inference — 300ms cap within the pipeline's overall budget.
+			var activeFiles []string
+			if resolvedIndexer != nil {
+				inferCtx, inferCancel := context.WithTimeout(ctx, 300*time.Millisecond)
+				inferCh := make(chan []string, 1)
+				go func() { inferCh <- InferFilesFromPrompt(resolvedIndexer, input.UserText) }()
+				select {
+				case inferred := <-inferCh:
+					activeFiles = inferred
+				case <-inferCtx.Done():
+					log.Debug("composer: pipeline symbol inference timed out")
+				}
+				inferCancel()
+			}
+
+			orchCtx, orchCancel := context.WithTimeout(ctx, 2*time.Second)
+			defer orchCancel()
+
+			type orchResult struct {
+				result *orchestrator.ProcessResult
+				err    error
+			}
+			orchCh := make(chan orchResult, 1)
+			go func() {
+				r, e := orchestrator.Process(orchCtx, turnDeps, orchestrator.ProcessInput{
+					Goal:        input.UserText,
+					CWD:         input.CWD,
+					ActiveFiles: activeFiles,
+				})
+				orchCh <- orchResult{r, e}
+			}()
+
+			select {
+			case or := <-orchCh:
+				if or.err != nil {
+					return collectorResult{Source: "strategy", Err: or.err}
+				}
+				if or.result == nil || or.result.Strategy.Name == "" {
+					return collectorResult{Source: "strategy"}
+				}
+				directive := strings.TrimSpace(or.result.Output.Text)
+				if directive == "" || directive == strings.TrimSpace(input.UserText) {
+					return collectorResult{Source: "strategy"}
+				}
+				tokens := estimateTokens(directive)
+				return collectorResult{Source: "strategy", XML: directive, Tokens: tokens}
+			case <-ctx.Done():
+				return collectorResult{Source: "strategy", Err: fmt.Errorf("timeout")}
+			}
+		}
+	}
+
+	// Memory collector: uses SessionMemoryBuilder if available via the V1 Service.
+	if b.service != nil && b.service.memoryBuilder != nil {
+		b.enrichmentPipeline.MemoryCollector = func(ctx context.Context, input EnrichmentInput) collectorResult {
+			builder := *b.service.memoryBuilder // shallow copy
+			block := builder.BuildWithBudget(800)
+			if block != "" {
+				tokens := estimateTokens(block)
+				return collectorResult{Source: "memory", XML: block, Tokens: tokens}
+			}
+			return collectorResult{Source: "memory"}
+		}
+	}
+
+	// Graph collector: uses the per-CWD file-graph indexer to provide
+	// a lightweight graph-stats fragment (file count, edge count, etc.).
+	b.enrichmentPipeline.GraphCollector = func(ctx context.Context, input EnrichmentInput) collectorResult {
+		indexer := b.resolveIndexer(input.CWD)
+		if indexer == nil {
+			return collectorResult{Source: "graph"}
+		}
+		g := indexer.Graph()
+		if g == nil {
+			return collectorResult{Source: "graph"}
+		}
+		files, _, edges := g.Stats()
+		if files == 0 {
+			return collectorResult{Source: "graph"}
+		}
+		xml := fmt.Sprintf(`<graph files="%d" edges="%d" cwd=%q />`, files, edges, input.CWD)
+		tokens := estimateTokens(xml)
+		return collectorResult{Source: "graph", XML: xml, Tokens: tokens}
+	}
 }
 
 // SetIndexerResolver injects a per-turn file-graph indexer resolver so the
@@ -228,11 +344,61 @@ func (b *Bindings) ComposerV2Send(req SendRequest) error {
 	// while we're preparing the enriched prompt.
 	session.ResetWatchdog()
 
-	// Attempt AI engine strategy selection + prompt enrichment for user messages.
-	// The enriched content replaces the raw user message with codebase context
-	// and strategy guidance prepended — matching V1's service.go behaviour.
+	// ── Enrichment: collect context from all sources in parallel ──────────
 	content := req.Content
-	if b.ctx != nil && (b.engineDepsSet || b.enricher != nil) {
+	if b.ctx != nil && b.enrichmentPipeline != nil && b.enrichmentPipeline.StrategyCollector != nil {
+		// Collect turn number for the enrichment input.
+		b.turnMu.Lock()
+		turnNum := 1
+		if seq, ok := b.turnSeqs[req.SessionID]; ok && seq > 0 {
+			turnNum = seq
+		}
+		b.turnMu.Unlock()
+
+		enrichInput := EnrichmentInput{
+			SessionID:     req.SessionID,
+			UserText:      userText,
+			CWD:           session.CWD,
+			EditorContext: req.EditorContext,
+			TurnNumber:    turnNum,
+		}
+
+		enrichOutput := b.enrichmentPipeline.Enrich(b.ctx, enrichInput)
+
+		// Emit chip events to the frontend.
+		for _, chip := range enrichOutput.Chips {
+			runtime.EventsEmit(b.ctx, fmt.Sprintf("composer:chip:%s", req.SessionID), chip)
+		}
+
+		// Replace content with the enriched version when we have context.
+		if enrichOutput.XMLBlock != "" {
+			if modified := b.injectEnrichedTextIntoEnvelope(req.Content, enrichOutput.EnrichedText); modified != nil {
+				content = modified
+				b.emitEnrichedPrompt(req.SessionID, enrichOutput.EnrichedText, userText)
+			}
+		}
+
+		// Backward compat: emit strategy event if the strategy collector produced data.
+		// The existing frontend expects "strategy" and "enriched_prompt" events.
+		for _, chip := range enrichOutput.Chips {
+			if chip.Source == "strategy" && chip.Status == "success" {
+				channel := "composer:event:" + req.SessionID
+				ev := StreamEvent{
+					Kind:               EventStrategy,
+					RawType:            "strategy",
+					StrategyName:       "enrichment-pipeline",
+					StrategyConfidence: 1.0,
+				}
+				if b.logger != nil {
+					b.logger.LogEvent(req.SessionID, ev)
+				}
+				runtime.EventsEmit(b.ctx, channel, ev)
+				break
+			}
+		}
+	} else if b.ctx != nil && (b.engineDepsSet || b.enricher != nil) {
+		// Deprecated: fallback to monolithic tryEnrichAndEmitStrategy when
+		// enrichment pipeline collectors are not yet wired.
 		if enriched := b.tryEnrichAndEmitStrategy(session, req); enriched != nil {
 			content = enriched
 		}
@@ -439,6 +605,53 @@ func (b *Bindings) persistStreamEvent(sessionID string, session *Session, ev Str
 	}
 }
 
+// injectEnrichedTextIntoEnvelope replaces the first text block in a user
+// message JSON envelope with enrichedText. Returns the re-serialized
+// envelope, or nil on error.
+func (b *Bindings) injectEnrichedTextIntoEnvelope(content json.RawMessage, enrichedText string) json.RawMessage {
+	type contentBlock struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	type messageBody struct {
+		Role    string         `json:"role"`
+		Content []contentBlock `json:"content"`
+	}
+	type userEnvelope struct {
+		Type    string      `json:"type"`
+		Message messageBody `json:"message"`
+	}
+
+	var envelope userEnvelope
+	if err := json.Unmarshal(content, &envelope); err != nil {
+		return nil
+	}
+	if envelope.Type != "user" || envelope.Message.Role != "user" {
+		return nil
+	}
+
+	// Find and replace the first text block.
+	for i, block := range envelope.Message.Content {
+		if block.Type == "text" && block.Text != "" {
+			envelope.Message.Content[i] = contentBlock{
+				Type: "text",
+				Text: enrichedText,
+			}
+			modified, err := json.Marshal(envelope)
+			if err != nil {
+				log.Warn("composer: failed to marshal enriched envelope", "err", err)
+				return nil
+			}
+			log.Info("composer: injecting enriched prompt via pipeline", "chars", len(enrichedText))
+			return modified
+		}
+	}
+	return nil
+}
+
+// Deprecated: tryEnrichAndEmitStrategy is replaced by EnrichmentPipeline in
+// ComposerV2Send. Kept as fallback when pipeline collectors are not wired.
+//
 // tryEnrichAndEmitStrategy attempts to extract the user message text,
 // run it through the full AI engine orchestrator (matching V1 behaviour),
 // and emit a strategy event to the frontend. Returns the modified JSON
