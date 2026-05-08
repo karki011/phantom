@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.35](https://github.com/karki011/phantom/compare/v0.1.34...v0.1.35) (2026-05-08)
+
+
+### Bug Fixes
+
+* separate inference and orchestrator timeouts to prevent starvation ([#110](https://github.com/karki011/phantom/issues/110)) ([67bb38f](https://github.com/karki011/phantom/commit/67bb38fbd00d496853a655d199352f8ff77a842f))
+* terminal file-path links + CI cleanup ([#113](https://github.com/karki011/phantom/issues/113)) ([0fc717a](https://github.com/karki011/phantom/commit/0fc717ac715d6ed0cee0e627d541b6a6181b87b6))
+
 ## [0.1.34](https://github.com/karki011/phantom/compare/v0.1.33...v0.1.34) (2026-05-07)
 
 
