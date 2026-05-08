@@ -84,6 +84,9 @@ test-results/
 # Tool scratch / graph outputs
 .code-review-graph/
 .phantom/
+.swarm/
+agentdb.rvf
+agentdb.rvf.lock
 
 # Planning scratch (ephemeral)
 .planning/
