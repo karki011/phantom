@@ -206,6 +206,8 @@ export interface ChipData {
   tokens: number
   expandable: boolean
   expandedContent?: string
+  /** Associates this chip with a specific message to prevent duplicated rendering. */
+  messageId?: string
 }
 
 export type SessionLifecycle = 'active' | 'hibernated' | 'resuming' | 'archived'

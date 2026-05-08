@@ -40,7 +40,8 @@ function createActivityChip(
   label: string,
   status: ChipData['status'],
   timing?: number,
-  expandedContent?: string
+  expandedContent?: string,
+  messageId?: string
 ): ChipData {
   return {
     id: `activity-${source}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -52,6 +53,7 @@ function createActivityChip(
     tokens: 0,
     expandable: !!expandedContent,
     expandedContent,
+    messageId,
   }
 }
 
@@ -216,7 +218,8 @@ export const reduceToolUseStart = (
 
     // Emit active activity chip for this tool invocation (legacy path)
     const toolLabel = formatToolLabel(ev.tool_name ?? '')
-    s.chips.push(createActivityChip(`tool-${toolId}`, `${toolLabel}...`, 'active'))
+    const currentMsgId = s.streaming?.msgId ?? s.messages[s.messages.length - 1]?.id
+    s.chips.push(createActivityChip(`tool-${toolId}`, `${toolLabel}...`, 'active', undefined, undefined, currentMsgId))
   })
 }
 
@@ -527,7 +530,8 @@ export const reduceStreamEvent = (
       handleStreamBlockStart(setState, state, 'thinking')
       // Emit active thinking activity chip (timing stores start timestamp for duration calc)
       setState((s) => {
-        s.chips.push(createActivityChip('thinking', 'Thinking...', 'active', Date.now()))
+        const currentMsgId = s.streaming?.msgId ?? s.messages[s.messages.length - 1]?.id
+        s.chips.push(createActivityChip('thinking', 'Thinking...', 'active', Date.now(), undefined, currentMsgId))
       })
       break
     case 'text_start':
@@ -690,7 +694,8 @@ const handleStreamToolUseStart = (
 
     // Emit active activity chip for this tool invocation
     const toolLabel = formatToolLabel(ev.tool_name ?? '')
-    s.chips.push(createActivityChip(`tool-${toolId}`, `${toolLabel}...`, 'active'))
+    const currentMsgId = s.streaming?.msgId ?? s.messages[s.messages.length - 1]?.id
+    s.chips.push(createActivityChip(`tool-${toolId}`, `${toolLabel}...`, 'active', undefined, undefined, currentMsgId))
   })
 }
 

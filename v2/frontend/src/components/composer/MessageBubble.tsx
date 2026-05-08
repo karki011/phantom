@@ -95,9 +95,9 @@ const MessageBubble: Component<MessageBubbleProps> = (props) => {
         {(text) => <EnrichedPromptChip text={text()} />}
       </Show>
 
-      {/* Activity chips — shown after assistant content blocks */}
+      {/* Activity chips — shown after assistant content blocks (per-message filtered) */}
       <Show when={props.message.role === 'assistant' && props.chips && props.chips.length > 0}>
-        <ActivityChipBar chips={props.chips!} />
+        <ActivityChipBar chips={props.chips!} messageId={props.message.id} />
       </Show>
 
       {/* Per-turn metrics — shown after each completed assistant message */}
