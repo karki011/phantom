@@ -145,3 +145,54 @@ func TestManager_CloseAll(t *testing.T) {
 		t.Fatalf("expected 0 sessions after CloseAll, got %d", len(mgr.List()))
 	}
 }
+
+func TestManager_GetHibernated_ReturnsSession(t *testing.T) {
+	m := &Manager{
+		sessions: make(map[string]*Session),
+		opts:     ManagerOptions{MaxSessions: 8},
+	}
+
+	s := &Session{
+		ID:        "test-session",
+		status:    StatusStopped,
+		lifecycle: LifecycleHibernated,
+	}
+	m.sessions["test-session"] = s
+
+	got, ok := m.Get("test-session")
+	if !ok || got == nil {
+		t.Fatal("expected to find hibernated session")
+	}
+	if got.Lifecycle() != LifecycleHibernated {
+		t.Errorf("lifecycle = %q, want %q", got.Lifecycle(), LifecycleHibernated)
+	}
+}
+
+func TestManager_PurgeDead_KeepsHibernated(t *testing.T) {
+	m := &Manager{
+		sessions: make(map[string]*Session),
+		opts:     ManagerOptions{MaxSessions: 8},
+	}
+
+	hibernated := &Session{
+		ID:        "hibernated-session",
+		status:    StatusStopped,
+		lifecycle: LifecycleHibernated,
+	}
+	dead := &Session{
+		ID:        "dead-session",
+		status:    StatusStopped,
+		lifecycle: LifecycleActive,
+	}
+	m.sessions["hibernated-session"] = hibernated
+	m.sessions["dead-session"] = dead
+
+	m.PurgeDead()
+
+	if _, ok := m.Get("hibernated-session"); !ok {
+		t.Fatal("PurgeDead should keep hibernated sessions")
+	}
+	if _, ok := m.Get("dead-session"); ok {
+		t.Fatal("PurgeDead should remove dead non-hibernated sessions")
+	}
+}
