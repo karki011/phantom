@@ -262,3 +262,33 @@ func TestSession_StderrEvents(t *testing.T) {
 		t.Fatalf("expected text %q, got %q", "something went wrong", ev.Text)
 	}
 }
+
+func TestSession_Hibernate_StoresUUID(t *testing.T) {
+	s := &Session{
+		ID:        "test-session",
+		status:    StatusRunning,
+		sessionID: "claude-uuid-123",
+		lifecycle: LifecycleActive,
+	}
+	s.done = make(chan struct{})
+
+	err := s.Hibernate()
+	if err != nil {
+		t.Fatalf("Hibernate() error: %v", err)
+	}
+
+	if s.lifecycle != LifecycleHibernated {
+		t.Errorf("lifecycle = %q, want %q", s.lifecycle, LifecycleHibernated)
+	}
+
+	if s.hibernateUUID != "claude-uuid-123" {
+		t.Errorf("hibernateUUID = %q, want %q", s.hibernateUUID, "claude-uuid-123")
+	}
+}
+
+func TestSession_Lifecycle_InitialState(t *testing.T) {
+	s := &Session{}
+	if s.Lifecycle() != LifecycleActive {
+		t.Errorf("initial lifecycle = %q, want %q", s.Lifecycle(), LifecycleActive)
+	}
+}

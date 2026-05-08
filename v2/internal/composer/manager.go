@@ -68,17 +68,28 @@ func (m *Manager) Open(id, cwd string, opts SessionOptions, handlers ...EventHan
 	}
 
 	// Purge dead sessions before checking capacity.
+	// Hibernated sessions are intentionally stopped — keep them.
 	for kid, ks := range m.sessions {
+		if ks.Lifecycle() == LifecycleHibernated {
+			continue
+		}
 		st := ks.Status()
 		if st == StatusStopped || st == StatusCrashed || st == StatusAuthFailed {
 			delete(m.sessions, kid)
 		}
 	}
 
-	// Enforce capacity.
-	if len(m.sessions) >= m.opts.MaxSessions {
+	// Enforce capacity: count only active (non-hibernated, non-archived) sessions.
+	activeCount := 0
+	for _, s := range m.sessions {
+		lc := s.Lifecycle()
+		if lc != LifecycleHibernated && lc != LifecycleArchived {
+			activeCount++
+		}
+	}
+	if activeCount >= m.opts.MaxSessions {
 		m.mu.Unlock()
-		return ManagerSessionInfo{}, fmt.Errorf("max sessions reached (%d)", m.opts.MaxSessions)
+		return ManagerSessionInfo{}, fmt.Errorf("max sessions (%d active) reached", m.opts.MaxSessions)
 	}
 
 	// Derive SessionDir from BaseDir + id when not explicitly set.
@@ -136,10 +147,15 @@ func (m *Manager) List() []ManagerSessionInfo {
 }
 
 // PurgeDead removes sessions whose subprocess is no longer running.
+// Hibernated sessions are kept so they can be resumed later.
 func (m *Manager) PurgeDead() int {
 	m.mu.Lock()
 	var dead []string
 	for id, s := range m.sessions {
+		// Hibernated sessions are intentionally stopped — keep them.
+		if s.Lifecycle() == LifecycleHibernated {
+			continue
+		}
 		st := s.Status()
 		if st == StatusStopped || st == StatusCrashed || st == StatusAuthFailed {
 			dead = append(dead, id)
@@ -150,6 +166,14 @@ func (m *Manager) PurgeDead() int {
 	}
 	m.mu.Unlock()
 	return len(dead)
+}
+
+// IsHibernated reports whether the session with sessionID is currently hibernated.
+func (m *Manager) IsHibernated(sessionID string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	s, ok := m.sessions[sessionID]
+	return ok && s.Lifecycle() == LifecycleHibernated
 }
 
 // Close stops and removes a single session by id.

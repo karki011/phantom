@@ -32,13 +32,24 @@ type SessionMemoryBuilder struct {
 }
 
 // Build assembles the memory block, respecting the byte budget.
+// Delegates to BuildWithBudget with 0 (default budget).
+func (b *SessionMemoryBuilder) Build() string {
+	return b.BuildWithBudget(0)
+}
+
+// BuildWithBudget assembles the memory block with a configurable token budget.
+// maxTokens is converted to bytes (maxTokens * 4). If maxTokens is 0 or the
+// resulting byte count exceeds MaxSessionMemoryBytes, the default cap is used.
 // Sections are added in priority order — lower-priority sections are dropped
 // first when the budget is exhausted. Returns empty string when no meaningful
 // memory is available.
-func (b *SessionMemoryBuilder) Build() string {
-	maxBytes := b.MaxBytes
-	if maxBytes <= 0 {
+func (b *SessionMemoryBuilder) BuildWithBudget(maxTokens int) string {
+	maxBytes := maxTokens * 4
+	if maxBytes <= 0 || maxBytes > MaxSessionMemoryBytes {
 		maxBytes = MaxSessionMemoryBytes
+	}
+	if b.MaxBytes > 0 && b.MaxBytes < maxBytes {
+		maxBytes = b.MaxBytes
 	}
 
 	// Collect sections in priority order (highest first).
