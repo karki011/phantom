@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.1.37](https://github.com/karki011/phantom/compare/v0.1.36...v0.1.37) (2026-05-09)
+
+
+### Features
+
+* **composer:** add ActivityChipBar, StatusChipStrip and wire into composer UI ([a3b9178](https://github.com/karki011/phantom/commit/a3b91782e9013338a716b2eb52c208975b0fa378))
+* **composer:** add Chip, ContextChipBar, SessionLifecycleChip components ([83cd192](https://github.com/karki011/phantom/commit/83cd192c5daccb291d3a1985c303de32ade45cc0))
+* **composer:** add ChipData types, store fields, reducers, and bridge subscription for chip events ([63bb823](https://github.com/karki011/phantom/commit/63bb823650821ffae25c671d4925f0160800ffe6))
+* **composer:** emit activity chips for tool calls and thinking blocks in reducer ([3ea9bb7](https://github.com/karki011/phantom/commit/3ea9bb766e7b4c2ba6e85412f3e00810b4db1a9c))
+* **composer:** wire ContextChipBar and SessionLifecycleChip into composer UI ([13f46f0](https://github.com/karki011/phantom/commit/13f46f038a3c5a7a1e9a5983131f0cbeef9acea0))
+* **composer:** wire enrichment pipeline into ComposerV2Send for per-turn injection ([17b189c](https://github.com/karki011/phantom/commit/17b189c458bf3fdec6a291b88264be4c5cf049e2))
+
+
+### Bug Fixes
+
+* **composer:** make activity chips compact and per-message ([b0972b1](https://github.com/karki011/phantom/commit/b0972b1b5f82eff73853581c13223caf6897d084))
+* **composer:** reduce chip padding, increase max-width for longer labels ([65ce700](https://github.com/karki011/phantom/commit/65ce70059feddbdde9a959ccd96416ba581795d4))
+* **composer:** resolve pre-existing TS errors in reduceAssistantMessage ([3063884](https://github.com/karki011/phantom/commit/30638842c0e339e054560107bec416b8ee28620f))
+* **composer:** set enrichment chip category to 'context' to match frontend filter ([68de830](https://github.com/karki011/phantom/commit/68de8301386c1d54ccc2053196a6eecc244f139b))
+* **composer:** show strategy name even when DirectStrategy doesn't modify prompt ([29b2467](https://github.com/karki011/phantom/commit/29b2467134e2883c65c3a140ae18d19ebf36552e))
+* **composer:** shrink chip font to 10px/14px line-height ([f2393e1](https://github.com/karki011/phantom/commit/f2393e1523a58050a0e75a1f895dd42d3f61c90f))
+* **composer:** wire strategy registry + increase pipeline timeout to 2500ms ([8fdfcf8](https://github.com/karki011/phantom/commit/8fdfcf8ebc89da9f4069f12db19b120264842fb4))
+* hide gitignored files from file tree sidebar ([66f7d36](https://github.com/karki011/phantom/commit/66f7d366242f42a5e47ada04cba9463dd1043f42))
+
+
+### Performance
+
+* virtualize file tree, cache gitignore, remove sync reflows ([9d90785](https://github.com/karki011/phantom/commit/9d90785756027cda5b140b47f111413a4e7317b7))
+
 ## [0.1.36](https://github.com/karki011/phantom/compare/v0.1.35...v0.1.36) (2026-05-08)
 
 
