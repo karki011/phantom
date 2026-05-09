@@ -199,8 +199,9 @@ func (b *Bindings) wireEnrichmentCollectors() {
 					return collectorResult{Source: "strategy"}
 				}
 				directive := strings.TrimSpace(or.result.Output.Text)
+				strategyLabel := fmt.Sprintf("Strategy: %s (%.0f%%)", or.result.Strategy.Name, or.result.Confidence*100)
 				if directive == "" || directive == strings.TrimSpace(input.UserText) {
-					return collectorResult{Source: "strategy"}
+					return collectorResult{Source: "strategy", Label: strategyLabel}
 				}
 				tokens := estimateTokens(directive)
 				return collectorResult{Source: "strategy", XML: directive, Tokens: tokens}

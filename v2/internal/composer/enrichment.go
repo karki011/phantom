@@ -64,6 +64,7 @@ type collectorResult struct {
 	XML    string
 	Tokens int
 	Err    error
+	Label  string // optional: chip label when XML is empty but result is valid (e.g. DirectStrategy)
 }
 
 // collectorOutcome pairs a collector's output with whether it completed.
@@ -237,6 +238,10 @@ func buildChip(source string, ir collectorOutcome) ChipEvent {
 	case ir.result.Err != nil:
 		chip.Status = "error"
 		chip.Label = capitalizeFirst(source) + ": " + ir.result.Err.Error()
+	case ir.result.XML == "" && ir.result.Label != "":
+		// Collector ran, selected a result but didn't inject XML (e.g. DirectStrategy).
+		chip.Status = "success"
+		chip.Label = ir.result.Label
 	case ir.result.XML == "":
 		// Collector ran but produced nothing (e.g. nil EditorContext).
 		chip.Status = "neutral"
