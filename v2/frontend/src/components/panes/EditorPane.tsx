@@ -208,17 +208,6 @@ export default function EditorPane(props: EditorPaneProps) {
     },
   ));
 
-  // ---------------------------------------------------------------------------
-  // ResizeObserver — refit editor when pane resizes
-  // ---------------------------------------------------------------------------
-
-  onMount(() => {
-    const ro = new ResizeObserver(() => {
-      editorInstance?.layout();
-    });
-    ro.observe(editorContainerRef);
-    onCleanup(() => ro.disconnect());
-  });
 
   // ---------------------------------------------------------------------------
   // Editor settings sync — live-apply font size / line height from Settings

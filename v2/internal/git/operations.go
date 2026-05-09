@@ -341,8 +341,11 @@ func ListDirectory(ctx context.Context, repoPath, dirPath string) ([]FileEntry, 
 		return nil, fmt.Errorf("ListDirectory: read dir %s: %w", dirPath, err)
 	}
 
-	// Build the list of relative paths to check for gitignore.
-	pathsToCheck := make([]string, 0, len(entries))
+	// Load cached in-process gitignore rules (no subprocess, 30 s TTL).
+	gitignoreRules := getCachedGitignoreRules(repoPath)
+
+	// Build ignoredSet by evaluating each entry against the cached rules.
+	ignoredSet := make(map[string]bool)
 	for _, entry := range entries {
 		name := entry.Name()
 		if name == ".git" {
@@ -354,21 +357,8 @@ func ListDirectory(ctx context.Context, repoPath, dirPath string) ([]FileEntry, 
 		} else {
 			rel = relDir + "/" + name
 		}
-		pathsToCheck = append(pathsToCheck, rel)
-	}
-
-	// Use git check-ignore to build the set of ignored entries in this directory.
-	ignoredSet := make(map[string]bool)
-	if len(pathsToCheck) > 0 {
-		args := append([]string{"check-ignore"}, pathsToCheck...)
-		ignoredOut, _ := runGit(ctx, repoPath, args...)
-		if ignoredOut != "" {
-			for _, line := range strings.Split(ignoredOut, "\n") {
-				line = strings.TrimSpace(line)
-				if line != "" {
-					ignoredSet[filepath.Base(line)] = true
-				}
-			}
+		if isIgnoredByRules(gitignoreRules, rel, entry.IsDir()) {
+			ignoredSet[name] = true
 		}
 	}
 

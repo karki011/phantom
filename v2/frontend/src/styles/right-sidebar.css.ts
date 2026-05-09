@@ -188,6 +188,42 @@ export const fileTree = style({
   '::-webkit-scrollbar-track': { background: 'transparent' },
 });
 
+// Virtualized file tree container — CSS containment + will-change for compositing
+export const fileTreeVirtual = style({
+  display: 'flex',
+  flexDirection: 'column',
+  padding: vars.space.sm,
+  flex: 1,
+  overflowY: 'auto',
+  minHeight: 0,
+  position: 'relative',
+  contain: 'layout style',
+  contentVisibility: 'auto',
+  containIntrinsicHeight: 'auto 10000px',
+  willChange: 'transform',
+  scrollbarWidth: 'thin',
+  scrollbarColor: `${vars.color.border} transparent`,
+  '::-webkit-scrollbar': { width: '4px' },
+  '::-webkit-scrollbar-thumb': { background: vars.color.border, borderRadius: '2px' },
+  '::-webkit-scrollbar-track': { background: 'transparent' },
+});
+
+// Overlay for inline create input in virtualized tree
+export const createInputOverlay = style({
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `4px ${vars.space.sm}`,
+  fontSize: vars.fontSize.xs,
+  fontFamily: vars.font.mono,
+  position: 'sticky',
+  bottom: 0,
+  backgroundColor: vars.color.bgSecondary,
+  borderTop: `1px solid ${vars.color.border}`,
+  zIndex: 5,
+});
+
 export const fileItem = style({
   display: 'flex',
   flexDirection: 'row',

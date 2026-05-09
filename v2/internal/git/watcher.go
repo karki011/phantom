@@ -273,6 +273,17 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 		return
 	}
 
+	// Invalidate gitignore cache when a .gitignore file changes so the next
+	// ListDirectory call re-parses rules without spawning a subprocess.
+	if name == ".gitignore" {
+		// Walk up from the changed file's directory to find the repo root, then
+		// invalidate. We resolve by walking up until we find a .git directory.
+		repoRoot := findRepoRoot(dir)
+		if repoRoot != "" {
+			InvalidateGitignoreCache(repoRoot)
+		}
+	}
+
 	// Working tree file change — 1s debounce like VS Code
 	w.emitDebounced("worktree:"+dir, GitEventWorkingTreeChanged, 1000*time.Millisecond)
 }
@@ -342,4 +353,20 @@ func resolveGitCommonDir(repoPath string) string {
 		commonDir = filepath.Join(gitDir, commonDir)
 	}
 	return filepath.Clean(commonDir)
+}
+
+// findRepoRoot walks up from dir until it finds a directory containing a .git
+// entry (file or directory). Returns "" if no repo root is found.
+func findRepoRoot(dir string) string {
+	for {
+		if resolveGitDir(dir) != "" {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached the filesystem root without finding a repo.
+			return ""
+		}
+		dir = parent
+	}
 }
