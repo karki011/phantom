@@ -42,7 +42,8 @@ export async function setComposerV2Enabled(enabled: boolean): Promise<void> {
 }
 
 export function composerPaneKind(): PaneType {
-  return composerV2Enabled() ? 'composer-v2' : 'composer'
+  // V1 composer removed — always use V2
+  return 'composer'
 }
 
 export { composerV2Enabled }

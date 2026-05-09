@@ -36,6 +36,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
 
+	"github.com/subashkarki/phantom-os-v2/internal/ai/classify"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/evaluator"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/orchestrator"
@@ -830,6 +831,14 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		}
 	}
 
+	// Classification directive injection — first turn only, appended to the
+	// system prompt so the model emits a <phantom:task_type> tag that the
+	// stream processor can extract and strip from user-visible output.
+	if !isResume && !args.NoContext {
+		cliArgs = append(cliArgs, "--append-system-prompt", classify.ClassificationDirective)
+		log.Debug("composer: classification directive injected", "session", sessionID)
+	}
+
 	cmd := exec.CommandContext(ctx, cliPath, cliArgs...)
 
 	// CWD selection:
@@ -1147,13 +1156,17 @@ func (s *Service) handleContentBlockDelta(paneID, turnID string, raw map[string]
 	switch delta.Delta.Type {
 	case "text_delta":
 		if delta.Delta.Text != "" {
-			s.emit("composer:event", Event{PaneID: paneID, TurnID: turnID, Type: "delta", Content: delta.Delta.Text})
+			// Strip any classification tag before forwarding to the frontend.
+			// The tag appears early in the response (first chunk or two), so
+			// this check is effectively free on subsequent chunks.
+			visibleText, _, _ := classify.ExtractAndStrip(delta.Delta.Text)
+			s.emit("composer:event", Event{PaneID: paneID, TurnID: turnID, Type: "delta", Content: visibleText})
 			if responseText != nil && responseText.Len() < maxResponseText {
 				remain := maxResponseText - responseText.Len()
-				if len(delta.Delta.Text) <= remain {
-					responseText.WriteString(delta.Delta.Text)
+				if len(visibleText) <= remain {
+					responseText.WriteString(visibleText)
 				} else {
-					responseText.WriteString(delta.Delta.Text[:remain])
+					responseText.WriteString(visibleText[:remain])
 				}
 			}
 		}
@@ -1223,13 +1236,15 @@ func (s *Service) handleAssistant(ctx context.Context, paneID, turnID, cwd strin
 		switch block.Type {
 		case "text":
 			if block.Text != "" {
-				s.emit("composer:event", Event{PaneID: paneID, TurnID: turnID, Type: "delta", Content: block.Text})
+				// Strip classification tags from batched assistant text blocks.
+				visibleText, _, _ := classify.ExtractAndStrip(block.Text)
+				s.emit("composer:event", Event{PaneID: paneID, TurnID: turnID, Type: "delta", Content: visibleText})
 				if responseText != nil && responseText.Len() < maxResponseText {
 					remain := maxResponseText - responseText.Len()
-					if len(block.Text) <= remain {
-						responseText.WriteString(block.Text)
+					if len(visibleText) <= remain {
+						responseText.WriteString(visibleText)
 					} else {
-						responseText.WriteString(block.Text[:remain])
+						responseText.WriteString(visibleText[:remain])
 					}
 				}
 			}

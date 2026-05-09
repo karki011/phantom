@@ -1,6 +1,7 @@
 // Phantom — Editor file I/O bindings (Go backend wrappers)
 // Author: Subash Karki
 
+import { showErrorToast } from '../../shared/Toast/Toast';
 import type { BlameLine } from '../types';
 
 const App = () => (window as any).go?.['app']?.App;
@@ -13,8 +14,8 @@ const App = () => (window as any).go?.['app']?.App;
 export const readFileByPath = async (absPath: string): Promise<string> => {
   try {
     return (await App()?.ReadFileByPath(absPath)) ?? '';
-  } catch (err) {
-    console.error('[bindings] readFileByPath error:', err);
+  } catch (err: any) {
+    showErrorToast('Failed to read file', err?.message);
     return '';
   }
 };
@@ -22,8 +23,8 @@ export const readFileByPath = async (absPath: string): Promise<string> => {
 export const readFileContents = async (workspaceId: string, relativePath: string): Promise<string> => {
   try {
     return (await App()?.ReadFileContents(workspaceId, relativePath)) ?? '';
-  } catch (err) {
-    console.error('[bindings] readFileContents error:', err);
+  } catch (err: any) {
+    showErrorToast('Failed to read file', err?.message);
     return '';
   }
 };
@@ -42,8 +43,8 @@ export const writeFileContents = async (
   try {
     await App()?.WriteFileContents(workspaceId, relativePath, content);
     return true;
-  } catch (err) {
-    console.error('[bindings] writeFileContents error:', err);
+  } catch (err: any) {
+    showErrorToast('Failed to write file', err?.message);
     return false;
   }
 };

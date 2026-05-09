@@ -127,3 +127,33 @@ export const toastTitleWarning = style({
   fontFamily: vars.font.body,
   margin: 0,
 });
+
+export const toastTitleError = style({
+  color: vars.color.danger,
+  fontSize: vars.fontSize.sm,
+  fontWeight: 600,
+  fontFamily: vars.font.body,
+  margin: 0,
+});
+
+export const toastTitleSuccess = style({
+  color: vars.color.success,
+  fontSize: vars.fontSize.sm,
+  fontWeight: 600,
+  fontFamily: vars.font.body,
+  margin: 0,
+});
+
+export const progressFillError = style({
+  height: '100%',
+  backgroundColor: vars.color.danger,
+  width: 'var(--kb-toast-progress-fill-width)',
+  transition: 'width 100ms linear',
+});
+
+export const progressFillSuccess = style({
+  height: '100%',
+  backgroundColor: vars.color.success,
+  width: 'var(--kb-toast-progress-fill-width)',
+  transition: 'width 100ms linear',
+});

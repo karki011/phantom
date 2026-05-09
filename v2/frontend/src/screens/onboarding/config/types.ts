@@ -8,6 +8,7 @@ export type PhaseId =
   | 'identity-bind'
   | 'domain-select'
   | 'domain-link'
+  | 'identity-appearance'
   | 'ai-engine'
   | 'ability-awaken'
   | 'complete';

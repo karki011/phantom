@@ -38,6 +38,13 @@ type AiDecision struct {
 	CreatedAt  sql.NullTime    `json:"created_at"`
 }
 
+type AiDecisionsFt struct {
+	Goal       string `json:"goal"`
+	StrategyID string `json:"strategy_id"`
+	Complexity string `json:"complexity"`
+	Risk       string `json:"risk"`
+}
+
 type AiEmbedding struct {
 	ID          string       `json:"id"`
 	MemoryType  string       `json:"memory_type"`
@@ -55,6 +62,12 @@ type AiOutcome struct {
 	FailureReason sql.NullString `json:"failure_reason"`
 	CreatedAt     sql.NullTime   `json:"created_at"`
 	Phase         string         `json:"phase"`
+}
+
+type AiPatternsFt struct {
+	PatternText   string `json:"pattern_text"`
+	Category      string `json:"category"`
+	SourceContext string `json:"source_context"`
 }
 
 type ChatConversation struct {
@@ -301,6 +314,12 @@ type SessionEvent struct {
 	Type      string         `json:"type"`
 	Data      sql.NullString `json:"data"`
 	Timestamp int64          `json:"timestamp"`
+}
+
+type SessionMemoriesFt struct {
+	MemoryText string `json:"memory_text"`
+	MemoryType string `json:"memory_type"`
+	SessionID  string `json:"session_id"`
 }
 
 type SessionPolicy struct {

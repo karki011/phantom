@@ -83,7 +83,7 @@ export function Awakening(props: AwakeningProps) {
     timers.push(t);
   }
 
-  const operatorName = () => props.data.operator_name || 'Hunter';
+  const operatorName = () => props.data.operator_name || 'Operator';
 
   return (
     <div class={styles.awakeningContainer}>
@@ -124,20 +124,20 @@ export function Awakening(props: AwakeningProps) {
         <div class={styles.hunterName}>{operatorName()}</div>
         <div class={styles.hunterStats}>
           <div class={styles.hunterStat}>
-            <span class={styles.hunterStatLabel}>Level</span>
-            <span class={styles.hunterStatValue}>1</span>
+            <span class={styles.hunterStatLabel}>Status</span>
+            <span class={styles.hunterStatValue}>Online</span>
           </div>
           <div class={styles.hunterStat}>
-            <span class={styles.hunterStatLabel}>XP</span>
-            <span class={styles.hunterStatValue}>0 / 100</span>
+            <span class={styles.hunterStatLabel}>AI Engine</span>
+            <span class={styles.hunterStatValue}>Ready</span>
           </div>
           <div class={styles.hunterStat}>
-            <span class={styles.hunterStatLabel}>Streak</span>
-            <span class={styles.hunterStatValue}>0 days</span>
+            <span class={styles.hunterStatLabel}>Workspace</span>
+            <span class={styles.hunterStatValue}>Active</span>
           </div>
         </div>
         <div class={styles.hunterObjective}>
-          Daily Objective: Complete your first agent session
+          Your workspace is ready. Open a terminal or start a session.
         </div>
       </div>
 

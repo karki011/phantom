@@ -14,13 +14,12 @@ package orchestrator
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
+	"github.com/subashkarki/phantom-os-v2/internal/ai/detect"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/knowledge"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/strategies"
@@ -94,8 +93,6 @@ type LearningSummary struct {
 	AutoTuneThresholdsKey string  `json:"autoTuneApplied,omitempty"`
 	ConflictSessionCount  int     `json:"conflictSessions,omitempty"`
 	ConflictRiskBoost     float64 `json:"conflictRiskBoost,omitempty"`
-	SemanticMatchCount    int     `json:"semanticMatches,omitempty"`
-	TopSemanticScore      float64 `json:"topSemanticScore,omitempty"`
 }
 
 // ProcessResult is the wire-shape compatible with v1 orchestrator handlers.
@@ -117,18 +114,20 @@ type ProcessResult struct {
 // - Knowledge components (Decisions, Performance, AutoTune, GlobalPatterns,
 //   GapDetector, Compactor) are all optional. When provided they enable the
 //   learning loop; when absent Process degrades gracefully to a stateless run.
+// - DetectorCoordinator is optional. When set, its hints augment the assessor
+//   result before strategy selection (additive — existing logic unchanged).
 type Dependencies struct {
-	Indexer         *filegraph.Indexer
-	Registry        *strategies.Registry
-	Assessor        *strategies.Assessor
-	Decisions       *knowledge.DecisionStore
-	Performance     *strategies.PerformanceStore
-	AutoTune        *strategies.ThresholdTracker
-	GlobalPatterns  *knowledge.GlobalPatternStore
-	GapDetector     *strategies.GapDetector
-	Compactor       *knowledge.Compactor
-	ConflictTracker *conflict.Tracker      // optional — enables multi-session awareness
-	VectorStore     *embedding.VectorStore // optional — enables semantic memory retrieval
+	Indexer              *filegraph.Indexer
+	Registry             *strategies.Registry
+	Assessor             *strategies.Assessor
+	Decisions            *knowledge.DecisionStore
+	Performance          *strategies.PerformanceStore
+	AutoTune             *strategies.ThresholdTracker
+	GlobalPatterns       *knowledge.GlobalPatternStore
+	GapDetector          *strategies.GapDetector
+	Compactor            *knowledge.Compactor
+	ConflictTracker      *conflict.Tracker        // optional — enables multi-session awareness
+	DetectorCoordinator  *detect.Coordinator      // optional — enriches context before strategy selection
 }
 
 // ErrNoStrategies is returned when the registry can't pick any strategy.
@@ -178,6 +177,22 @@ func Process(ctx context.Context, deps Dependencies, in ProcessInput) (*ProcessR
 	assessment := assessor.Assess(in.Goal, len(contextFiles), blastRadius)
 	applyHints(&assessment, in.Hints)
 
+	// 2b. Run the detector pipeline when one is wired in. The resulting hints
+	// are additive: they can promote complexity/risk but never demote them
+	// below what the assessor already determined. This preserves the existing
+	// assessment logic while layering richer context on top.
+	if deps.DetectorCoordinator != nil {
+		dinput := &detect.DetectorInput{
+			Goal:    in.Goal,
+			Files:   in.ActiveFiles,
+			WorkDir: in.CWD,
+		}
+		if dhints, err := deps.DetectorCoordinator.Analyze(ctx, dinput); err == nil {
+			applyDetectorHints(&assessment, dhints)
+		}
+		// Detector errors are non-fatal — assessment already contains a baseline.
+	}
+
 	// 3. Load priors for this project + similar goal.
 	priorFailures := loadPriorFailures(deps.Decisions, in.Goal)
 	patternBias := loadPatternBias(deps.GlobalPatterns)
@@ -196,50 +211,6 @@ func Process(ctx context.Context, deps Dependencies, in ProcessInput) (*ProcessR
 			// Cap at 0.6 so even heavy contention can't zero-out scores.
 			if conflictRiskBoost > 0.6 {
 				conflictRiskBoost = 0.6
-			}
-		}
-	}
-
-	// 3c. Semantic memory retrieval — find decisions/patterns similar to this goal.
-	var semanticMatchCount int
-	var topSemanticScore float64
-	if deps.VectorStore != nil && in.Goal != "" {
-		matches, err := deps.VectorStore.FindSimilar(in.Goal, 5, "decision", "pattern")
-		if err == nil && len(matches) > 0 {
-			semanticMatchCount = len(matches)
-			topSemanticScore = matches[0].Score
-			slog.Info("semantic memory retrieval",
-				"goal", in.Goal,
-				"matches", semanticMatchCount,
-				"topScore", topSemanticScore,
-			)
-			// Augment prior data from semantic matches.
-			for _, m := range matches {
-				if m.MemoryType == "decision" && m.Score > 0.5 {
-					// Check if this decision was a failure.
-					if deps.Decisions != nil {
-						var success int
-						lookupErr := deps.Decisions.DB().QueryRow(
-							"SELECT success FROM ai_outcomes WHERE decision_id = ? AND phase = ? LIMIT 1",
-							m.SourceID, knowledge.PhaseVerifier,
-						).Scan(&success)
-						if lookupErr == nil && success == 0 {
-							// Retrieve the strategy ID from the decision.
-							var strategyID string
-							var createdAt time.Time
-							scanErr := deps.Decisions.DB().QueryRow(
-								"SELECT strategy_id, created_at FROM ai_decisions WHERE id = ?",
-								m.SourceID,
-							).Scan(&strategyID, &createdAt)
-							if scanErr == nil {
-								priorFailures = append(priorFailures, strategies.Failure{
-									StrategyID: strategyID,
-									CreatedAt:  createdAt,
-								})
-							}
-						}
-					}
-				}
 			}
 		}
 	}
@@ -287,8 +258,6 @@ func Process(ctx context.Context, deps Dependencies, in ProcessInput) (*ProcessR
 		GapDetectorWarning:   gapWarning,
 		ConflictSessionCount: conflictSessionCount,
 		ConflictRiskBoost:    conflictRiskBoost,
-		SemanticMatchCount:   semanticMatchCount,
-		TopSemanticScore:     topSemanticScore,
 	}
 
 	if deps.Decisions != nil {
@@ -572,6 +541,92 @@ func gatherGraph(ix *filegraph.Indexer, activeFiles []string) (files []FileRef, 
 	sort.Strings(related)
 
 	return files, len(directSet) + len(transSet), related
+}
+
+// applyDetectorHints promotes complexity and risk based on detector pipeline
+// output. Promotions are one-way (only upward) so the detector can never
+// *reduce* what the base assessor already determined from graph metrics.
+// High-confidence hints (>= 0.7) drive promotions; lower-confidence hints are
+// ignored to avoid noisy signals overriding graph-backed signals.
+func applyDetectorHints(a *strategies.TaskAssessment, hints []detect.Hint) {
+	const minConf = 0.7
+	for _, h := range hints {
+		if h.Confidence < minConf {
+			continue
+		}
+		switch h.Key {
+		case "complexity":
+			promoted := complexityFromString(h.Value)
+			if complexityRank(promoted) > complexityRank(a.Complexity) {
+				a.Complexity = promoted
+			}
+		case "risk":
+			promoted := riskFromString(h.Value)
+			if riskRank(promoted) > riskRank(a.Risk) {
+				a.Risk = promoted
+			}
+		}
+	}
+}
+
+// complexityFromString converts a detector hint value to a TaskComplexity.
+func complexityFromString(s string) strategies.TaskComplexity {
+	switch strings.ToLower(s) {
+	case "low", "simple":
+		return strategies.Simple
+	case "medium", "moderate":
+		return strategies.Moderate
+	case "high", "complex":
+		return strategies.Complex
+	case "critical":
+		return strategies.Critical
+	}
+	return strategies.Simple
+}
+
+// riskFromString converts a detector hint value to a TaskRisk.
+func riskFromString(s string) strategies.TaskRisk {
+	switch strings.ToLower(s) {
+	case "low":
+		return strategies.LowRisk
+	case "medium":
+		return strategies.MediumRisk
+	case "high":
+		return strategies.HighRisk
+	case "critical":
+		return strategies.CriticalRisk
+	}
+	return strategies.LowRisk
+}
+
+// complexityRank maps TaskComplexity to an integer for comparison.
+func complexityRank(c strategies.TaskComplexity) int {
+	switch c {
+	case strategies.Simple:
+		return 0
+	case strategies.Moderate:
+		return 1
+	case strategies.Complex:
+		return 2
+	case strategies.Critical:
+		return 3
+	}
+	return 0
+}
+
+// riskRank maps TaskRisk to an integer for comparison.
+func riskRank(r strategies.TaskRisk) int {
+	switch r {
+	case strategies.LowRisk:
+		return 0
+	case strategies.MediumRisk:
+		return 1
+	case strategies.HighRisk:
+		return 2
+	case strategies.CriticalRisk:
+		return 3
+	}
+	return 0
 }
 
 // applyHints lets the caller force-promote complexity/risk via Hints.

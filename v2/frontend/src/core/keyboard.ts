@@ -13,9 +13,11 @@ import { toggleComposer } from './signals/composer';
 import { toggleComposerDrawer } from './composer/signals';
 import { toggleCommandPalette } from './signals/command-palette';
 import { openRecipePicker } from './signals/recipes';
-import { activeSessionId, forkSession } from './signals/sessions';
+import { toggleShortcutSheet } from './signals/shortcut-sheet';
+
 import { switcherVisible, openSwitcher, closeSwitcher, advanceSwitcher, commitSwitcher } from './signals/worktree-switcher';
 import { goBack, goForward } from './signals/navigation';
+import { toggleSearchPanel } from './signals/search-panel';
 
 const HMR_KEY = '__phantom_keyboard_handler';
 const HMR_KEYUP_KEY = '__phantom_keyboard_keyup_handler';
@@ -190,13 +192,17 @@ export function registerKeyboardShortcuts(): () => void {
       return;
     }
 
-    // Cmd+Shift+F: Fork active session
+    // Cmd+/: Keyboard shortcut sheet
+    if (meta && e.key === '/') {
+      e.preventDefault();
+      toggleShortcutSheet();
+      return;
+    }
+
+    // Cmd+Shift+F: Search file contents
     if (meta && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
-      const id = activeSessionId();
-      if (id) {
-        e.preventDefault();
-        void forkSession(id, '');
-      }
+      e.preventDefault();
+      toggleSearchPanel();
       return;
     }
 

@@ -8,11 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
 )
 
-// TTLs for different memory types stored in the VectorStore.
+// TTLs for different memory types (retained for future FTS5 integration).
 const (
 	ttlSessionFiles    = 90 * 24 * time.Hour  // 90 days
 	ttlSessionErrors   = 180 * 24 * time.Hour // 180 days
@@ -20,7 +19,7 @@ const (
 	ttlSessionCommands = 60 * 24 * time.Hour  // 60 days
 )
 
-// Memory type keys for VectorStore.
+// Memory type keys (retained for future FTS5 integration).
 const (
 	memTypeSessionFiles    = "session_files"
 	memTypeSessionErrors   = "session_errors"
@@ -28,18 +27,16 @@ const (
 	memTypeSessionCommands = "session_commands"
 )
 
-// MemoryExtractor processes session events into structured signals
-// and persists them as vector-embedded memories.
+// MemoryExtractor processes session events into structured signals.
+// Store is a no-op until the FTS5 persistence layer is wired in.
 type MemoryExtractor struct {
-	vectorStore *embedding.VectorStore
-	logger      *slog.Logger
+	logger *slog.Logger
 }
 
-// New creates a MemoryExtractor. vectorStore may be nil (Store becomes a no-op).
-func New(vs *embedding.VectorStore) *MemoryExtractor {
+// New creates a MemoryExtractor.
+func New() *MemoryExtractor {
 	return &MemoryExtractor{
-		vectorStore: vs,
-		logger:      slog.Default().With("component", "memory_extractor"),
+		logger: slog.Default().With("component", "memory_extractor"),
 	}
 }
 
@@ -89,63 +86,12 @@ func (me *MemoryExtractor) Extract(sessionID string, events []stream.Event) *Ext
 	return result
 }
 
-// Store persists the extraction result into VectorStore with TTLs.
-// Returns nil if the VectorStore is nil (graceful no-op).
-func (me *MemoryExtractor) Store(ctx context.Context, result *ExtractionResult) error {
-	if me.vectorStore == nil {
-		return nil
-	}
-	if result == nil {
-		return nil
-	}
-
-	_ = ctx // reserved for future cancellation support
-
-	var errs []string
-
-	// Store file edit memories.
-	if len(result.Files.Files) > 0 {
-		text := formatFileMemory(result)
-		sourceID := result.SessionID + ":files"
-		if err := me.vectorStore.StoreWithTTL(memTypeSessionFiles, sourceID, text, ttlSessionFiles); err != nil {
-			errs = append(errs, fmt.Sprintf("files: %v", err))
-		}
-	}
-
-	// Store error memories (one per error for granularity).
-	for i, e := range result.Errors.Errors {
-		text := formatErrorMemory(e)
-		sourceID := fmt.Sprintf("%s:error:%d", result.SessionID, i)
-		if err := me.vectorStore.StoreWithTTL(memTypeSessionErrors, sourceID, text, ttlSessionErrors); err != nil {
-			errs = append(errs, fmt.Sprintf("error[%d]: %v", i, err))
-		}
-	}
-
-	// Store outcome memory.
-	if result.Outcome.Score > 0 {
-		text := formatOutcomeMemory(result)
-		sourceID := result.SessionID + ":outcome"
-		if err := me.vectorStore.StoreWithTTL(memTypeSessionOutcome, sourceID, text, ttlSessionOutcome); err != nil {
-			errs = append(errs, fmt.Sprintf("outcome: %v", err))
-		}
-	}
-
-	// Store command memories.
-	if len(result.Commands.Commands) > 0 {
-		text := formatCommandMemory(result)
-		sourceID := result.SessionID + ":commands"
-		if err := me.vectorStore.StoreWithTTL(memTypeSessionCommands, sourceID, text, ttlSessionCommands); err != nil {
-			errs = append(errs, fmt.Sprintf("commands: %v", err))
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("store extraction: %s", strings.Join(errs, "; "))
-	}
+// Store is a no-op until the FTS5 persistence layer replaces the ONNX vector store.
+func (me *MemoryExtractor) Store(_ context.Context, _ *ExtractionResult) error {
 	return nil
 }
 
-// --- Memory text formatters ---
+// --- Memory text formatters (retained for future FTS5 integration) ---
 
 // formatFileMemory produces a natural-language summary of files edited.
 func formatFileMemory(result *ExtractionResult) string {
@@ -203,7 +149,7 @@ func formatCommandMemory(result *ExtractionResult) string {
 	return fmt.Sprintf("Commands: %s", strings.Join(parts, ", "))
 }
 
-// capitalizeFirst uppercases the first letter of s. Replaces deprecated strings.Title.
+// capitalizeFirst uppercases the first letter of s.
 func capitalizeFirst(s string) string {
 	if s == "" {
 		return s

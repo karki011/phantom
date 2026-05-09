@@ -53,12 +53,6 @@ const (
 	EventConflictRepo = "conflict:repo" // payload: conflict.Conflict (repo-level overlap)
 	EventConflictFile = "conflict:file" // payload: conflict.Conflict (file-level overlap)
 
-	EventGamificationXPGained           = "gamification:xp_gained"            // payload: {amount, total, trigger}
-	EventGamificationLevelUp            = "gamification:level_up"             // payload: {level, xpToNext}
-	EventGamificationRankUp             = "gamification:rank_up"              // payload: {rank, title}
-	EventGamificationAchievementUnlocked = "gamification:achievement_unlocked" // payload: {id, name, description, icon, xpReward}
-	EventGamificationQuestCompleted     = "gamification:quest_completed"      // payload: {id, label, xpReward}
-
 	EventHookToolEvent = "hook:tool-event" // payload: api.HookRelayEvent
 
 	// Terminal ↔ session linking lifecycle events.
@@ -69,6 +63,12 @@ const (
 	// Terminal activity — enriched stream events for linked terminal panes.
 	// payload: { pane_id, session_id, event_type, tool_name, file_path, is_error, timestamp }
 	EventTerminalActivity = "terminal:activity"
+
+	// Journal AI enrichment events.
+	EventJournalEnriched = "journal:enriched" // payload: { date: string, project: string }
+
+	// Project lifecycle events.
+	EventProjectCreated = "project:created" // payload: projectId string
 
 	// Embedding auto-setup lifecycle events.
 	// payload: { file: string, percent: int, totalMB: int }

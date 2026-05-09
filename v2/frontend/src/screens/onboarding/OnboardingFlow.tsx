@@ -9,10 +9,8 @@ import { setPref } from '../../core/signals/preferences';
 import { HexProgress } from '../../shared/HexProgress/HexProgress';
 import { BootTerminal } from './phases/BootTerminal';
 import { DepsCheck } from './phases/DepsCheck';
-import { IdentityBind } from './phases/IdentityBind';
-import { DomainSelect } from './phases/DomainSelect';
+import { IdentityAppearance } from './phases/IdentityAppearance';
 import { AIEngineConsent } from './phases/AIEngineConsent';
-import { AbilityAwaken } from './phases/AbilityAwaken';
 import { Awakening } from './phases/Awakening';
 import * as styles from './styles/flow.css';
 
@@ -89,17 +87,11 @@ export function OnboardingFlow(props: OnboardingFlowProps) {
             <Match when={phase() === 'deps-check'}>
               <DepsCheck scan={bootScan()} onComplete={handlePhaseComplete} />
             </Match>
-            <Match when={phase() === 'identity-bind'}>
-              <IdentityBind onComplete={handlePhaseComplete} />
-            </Match>
-            <Match when={phase() === 'domain-select'}>
-              <DomainSelect onComplete={handlePhaseComplete} />
+            <Match when={phase() === 'identity-appearance'}>
+              <IdentityAppearance onComplete={handlePhaseComplete} />
             </Match>
             <Match when={phase() === 'ai-engine'}>
               <AIEngineConsent onComplete={handlePhaseComplete} />
-            </Match>
-            <Match when={phase() === 'ability-awaken'}>
-              <AbilityAwaken onComplete={handlePhaseComplete} />
             </Match>
           </Switch>
         </div>
@@ -111,7 +103,7 @@ export function OnboardingFlow(props: OnboardingFlowProps) {
 
       <Show when={isMiddlePhase()}>
         <div class={styles.progressBar}>
-          <HexProgress total={5} current={completedPhases()} />
+          <HexProgress total={3} current={completedPhases()} />
         </div>
       </Show>
     </div>

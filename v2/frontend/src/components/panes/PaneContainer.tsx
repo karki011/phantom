@@ -20,12 +20,8 @@ interface PaneContainerProps {
 const PANE_TYPE_LABELS: Record<string, string> = {
   terminal: 'Terminal',
   editor: 'Editor',
-  chat: 'Chat',
-  composer: 'Composer',
-  diff: 'Diff',
   home: 'Home',
-  journal: 'Journal',
-  'markdown-preview': 'Preview',
+  'composer': 'Composer',
 };
 
 export function PaneContainer(props: PaneContainerProps) {
@@ -80,7 +76,7 @@ export function PaneContainer(props: PaneContainerProps) {
       onClick={handleClick}
     >
       {/* Floating overlay header — hidden when solo+home, shown on hover otherwise */}
-      <Show when={paneId() && (!props.isSolo || paneType() !== 'home') && paneType() !== 'editor' && paneType() !== 'diff' && paneType() !== 'chat' && paneType() !== 'composer'}>
+      <Show when={paneId() && (!props.isSolo || paneType() !== 'home') && paneType() !== 'editor' && paneType() !== 'composer'}>
         <div class={styles.paneHeaderFloat}>
           <Show when={!props.isSolo}>
             <span class={styles.paneHeaderTitle}>
@@ -139,7 +135,7 @@ export function PaneContainer(props: PaneContainerProps) {
 
       {/* Content */}
       <div class={styles.paneContent}>
-        <Show when={PaneComponent()} fallback={<PlaceholderContent kind={paneType()} />}>
+        <Show when={PaneComponent()} fallback={<PlaceholderContent />}>
           {(Comp) => (
             <Suspense fallback={<PlaceholderContent />}>
               <Dynamic component={Comp()} paneId={paneId()} cwd={paneData()?.data?.cwd as string ?? ''} worktreeId={paneData()?.data?.worktreeId as string ?? ''} projectId={paneData()?.data?.projectId as string ?? ''} sessionId={paneData()?.data?.sessionId as string ?? ''} command={paneData()?.data?.command as string ?? ''} restore={!!paneData()?.data?.restore} filePath={paneData()?.data?.filePath as string ?? ''} workspaceId={paneData()?.data?.workspaceId as string ?? ''} isPlanFile={!!paneData()?.data?.isPlanFile} line={paneData()?.data?.line as number | undefined} column={paneData()?.data?.column as number | undefined} originalContent={paneData()?.data?.originalContent as string ?? ''} modifiedContent={paneData()?.data?.modifiedContent as string ?? ''} originalLabel={paneData()?.data?.originalLabel as string ?? ''} modifiedLabel={paneData()?.data?.modifiedLabel as string ?? ''} language={paneData()?.data?.language as string ?? ''} readOnly={!!paneData()?.data?.readOnly} />

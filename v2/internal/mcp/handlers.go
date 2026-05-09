@@ -21,7 +21,6 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/knowledge"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/orchestrator"
@@ -95,8 +94,7 @@ type Deps struct {
 	GlobalPatterns  *knowledge.GlobalPatternStore
 	GapDetector     *strategies.GapDetector
 	Compactor       *knowledge.Compactor
-	ConflictTracker *conflict.Tracker      // optional — multi-session conflict awareness
-	VectorStore     *embedding.VectorStore // optional — enables semantic memory retrieval
+	ConflictTracker *conflict.Tracker // optional — multi-session conflict awareness
 }
 
 // jsonResult marshals payload to a TextContent CallToolResult that mirrors
@@ -291,6 +289,8 @@ func (d *Deps) HandleStats(ctx context.Context, req mcp.CallToolRequest) (*mcp.C
 }
 
 // HandlePath: phantom_graph_path — shortest path between two files.
+// Not exposed as an MCP tool (removed as niche/rarely needed externally).
+// Kept for internal use and testing.
 func (d *Deps) HandlePath(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	pid := d.resolveProjectID(req)
 	from, err := req.RequireString("from")
@@ -353,8 +353,8 @@ func (d *Deps) HandlePath(ctx context.Context, req mcp.CallToolRequest) (*mcp.Ca
 }
 
 // HandleBuild: phantom_graph_build — kick off a graph build asynchronously.
-// Returns immediately with `{ projectId, status: "building", startedAt }`.
-// Clients poll phantom_task_status to know when it's `ready`.
+// Not exposed as an MCP tool (removed; graph build is triggered automatically
+// on MCP binary startup when a project is detected). Kept for internal use.
 func (d *Deps) HandleBuild(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	pid := d.resolveProjectID(req)
 	if pid == "" {
@@ -402,8 +402,8 @@ func (d *Deps) HandleBuild(ctx context.Context, req mcp.CallToolRequest) (*mcp.C
 }
 
 // HandleTaskStatus: phantom_task_status — poll graph build lifecycle.
-// Prefers the builder's tracked state (idle/building/ready/error with
-// timestamps); falls back to inferring from a bare indexer.
+// Not exposed as an MCP tool (removed; internal lifecycle detail). Kept for
+// internal use by the standalone binary.
 func (d *Deps) HandleTaskStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	pid := d.resolveProjectID(req)
 
@@ -437,6 +437,8 @@ func (d *Deps) HandleTaskStatus(ctx context.Context, req mcp.CallToolRequest) (*
 }
 
 // HandleListProjects: phantom_list_projects — enumerate v2 projects.
+// Not exposed as an MCP tool (removed; project list available through other means).
+// Kept for internal use.
 func (d *Deps) HandleListProjects(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if d.Queries == nil {
 		return errorResult("database not available")
@@ -457,6 +459,8 @@ func (d *Deps) HandleListProjects(ctx context.Context, req mcp.CallToolRequest) 
 }
 
 // HandleEvaluateOutput: phantom_evaluate_output — heuristic quality scoring.
+// Not exposed as an MCP tool (removed; evaluation is internal to the strategy
+// pipeline). Kept for internal use by the orchestrator.
 // Direct port of v1 handlers.ts:handleEvaluateOutput so scores stay stable.
 func (d *Deps) HandleEvaluateOutput(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	goal, err := req.RequireString("goal")
@@ -692,7 +696,6 @@ func (d *Deps) HandleOrchestratorProcess(ctx context.Context, req mcp.CallToolRe
 		GapDetector:     d.GapDetector,
 		Compactor:       d.Compactor,
 		ConflictTracker: d.ConflictTracker,
-		VectorStore:     d.VectorStore,
 	}
 	result, err := orchestrator.Process(ctx, deps, orchestrator.ProcessInput{
 		ProjectID:   pid,
@@ -708,10 +711,10 @@ func (d *Deps) HandleOrchestratorProcess(ctx context.Context, req mcp.CallToolRe
 }
 
 // HandleOrchestratorStrategies: phantom_orchestrator_strategies — list all
-// registered reasoning strategies with metadata. Wire shape mirrors v1
-// handlers.ts:handleOrchestratorStrategies — `{ strategies: [{ id, name,
-// enabled, description }] }`. The v2 registry is built from the same 7
-// constructors as orchestrator.defaultRegistry, so the list stays in sync.
+// registered reasoning strategies with metadata.
+// Not exposed as an MCP tool (removed; strategy list is static and included
+// in the MCP Instructions surfaced during handshake). Kept for internal use.
+// Wire shape mirrors v1 handlers.ts:handleOrchestratorStrategies.
 func (d *Deps) HandleOrchestratorStrategies(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	reg := strategies.NewRegistry()
 	reg.Register(strategies.NewDirectStrategy(), 10)

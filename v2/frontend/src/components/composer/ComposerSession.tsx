@@ -19,8 +19,8 @@ import { PermissionModal } from './PermissionModal'
 import SearchOverlay from './SearchOverlay'
 import ContextGauge from './ContextGauge'
 import ContextInfoPanel from './ContextInfoPanel'
-import ComposerAgentPanel, { type AgentInfo } from '../panes/ComposerAgentPanel'
-import { toggleBadge as toggleBadgeCss, pendingHint as pendingHintCss, statusSpinner as spinnerCss } from '../panes/ComposerAgentPanel.css'
+import ComposerAgentPanel, { type AgentInfo } from './ComposerAgentPanel'
+import { toggleBadge as toggleBadgeCss, pendingHint as pendingHintCss, statusSpinner as spinnerCss } from './ComposerAgentPanel.css'
 import { Bot } from 'lucide-solid'
 
 interface ComposerSessionProps {

@@ -35,8 +35,14 @@ func TestBuildCleanEnv(t *testing.T) {
 	hasTerm := false
 	hasLang := false
 	hasElectron := false
+	hasPhantomTermProgram := false
+	hasWarpLeak := false
 
 	for _, kv := range env {
+		key := kv
+		if idx := strings.IndexByte(kv, '='); idx >= 0 {
+			key = kv[:idx]
+		}
 		switch {
 		case kv == "TERM=xterm-256color":
 			hasTerm = true
@@ -44,6 +50,10 @@ func TestBuildCleanEnv(t *testing.T) {
 			hasLang = true
 		case strings.HasPrefix(kv, "ELECTRON_RUN_AS_NODE="):
 			hasElectron = true
+		case kv == "TERM_PROGRAM=PhantomOS":
+			hasPhantomTermProgram = true
+		case strings.HasPrefix(key, "WARP_"):
+			hasWarpLeak = true
 		}
 	}
 
@@ -55,6 +65,12 @@ func TestBuildCleanEnv(t *testing.T) {
 	}
 	if hasElectron {
 		t.Fatal("buildCleanEnv should strip ELECTRON_RUN_AS_NODE")
+	}
+	if !hasPhantomTermProgram {
+		t.Fatal("buildCleanEnv missing TERM_PROGRAM=PhantomOS")
+	}
+	if hasWarpLeak {
+		t.Fatal("buildCleanEnv should strip WARP_* env vars")
 	}
 }
 

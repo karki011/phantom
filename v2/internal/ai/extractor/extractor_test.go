@@ -357,7 +357,7 @@ func TestExtract_FullSession(t *testing.T) {
 		makeEvent(stream.EventToolResult, withIsError(false), withTimestamp(1260)),
 	}
 
-	ext := New(nil)
+	ext := New()
 	result := ext.Extract("test-session-123", events)
 
 	if result == nil {
@@ -392,7 +392,7 @@ func TestExtract_FullSession(t *testing.T) {
 // --- Store Tests ---
 
 func TestStore_NilVectorStore(t *testing.T) {
-	ext := New(nil)
+	ext := New()
 	result := &ExtractionResult{
 		SessionID: "test-nil",
 		Files: FilesSummary{
@@ -408,7 +408,7 @@ func TestStore_NilVectorStore(t *testing.T) {
 }
 
 func TestStore_NilResult(t *testing.T) {
-	ext := New(nil)
+	ext := New()
 	err := ext.Store(context.Background(), nil)
 	if err != nil {
 		t.Errorf("Store with nil result should return nil, got: %v", err)

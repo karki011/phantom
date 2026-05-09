@@ -1580,7 +1580,7 @@ export const DOC_SECTIONS: DocSection[] = [
           sections: [
             {
               type: 'paragraph',
-              text: 'PhantomOS uses a local SQLite database with 23 tables for persisting application state, session data, user preferences, and gamification progress.',
+              text: 'PhantomOS uses a local SQLite database for persisting application state, session data, and user preferences.',
             },
             {
               type: 'heading',
@@ -1596,10 +1596,6 @@ export const DOC_SECTIONS: DocSection[] = [
                 ['projects', 'Registered project directories and metadata'],
                 ['worktrees', 'Git worktree entries and their branch associations'],
                 ['activity_log', 'Timestamped log of user and system actions'],
-                ['hunter_profile', 'User profile for the gamification (hunter rank) system'],
-                ['hunter_stats', 'Accumulated statistics for rank progression'],
-                ['achievements', 'Unlocked achievement records'],
-                ['daily_quests', 'Daily challenge definitions and completion state'],
                 ['chat_conversations', 'Conversation thread metadata'],
                 ['chat_messages', 'Individual messages within conversations'],
                 ['pane_states', 'Terminal pane layout and position persistence'],

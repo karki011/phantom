@@ -2,7 +2,7 @@
 // Author: Subash Karki
 
 import { createMemo, createSignal, createEffect, on, onCleanup, onMount, Show, For, Index } from 'solid-js';
-import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw, Shield, Activity, ChevronDown, GitMerge, Rocket } from 'lucide-solid';
+import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw, Activity, ChevronDown, GitMerge, Rocket } from 'lucide-solid';
 import { activeWorktreeId } from '@/core/signals/app';
 import { activeProject, activeWorktree } from '@/core/signals/worktrees';
 import { addTabWithData } from '@/core/panes/signals';
@@ -14,11 +14,8 @@ import { getPref, loadPref, setPref } from '@/core/signals/preferences';
 import { prStatus, setPrStatus, isCreatingPr, setIsCreatingPr, ghAvailable, setGhAvailable } from '@/core/signals/activity';
 import { SessionControls } from '@/shared/SessionControls/SessionControls';
 import { NewWorktreeDialog } from '@/shared/NewWorktreeDialog/NewWorktreeDialog';
-import { WardManager } from '@/shared/WardManager/WardManager';
 import { getWorkspaceStatus, gitPull, gitPush, getPrStatus, getCiRuns, getCiRunsForBranch, createPrWithAI, listOpenPrs, isGhCliAvailable, getCheckAnnotations, getFailedSteps, getSessionsByProject, getAllRecipes, getFavoriteRecipes, toggleRecipeFavorite, getRepoMergeConfig, mergePr, disableAutoMerge, postMergeCleanup } from '@/core/bindings';
 import { openURL } from '@/core/bindings/shell';
-import { getWards } from '@/core/bindings/wards';
-import type { WardRule } from '@/core/bindings/wards';
 import { onWailsEvent } from '@/core/events';
 import { showToast, showWarningToast } from '@/shared/Toast/Toast';
 import { Tip } from '@/shared/Tip/Tip';
@@ -28,102 +25,6 @@ import { openRecipePicker, recipePickerOpen } from '@/core/signals/recipes';
 import type { RepoStatus, PrStatus as PrStatusType, CiRun, CheckAnnotation, FailedStep, JournalEntry, EnrichedRecipe, RepoMergeConfig, Reviewer, MergeMethod } from '@/core/types';
 import * as styles from '@/styles/home.css';
 
-
-function WardSummaryCard() {
-  const [rules, setRules] = createSignal<WardRule[]>([]);
-  const [showManager, setShowManager] = createSignal(false);
-
-  async function refresh() {
-    setRules(await getWards());
-  }
-
-  createEffect(() => { refresh(); });
-  onWailsEvent('ward:rules_reloaded', () => { refresh(); });
-
-  const enabledRules = () => rules().filter((r) => r.enabled);
-  const blockCount = () => enabledRules().filter((r) => r.level === 'block').length;
-  const warnCount = () => enabledRules().filter((r) => r.level === 'warn').length;
-  const confirmCount = () => enabledRules().filter((r) => r.level === 'confirm').length;
-
-  return (
-    <>
-      <div class={styles.wardCard}>
-        {/* Header */}
-        <div class={styles.wardHeader}>
-          <div class={styles.wardHeaderLeft}>
-            <span class={styles.wardHeaderIcon}>
-              <Shield size={14} />
-            </span>
-            <span class={styles.wardSectionLabel}>
-              Session Guard
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowManager(true)}
-            class={styles.wardManageButton}
-          >
-            Manage Wards
-          </button>
-        </div>
-
-        {/* Summary */}
-        <Show
-          when={enabledRules().length > 0}
-          fallback={
-            <span class={styles.wardFallbackText}>
-              No ward rules defined — create rules to protect your sessions
-            </span>
-          }
-        >
-          <div class={styles.wardSummaryRow}>
-            <span class={styles.wardRuleCount}>
-              {enabledRules().length} rule{enabledRules().length !== 1 ? 's' : ''} active
-            </span>
-            <Show when={blockCount() > 0}>
-              <span class={styles.wardBadgeBlock}>
-                {blockCount()} block
-              </span>
-            </Show>
-            <Show when={warnCount() > 0}>
-              <span class={styles.wardBadgeWarn}>
-                {warnCount()} warn
-              </span>
-            </Show>
-            <Show when={confirmCount() > 0}>
-              <span class={styles.wardBadgeConfirm}>
-                {confirmCount()} confirm
-              </span>
-            </Show>
-          </div>
-        </Show>
-      </div>
-
-      {/* WardManager drawer overlay */}
-      <Show when={showManager()}>
-        <div
-          class={styles.wardDrawerOverlay}
-          onClick={(e) => { if (e.target === e.currentTarget) setShowManager(false); }}
-        >
-          <div class={styles.wardDrawerBackdrop} />
-          <div class={styles.wardDrawerPanel}>
-            <div class={styles.wardDrawerHeader}>
-              <span class={styles.wardDrawerTitle}>Ward Manager</span>
-              <button
-                type="button"
-                onClick={() => setShowManager(false)}
-                class={styles.wardDrawerCloseButton}
-              >
-                ✕
-              </button>
-            </div>
-            <WardManager />
-          </div>
-        </div>
-      </Show>
-    </>
-  );
-}
 
 function RecentSessions(props: { repoPath: string | null }) {
   const [recentSessions, setRecentSessions] = createSignal<JournalEntry[]>([]);
@@ -963,11 +864,6 @@ export default function WorktreeHome() {
             </Index>
           </div>
         </div>
-      </Show>
-
-      {/* Ward Summary — only when wards feature is enabled */}
-      <Show when={getPref('wards_enabled') === 'true'}>
-        <WardSummaryCard />
       </Show>
 
       {/* Recent Sessions */}

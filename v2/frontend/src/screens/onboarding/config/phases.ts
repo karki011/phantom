@@ -6,10 +6,8 @@ import { APP_VERSION, APP_NAME_SPACED } from '../../../core/branding';
 export const phaseOrder: PhaseId[] = [
   'awakening',
   'deps-check',
-  'identity-bind',
-  'domain-select',
+  'identity-appearance',
   'ai-engine',
-  'ability-awaken',
   'complete',
 ];
 
@@ -122,6 +120,22 @@ export const phaseConfigs: Record<PhaseId, PhaseConfig> = {
       message: 'No domain linked. Proceeding without binding.',
     },
     persistKeys: ['first_project_path'],
+  },
+  'identity-appearance': {
+    id: 'identity-appearance',
+    title: 'Identity & Appearance',
+    subtitle: 'Bind your name and configure your visual domain.',
+    announcement: {
+      text: 'Locking identity and visual domain...',
+      sound: 'whoosh',
+    },
+    autoResolve: {
+      timeout: 15000,
+      defaultKey: 'operator_name',
+      defaultValue: '',
+      message: 'No override detected. Identity and domain locked.',
+    },
+    persistKeys: ['operator_name', 'theme', 'font_style'],
   },
   'ai-engine': {
     id: 'ai-engine',

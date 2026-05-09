@@ -2,17 +2,13 @@
 // Author: Subash Karki
 
 import { Show, For, createSignal, createEffect, createMemo, on } from 'solid-js';
-import { Shield, Pause, Play, Skull, ExternalLink, TerminalSquare, ChevronDown, ChevronRight, CheckCircle, Circle, Loader, Activity } from 'lucide-solid';
+import { Pause, Play, Skull, ExternalLink, TerminalSquare, ChevronDown, ChevronRight, CheckCircle, Circle, Loader, Activity } from 'lucide-solid';
 import { Collapsible } from '@kobalte/core/collapsible';
-import { wardAlertCount } from '@/core/signals/wards';
-import { getPref } from '@/core/signals/preferences';
 import { tabs } from '@/core/panes/signals';
 import { addTabWithData } from '@/core/panes/signals';
 import { pauseSession, resumeSession, killSession } from '@/core/bindings';
 import { showToast, showWarningToast } from '@/shared/Toast/Toast';
 import { activeProvider, activeProviderLabel } from '@/core/signals/active-provider';
-import { WardManager } from '@/shared/WardManager/WardManager';
-import { PhantomDrawer } from '@/shared/PhantomDrawer/PhantomDrawer';
 import { getSessionTasks } from '@/core/bindings/tasks';
 import type { TaskItem } from '@/core/bindings/tasks';
 import { onWailsEvent } from '@/core/events';
@@ -42,7 +38,6 @@ interface Props {
 export function SessionControls(props: Props) {
   const [loading, setLoading] = createSignal(false);
   const [confirmKill, setConfirmKill] = createSignal(false);
-  const [showWardManager, setShowWardManager] = createSignal(false);
   const [tasks, setTasks] = createSignal<TaskItem[]>([]);
   const [tasksExpanded, setTasksExpanded] = createSignal(false);
 
@@ -181,14 +176,6 @@ export function SessionControls(props: Props) {
           {confirmKill() ? 'Confirm Kill?' : 'Kill'}
         </button>
 
-          <Show when={getPref('wards_enabled') === 'true'}>
-            <button
-              class={styles.controlButton}
-              onClick={() => setShowWardManager(true)}
-            >
-              <Shield size={12} />
-            </button>
-          </Show>
         </span>
       </div>
 
@@ -244,13 +231,6 @@ export function SessionControls(props: Props) {
         </Collapsible>
       </Show>
 
-      <PhantomDrawer
-        open={showWardManager}
-        onOpenChange={setShowWardManager}
-        title="Ward Manager"
-      >
-        <WardManager />
-      </PhantomDrawer>
     </div>
   );
 }

@@ -11,7 +11,6 @@ import * as styles from './styles/app.css';
 import * as shellStyles from './styles/app-shell.css';
 import { isFullscreen, initFullscreenDetection, stopFullscreenDetection } from './core/signals/fullscreen';
 import { bootstrapSessions } from './core/signals/sessions';
-import { bootstrapWards } from './core/signals/wards';
 import { bootstrapProjects } from './core/signals/projects';
 import { bootstrapApp, activeTopTab, activeWorktreeId, restoreActiveTopTab } from './core/signals/app';
 import { worktreeMap, bootstrapWorktrees } from './core/signals/worktrees';
@@ -38,11 +37,12 @@ import { waitForWails } from './core/bindings/ready';
 import { ToastRegion } from './shared/Toast/Toast';
 import { SettingsDialog } from './shared/SettingsDialog/SettingsDialog';
 import { QuickOpen } from './shared/QuickOpen/QuickOpen';
+import { SearchPanel } from './shared/SearchPanel/SearchPanel';
 import { CommandPalette } from './shared/CommandPalette';
+import { ShortcutSheet } from './shared/ShortcutSheet/ShortcutSheet';
 import { WorktreeSwitcher } from './shared/WorktreeSwitcher';
 import { RecipePicker } from './shared/RecipePicker';
 import { McpManagerDialog } from './shared/McpManagerDialog';
-import { ApprovalModal } from './shared/ApprovalModal/ApprovalModal';
 import { PromptComposer } from './shared/PromptComposer';
 import { composerVisible, closeComposer } from './core/signals/composer';
 import { activeTab, activePaneId } from './core/panes/signals';
@@ -50,12 +50,11 @@ import { registerShutdownHandler, shutdownConfirmVisible } from './core/signals/
 import { generateMorningBrief } from './core/bindings/journal';
 import { DocsScreen } from './screens/docs';
 import { SystemCockpit } from './screens/system/SystemCockpit';
-import { XPGainFloat, LevelUpCelebration, RankUpCelebration, AchievementToastWatcher } from './shared/Gamification';
-import { bootstrapGamification } from './core/signals/gamification';
 import { bootstrapMCPRegistrationListener } from './core/signals/mcp';
 import { AICommandCenter } from './components/ai-command-center/AICommandCenter';
 import ComposerDrawer from './components/composer/ComposerDrawer';
 import ComposerStatusPill from './components/composer/ComposerStatusPill';
+import { DigestDrawer } from './shared/DigestDrawer/DigestDrawer';
 
 export function App() {
   const [ready, setReady] = createSignal(false);
@@ -110,12 +109,6 @@ export function App() {
     // initial render lands on the workspace instead of flashing WelcomePage.
     // Idempotent: WorktreeSidebar.onMount calls this again as a safety net.
     await bootstrapWorktrees();
-
-    const wardsEnabled = await loadPref('wards_enabled');
-    if (wardsEnabled === 'true') bootstrapWards();
-
-    const gamEnabled = await loadPref('gamification');
-    if (gamEnabled === 'true') bootstrapGamification();
 
     await loadComposerV2Pref();
     await loadComposerPrefs();
@@ -229,15 +222,12 @@ export function App() {
   return (
     <div class={shellClass()}>
       <ToastRegion />
-      <AchievementToastWatcher />
-      <XPGainFloat />
-      <LevelUpCelebration />
-      <RankUpCelebration />
-      <ApprovalModal />
       <SettingsDialog />
       <AICommandCenter />
       <QuickOpen />
+      <SearchPanel />
       <CommandPalette />
+      <ShortcutSheet />
       <WorktreeSwitcher />
       <RecipePicker />
       <McpManagerDialog />
@@ -291,6 +281,7 @@ export function App() {
         </div>
       </Show>
 
+      <DigestDrawer />
       <ComposerDrawer />
       <ComposerStatusPill />
     </div>

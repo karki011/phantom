@@ -2,7 +2,7 @@
 // Author: Subash Karki
 
 import { Show, For } from 'solid-js';
-import { Files, GitCompare, ShieldAlert, Activity, ChevronsLeft } from 'lucide-solid';
+import { Files, GitCompare, Activity, ChevronsLeft } from 'lucide-solid';
 import type { Component, JSX } from 'solid-js';
 import { Tip } from '@/shared/Tip/Tip';
 import {
@@ -13,12 +13,11 @@ import {
   changesCount,
   activityCount,
 } from '@/core/signals/files';
-import { wardAlertCount } from '@/core/signals/wards';
 import { prStatus, isCreatingPr } from '@/core/signals/activity';
 import * as styles from '@/styles/sidebar-rail.css';
 import * as rightStyles from '@/styles/right-sidebar.css';
 
-type TabId = 'files' | 'changes' | 'alerts' | 'activity';
+type TabId = 'files' | 'changes' | 'activity';
 
 interface TabSpec {
   id: TabId;
@@ -30,7 +29,6 @@ interface TabSpec {
 const TABS: TabSpec[] = [
   { id: 'files', label: 'Files', icon: Files, count: filesCount },
   { id: 'changes', label: 'Changes', icon: GitCompare, count: changesCount },
-  { id: 'alerts', label: 'Alerts', icon: ShieldAlert, count: wardAlertCount },
   { id: 'activity', label: 'Activity', icon: Activity, count: activityCount },
 ];
 

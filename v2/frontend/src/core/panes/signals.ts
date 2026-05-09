@@ -258,7 +258,7 @@ export function removeTab(tabId: string): void {
 
   // Cancel any in-flight composer sessions for the removed tab.
   for (const pane of Object.values(tab?.panes ?? {})) {
-    if (pane.kind === 'composer' || pane.kind === 'composer-v2') {
+    if (pane.kind === 'composer') {
       import('@/core/bindings/composer').then(({ composerCancel }) => {
         composerCancel(pane.id).catch(() => {});
       });

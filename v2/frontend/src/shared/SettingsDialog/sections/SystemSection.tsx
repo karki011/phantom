@@ -79,7 +79,7 @@ export default function SystemSection() {
       >
         <div class={styles.factoryResetModalBody}>
           <p class={styles.settingDescription}>
-            Removes the main database (projects, workspaces, sessions, preferences, gamification),
+            Removes the main database (projects, workspaces, sessions, preferences),
             any legacy phantom.v1.db snapshot on disk, AI engine files, daily journal files, custom ward
             rules, terminal restore snapshots, and context cache under ~/.phantom-os/. Your provider YAML
             overrides in ~/.phantom-os/providers/ are not deleted.
