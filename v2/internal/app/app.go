@@ -18,6 +18,7 @@ import (
 
 	"net/http"
 
+	"github.com/subashkarki/phantom-os-v2/internal/ai/detect"
 	graphctx "github.com/subashkarki/phantom-os-v2/internal/ai/graph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/knowledge"
@@ -350,8 +351,8 @@ func (a *App) handleGitWatcherEvents() {
 
 		switch event.Type {
 		case git.GitEventBranchChanged:
-			wailsRuntime.EventsEmit(a.ctx, EventGitBranchChanged)
-			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+			a.EmitGitBranchChanged()
+			a.EmitGitStatus()
 			if a.journal != nil {
 				today := time.Now().Format("2006-01-02")
 				ts := time.Now().Format("15:04")
@@ -362,11 +363,11 @@ func (a *App) handleGitWatcherEvents() {
 			default:
 			}
 		case git.GitEventIndexChanged:
-			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+			a.EmitGitStatus()
 		case git.GitEventStatusChanged:
-			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+			a.EmitGitStatus()
 		case git.GitEventWorkingTreeChanged:
-			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+			a.EmitGitStatus()
 		}
 	}
 }
@@ -465,6 +466,31 @@ func (a *App) wireComposerEngine() {
 	} else {
 		log.Warn("app: global pattern store init failed (cross-project patterns disabled)", "err", err)
 	}
+
+	// Build the detector coordinator and inject into deps.
+	// BlastRadiusDetector holds a direct reference to a.fileIndexers — the map
+	// is initialized by initFileGraph (which runs before wireComposerEngine) and
+	// mutated in place by StartFileGraph, so entries added later are visible.
+	// The detector takes its own read of the map at Detect() time, so no extra
+	// locking is needed here at wire time.
+	blastDet := &detect.BlastRadiusDetector{
+		Indexers: a.fileIndexers,
+	}
+	var priorDet *detect.PriorOutcomeDetector
+	if deps.Decisions != nil {
+		priorDet = &detect.PriorOutcomeDetector{Decisions: deps.Decisions}
+	}
+	detectors := []detect.Detector{
+		&detect.FileComplexityDetector{},
+		blastDet,
+		&detect.WorkTypeDetector{},
+		&detect.BranchContextDetector{},
+	}
+	if priorDet != nil {
+		detectors = append(detectors, priorDet)
+	}
+	deps.DetectorCoordinator = detect.NewCoordinator(detectors...)
+	log.Info("app: detector coordinator wired", "detectors", len(detectors))
 
 	a.Composer.SetEngineDeps(deps)
 	a.Composer.SetIndexerResolver(a.resolveIndexerForCwd)
@@ -690,14 +716,7 @@ func (a *App) emitMCPFailure(phase string, err error) {
 	if err == nil || a.ctx == nil {
 		return
 	}
-	payload := map[string]any{
-		"phase": phase,
-		"error": err.Error(),
-	}
-	if hint := mcpErrorHint(err); hint != "" {
-		payload["hint"] = hint
-	}
-	wailsRuntime.EventsEmit(a.ctx, EventMCPRegistrationFailed, payload)
+	a.EmitMCPRegistrationFailed(phase, err.Error(), mcpErrorHint(err))
 }
 
 // mcpErrorHint returns a user-friendly remediation hint for known error

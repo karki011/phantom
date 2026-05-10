@@ -163,11 +163,7 @@ func (a *App) onTerminalLinked(paneID, sessionID string) {
 		}
 	}
 
-	wailsRuntime.EventsEmit(a.ctx, EventTerminalSessionLinked, map[string]interface{}{
-		"paneId":      paneID,
-		"sessionId":   sessionID,
-		"sessionName": sessionName,
-	})
+	a.EmitTerminalSessionLinked(paneID, sessionID, sessionName)
 
 	// Ensure tailing is started for this session.
 	if a.Stream != nil {
@@ -185,10 +181,7 @@ func (a *App) onTerminalUnlinked(paneID, sessionID string) {
 	a.tsMap.unlink(paneID)
 	slog.Info("terminal-activity: unlinked", "pane_id", paneID, "session_id", sessionID)
 
-	wailsRuntime.EventsEmit(a.ctx, EventTerminalSessionUnlinked, map[string]interface{}{
-		"paneId":    paneID,
-		"sessionId": sessionID,
-	})
+	a.EmitTerminalSessionUnlinked(paneID, sessionID)
 }
 
 // emitTerminalActivity is called from the stream event hook for every tailed

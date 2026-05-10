@@ -73,7 +73,7 @@ func (a *App) startGitHubPoller() {
 				SectionID: ws.SectionID, BaseBranch: ws.BaseBranch,
 				TabOrder: ws.TabOrder, IsActive: ws.IsActive, TicketUrl: ws.TicketUrl,
 			})
-			wailsRuntime.EventsEmit(a.ctx, EventWorktreeUpdated)
+			a.EmitWorktreeUpdated()
 			cachedPr = ""
 			cachedCi = ""
 			cachedPrsList = ""
@@ -238,7 +238,7 @@ func (a *App) startBackgroundFetch() {
 	if err := a.FetchAllProjects(); err != nil {
 		log.Error("app/backgroundFetch: initial fetch failed", "err", err)
 	}
-	wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+	a.EmitGitStatus()
 
 	ticker := time.NewTicker(3 * time.Minute)
 	defer ticker.Stop()
@@ -251,7 +251,7 @@ func (a *App) startBackgroundFetch() {
 			if err := a.FetchAllProjects(); err != nil {
 				log.Error("app/backgroundFetch: periodic fetch failed", "err", err)
 			}
-			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+			a.EmitGitStatus()
 		}
 	}
 }

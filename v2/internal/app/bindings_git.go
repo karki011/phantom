@@ -15,7 +15,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/git"
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // canonPath normalizes a worktree path for cross-source matching (DB ⟷ git).
@@ -121,7 +120,7 @@ func (a *App) CreateWorktree(projectId, branch, baseBranch, ticketUrl string) (*
 		log.Error("app/CreateWorktree: GetWorkspace after create failed", "err", err)
 		return nil, fmt.Errorf("CreateWorktree: GetWorkspace after create: %w", err)
 	}
-	wailsRuntime.EventsEmit(a.ctx, EventWorktreeCreated)
+	a.EmitWorktreeCreated()
 	a.journalWorktreeEvent("Created", branch)
 	log.Info("app/CreateWorktree: success", "id", ws.ID, "branch", ws.Branch, "path", ws.WorktreePath.String)
 	return &ws, nil
@@ -163,7 +162,7 @@ func (a *App) RemoveWorktree(worktreeId, worktreePath string) error {
 		a.journalWorktreeEvent("Removed", ws.Branch)
 	}
 
-	wailsRuntime.EventsEmit(a.ctx, EventWorktreeRemoved)
+	a.EmitWorktreeRemoved()
 	log.Info("app/RemoveWorktree: success", "worktreeId", worktreeId, "path", path)
 	return nil
 }

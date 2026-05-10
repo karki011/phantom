@@ -85,6 +85,11 @@ type Event struct {
 	TaskRisk           string  `json:"task_risk,omitempty"`
 	BlastRadius        int     `json:"blast_radius,omitempty"`
 
+	// TaskType is the self-classified work type, populated on
+	// type=="task_classified". Emitted when the model's <phantom:task_type>
+	// tag is extracted from the streaming response.
+	TaskType string `json:"task_type,omitempty"`
+
 	// Enriched prompt text, populated on type=="enriched_prompt".
 	// Sent to the frontend so the UI can display the injected context.
 	EnrichedText string `json:"enriched_text,omitempty"`

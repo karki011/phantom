@@ -33,6 +33,11 @@ type ProcessInput struct {
 	CWD         string // repo working directory — used for conflict detection
 	ActiveFiles []string
 	Hints       Hints
+	// TaskType carries the self-classified work type from a prior turn's
+	// <phantom:task_type> extraction (e.g. "feature", "bugfix", "refactor").
+	// When non-empty it is used as a soft signal to bump strategy scores
+	// before selection — it never overrides graph or assessor signals.
+	TaskType    string
 }
 
 // Hints mirrors v1's GoalInput.hints — optional knobs the caller can pass.
@@ -219,6 +224,15 @@ func Process(ctx context.Context, deps Dependencies, in ProcessInput) (*ProcessR
 	all := scoreAll(registry, assessment, priorFailures, patternBias, deps.Performance)
 	if len(all) == 0 {
 		return nil, ErrNoStrategies
+	}
+
+	// 4c. Apply task-type bias — soft bump based on self-classified work type
+	// from the previous turn. This is additive and conservative: a +0.1 nudge
+	// on preferred strategies and a -0.05 nudge on non-preferred ones.
+	// Never zeroes out a strategy; graph and assessor signals take priority.
+	if in.TaskType != "" {
+		applyTaskTypeBias(all, in.TaskType)
+		sort.SliceStable(all, func(i, j int) bool { return all[i].Score > all[j].Score })
 	}
 
 	// 4b. Apply conflict-risk penalty — reduce all strategy scores uniformly.
@@ -627,6 +641,49 @@ func riskRank(r strategies.TaskRisk) int {
 		return 3
 	}
 	return 0
+}
+
+// applyTaskTypeBias nudges strategy scores based on the self-classified task
+// type from the prior turn. Preferred strategies get +0.10; the rest get -0.05.
+// These are soft signals — existing graph/assessor scores always dominate.
+//
+// Mapping (mirrors task description):
+//
+//	feature, refactor  → prefer tree-of-thought, decompose (complex thinking)
+//	bugfix, debug      → prefer self-refine, direct (tight feedback loop)
+//	exploration, docs  → prefer direct, advisor (answer-oriented)
+//	test               → prefer direct
+func applyTaskTypeBias(all []scoredStrategy, taskType string) {
+	const bump = 0.10
+	const damp = 0.05
+
+	// preferred holds strategy IDs that get a positive nudge.
+	var preferred map[string]bool
+	switch strings.ToLower(taskType) {
+	case "feature", "refactor":
+		preferred = map[string]bool{"tree-of-thought": true, "decompose": true}
+	case "bugfix", "debug":
+		preferred = map[string]bool{"self-refine": true, "direct": true}
+	case "exploration", "docs":
+		preferred = map[string]bool{"direct": true, "advisor": true}
+	case "test":
+		preferred = map[string]bool{"direct": true}
+	default:
+		return // unknown task type — no adjustment
+	}
+
+	for i := range all {
+		id := all[i].Strategy.ID()
+		if preferred[id] {
+			all[i].Score += bump
+			all[i].Reason += " [task-type:" + taskType + "+]"
+		} else {
+			if all[i].Score > damp {
+				all[i].Score -= damp
+			}
+			all[i].Reason += " [task-type:" + taskType + "-]"
+		}
+	}
 }
 
 // applyHints lets the caller force-promote complexity/risk via Hints.

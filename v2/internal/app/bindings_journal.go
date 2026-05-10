@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/journal"
@@ -341,10 +340,7 @@ func (a *App) enrichJournalNarrative(date, project, recap string) {
 		return
 	}
 	if a.ctx != nil {
-		wailsRuntime.EventsEmit(a.ctx, "journal:enriched", map[string]string{
-			"date":    date,
-			"project": project,
-		})
+		a.EmitJournalEnriched(date, project)
 	}
 }
 

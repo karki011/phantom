@@ -18,7 +18,6 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/git"
 	"github.com/subashkarki/phantom-os-v2/internal/integration"
 	"github.com/subashkarki/phantom-os-v2/internal/project"
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // GetProjects returns all registered projects.
@@ -101,7 +100,7 @@ func (a *App) AddProject(repoPath string) (*db.Project, error) {
 		slog.Warn("AddProject: ensure mcp project enablement failed", "err", err)
 	}
 
-	wailsRuntime.EventsEmit(a.ctx, "project:created", proj.ID)
+	a.EmitProjectCreated(proj.ID)
 
 	return &proj, nil
 }
