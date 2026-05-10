@@ -199,6 +199,56 @@ export const winRateChip = style({
   color: vars.color.success,
 });
 
+export const dateNav = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: vars.space.sm,
+});
+
+export const dateNavButton = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '28px',
+  height: '28px',
+  borderRadius: vars.radius.sm,
+  border: 'none',
+  background: 'transparent',
+  color: vars.color.textSecondary,
+  cursor: 'pointer',
+  transition: 'all 150ms ease',
+  selectors: {
+    '&:hover': {
+      background: vars.color.bgHover,
+      color: vars.color.textPrimary,
+    },
+    '&:disabled': {
+      opacity: 0.3,
+      cursor: 'default',
+    },
+  },
+});
+
+export const dateLabel = style({
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.sm,
+  color: vars.color.textPrimary,
+  fontWeight: 600,
+  border: 'none',
+  background: 'transparent',
+  cursor: 'pointer',
+  padding: `${vars.space.xs} ${vars.space.sm}`,
+  borderRadius: vars.radius.sm,
+  transition: 'all 150ms ease',
+  selectors: {
+    '&:hover': {
+      background: vars.color.bgHover,
+      color: vars.color.accent,
+    },
+  },
+});
+
 export const refreshButton = style({
   display: 'flex',
   alignItems: 'center',

@@ -9,11 +9,40 @@ import { getDailyCostReport } from '../bindings/cost';
 
 // Drawer open/close state
 const [digestOpen, setDigestOpen] = createSignal(false);
+const [digestDate, setDigestDate] = createSignal(new Date().toISOString().slice(0, 10));
 
 export const openDigest = () => setDigestOpen(true);
 export const closeDigest = () => setDigestOpen(false);
 export const toggleDigest = () => setDigestOpen((v) => !v);
-export { digestOpen };
+export { digestOpen, digestDate };
+
+export function goToPrevDay(): void {
+  const d = new Date(digestDate());
+  d.setDate(d.getDate() - 1);
+  const prev = d.toISOString().slice(0, 10);
+  setDigestDate(prev);
+  void loadDigest(prev);
+}
+
+export function goToNextDay(): void {
+  const today = new Date().toISOString().slice(0, 10);
+  const d = new Date(digestDate());
+  d.setDate(d.getDate() + 1);
+  const next = d.toISOString().slice(0, 10);
+  if (next > today) return;
+  setDigestDate(next);
+  void loadDigest(next);
+}
+
+export function goToToday(): void {
+  const today = new Date().toISOString().slice(0, 10);
+  setDigestDate(today);
+  void loadDigest(today);
+}
+
+export function isToday(): boolean {
+  return digestDate() === new Date().toISOString().slice(0, 10);
+}
 
 // Loaded digest data
 const [digestData, setDigestData] = createSignal<DigestSummary | null>(null);

@@ -3,9 +3,9 @@
 // Author: Subash Karki
 
 import { For, Show, createEffect, createMemo } from 'solid-js';
-import { RefreshCw } from 'lucide-solid';
+import { RefreshCw, ChevronLeft, ChevronRight } from 'lucide-solid';
 import { PhantomDrawer } from '../PhantomDrawer/PhantomDrawer';
-import { digestOpen, closeDigest, digestData, digestLoading, loadDigest, costReport } from '@/core/signals/digest';
+import { digestOpen, closeDigest, digestData, digestLoading, loadDigest, costReport, digestDate, goToPrevDay, goToNextDay, goToToday, isToday } from '@/core/signals/digest';
 import * as styles from './DigestDrawer.css';
 
 function formatTokens(n: number): string {
@@ -117,15 +117,22 @@ function LoadingSkeleton() {
   );
 }
 
+function formatDate(dateStr: string): string {
+  const today = new Date().toISOString().slice(0, 10);
+  if (dateStr === today) return 'Today';
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (dateStr === yesterday.toISOString().slice(0, 10)) return 'Yesterday';
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
 export function DigestDrawer() {
-  // Load digest data whenever the drawer opens
   createEffect(() => {
     if (digestOpen()) {
-      void loadDigest();
+      void loadDigest(digestDate());
     }
   });
-
-  const today = () => new Date().toISOString().slice(0, 10);
 
   return (
     <PhantomDrawer
@@ -136,13 +143,35 @@ export function DigestDrawer() {
       title="Daily Digest"
     >
       <div class={styles.scrollBody}>
+        {/* Date navigation */}
+        <div class={styles.dateNav}>
+          <button class={styles.dateNavButton} onClick={goToPrevDay} aria-label="Previous day">
+            <ChevronLeft size={14} />
+          </button>
+          <button
+            class={styles.dateLabel}
+            onClick={goToToday}
+            title="Go to today"
+          >
+            {formatDate(digestDate())}
+          </button>
+          <button
+            class={styles.dateNavButton}
+            onClick={goToNextDay}
+            disabled={isToday()}
+            aria-label="Next day"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+
         <Show when={digestLoading()}>
           <LoadingSkeleton />
         </Show>
 
         <Show when={!digestLoading() && !digestData()}>
           <div class={styles.emptyState}>
-            No session data for today yet.
+            No session data for {formatDate(digestDate())}.
           </div>
         </Show>
 
@@ -211,7 +240,7 @@ export function DigestDrawer() {
               <button
                 type="button"
                 class={styles.refreshButton}
-                onClick={() => void loadDigest(today())}
+                onClick={() => void loadDigest(digestDate())}
                 aria-label="Refresh digest"
               >
                 <RefreshCw size={12} />
