@@ -79,7 +79,7 @@ function CoverageRing(props: { percent: number }) {
         stroke={vars.color.accent}
         stroke-width="4"
         stroke-linecap="round"
-        stroke-dasharray={circumference}
+        stroke-dasharray={String(circumference)}
         stroke-dashoffset={offset()}
         transform="rotate(-90 22 22)"
         style={{ transition: `stroke-dashoffset ${vars.animation.normal} ease` }}

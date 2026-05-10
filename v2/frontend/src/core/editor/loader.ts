@@ -28,18 +28,19 @@ export const getMonaco = (): Promise<typeof MonacoNS> => {
 
     // Disable semantic validation to prevent false-positive red squiggles
     // when we don't have full project type information. Syntax validation stays on.
-    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+    // Cast required: monaco.languages.typescript is typed as deprecated in this version
+    (monaco.languages as any).typescript.typescriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: true,
       noSyntaxValidation: false,
     });
-    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+    (monaco.languages as any).typescript.javascriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: true,
       noSyntaxValidation: false,
     });
 
     // Defer TypeScript worker model sync — cuts startup CPU
-    monaco.languages.typescript.typescriptDefaults.setEagerModelSync(false);
-    monaco.languages.typescript.javascriptDefaults.setEagerModelSync(false);
+    (monaco.languages as any).typescript.typescriptDefaults.setEagerModelSync(false);
+    (monaco.languages as any).typescript.javascriptDefaults.setEagerModelSync(false);
 
     monacoInstance = monaco;
     return monaco;

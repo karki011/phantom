@@ -31,7 +31,7 @@ export function ScanResultsDialog(props: ScanResultsDialogProps) {
 
     setScanning(true);
     setPaths([]);
-    setSelected(new Set());
+    setSelected(new Set<string>());
 
     Promise.all([
       scanDirectory(parent),
@@ -62,7 +62,7 @@ export function ScanResultsDialog(props: ScanResultsDialogProps) {
   }
 
   function deselectAll() {
-    setSelected(new Set());
+    setSelected(new Set<string>());
   }
 
   async function handleAdd() {
@@ -87,7 +87,7 @@ export function ScanResultsDialog(props: ScanResultsDialogProps) {
   function handleOpenChange(open: boolean) {
     if (!open) {
       setPaths([]);
-      setSelected(new Set());
+      setSelected(new Set<string>());
     }
     props.onOpenChange(open);
   }

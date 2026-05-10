@@ -593,7 +593,7 @@ export default function EditorPane(props: EditorPaneProps) {
       });
     }
 
-    setDiffReview({ active: true, sideBySide: diffReview().sideBySide, gitDiff });
+    setDiffReview({ active: true, sideBySide: diffReview().sideBySide, gitDiff: false });
     requestAnimationFrame(() => diffEditorInstance?.layout());
   };
 
@@ -618,7 +618,7 @@ export default function EditorPane(props: EditorPaneProps) {
 
   const toggleDiffLayout = (): void => {
     const next = !diffReview().sideBySide;
-    setDiffReview({ active: true, sideBySide: next });
+    setDiffReview({ active: true, sideBySide: next, gitDiff: diffReview().gitDiff });
     diffEditorInstance?.updateOptions({ renderSideBySide: next });
   };
 

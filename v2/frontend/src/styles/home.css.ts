@@ -437,7 +437,7 @@ export const statusDot = style({
   borderRadius: '50%',
   background: vars.color.success,
   flexShrink: 0,
-  boxShadow: vars.color.successGlow,
+  boxShadow: vars.shadow.successGlow,
 });
 
 export const statusDotDirty = style({

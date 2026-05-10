@@ -53,7 +53,7 @@ function HealthRing(props: { score: number }) {
         stroke={color()}
         stroke-width="4"
         stroke-linecap="round"
-        stroke-dasharray={circumference}
+        stroke-dasharray={String(circumference)}
         stroke-dashoffset={offset()}
         transform="rotate(-90 26 26)"
         style={{ transition: `stroke-dashoffset ${vars.animation.normal} ease` }}

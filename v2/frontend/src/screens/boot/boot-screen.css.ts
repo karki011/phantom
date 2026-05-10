@@ -147,3 +147,69 @@ export const stepDetail = style({
 export const stepDetailDone = style({
   color: vars.color.textSecondary,
 });
+
+// ---------------------------------------------------------------------------
+// ConfirmationPanel styles
+// ---------------------------------------------------------------------------
+
+const pulseAnim = keyframes({
+  '0%, 100%': { opacity: 0.5 },
+  '50%': { opacity: 1 },
+});
+
+export const confirmationPanel = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  fontFamily: vars.font.mono,
+  fontSize: vars.fontSize.sm,
+});
+
+export const scanLine = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+});
+
+export const scanLabel = style({
+  color: vars.color.textPrimary,
+  flex: 1,
+});
+
+export const scanDetail = style({
+  color: vars.color.textDisabled,
+  marginLeft: 'auto',
+});
+
+export const statusDotSuccess = style({
+  color: vars.color.success,
+  fontSize: '10px',
+  flexShrink: 0,
+});
+
+export const statusDotWarning = style({
+  color: vars.color.warning,
+  fontSize: '10px',
+  flexShrink: 0,
+});
+
+export const statusDotOffline = style({
+  color: vars.color.textDisabled,
+  fontSize: '10px',
+  flexShrink: 0,
+});
+
+export const pulsing = style({
+  animation: `${pulseAnim} 1.5s ease-in-out infinite`,
+});
+
+// ---------------------------------------------------------------------------
+// ParticleCanvas styles
+// ---------------------------------------------------------------------------
+
+export const canvas = style({
+  position: 'absolute',
+  inset: 0,
+  width: '100%',
+  height: '100%',
+});

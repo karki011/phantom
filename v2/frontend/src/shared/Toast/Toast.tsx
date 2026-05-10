@@ -44,47 +44,41 @@ export function showWarningToast(title: string, description?: string) {
 }
 
 export function showErrorToast(title: string, description?: string) {
-  toaster.show(
-    (props) => (
-      <Toast toastId={props.toastId} class={styles.toast}>
-        <div class={styles.toastContent}>
-          <div>
-            <Toast.Title class={styles.toastTitleError}>{title}</Toast.Title>
-            <Show when={description}>
-              <Toast.Description class={styles.toastDescription}>{description}</Toast.Description>
-            </Show>
-          </div>
-          <Toast.CloseButton class={styles.toastClose}>×</Toast.CloseButton>
+  toaster.show((props) => (
+    <Toast toastId={props.toastId} class={styles.toast} duration={8000}>
+      <div class={styles.toastContent}>
+        <div>
+          <Toast.Title class={styles.toastTitleError}>{title}</Toast.Title>
+          <Show when={description}>
+            <Toast.Description class={styles.toastDescription}>{description}</Toast.Description>
+          </Show>
         </div>
-        <Toast.ProgressTrack class={styles.progressTrack}>
-          <Toast.ProgressFill class={styles.progressFillError} />
-        </Toast.ProgressTrack>
-      </Toast>
-    ),
-    { duration: 8000 },
-  );
+        <Toast.CloseButton class={styles.toastClose}>×</Toast.CloseButton>
+      </div>
+      <Toast.ProgressTrack class={styles.progressTrack}>
+        <Toast.ProgressFill class={styles.progressFillError} />
+      </Toast.ProgressTrack>
+    </Toast>
+  ));
 }
 
 export function showSuccessToast(title: string, description?: string) {
-  toaster.show(
-    (props) => (
-      <Toast toastId={props.toastId} class={styles.toast}>
-        <div class={styles.toastContent}>
-          <div>
-            <Toast.Title class={styles.toastTitleSuccess}>{title}</Toast.Title>
-            <Show when={description}>
-              <Toast.Description class={styles.toastDescription}>{description}</Toast.Description>
-            </Show>
-          </div>
-          <Toast.CloseButton class={styles.toastClose}>×</Toast.CloseButton>
+  toaster.show((props) => (
+    <Toast toastId={props.toastId} class={styles.toast} duration={4000}>
+      <div class={styles.toastContent}>
+        <div>
+          <Toast.Title class={styles.toastTitleSuccess}>{title}</Toast.Title>
+          <Show when={description}>
+            <Toast.Description class={styles.toastDescription}>{description}</Toast.Description>
+          </Show>
         </div>
-        <Toast.ProgressTrack class={styles.progressTrack}>
-          <Toast.ProgressFill class={styles.progressFillSuccess} />
-        </Toast.ProgressTrack>
-      </Toast>
-    ),
-    { duration: 4000 },
-  );
+        <Toast.CloseButton class={styles.toastClose}>×</Toast.CloseButton>
+      </div>
+      <Toast.ProgressTrack class={styles.progressTrack}>
+        <Toast.ProgressFill class={styles.progressFillSuccess} />
+      </Toast.ProgressTrack>
+    </Toast>
+  ));
 }
 
 export function ToastRegion() {

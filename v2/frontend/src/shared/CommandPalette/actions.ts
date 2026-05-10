@@ -401,6 +401,16 @@ const THEME_LABELS: Record<ThemeId, string> = {
   'dracula': 'Dracula',
   'nord-dark': 'Nord Dark',
   'nord-light': 'Nord Light',
+  'one-dark-pro': 'One Dark Pro',
+  'github-dark': 'GitHub Dark',
+  'catppuccin': 'Catppuccin',
+  'rose-pine': 'Rosé Pine',
+  'tokyo-night': 'Tokyo Night',
+  'gruvbox': 'Gruvbox',
+  'solarized-dark': 'Solarized Dark',
+  'ayu-dark': 'Ayu Dark',
+  'kanagawa': 'Kanagawa',
+  'vscode-dark': 'VS Code Dark',
 };
 
 export const themeActions: DynamicActionProvider = (): CommandAction[] =>

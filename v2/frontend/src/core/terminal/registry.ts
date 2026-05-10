@@ -5,6 +5,7 @@
 // SolidJS component unmount/remount cycles (worktree switches, tab changes).
 
 import { Terminal } from '@xterm/xterm';
+import type { FontWeight } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { SerializeAddon } from '@xterm/addon-serialize';
@@ -88,8 +89,8 @@ export function createSession(
   const terminal = new Terminal({
     fontSize: userPrefs.fontSize ?? getZoomConfig().terminalFontSize,
     fontFamily: userPrefs.fontFamily ?? opts?.fontFamily ?? MONO_FONT_FAMILY,
-    fontWeight: userPrefs.fontWeight ?? '300',
-    fontWeightBold: userPrefs.fontWeightBold ?? '400',
+    fontWeight: (userPrefs.fontWeight ?? '300') as FontWeight,
+    fontWeightBold: (userPrefs.fontWeightBold ?? '400') as FontWeight,
     lineHeight: userPrefs.lineHeight ?? 1.18,
     letterSpacing: userPrefs.letterSpacing ?? 0.2,
     cursorBlink: true,

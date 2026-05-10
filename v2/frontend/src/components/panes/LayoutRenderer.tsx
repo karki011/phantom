@@ -64,11 +64,11 @@ function SplitRenderer(props: SplitRendererProps) {
     ? styles.layoutSplitHorizontal
     : styles.layoutSplitVertical;
 
-  const wrapperStyle = (pct: number) => ({
+  const wrapperStyle = (pct: number): import('solid-js').JSX.CSSProperties => ({
     flex: `0 0 ${pct}%`,
     overflow: 'hidden',
-    'min-width': 0,
-    'min-height': 0,
+    'min-width': '0',
+    'min-height': '0',
     display: 'flex',
     'flex-direction': isHorizontal ? 'row' : 'column',
   });

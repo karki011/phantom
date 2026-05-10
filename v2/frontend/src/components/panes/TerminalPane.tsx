@@ -149,12 +149,12 @@ export default function TerminalPane(props: TerminalPaneProps) {
 
     const explicitTheme = resolveTerminalTheme(activeTerminalThemeId());
     const session = createSession(sessionId, {
-      theme: explicitTheme ?? {
+      theme: (explicitTheme ?? {
         background: resolve(vars.color.terminalBg, '#0a0a1a'),
         foreground: resolve(vars.color.terminalText, '#c8c5d4'),
         cursor: resolve(vars.color.terminalCursor, '#b794f6'),
         selectionBackground: resolve(vars.color.terminalSelection, 'rgba(139,92,255,0.3)'),
-      },
+      }) as Record<string, string>,
     });
 
     // Store the working directory on the session for file path resolution

@@ -5,10 +5,15 @@
 // This module MUST be imported (side-effect) BEFORE Monaco is initialized
 // so that language services run off the main thread.
 
+// @ts-expect-error vite worker import
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+// @ts-expect-error vite worker import
 import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
+// @ts-expect-error vite worker import
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
+// @ts-expect-error vite worker import
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
+// @ts-expect-error vite worker import
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 
 (self as any).MonacoEnvironment = {
