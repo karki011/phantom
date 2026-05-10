@@ -28,7 +28,9 @@ func (d *DirectStrategy) ShouldActivate(a TaskAssessment) (float64, string) {
 	var reason string
 	switch a.Complexity {
 	case Simple:
-		score, reason = 0.9, "simple task"
+		// Lowered from 0.9 → 0.65 so alternatives can compete on simple tasks
+		// rather than being locked out by an insurmountable Direct margin.
+		score, reason = 0.65, "simple task"
 	case Moderate:
 		score, reason = 0.6, "moderate task"
 	default:

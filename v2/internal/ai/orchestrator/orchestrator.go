@@ -287,11 +287,9 @@ func Process(ctx context.Context, deps Dependencies, in ProcessInput) (*ProcessR
 			_ = deps.Decisions.RecordOrchestratorOutcome(id, true, "")
 		}
 	}
-	if deps.Performance != nil {
-		deps.Performance.Record(winner.Strategy.ID(), assessment.Complexity, true)
-	}
 	if deps.AutoTune != nil {
-		deps.AutoTune.RecordOutcome(assessment.Complexity, true, len(contextFiles))
+		// Note: RecordOutcome is intentionally NOT called here at selection time.
+		// The verifier writes the actual pass/fail signal after the task completes.
 		learning.AutoTuneThresholdsKey = "ema-applied"
 	}
 	if deps.Compactor != nil {
@@ -644,8 +642,8 @@ func riskRank(r strategies.TaskRisk) int {
 }
 
 // applyTaskTypeBias nudges strategy scores based on the self-classified task
-// type from the prior turn. Preferred strategies get +0.10; the rest get -0.05.
-// These are soft signals — existing graph/assessor scores always dominate.
+// type from the prior turn. Preferred strategies get +0.20; the rest get -0.10.
+// These are meaningful signals that can swing close contests between strategies.
 //
 // Mapping (mirrors task description):
 //
@@ -654,8 +652,11 @@ func riskRank(r strategies.TaskRisk) int {
 //	exploration, docs  → prefer direct, advisor (answer-oriented)
 //	test               → prefer direct
 func applyTaskTypeBias(all []scoredStrategy, taskType string) {
-	const bump = 0.10
-	const damp = 0.05
+	// Raised bump 0.10 → 0.20 and damp 0.05 → 0.10 so task classification
+	// is a meaningful signal rather than a rounding error against Direct's
+	// previously inflated base score.
+	const bump = 0.20
+	const damp = 0.10
 
 	// preferred holds strategy IDs that get a positive nudge.
 	var preferred map[string]bool

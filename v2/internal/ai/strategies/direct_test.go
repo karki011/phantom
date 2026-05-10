@@ -12,11 +12,13 @@ func TestDirect_ShouldActivate(t *testing.T) {
 		wantScore  float64
 		wantSubstr string
 	}{
-		{"simple clear", TaskAssessment{Complexity: Simple}, 0.9, "simple task"},
+		// simple score lowered from 0.9 → 0.65 (Fix 2: prevent insurmountable margin)
+		{"simple clear", TaskAssessment{Complexity: Simple}, 0.65, "simple task"},
 		{"moderate clear", TaskAssessment{Complexity: Moderate}, 0.6, "moderate task"},
 		{"complex clear", TaskAssessment{Complexity: Complex}, 0.3, "complex task"},
 		{"critical clear", TaskAssessment{Complexity: Critical}, 0.3, "complex task"},
-		{"simple ambiguous", TaskAssessment{Complexity: Simple, IsAmbiguous: true}, 0.45, "penalized"},
+		// 0.65 * 0.5 = 0.325 (rounded to float64 exact)
+		{"simple ambiguous", TaskAssessment{Complexity: Simple, IsAmbiguous: true}, 0.325, "penalized"},
 		{"moderate ambiguous", TaskAssessment{Complexity: Moderate, IsAmbiguous: true}, 0.3, "penalized"},
 		{"complex ambiguous", TaskAssessment{Complexity: Complex, IsAmbiguous: true}, 0.15, "penalized"},
 	}

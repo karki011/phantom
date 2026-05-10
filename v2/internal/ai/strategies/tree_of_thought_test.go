@@ -19,7 +19,8 @@ func TestTreeOfThought_ShouldActivate(t *testing.T) {
 		{"ambiguous critical", TaskAssessment{IsAmbiguous: true, Complexity: Critical}, 0.85},
 		{"ambiguous simple", TaskAssessment{IsAmbiguous: true, Complexity: Simple}, 0.5},
 		{"complex+medium", TaskAssessment{Complexity: Complex, Risk: MediumRisk}, 0.6},
-		{"clear simple", TaskAssessment{Complexity: Simple, Risk: LowRisk}, 0.1},
+		// default floor raised from 0.1 → 0.15 (Fix 2)
+		{"clear simple", TaskAssessment{Complexity: Simple, Risk: LowRisk}, 0.15},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

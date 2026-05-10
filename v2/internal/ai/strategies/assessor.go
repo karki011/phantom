@@ -68,6 +68,13 @@ func (a *Assessor) Assess(message string, fileCount int, blastRadius int) TaskAs
 		risk = assessRisk(blastRadius)
 	}
 
+	// When no files are explicitly mentioned, use goal text as a complexity signal.
+	// Without this, "Refactor auth" is classified as "simple" just because no files
+	// were @-mentioned, giving Direct an undeserved 0.65 base score.
+	if fileCount == 0 {
+		complexity = applyGoalTextComplexity(message, complexity)
+	}
+
 	return TaskAssessment{
 		Complexity:     complexity,
 		Risk:           risk,
@@ -76,6 +83,36 @@ func (a *Assessor) Assess(message string, fileCount int, blastRadius int) TaskAs
 		FileCount:      fileCount,
 		BlastRadius:    blastRadius,
 	}
+}
+
+// applyGoalTextComplexity floors complexity based on keywords in the goal text.
+// It only upgrades complexity — never downgrades it.
+func applyGoalTextComplexity(goal string, complexity TaskComplexity) TaskComplexity {
+	goalLower := strings.ToLower(goal)
+
+	// These keywords suggest non-trivial, multi-file work.
+	complexKeywords := []string{"refactor", "redesign", "migrate", "implement", "architect", "rewrite", "optimize", "overhaul"}
+	for _, kw := range complexKeywords {
+		if strings.Contains(goalLower, kw) {
+			if complexity == Simple {
+				complexity = Moderate
+			}
+			return complexity
+		}
+	}
+
+	// These keywords suggest meaningful but bounded work.
+	moderateKeywords := []string{"add", "create", "build", "feature", "integrate", "update", "fix"}
+	if complexity == Simple {
+		for _, kw := range moderateKeywords {
+			if strings.Contains(goalLower, kw) {
+				complexity = Moderate
+				break
+			}
+		}
+	}
+
+	return complexity
 }
 
 // assessComplexity maps file count to a complexity tier using hardcoded defaults.

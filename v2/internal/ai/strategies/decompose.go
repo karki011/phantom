@@ -33,6 +33,10 @@ func (d *DecomposeStrategy) ShouldActivate(a TaskAssessment) (float64, string) {
 		return 0.85, "complex task benefits from decomposition"
 	case a.Complexity == Moderate && a.Risk == HighRisk:
 		return 0.7, "moderate but high-risk"
+	case a.Complexity == Moderate:
+		// Raised floor for moderate tasks: 0.45 ensures decompose competes
+		// against Direct (0.6) rather than losing by an insurmountable margin.
+		return 0.45, "moderate task — decomposition may help"
 	case a.IsAmbiguous:
 		return 0.6, "ambiguous task needs structured approach"
 	default:
