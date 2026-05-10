@@ -91,7 +91,7 @@ export const welcomeTitle = style({
   color: vars.color.accent,
   letterSpacing: '0.2em',
   textTransform: 'uppercase',
-  animation: `${welcomeTextGlow} 4s ease-in-out infinite`,
+  textShadow: `0 0 10px ${vars.color.accentGlow}`,
   margin: 0,
 });
 
@@ -146,7 +146,6 @@ export const welcomeTile = style({
 
 export const welcomeTilePrimary = style({
   borderColor: `color-mix(in srgb, ${vars.color.accent} 35%, ${vars.color.border})`,
-  animation: `${welcomeTileBreathe} 4s ease-in-out infinite`,
 });
 
 export const welcomeTileIcon = style({
@@ -328,7 +327,6 @@ export const quickActionButton = style({
     background: vars.color.bgHover,
     borderColor: `color-mix(in srgb, ${vars.color.accent} 45%, ${vars.color.border})`,
     color: vars.color.textPrimary,
-    boxShadow: `0 0 12px color-mix(in srgb, ${vars.color.accent} 18%, transparent)`,
   },
   selectors: {
     '&[data-active]': {
@@ -996,7 +994,6 @@ export const hunterBanner = style({
   background: vars.color.bgSecondary,
   borderRadius: vars.radius.lg,
   border: `1px solid color-mix(in srgb, ${vars.color.accent} 30%, ${vars.color.border})`,
-  animation: `${borderGlow} 4s ease-in-out infinite`,
 });
 
 export const rankBadge = style({

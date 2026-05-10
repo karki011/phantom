@@ -13,12 +13,12 @@ export const fadeOut = keyframes({
 });
 
 export const slideUp = keyframes({
-  from: { transform: 'translateY(20px)', opacity: 0 },
+  from: { transform: 'translateY(8px)', opacity: 0 },
   to: { transform: 'translateY(0)', opacity: 1 },
 });
 
 export const slideDown = keyframes({
-  from: { transform: 'translateY(-20px)', opacity: 0 },
+  from: { transform: 'translateY(-8px)', opacity: 0 },
   to: { transform: 'translateY(0)', opacity: 1 },
 });
 
@@ -28,7 +28,7 @@ export const dissolve = keyframes({
 });
 
 export const glowPulse = keyframes({
-  '0%, 100%': { opacity: 0.4 },
+  '0%, 100%': { opacity: 0.7 },
   '50%': { opacity: 1 },
 });
 

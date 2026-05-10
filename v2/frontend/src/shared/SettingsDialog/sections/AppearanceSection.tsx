@@ -49,6 +49,8 @@ const THEME_SWATCHES: { id: ThemeId; label: string; accent: string; bg: string }
   { id: 'ayu-dark',               label: 'Ayu Dark',       accent: '#e6b450', bg: '#0b0e14' },
   { id: 'kanagawa',               label: 'Kanagawa',       accent: '#7e9cd8', bg: '#1f1f28' },
   { id: 'vscode-dark',            label: 'VS Code',        accent: '#4fc1ff', bg: '#1f1f1f' },
+  { id: 'fleet-dark',             label: 'Fleet Dark',     accent: '#af8fff', bg: '#1e1f22' },
+  { id: 'fleet-light',            label: 'Fleet Light',    accent: '#7c4dff', bg: '#ffffff' },
 ];
 
 const FONT_STYLES: { id: FontStyleId; label: string }[] = [

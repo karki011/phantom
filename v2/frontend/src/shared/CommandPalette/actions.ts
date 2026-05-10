@@ -411,6 +411,8 @@ const THEME_LABELS: Record<ThemeId, string> = {
   'ayu-dark': 'Ayu Dark',
   'kanagawa': 'Kanagawa',
   'vscode-dark': 'VS Code Dark',
+  'fleet-dark': 'Fleet Dark',
+  'fleet-light': 'Fleet Light',
 };
 
 export const themeActions: DynamicActionProvider = (): CommandAction[] =>

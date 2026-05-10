@@ -43,7 +43,7 @@ export const identityGroup = style({
 
 export const projectGlyphButton = style({
   appearance: 'none',
-  border: `1px solid ${vars.color.border}`,
+  border: 'none',
   background: vars.color.bgTertiary,
   color: vars.color.textPrimary,
   width: '32px',
@@ -57,16 +57,15 @@ export const projectGlyphButton = style({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  transition: `background ${vars.animation.fast} ease, border-color ${vars.animation.fast} ease`,
+  transition: `background ${vars.animation.fast} ease`,
   ':hover': {
     backgroundColor: vars.color.bgHover,
-    borderColor: vars.color.borderHover,
   },
 });
 
 export const branchChipButton = style({
   appearance: 'none',
-  border: `1px solid ${vars.color.border}`,
+  border: 'none',
   background: 'transparent',
   color: vars.color.textSecondary,
   width: '34px',
@@ -78,10 +77,9 @@ export const branchChipButton = style({
   letterSpacing: '0.04em',
   cursor: 'pointer',
   textAlign: 'center',
-  transition: `color ${vars.animation.fast} ease, border-color ${vars.animation.fast} ease, background ${vars.animation.fast} ease`,
+  transition: `color ${vars.animation.fast} ease, background ${vars.animation.fast} ease`,
   ':hover': {
     color: vars.color.accent,
-    borderColor: vars.color.accent,
     backgroundColor: vars.color.bgHover,
   },
 });

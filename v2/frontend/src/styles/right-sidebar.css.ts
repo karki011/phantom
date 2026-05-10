@@ -36,7 +36,7 @@ export const tabList = style({
   height: '32px',
   flexShrink: 0,
   backgroundColor: vars.color.bgSecondary,
-  borderBottom: `1px solid ${vars.color.border}`,
+  borderBottom: `1px solid color-mix(in srgb, ${vars.color.border} 30%, transparent)`,
   paddingLeft: vars.space.xs,
   gap: '2px',
 });
@@ -101,7 +101,7 @@ export const tabPanel = style({
 
 export const fileSearchWrapper = style({
   padding: vars.space.sm,
-  borderBottom: `1px solid ${vars.color.divider}`,
+  borderBottom: `1px solid color-mix(in srgb, ${vars.color.border} 30%, transparent)`,
   flexShrink: 0,
 });
 
@@ -177,7 +177,7 @@ export const fileTree = style({
   display: 'flex',
   flexDirection: 'column',
   padding: vars.space.sm,
-  gap: '1px',
+  gap: '2px',
   flex: 1,
   overflowY: 'auto',
   minHeight: 0,
@@ -229,7 +229,7 @@ export const fileItem = style({
   flexDirection: 'row',
   alignItems: 'center',
   gap: vars.space.xs,
-  padding: `4px ${vars.space.sm}`,
+  padding: `6px ${vars.space.sm}`,
   borderRadius: vars.radius.sm,
   cursor: 'pointer',
   fontSize: vars.fontSize.xs,
@@ -446,7 +446,7 @@ export const changesHeader = style({
   alignItems: 'center',
   gap: vars.space.xs,
   padding: `${vars.space.xs} ${vars.space.sm}`,
-  borderBottom: `1px solid ${vars.color.border}`,
+  borderBottom: `1px solid color-mix(in srgb, ${vars.color.border} 30%, transparent)`,
   flexShrink: 0,
 });
 
