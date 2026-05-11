@@ -96,8 +96,12 @@ func (h *HaikuAssessor) Assess(ctx context.Context, goal string, projectContext 
 
 	prompt := fmt.Sprintf(assessUserTemplate, goal, projectContext)
 
+	start := time.Now()
 	text, inTok, outTok, err := h.client.Call(tctx, assessSystemPrompt, prompt)
+	elapsed := time.Since(start)
 	if err != nil {
+		slog.Warn("haiku assessment failed, falling back to keywords",
+			"error", err, "elapsed_ms", elapsed.Milliseconds())
 		return nil, fmt.Errorf("haiku assess call: %w", err)
 	}
 
@@ -106,14 +110,13 @@ func (h *HaikuAssessor) Assess(ctx context.Context, goal string, projectContext 
 		return nil, fmt.Errorf("haiku assess parse: %w", err)
 	}
 
-	slog.Debug("haiku assessment",
+	slog.Info("haiku assessment",
 		"task_type", result.TaskType,
 		"complexity", result.Complexity,
 		"risk", result.Risk,
 		"risk_reason", result.RiskReason,
-		"summary", result.Summary,
-		"in_tokens", inTok,
-		"out_tokens", outTok,
+		"elapsed_ms", elapsed.Milliseconds(),
+		"tokens", fmt.Sprintf("%d in / %d out", inTok, outTok),
 	)
 
 	return result, nil

@@ -94,16 +94,15 @@ func (a *Assessor) Assess(message string, fileCount int, blastRadius int) TaskAs
 		defer cancel()
 		projectCtx := fmt.Sprintf("~%d context files", fileCount)
 		if la, err := a.haiku.Assess(ctx, message, projectCtx); err != nil {
-			slog.Debug("haiku assessor error — falling back to keywords", "err", err)
+			slog.Warn("haiku assessor error — falling back to keywords", "err", err)
 		} else if la.Complexity != "" {
-			// Map LLM result into TaskAssessment, preserving graph metrics.
 			complexity := complexityFromLLM(la.Complexity, fileCount, a.tracker)
 			risk := riskFromLLM(la.Risk, blastRadius, a.tracker)
-			slog.Debug("haiku assessment applied",
+			slog.Info("haiku assessment applied",
 				"complexity", la.Complexity,
 				"risk", la.Risk,
 				"task_type", la.TaskType,
-				"summary", la.Summary,
+				"risk_reason", la.RiskReason,
 			)
 			return TaskAssessment{
 				Complexity:     complexity,
