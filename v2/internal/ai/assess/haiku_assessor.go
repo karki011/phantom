@@ -16,7 +16,7 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/ai/knowledge"
 )
 
-const haikuAssessTimeout = 2 * time.Second
+const haikuAssessTimeout = 8 * time.Second
 
 // HaikuClient is the interface this package needs from knowledge.HaikuClient.
 // Kept narrow so tests can inject a fake without importing the concrete type.

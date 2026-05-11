@@ -90,7 +90,7 @@ func (a *Assessor) Assess(message string, fileCount int, blastRadius int) TaskAs
 
 	// --- Primary path: LLM assessment via Haiku ---
 	if a.haiku != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
 		projectCtx := fmt.Sprintf("~%d context files", fileCount)
 		if la, err := a.haiku.Assess(ctx, message, projectCtx); err != nil {
