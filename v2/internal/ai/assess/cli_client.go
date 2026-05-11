@@ -41,24 +41,24 @@ func (c *CLIHaikuClient) Call(ctx context.Context, system, userPrompt string) (s
 		return "", 0, 0, fmt.Errorf("CLI client not initialized")
 	}
 
-	// Build the combined prompt with system instruction
-	combinedPrompt := userPrompt
+	// Combine system + user into a single prompt passed as argument
+	// (avoids stdin piping issues in subprocess)
+	fullPrompt := userPrompt
+	if system != "" {
+		fullPrompt = system + "\n\n" + userPrompt
+	}
 
 	args := []string{
 		"-p",
+		fullPrompt,
 		"--model", "claude-haiku-4-5-20251001",
 		"--output-format", "text",
 		"--max-turns", "1",
 	}
 
-	if system != "" {
-		args = append(args, "--append-system-prompt", system)
-	}
-
 	cmd := exec.CommandContext(ctx, c.binaryPath, args...)
 	cmd.Env = c.env
 	cmd.Dir = homeDir()
-	cmd.Stdin = strings.NewReader(combinedPrompt)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
