@@ -32,7 +32,7 @@ func (d *DirectStrategy) ShouldActivate(a TaskAssessment) (float64, string) {
 		// rather than being locked out by an insurmountable Direct margin.
 		score, reason = 0.65, "simple task"
 	case Moderate:
-		score, reason = 0.6, "moderate task"
+		score, reason = 0.4, "moderate task, other strategies may fit better"
 	default:
 		score, reason = 0.3, "complex task, prefer other strategies"
 	}

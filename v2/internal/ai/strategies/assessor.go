@@ -90,15 +90,24 @@ func (a *Assessor) Assess(message string, fileCount int, blastRadius int) TaskAs
 func applyGoalTextComplexity(goal string, complexity TaskComplexity) TaskComplexity {
 	goalLower := strings.ToLower(goal)
 
-	// These keywords suggest non-trivial, multi-file work.
+	// Compound goals with multiple components → complex
 	complexKeywords := []string{"refactor", "redesign", "migrate", "implement", "architect", "rewrite", "optimize", "overhaul"}
+	hasComplexKeyword := false
 	for _, kw := range complexKeywords {
 		if strings.Contains(goalLower, kw) {
-			if complexity == Simple {
-				complexity = Moderate
-			}
-			return complexity
+			hasComplexKeyword = true
+			break
 		}
+	}
+	if hasComplexKeyword {
+		// "implement X with Y and Z" → complex (multiple components)
+		hasCompound := strings.Contains(goalLower, " with ") || strings.Contains(goalLower, " and ")
+		if hasCompound && complexity != Critical {
+			complexity = Complex
+		} else if complexity == Simple {
+			complexity = Moderate
+		}
+		return complexity
 	}
 
 	// These keywords suggest meaningful but bounded work.
