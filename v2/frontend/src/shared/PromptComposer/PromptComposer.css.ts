@@ -37,6 +37,7 @@ export const composer = style({
 
   display: 'flex',
   flexDirection: 'column',
+  marginBottom: 48,
 });
 
 export const composerDragOver = style({

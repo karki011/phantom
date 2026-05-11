@@ -56,7 +56,7 @@ export const PromptComposer = (props: PromptComposerProps) => {
   const [dragOver, setDragOver] = createSignal(false);
   const [position, setPosition] = createSignal({
     x: typeof window !== 'undefined' ? Math.round(window.innerWidth / 2 - 300) : 0,
-    y: typeof window !== 'undefined' ? Math.round(window.innerHeight - 200) : 0,
+    y: typeof window !== 'undefined' ? Math.round(window.innerHeight - 248) : 0,
   });
   const [dragging, setDragging] = createSignal(false);
 
