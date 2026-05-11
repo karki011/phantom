@@ -200,11 +200,21 @@ func (b *Bindings) wireEnrichmentCollectors() {
 				}
 				directive := strings.TrimSpace(or.result.Output.Text)
 				strategyLabel := fmt.Sprintf("Strategy: %s (%.0f%%)", or.result.Strategy.Name, or.result.Confidence*100)
-				if directive == "" || directive == strings.TrimSpace(input.UserText) {
-					return collectorResult{Source: "strategy", Label: strategyLabel}
+				base := collectorResult{
+					Source:        "strategy",
+					StrategyName:  or.result.Strategy.Name,
+					StrategyScore: or.result.Confidence,
+					Complexity:    or.result.TaskContext.Complexity,
+					Risk:          or.result.TaskContext.Risk,
+					BlastRadius:   or.result.Context.BlastRadius,
 				}
-				tokens := estimateTokens(directive)
-				return collectorResult{Source: "strategy", XML: directive, Tokens: tokens}
+				if directive == "" || directive == strings.TrimSpace(input.UserText) {
+					base.Label = strategyLabel
+					return base
+				}
+				base.XML = directive
+				base.Tokens = estimateTokens(directive)
+				return base
 			case <-ctx.Done():
 				return collectorResult{Source: "strategy", Err: fmt.Errorf("timeout")}
 			}
@@ -384,11 +394,18 @@ func (b *Bindings) ComposerV2Send(req SendRequest) error {
 		for _, chip := range enrichOutput.Chips {
 			if chip.Source == "strategy" && chip.Status == "success" {
 				channel := "composer:event:" + req.SessionID
+				confidence := chip.StrategyScore
+				if confidence == 0 {
+					confidence = 1.0
+				}
 				ev := StreamEvent{
 					Kind:               EventStrategy,
 					RawType:            "strategy",
-					StrategyName:       "enrichment-pipeline",
-					StrategyConfidence: 1.0,
+					StrategyName:       chip.StrategyName,
+					StrategyConfidence: confidence,
+					TaskComplexity:     chip.Complexity,
+					TaskRisk:           chip.Risk,
+					BlastRadius:        chip.BlastRadius,
 				}
 				if b.logger != nil {
 					b.logger.LogEvent(req.SessionID, ev)

@@ -149,12 +149,17 @@ type EditorContext struct {
 // ChipEvent represents a discrete activity chip emitted during a turn,
 // such as a tool call, a file write, or a strategy selection.
 type ChipEvent struct {
-	Category string `json:"category"`
-	Label    string `json:"label"`
-	Status   string `json:"status"`
-	Source   string `json:"source"`
-	Timing   int64  `json:"timing"`
-	Tokens   int    `json:"tokens"`
+	Category      string  `json:"category"`
+	Label         string  `json:"label"`
+	Status        string  `json:"status"`
+	Source        string  `json:"source"`
+	Timing        int64   `json:"timing"`
+	Tokens        int     `json:"tokens"`
+	StrategyName  string  `json:"strategy_name,omitempty"`  // set for source=="strategy"
+	StrategyScore float64 `json:"strategy_score,omitempty"` // 0-1; set for source=="strategy"
+	Complexity    string  `json:"complexity,omitempty"`     // task complexity; set for source=="strategy"
+	Risk          string  `json:"risk,omitempty"`           // task risk; set for source=="strategy"
+	BlastRadius   int     `json:"blast_radius,omitempty"`   // affected files; set for source=="strategy"
 }
 
 // SessionLifecycle describes the current state of a composer session.
