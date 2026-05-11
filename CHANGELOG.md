@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.38](https://github.com/karki011/phantom/compare/v0.1.37...v0.1.38) (2026-05-11)
+
+
+### Features
+
+* Product V2 — AI-native developer workspace redesign ([#117](https://github.com/karki011/phantom/issues/117)) ([10c0431](https://github.com/karki011/phantom/commit/10c0431e1d87d4aaadd23cc3357819d5a9546142))
+
 ## [0.1.37](https://github.com/karki011/phantom/compare/v0.1.36...v0.1.37) (2026-05-09)
 
 
