@@ -711,9 +711,9 @@ func (s *Service) DeleteSession(ctx context.Context, sessionID string) error {
 const readTimeoutDuration = 120 * time.Second
 
 // enrichmentTimeout caps how long s.run waits for the async orchestrator
-// before falling through with the unenriched prompt. Keep it short — the
-// whole point is to unblock first-token latency.
-const enrichmentTimeout = 2 * time.Second
+// before falling through with the unenriched prompt. Extended to accommodate
+// Haiku CLI assessment (~3-5s subprocess startup + API call).
+const enrichmentTimeout = 10 * time.Second
 
 // enrichmentResult carries the orchestrator output from the async goroutine
 // to s.run. A nil value means the orchestrator either failed or timed out.
