@@ -22,7 +22,7 @@ export const editorContainer = style({
   transition: 'border-color 150ms ease',
   selectors: {
     '&:focus-within': {
-      borderColor: vars.color.borderFocus,
+      borderColor: 'inherit',
     },
   },
 })
