@@ -442,9 +442,12 @@ func (a *App) wireComposerEngine() {
 	deps.AutoTune = autoTune
 
 	// Wire Haiku-backed LLM assessor as the primary assessment path.
-	// Falls back to keyword logic when no API key is available.
+	// Prefers API key (faster, direct), falls back to CLI (uses existing auth),
+	// then to keyword logic if neither is available.
 	assessorInst := strategies.NewAssessor()
 	assessorInst.SetThresholdTracker(autoTune)
+	var haikuWired bool
+	// Try 1: direct API key (fastest — ~150ms, no subprocess)
 	var haikuAPIKey string
 	if k, ok := composer.GetAnthropicAPIKey(); ok {
 		haikuAPIKey = k
@@ -456,9 +459,22 @@ func (a *App) wireComposerEngine() {
 		haikuAssessor := assess.NewHaikuAssessorFromKnowledge(haikuClient)
 		adapter := assess.NewStrategiesAdapter(haikuAssessor)
 		assessorInst.SetLLMAssessor(adapter)
-		log.Info("app: Haiku LLM assessor wired (primary assessment path)")
-	} else {
-		log.Info("app: no API key — Haiku assessor disabled, using keyword fallback")
+		log.Info("app: Haiku assessor wired via API key")
+		haikuWired = true
+	}
+	// Try 2: claude CLI (uses existing auth — ~500ms with subprocess)
+	if !haikuWired {
+		cliClient := assess.NewCLIHaikuClient()
+		if cliClient != nil {
+			haikuAssessor := assess.NewHaikuAssessor(cliClient)
+			adapter := assess.NewStrategiesAdapter(haikuAssessor)
+			assessorInst.SetLLMAssessor(adapter)
+			log.Info("app: Haiku assessor wired via claude CLI")
+			haikuWired = true
+		}
+	}
+	if !haikuWired {
+		log.Info("app: Haiku assessor unavailable, using keyword fallback")
 	}
 	deps.Assessor = assessorInst
 
