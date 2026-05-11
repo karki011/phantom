@@ -30,7 +30,7 @@ import { TerminalCommandPalette } from '@/components/terminal/TerminalCommandPal
 import type { Terminal } from '@xterm/xterm';
 import { activeTerminalThemeId, resolveTerminalTheme } from '@/core/terminal/theme-manager';
 import { getSessionCwd } from '@/core/terminal/addons/shellIntegration';
-import { splitPane, closePane } from '@/core/panes/signals';
+import { splitPane, closePane, getPaneColor } from '@/core/panes/signals';
 import { openComposer, setComposerTarget } from '@/core/signals/composer';
 import {
   createTerminal as createBackendTerminal,
@@ -789,10 +789,13 @@ export default function TerminalPane(props: TerminalPaneProps) {
     }
   };
 
+  const paneColor = getPaneColor(props.paneId);
+
   return (
     <div
       class={termStyles.terminalWrapper}
       ref={wrapperRef!}
+      style={{ 'border-top': `2px solid ${paneColor}` }}
       onDragOver={(e: DragEvent) => e.preventDefault()}
       onDrop={handleTerminalDrop}
       onContextMenu={handleContextMenu}
