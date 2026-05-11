@@ -49,7 +49,6 @@ func (c *CLIHaikuClient) Call(ctx context.Context, system, userPrompt string) (s
 		"--model", "claude-haiku-4-5-20251001",
 		"--output-format", "text",
 		"--max-turns", "1",
-		"--no-input",
 	}
 
 	if system != "" {
