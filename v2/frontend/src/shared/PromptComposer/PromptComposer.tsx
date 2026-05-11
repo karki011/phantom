@@ -265,7 +265,6 @@ export const PromptComposer = (props: PromptComposerProps) => {
             left: '0px',
             top: '0px',
             transform: `translate(${position().x}px, ${position().y}px)`,
-            ...(composerColor() ? { 'border-color': composerColor()! } : {}),
           }}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -358,10 +357,13 @@ export const PromptComposer = (props: PromptComposerProps) => {
           </Show>
 
           {/* Rich markdown input */}
-          <div class={styles.textAreaWrap}>
+          <div
+            class={styles.textAreaWrap}
+            style={composerColor() ? { 'border-color': composerColor()! } : undefined}
+          >
             <MilkdownEditor
               placeholder="Message Phantom... (⌘+Enter to send)"
-              onSubmit={handleSubmit}
+              onSubmit={(md) => { handleSubmit(); }}
               onInput={(md) => setPrompt(md)}
               autoFocus={props.visible}
             />

@@ -1,6 +1,6 @@
 // Author: Subash Karki
 import { onMount, onCleanup } from 'solid-js'
-import { Editor, rootCtx, defaultValueCtx } from '@milkdown/kit/core'
+import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from '@milkdown/kit/core'
 import { commonmark } from '@milkdown/kit/preset/commonmark'
 import { gfm } from '@milkdown/kit/preset/gfm'
 import { listener, listenerCtx } from '@milkdown/kit/plugin/listener'
@@ -17,6 +17,7 @@ interface MilkdownEditorProps {
   autoFocus?: boolean
   disabled?: boolean
   fontSize?: number
+  clearOnSubmit?: boolean
 }
 
 export function MilkdownEditor(props: MilkdownEditorProps) {
@@ -74,7 +75,29 @@ export function MilkdownEditor(props: MilkdownEditorProps) {
       const markdown = editorInstance
         ? editorInstance.action(getMarkdown())
         : latestMarkdown
+      if (!markdown.trim()) return
       props.onSubmit(markdown)
+      if (props.clearOnSubmit !== false) {
+        clearEditor()
+      }
+    }
+  }
+
+  const clearEditor = () => {
+    if (!editorInstance) return
+    try {
+      editorInstance.action((ctx) => {
+        const view = ctx.get(editorViewCtx)
+        const { state } = view
+        const tr = state.tr.delete(0, state.doc.content.size)
+        view.dispatch(tr)
+      })
+      latestMarkdown = ''
+    } catch {
+      // fallback: clear via DOM
+      const pm = containerRef?.querySelector('.ProseMirror')
+      if (pm) pm.innerHTML = '<p><br></p>'
+      latestMarkdown = ''
     }
   }
 
