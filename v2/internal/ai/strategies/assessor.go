@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -62,8 +63,11 @@ type TaskAssessment struct {
 
 // Assessor evaluates tasks to produce a TaskAssessment.
 type Assessor struct {
-	tracker *ThresholdTracker
-	haiku   LLMAssessor // optional; when set, Haiku is tried first
+	tracker    *ThresholdTracker
+	haiku      LLMAssessor // optional; when set, Haiku runs async in background
+	cachedLLM  *LLMAssessment
+	cacheMu    sync.Mutex
+	bgRunning  bool
 }
 
 // NewAssessor creates an Assessor with hardcoded default thresholds.
@@ -82,28 +86,34 @@ func (a *Assessor) SetLLMAssessor(l LLMAssessor) {
 }
 
 // Assess evaluates a user message and graph metrics to produce a TaskAssessment.
-// When a HaikuAssessor is wired in, it is tried first (2-second timeout). On
-// any error or nil result the method falls through to keyword-based logic so
-// the pipeline always produces a result.
+// Uses a two-path approach:
+//   1. Check for cached Haiku result (from a previous async call)
+//   2. Always run keywords (instant, always available)
+//   3. Fire async Haiku in background for NEXT call
+//
+// First prompt in a session uses keywords. Subsequent prompts benefit from
+// the cached Haiku assessment if it completed in time.
 func (a *Assessor) Assess(message string, fileCount int, blastRadius int) TaskAssessment {
 	ambiguity := assessAmbiguity(message)
 
-	// --- Primary path: LLM assessment via Haiku ---
+	// --- Check cached LLM assessment from a previous async run ---
 	if a.haiku != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-		defer cancel()
-		projectCtx := fmt.Sprintf("~%d context files", fileCount)
-		if la, err := a.haiku.Assess(ctx, message, projectCtx); err != nil {
-			slog.Warn("haiku assessor error — falling back to keywords", "err", err)
-		} else if la.Complexity != "" {
-			complexity := complexityFromLLM(la.Complexity, fileCount, a.tracker)
-			risk := riskFromLLM(la.Risk, blastRadius, a.tracker)
-			slog.Info("haiku assessment applied",
-				"complexity", la.Complexity,
-				"risk", la.Risk,
-				"task_type", la.TaskType,
-				"risk_reason", la.RiskReason,
+		a.cacheMu.Lock()
+		cached := a.cachedLLM
+		a.cachedLLM = nil // consume it
+		a.cacheMu.Unlock()
+
+		if cached != nil && cached.Complexity != "" {
+			complexity := complexityFromLLM(cached.Complexity, fileCount, a.tracker)
+			risk := riskFromLLM(cached.Risk, blastRadius, a.tracker)
+			slog.Info("haiku assessment applied (from cache)",
+				"complexity", cached.Complexity,
+				"risk", cached.Risk,
+				"task_type", cached.TaskType,
+				"risk_reason", cached.RiskReason,
 			)
+			// Fire another async call for the next turn
+			a.fireAsyncHaiku(message, fileCount)
 			return TaskAssessment{
 				Complexity:     complexity,
 				Risk:           risk,
@@ -113,9 +123,12 @@ func (a *Assessor) Assess(message string, fileCount int, blastRadius int) TaskAs
 				BlastRadius:    blastRadius,
 			}
 		}
+
+		// No cache — fire async for next time
+		a.fireAsyncHaiku(message, fileCount)
 	}
 
-	// --- Fallback path: keyword-based assessment ---
+	// --- Keyword-based assessment (always runs, instant) ---
 	var complexity TaskComplexity
 	var risk TaskRisk
 
@@ -145,6 +158,49 @@ func (a *Assessor) Assess(message string, fileCount int, blastRadius int) TaskAs
 		FileCount:      fileCount,
 		BlastRadius:    blastRadius,
 	}
+}
+
+// fireAsyncHaiku launches Haiku assessment in a background goroutine.
+// Result is cached for the next Assess() call. Only one concurrent call allowed.
+func (a *Assessor) fireAsyncHaiku(message string, fileCount int) {
+	a.cacheMu.Lock()
+	if a.bgRunning {
+		a.cacheMu.Unlock()
+		return
+	}
+	a.bgRunning = true
+	a.cacheMu.Unlock()
+
+	go func() {
+		defer func() {
+			a.cacheMu.Lock()
+			a.bgRunning = false
+			a.cacheMu.Unlock()
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
+
+		projectCtx := fmt.Sprintf("~%d context files", fileCount)
+		la, err := a.haiku.Assess(ctx, message, projectCtx)
+		if err != nil {
+			slog.Warn("async haiku assessment failed", "err", err)
+			return
+		}
+		if la.Complexity == "" {
+			return
+		}
+
+		slog.Info("async haiku assessment cached for next turn",
+			"complexity", la.Complexity,
+			"risk", la.Risk,
+			"task_type", la.TaskType,
+		)
+
+		a.cacheMu.Lock()
+		a.cachedLLM = &la
+		a.cacheMu.Unlock()
+	}()
 }
 
 // complexityFromLLM maps the LLM string to a TaskComplexity, using the graph
