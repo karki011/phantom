@@ -6,7 +6,8 @@ import {
   Terminal, SplitSquareHorizontal, SplitSquareVertical, X,
   Monitor, GitBranch, GitFork, Settings, FileSearch, BookOpen,
   Pause, Play, Square, Sun, Moon, ZoomIn, ZoomOut, RotateCcw,
-  PenTool, Sidebar, PanelRight, LayoutGrid, Eye, Plug, Sparkles,
+  PenTool, Sidebar, PanelRight, LayoutGrid, Eye, Plug, Sparkles, Keyboard,
+  ClipboardList,
 } from 'lucide-solid';
 
 // === Pane signals ===
@@ -21,8 +22,10 @@ import { setActiveTopTab, activeWorktreeId } from '@/core/signals/app';
 // === UI toggle signals ===
 import { openSettings } from '@/core/signals/settings';
 import { toggleQuickOpen } from '@/core/signals/quickopen';
+import { toggleSearchPanel } from '@/core/signals/search-panel';
 import { toggleComposer } from '@/core/signals/composer';
 import { toggleDocs } from '@/core/signals/docs';
+import { toggleShortcutSheet } from '@/core/signals/shortcut-sheet';
 
 // === Sidebar signals ===
 import { leftSidebarCollapsed, setLeftSidebarCollapsed, worktreeMap, selectWorktree } from '@/core/signals/worktrees';
@@ -40,6 +43,9 @@ import { pauseSession, resumeSession, killSession } from '@/core/bindings/sessio
 
 // === MCP Manager ===
 import { openMcpManager } from '@/core/signals/mcp';
+
+// === Digest ===
+import { openDigest } from '@/core/signals/digest';
 
 // === Git bindings ===
 import { gitFetch, gitPull, gitPush } from '@/core/bindings/git';
@@ -173,11 +179,29 @@ const NAVIGATION_ACTIONS: CommandAction[] = [
     execute: () => toggleQuickOpen(),
   },
   {
+    id: 'nav:search-in-files',
+    label: 'Search in Files',
+    category: 'Navigation',
+    icon: FileSearch,
+    shortcut: '⌘⇧F',
+    keywords: ['grep', 'find', 'content', 'search', 'text'],
+    execute: () => toggleSearchPanel(),
+  },
+  {
     id: 'nav:open-docs',
     label: 'Open Documentation',
     category: 'Navigation',
     icon: BookOpen,
     execute: () => toggleDocs(),
+  },
+  {
+    id: 'nav:keyboard-shortcuts',
+    label: 'Keyboard Shortcuts',
+    category: 'Navigation',
+    icon: Keyboard,
+    shortcut: '⌘/',
+    keywords: ['shortcuts', 'keybindings', 'hotkeys', 'cheatsheet', 'help', 'keys'],
+    execute: () => toggleShortcutSheet(),
   },
   {
     id: 'nav:toggle-left-sidebar',
@@ -194,14 +218,6 @@ const NAVIGATION_ACTIONS: CommandAction[] = [
     icon: PanelRight,
     shortcut: '⌘⇧B',
     execute: () => setRightSidebarCollapsed(!rightSidebarCollapsed()),
-  },
-  {
-    id: 'nav:ai-playground',
-    label: 'AI Engine Playground',
-    category: 'Navigation',
-    icon: Sparkles,
-    keywords: ['ai', 'playground', 'engine', 'strategy', 'orchestrator', 'dry run'],
-    execute: () => focusOrCreateTab('playground', 'AI Playground'),
   },
 ];
 
@@ -359,6 +375,17 @@ const ZOOM_ACTIONS: CommandAction[] = [
   },
 ];
 
+const SYSTEM_ACTIONS: CommandAction[] = [
+  {
+    id: 'system:daily-digest',
+    label: 'Daily Digest',
+    category: 'System',
+    icon: ClipboardList,
+    keywords: ['digest', 'summary', 'journal', 'sessions', 'daily', 'ai', 'cost', 'tokens'],
+    execute: () => openDigest(),
+  },
+];
+
 // ── Dynamic Action Providers ─────────────────────────────────────────────────
 
 const THEME_LABELS: Record<ThemeId, string> = {
@@ -374,6 +401,18 @@ const THEME_LABELS: Record<ThemeId, string> = {
   'dracula': 'Dracula',
   'nord-dark': 'Nord Dark',
   'nord-light': 'Nord Light',
+  'one-dark-pro': 'One Dark Pro',
+  'github-dark': 'GitHub Dark',
+  'catppuccin': 'Catppuccin',
+  'rose-pine': 'Rosé Pine',
+  'tokyo-night': 'Tokyo Night',
+  'gruvbox': 'Gruvbox',
+  'solarized-dark': 'Solarized Dark',
+  'ayu-dark': 'Ayu Dark',
+  'kanagawa': 'Kanagawa',
+  'vscode-dark': 'VS Code Dark',
+  'fleet-dark': 'Fleet Dark',
+  'fleet-light': 'Fleet Light',
 };
 
 export const themeActions: DynamicActionProvider = (): CommandAction[] =>
@@ -445,6 +484,7 @@ export const getAllActions = (): CommandAction[] => [
   ...GIT_ACTIONS,
   ...SESSION_ACTIONS,
   ...ZOOM_ACTIONS,
+  ...SYSTEM_ACTIONS,
   ...themeActions(),
   ...worktreeActions(),
   ...zoomLevelActions(),

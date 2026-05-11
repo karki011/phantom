@@ -2,7 +2,7 @@
 // Author: Subash Karki
 
 import { createSignal, createMemo } from 'solid-js';
-import { onWailsEvent } from '../events';
+import { onPhantomEvent } from '../events/types';
 import { projects, bootstrapProjects, refreshProjects } from './projects';
 import { activeWorktreeId, setActiveWorktreeId } from './app';
 import { listWorktrees, createWorktree, removeWorktree, getAllWorktreeStatus, watchWorktree } from '../bindings';
@@ -208,22 +208,22 @@ export async function bootstrapWorktrees(): Promise<void> {
   }
 
   // Subscribe to backend events — refresh on changes
-  onWailsEvent('worktree:created', () => {
+  onPhantomEvent('worktree:created', () => {
     refreshAllWorktrees();
     refreshAllWorktreeStatuses();
   });
-  onWailsEvent('worktree:removed', () => {
+  onPhantomEvent('worktree:removed', () => {
     refreshAllWorktrees();
     refreshAllWorktreeStatuses();
   });
-  onWailsEvent('worktree:updated', () => {
+  onPhantomEvent('worktree:updated', () => {
     refreshAllWorktrees();
     refreshAllWorktreeStatuses();
   });
   // git:status fires per .git/index fsnotify event — coalesce bursts into a
   // single refresh so one user edit doesn't trigger N ListWorktrees calls.
   let gitStatusTimer: ReturnType<typeof setTimeout> | null = null;
-  onWailsEvent('git:status', () => {
+  onPhantomEvent('git:status', () => {
     if (gitStatusTimer) clearTimeout(gitStatusTimer);
     gitStatusTimer = setTimeout(() => {
       gitStatusTimer = null;
@@ -231,13 +231,13 @@ export async function bootstrapWorktrees(): Promise<void> {
       refreshAllWorktreeStatuses();
     }, 250);
   });
-  onWailsEvent('git:branch-changed', () => {
+  onPhantomEvent('git:branch-changed', () => {
     refreshAllWorktrees();
     refreshAllWorktreeStatuses();
   });
   // Incremental load: AddProject emits once per repo — a full refreshAllWorktrees
   // here is O(n²) during bulk scan (each event re-lists every project).
-  onWailsEvent<string>('project:created', async (projectId) => {
+  onPhantomEvent('project:created', async (projectId) => {
     await refreshProjects();
     if (typeof projectId === 'string' && projectId.length > 0) {
       await loadProjectWorktrees(projectId);

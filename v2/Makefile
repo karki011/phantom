@@ -1,4 +1,4 @@
-.PHONY: dev build clean test lint sqlc frontend-install frontend-build frontend-typecheck go-build go-test go-lint ci mcp-build mcp-bundle docs-llm release release-build release-sign release-notarize release-zip release-dmg onnx-setup
+.PHONY: dev build clean test lint sqlc frontend-install frontend-build frontend-typecheck go-build go-test go-lint ci mcp-build mcp-bundle docs-llm release release-build release-sign release-notarize release-zip release-dmg
 
 # --- Release config ---
 # Auto-load Apple notarization credentials from parent dir (sibling of v2/).
@@ -15,13 +15,9 @@ ENTITLEMENTS  := build/darwin/entitlements.plist
 DIST_DIR      := build/dist
 VERSION       := $(shell cat VERSION 2>/dev/null || echo dev)
 
-# Development (CGO_LDFLAGS points the linker at the ONNX runtime in ~/.phantom-os/lib)
+# Development
 dev: mcp-build
-	CGO_LDFLAGS="-L$(HOME)/.phantom-os/lib" wails dev -tags onnx
-
-# Developer convenience: download ONNX runtime + model to ~/.phantom-os/
-onnx-setup:
-	@go run ./cmd/onnx-setup
+	wails dev
 
 # Production build — also bundles the phantom-mcp child binary into the .app.
 build: mcp-build

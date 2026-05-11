@@ -37,11 +37,11 @@ export function ManageProjectsDialog(props: ManageProjectsDialogProps) {
   }
 
   function deselectAll() {
-    setSelected(new Set());
+    setSelected(new Set<string>());
   }
 
   function handleOpenChange(open: boolean) {
-    if (!open) setSelected(new Set());
+    if (!open) setSelected(new Set<string>());
     props.onOpenChange(open);
   }
 

@@ -10,17 +10,7 @@ const registry: Partial<Record<PaneType, Component<any>>> = {
   tui: lazy(() => import('./TerminalPane')),
   home: lazy(() => import('./WorktreeHome')),
   editor: lazy(() => import('./EditorPane')),
-  diff: lazy(() => import('./DiffPane')),
-  journal: lazy(() => import('./JournalPane')),
-  // Chat was replaced by Composer. Saved tabs that still reference `chat`
-  // render a small redirect tile that one-click migrates them. Remove
-  // this entry once we're confident no persisted sessions still carry
-  // `kind: 'chat'`.
-  chat: lazy(() => import('./ChatRedirect')),
-  composer: lazy(() => import('./ComposerPane')),
-  'composer-v2': lazy(() => import('../composer/ComposerPaneV2')),
-  'markdown-preview': lazy(() => import('./MarkdownPreviewPane')),
-  playground: lazy(() => import('./PlaygroundPane')),
+  'composer': lazy(() => import('../composer/ComposerPaneV2')),
 };
 
 export function getPaneComponent(kind: string): Component<any> | undefined {

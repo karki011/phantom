@@ -61,7 +61,20 @@ func (ps *PerformanceStore) GetHistoricalWeight(strategyID string, complexity Ta
 		return 1.0
 	}
 	successRate := float64(r.successes) / float64(r.total)
-	return 0.5 + successRate // Range: 0.5 (0% success) to 1.5 (100% success)
+	weight := 0.8 + (successRate * 0.4) // Range: 0.8 (0% success) to 1.2 (100% success)
+	return weight
+}
+
+// Reset clears all in-memory performance records and wipes the persisted table.
+func (ps *PerformanceStore) Reset(db *sql.DB) error {
+	ps.mu.Lock()
+	ps.records = make(map[string]map[TaskComplexity]*perfRecord)
+	ps.mu.Unlock()
+	if db != nil {
+		_, err := db.Exec(`DELETE FROM ai_performance`)
+		return err
+	}
+	return nil
 }
 
 // Save persists all performance records to SQLite.

@@ -18,20 +18,16 @@ import (
 	charmlog "github.com/charmbracelet/log"
 	"github.com/lmittmann/tint"
 	"github.com/muesli/termenv"
-	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
-	"github.com/subashkarki/phantom-os-v2/internal/ai/extractor"
 	"github.com/subashkarki/phantom-os-v2/internal/applog"
 	"github.com/subashkarki/phantom-os-v2/internal/app"
 	"github.com/subashkarki/phantom-os-v2/internal/collector"
 	"github.com/subashkarki/phantom-os-v2/internal/composer"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
-	"github.com/subashkarki/phantom-os-v2/internal/gamification"
 	"github.com/subashkarki/phantom-os-v2/internal/journal"
 	"github.com/subashkarki/phantom-os-v2/internal/linker"
 	"github.com/subashkarki/phantom-os-v2/internal/provider"
 	"github.com/subashkarki/phantom-os-v2/internal/provider/claude"
 	"github.com/subashkarki/phantom-os-v2/internal/provider/codex"
-	"github.com/subashkarki/phantom-os-v2/internal/safety"
 	"github.com/subashkarki/phantom-os-v2/internal/session"
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
 	"github.com/subashkarki/phantom-os-v2/internal/terminal"
@@ -162,26 +158,13 @@ func main() {
 	a.SetProvider(activeProv)
 	a.SetProviderRegistry(provRegistry)
 
-	// 6b. Create gamification service (XP engine, achievements, quests).
-	gamEmitFn := func(name string, data interface{}) {
-		app.EmitEvent(a.Ctx(), name, data)
-	}
-	gamSvc := gamification.NewService(database.Writer, database.Reader, gamEmitFn)
-	if err := gamSvc.Init(context.Background()); err != nil {
-		stdlog.Printf("phantomos: gamification init warning: %v", err)
-	}
-	a.SetGamification(gamSvc)
-
 	// 7. Build collector registry with all 5 collectors.
 	//    emitEvent is a closure; it captures `a` but only calls EmitEvent after
 	//    Wails has called Startup (which sets a.Ctx()). Collectors are started
 	//    inside OnStartup below, so the context is always valid by that time.
 	registry := collector.NewRegistry()
 
-	onTaskComplete := func(sessionID, taskID string) {
-		stdlog.Printf("phantomos: task completed session=%s task=%s", sessionID, taskID)
-		gamSvc.OnTaskComplete(context.Background(), sessionID, taskID)
-	}
+	var onTaskComplete func(sessionID, taskID string)
 
 	sessionWatcher := collector.NewSessionWatcher(queries, activeProv, func(name string, data interface{}) {
 		app.EmitEvent(a.Ctx(), name, data)
@@ -218,37 +201,6 @@ func main() {
 	}
 	streamSvc := stream.NewService(database.Writer, emitFn)
 	a.SetStream(streamSvc)
-
-	// Wire memory extraction pipeline into enricher. The VectorStore is created
-	// from the main DB (same as knowledge stores). Embedder degrades to a stub
-	// when ONNX is unavailable, and extractor.Store is a no-op when VectorStore
-	// is nil — so the entire chain is nil-safe.
-	embedder, _ := embedding.NewEmbedder()
-	if vectorStore, vsErr := embedding.NewVectorStore(database.Writer, embedder); vsErr == nil {
-		memExtractor := extractor.New(vectorStore)
-		enricher.SetExtractor(memExtractor)
-		enricher.SetStreamService(streamSvc)
-		slog.Info("phantomos: memory extraction pipeline wired", "memories", vectorStore.Stats().TotalMemories)
-	} else {
-		slog.Warn("phantomos: vector store init failed (memory extraction disabled)", "err", vsErr)
-	}
-
-	// First-run: download ONNX runtime + model if not already present.
-	// Runs in a background goroutine so it never blocks app startup. The user
-	// gets the app immediately — embedding becomes available after download
-	// completes (or on next launch if interrupted).
-	go func() {
-		status := embedding.CheckSetup()
-		if !status.NeedsDownload {
-			return
-		}
-		slog.Info("embedding: first-run setup starting", "download_mb", status.DownloadSizeMB)
-		if err := embedding.EnsureAll(); err != nil {
-			slog.Warn("embedding: first-run setup failed (app works without ONNX)", "err", err)
-			return
-		}
-		slog.Info("embedding: first-run setup complete — restart to enable semantic search")
-	}()
 
 	// Auto-start JSONL tailing when session watcher discovers active sessions.
 	// Uses the provider's FindConversationFile instead of hardcoded path walking.
@@ -291,20 +243,7 @@ func main() {
 	composerV2Bindings.SetService(composerSvc)
 	a.SetComposerV2(composerV2Mgr, composerV2Bindings)
 
-	// 9. Create safety service (YAML ward rules + audit).
-	home, _ := os.UserHomeDir()
-	wardsDir := filepath.Join(home, ".phantom-os", "wards")
-	os.MkdirAll(wardsDir, 0o755)
-	safety.InstallDefaults(wardsDir)
-	safetySvc, err := safety.NewService(wardsDir, database.Writer, emitFn)
-	if err != nil {
-		stdlog.Printf("phantomos: safety service warning: %v", err)
-	} else {
-		safetySvc.SetJournal(journalSvc)
-		a.SetSafety(safetySvc)
-	}
-
-	// 10. Create session controller (pause/resume/branch/rewind).
+	// 9. Create session controller (pause/resume/branch/rewind).
 	streamStore := stream.NewStore(database.Writer)
 	sessionCtrl := session.NewController(database.Writer, streamStore, emitFn)
 	a.SetSessionCtrl(sessionCtrl)

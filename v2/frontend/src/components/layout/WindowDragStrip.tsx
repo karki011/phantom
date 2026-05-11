@@ -22,19 +22,15 @@ import {
 import { openSettings } from '@/core/signals/settings';
 import { openAICommandCenter, aiCommandCenterSeen } from '@/core/signals/ai-command-center';
 import { toggleDocs } from '@/core/signals/docs';
-import { focusOrCreateTab } from '@/core/panes/signals';
 import { toggleCommandPalette } from '@/core/signals/command-palette';
+import { toggleDigest } from '@/core/signals/digest';
 import { requestShutdown } from '@/core/signals/shutdown';
-import { gamificationEnabled, hunterProfile, dailyQuests } from '@/core/signals/gamification';
-import { RankBadge } from '@/shared/Gamification/RankBadge';
-import { XPProgressBar } from '@/shared/Gamification/XPProgressBar';
 import { Tip } from '@/shared/Tip/Tip';
 import { PhantomDrawer } from '@/shared/PhantomDrawer/PhantomDrawer';
 import * as drawerStyles from '@/shared/PhantomDrawer/PhantomDrawer.css';
 import { AppBackendLogDrawer } from './AppBackendLogDrawer';
 import { ChevronLeft, ChevronRight, SystemIcon, FolderIcon } from './header-icons';
 import * as shellStyles from '@/styles/app-shell.css';
-import * as gamStyles from '@/styles/gamification.css';
 import { headerIconPulse } from '@/components/ai-command-center/ai-command-center.css';
 
 function BookIcon() {
@@ -63,15 +59,6 @@ function CommandIcon() {
   );
 }
 
-function JournalIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-      <path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-      <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-    </svg>
-  );
-}
 
 function LogIcon() {
   return (
@@ -88,6 +75,16 @@ function BrainIcon() {
       <path d="M12 2a7 7 0 0 0-4.6 12.3c.5.4.8 1 .9 1.6l.2 2.1h7l.2-2.1c.1-.6.4-1.2.9-1.6A7 7 0 0 0 12 2Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
       <path d="M10 22h4M9 18h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
       <path d="M12 2v4M8 5.5l2 2M16 5.5l-2 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.5" />
+    </svg>
+  );
+}
+
+function DigestIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+      <rect x="9" y="3" width="6" height="4" rx="1" stroke="currentColor" stroke-width="1.6" />
+      <path d="M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
     </svg>
   );
 }
@@ -244,11 +241,6 @@ export function WindowDragStrip() {
               <BookIcon />
             </button>
           </Tip>
-          <Tip label="Daily Digest" placement="bottom">
-            <button data-tour="action-digest" class={shellStyles.headerIconButton} type="button" aria-label="Open daily digest" onClick={() => focusOrCreateTab('journal', 'Daily Digest')}>
-              <JournalIcon />
-            </button>
-          </Tip>
           <Tip label="AI Command Center" placement="bottom">
             <button
               data-tour="action-ai"
@@ -258,6 +250,17 @@ export function WindowDragStrip() {
               onClick={() => openAICommandCenter()}
             >
               <BrainIcon />
+            </button>
+          </Tip>
+          <Tip label="Daily Digest" placement="bottom">
+            <button
+              data-tour="action-digest"
+              class={shellStyles.headerIconButton}
+              type="button"
+              aria-label="Open Daily Digest"
+              onClick={() => toggleDigest()}
+            >
+              <DigestIcon />
             </button>
           </Tip>
           <Tip label="Settings" placement="bottom">
@@ -272,56 +275,6 @@ export function WindowDragStrip() {
           </Tip>
         </div>
 
-        <Show when={gamificationEnabled()}>
-          <Show
-            when={hunterProfile()}
-            fallback={<span class={shellStyles.statusMuted}>Hunter Lv —</span>}
-          >
-            {(profile) => (
-              <button
-                type="button"
-                data-tour="hunter-button"
-                class={gamStyles.statusHunterSection}
-                title="Open Hunter Profile"
-                aria-label="Open Hunter Profile"
-                onClick={() => {
-                  if (activeTopTab() === 'system' && cockpitView() === 'hunter') {
-                    setCockpitView('system');
-                    pushNav({ tab: 'system', view: 'system' });
-                    return;
-                  }
-                  setActiveTopTab('system');
-                  setCockpitView('hunter');
-                  pushNav({ tab: 'system', view: 'hunter' });
-                }}
-              >
-                <RankBadge rank={profile().rank} size="sm" />
-                <span class={gamStyles.statusLevelText}>Lv {profile().level}</span>
-                <XPProgressBar
-                  current={profile().xp}
-                  required={profile().xp_to_next}
-                  level={profile().level}
-                  mini
-                />
-                <Show when={(dailyQuests() ?? []).length > 0}>
-                  {(() => {
-                    const quests = () => dailyQuests() ?? [];
-                    const completed = () => quests().filter((q) => q.completed > 0).length;
-                    const total = () => quests().length;
-                    return (
-                      <>
-                        <span class={shellStyles.statusDivider}>·</span>
-                        <span class={shellStyles.statusMuted} title="Daily Quests">
-                          ⚔ {completed()}/{total()}
-                        </span>
-                      </>
-                    );
-                  })()}
-                </Show>
-              </button>
-            )}
-          </Show>
-        </Show>
       </div>
 
       <PhantomDrawer

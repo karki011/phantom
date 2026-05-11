@@ -6,9 +6,32 @@
 package strategies
 
 import (
+	"context"
+	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 )
+
+// LLMAssessor is the interface a Haiku-backed assessor must satisfy.
+// The narrow interface avoids an import cycle between strategies ↔ assess.
+type LLMAssessor interface {
+	// Assess returns structured task metadata. Returns (nil, nil) when the LLM
+	// is unavailable; callers fall through to keyword-based logic on nil result.
+	Assess(ctx context.Context, goal string, projectContext string) (LLMAssessment, error)
+}
+
+// LLMAssessment is the normalized output from an LLMAssessor.
+type LLMAssessment struct {
+	TaskType   string   // feature, bugfix, refactor, debug, exploration, test, docs
+	Complexity string   // simple, moderate, complex, critical
+	Risk       string   // low, medium, high, critical
+	RiskReason string   // human-readable rationale
+	KeyFiles   []string // likely files or areas involved
+	Summary    string   // one-line task summary
+}
 
 // TaskComplexity indicates how involved a task is based on file count.
 type TaskComplexity string
@@ -40,7 +63,11 @@ type TaskAssessment struct {
 
 // Assessor evaluates tasks to produce a TaskAssessment.
 type Assessor struct {
-	tracker *ThresholdTracker
+	tracker    *ThresholdTracker
+	haiku      LLMAssessor // optional; when set, Haiku runs async in background
+	cachedLLM  *LLMAssessment
+	cacheMu    sync.Mutex
+	bgRunning  bool
 }
 
 // NewAssessor creates an Assessor with hardcoded default thresholds.
@@ -52,10 +79,56 @@ func (a *Assessor) SetThresholdTracker(t *ThresholdTracker) {
 	a.tracker = t
 }
 
+// SetLLMAssessor attaches a Haiku-backed LLM assessor. When non-nil it is
+// tried first; keyword logic is used as fallback on error or nil result.
+func (a *Assessor) SetLLMAssessor(l LLMAssessor) {
+	a.haiku = l
+}
+
 // Assess evaluates a user message and graph metrics to produce a TaskAssessment.
+// Uses a two-path approach:
+//   1. Check for cached Haiku result (from a previous async call)
+//   2. Always run keywords (instant, always available)
+//   3. Fire async Haiku in background for NEXT call
+//
+// First prompt in a session uses keywords. Subsequent prompts benefit from
+// the cached Haiku assessment if it completed in time.
 func (a *Assessor) Assess(message string, fileCount int, blastRadius int) TaskAssessment {
 	ambiguity := assessAmbiguity(message)
 
+	// --- Check cached LLM assessment from a previous async run ---
+	if a.haiku != nil {
+		a.cacheMu.Lock()
+		cached := a.cachedLLM
+		a.cachedLLM = nil // consume it
+		a.cacheMu.Unlock()
+
+		if cached != nil && cached.Complexity != "" {
+			complexity := complexityFromLLM(cached.Complexity, fileCount, a.tracker)
+			risk := riskFromLLM(cached.Risk, blastRadius, a.tracker)
+			slog.Info("haiku assessment applied (from cache)",
+				"complexity", cached.Complexity,
+				"risk", cached.Risk,
+				"task_type", cached.TaskType,
+				"risk_reason", cached.RiskReason,
+			)
+			// Fire another async call for the next turn
+			a.fireAsyncHaiku(message, fileCount)
+			return TaskAssessment{
+				Complexity:     complexity,
+				Risk:           risk,
+				IsAmbiguous:    ambiguity >= 0.3,
+				AmbiguityScore: ambiguity,
+				FileCount:      fileCount,
+				BlastRadius:    blastRadius,
+			}
+		}
+
+		// No cache — fire async for next time
+		a.fireAsyncHaiku(message, fileCount)
+	}
+
+	// --- Keyword-based assessment (always runs, instant) ---
 	var complexity TaskComplexity
 	var risk TaskRisk
 
@@ -68,6 +141,15 @@ func (a *Assessor) Assess(message string, fileCount int, blastRadius int) TaskAs
 		risk = assessRisk(blastRadius)
 	}
 
+	// When no files are explicitly mentioned, use goal text as a complexity signal.
+	if fileCount == 0 {
+		complexity = applyGoalTextComplexity(message, complexity)
+	}
+
+	// Floor risk based on goal keywords — auth/security/payment work is risky
+	// regardless of blast radius.
+	risk = applyGoalTextRisk(message, risk)
+
 	return TaskAssessment{
 		Complexity:     complexity,
 		Risk:           risk,
@@ -76,6 +158,206 @@ func (a *Assessor) Assess(message string, fileCount int, blastRadius int) TaskAs
 		FileCount:      fileCount,
 		BlastRadius:    blastRadius,
 	}
+}
+
+// fireAsyncHaiku launches Haiku assessment in a background goroutine.
+// Result is cached for the next Assess() call. Only one concurrent call allowed.
+func (a *Assessor) fireAsyncHaiku(message string, fileCount int) {
+	a.cacheMu.Lock()
+	if a.bgRunning {
+		a.cacheMu.Unlock()
+		return
+	}
+	a.bgRunning = true
+	a.cacheMu.Unlock()
+
+	go func() {
+		defer func() {
+			a.cacheMu.Lock()
+			a.bgRunning = false
+			a.cacheMu.Unlock()
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
+
+		projectCtx := fmt.Sprintf("~%d context files", fileCount)
+		la, err := a.haiku.Assess(ctx, message, projectCtx)
+		if err != nil {
+			slog.Warn("async haiku assessment failed", "err", err)
+			return
+		}
+		if la.Complexity == "" {
+			return
+		}
+
+		slog.Info("async haiku assessment cached for next turn",
+			"complexity", la.Complexity,
+			"risk", la.Risk,
+			"task_type", la.TaskType,
+		)
+
+		a.cacheMu.Lock()
+		a.cachedLLM = &la
+		a.cacheMu.Unlock()
+	}()
+}
+
+// complexityFromLLM maps the LLM string to a TaskComplexity, using the graph
+// file count as a floor so Haiku can only upgrade — never reduce — what the
+// graph signals.
+func complexityFromLLM(llmVal string, fileCount int, tracker *ThresholdTracker) TaskComplexity {
+	llm := complexityFromString(llmVal)
+	var graph TaskComplexity
+	if tracker != nil {
+		graph = assessComplexityWithConfig(fileCount, tracker.GetConfig())
+	} else {
+		graph = assessComplexity(fileCount)
+	}
+	if complexityRankLocal(llm) > complexityRankLocal(graph) {
+		return llm
+	}
+	return graph
+}
+
+// riskFromLLM maps the LLM string to a TaskRisk using blast radius as a floor.
+func riskFromLLM(llmVal string, blastRadius int, tracker *ThresholdTracker) TaskRisk {
+	llm := riskFromString(llmVal)
+	var graph TaskRisk
+	if tracker != nil {
+		graph = assessRiskWithConfig(blastRadius, tracker.GetConfig())
+	} else {
+		graph = assessRisk(blastRadius)
+	}
+	if riskRankLocal(llm) > riskRankLocal(graph) {
+		return llm
+	}
+	return graph
+}
+
+// complexityFromString converts a lowercase string to TaskComplexity.
+func complexityFromString(s string) TaskComplexity {
+	switch strings.ToLower(s) {
+	case "simple":
+		return Simple
+	case "moderate":
+		return Moderate
+	case "complex":
+		return Complex
+	case "critical":
+		return Critical
+	}
+	return Simple
+}
+
+// riskFromString converts a lowercase string to TaskRisk.
+func riskFromString(s string) TaskRisk {
+	switch strings.ToLower(s) {
+	case "low":
+		return LowRisk
+	case "medium":
+		return MediumRisk
+	case "high":
+		return HighRisk
+	case "critical":
+		return CriticalRisk
+	}
+	return LowRisk
+}
+
+func complexityRankLocal(c TaskComplexity) int {
+	switch c {
+	case Simple:
+		return 0
+	case Moderate:
+		return 1
+	case Complex:
+		return 2
+	case Critical:
+		return 3
+	}
+	return 0
+}
+
+func riskRankLocal(r TaskRisk) int {
+	switch r {
+	case LowRisk:
+		return 0
+	case MediumRisk:
+		return 1
+	case HighRisk:
+		return 2
+	case CriticalRisk:
+		return 3
+	}
+	return 0
+}
+
+// applyGoalTextComplexity floors complexity based on keywords in the goal text.
+// It only upgrades complexity — never downgrades it.
+func applyGoalTextComplexity(goal string, complexity TaskComplexity) TaskComplexity {
+	goalLower := strings.ToLower(goal)
+
+	// Compound goals with multiple components → complex
+	complexKeywords := []string{"refactor", "redesign", "migrate", "implement", "architect", "rewrite", "optimize", "overhaul"}
+	hasComplexKeyword := false
+	for _, kw := range complexKeywords {
+		if strings.Contains(goalLower, kw) {
+			hasComplexKeyword = true
+			break
+		}
+	}
+	if hasComplexKeyword {
+		// "implement X with Y and Z" → complex (multiple components)
+		hasCompound := strings.Contains(goalLower, " with ") || strings.Contains(goalLower, " and ")
+		if hasCompound && complexity != Critical {
+			complexity = Complex
+		} else if complexity == Simple {
+			complexity = Moderate
+		}
+		return complexity
+	}
+
+	// These keywords suggest meaningful but bounded work.
+	moderateKeywords := []string{"add", "create", "build", "feature", "integrate", "update", "fix"}
+	if complexity == Simple {
+		for _, kw := range moderateKeywords {
+			if strings.Contains(goalLower, kw) {
+				complexity = Moderate
+				break
+			}
+		}
+	}
+
+	return complexity
+}
+
+// applyGoalTextRisk floors risk based on security-sensitive keywords.
+// Only upgrades risk — never downgrades it.
+func applyGoalTextRisk(goal string, risk TaskRisk) TaskRisk {
+	goalLower := strings.ToLower(goal)
+
+	highRiskKeywords := []string{"auth", "oauth", "login", "password", "credential", "token", "jwt", "session", "permission", "rbac", "acl", "encrypt", "decrypt", "secret", "api key", "apikey", "certificate", "tls", "ssl"}
+	for _, kw := range highRiskKeywords {
+		if strings.Contains(goalLower, kw) {
+			if risk == LowRisk || risk == MediumRisk {
+				return HighRisk
+			}
+			return risk
+		}
+	}
+
+	mediumRiskKeywords := []string{"payment", "billing", "credit card", "stripe", "database", "migration", "deploy", "production", "delete", "remove", "drop"}
+	for _, kw := range mediumRiskKeywords {
+		if strings.Contains(goalLower, kw) {
+			if risk == LowRisk {
+				return MediumRisk
+			}
+			return risk
+		}
+	}
+
+	return risk
 }
 
 // assessComplexity maps file count to a complexity tier using hardcoded defaults.

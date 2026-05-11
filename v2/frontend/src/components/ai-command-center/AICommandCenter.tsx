@@ -73,7 +73,7 @@ function HealthGauge(props: { score: number }) {
         stroke={color()}
         stroke-width="5"
         stroke-linecap="round"
-        stroke-dasharray={circumference}
+        stroke-dasharray={String(circumference)}
         stroke-dashoffset={offset()}
         transform="rotate(-90 34 34)"
         style={{ transition: `stroke-dashoffset ${vars.animation.normal} ease` }}

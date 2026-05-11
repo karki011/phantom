@@ -10,7 +10,7 @@ import {
   batch,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { TextField } from '@kobalte/core/text-field';
+import { MilkdownEditor } from '@/shared/MilkdownEditor/MilkdownEditor';
 import {
   Paperclip,
   ArrowUp,
@@ -56,7 +56,7 @@ export const PromptComposer = (props: PromptComposerProps) => {
   const [dragOver, setDragOver] = createSignal(false);
   const [position, setPosition] = createSignal({
     x: typeof window !== 'undefined' ? Math.round(window.innerWidth / 2 - 300) : 0,
-    y: typeof window !== 'undefined' ? Math.round(window.innerHeight - 200) : 0,
+    y: typeof window !== 'undefined' ? Math.round(window.innerHeight - 248) : 0,
   });
   const [dragging, setDragging] = createSignal(false);
 
@@ -95,26 +95,57 @@ export const PromptComposer = (props: PromptComposerProps) => {
   let dragStart = { x: 0, y: 0 };
   let posStart = { x: 0, y: 0 };
   let fileInputRef: HTMLInputElement | undefined;
-  let textAreaRef: HTMLTextAreaElement | undefined;
+  // textAreaRef removed — Milkdown manages its own DOM
 
-  // -- Auto-focus textarea when composer opens ------------------------------
-  createEffect(() => {
-    if (props.visible) {
-      requestAnimationFrame(() => textAreaRef?.focus());
-    }
-  });
+  // Auto-focus is handled by MilkdownEditor's autoFocus prop
 
-  // -- Global Escape to close (works even when textarea isn't focused) ------
+  // -- Keyboard shortcuts when composer is visible ----------------------------
   createEffect(() => {
     if (!props.visible) return;
-    const onEsc = (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => {
+      // Escape → close
       if (e.key === 'Escape') {
         e.preventDefault();
         props.onClose();
+        return;
+      }
+      // Cmd+Shift+] or Cmd+Shift+[ → cycle terminals
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === ']' || e.key === '[')) {
+        e.preventDefault();
+        const panes = terminalPanes();
+        if (panes.length < 2) return;
+        const currentId = composerTargetSession();
+        const idx = panes.findIndex(p => p.id === currentId);
+        const next = e.key === ']'
+          ? (idx + 1) % panes.length
+          : (idx - 1 + panes.length) % panes.length;
+        handleSelectTerminal(panes[next].id);
+        return;
+      }
+      // Tab → cycle to next terminal (when dropdown is open)
+      if (e.key === 'Tab' && selectorOpen()) {
+        e.preventDefault();
+        const panes = terminalPanes();
+        if (panes.length < 2) return;
+        const currentId = composerTargetSession();
+        const idx = panes.findIndex(p => p.id === currentId);
+        const next = e.shiftKey
+          ? (idx - 1 + panes.length) % panes.length
+          : (idx + 1) % panes.length;
+        handleSelectTerminal(panes[next].id);
+        return;
+      }
+      // Cmd+T → toggle terminal selector dropdown
+      if ((e.metaKey || e.ctrlKey) && e.key === 't' && !e.shiftKey) {
+        // Only capture when prompt composer is focused, don't steal global Cmd+T
+        if (document.activeElement?.closest(`.${styles.composer}`)) {
+          e.preventDefault();
+          setSelectorOpen(!selectorOpen());
+        }
       }
     };
-    document.addEventListener('keydown', onEsc, true);
-    onCleanup(() => document.removeEventListener('keydown', onEsc, true));
+    document.addEventListener('keydown', onKey, true);
+    onCleanup(() => document.removeEventListener('keydown', onKey, true));
   });
 
   // -- Drag handling --------------------------------------------------------
@@ -270,7 +301,6 @@ export const PromptComposer = (props: PromptComposerProps) => {
             left: '0px',
             top: '0px',
             transform: `translate(${position().x}px, ${position().y}px)`,
-            ...(composerColor() ? { 'border-color': composerColor()! } : {}),
           }}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -299,7 +329,14 @@ export const PromptComposer = (props: PromptComposerProps) => {
                   style={{ background: composerColor() ?? undefined }}
                 />
                 <Terminal size={12} />
-                <span class={styles.selectorLabel}>{currentTargetLabel()}</span>
+                <span class={styles.selectorLabel}>
+                  {currentTargetLabel()}
+                  <Show when={terminalPanes().length > 1}>
+                    <span style={{ opacity: 0.4, 'font-size': '9px', 'margin-left': '4px' }}>
+                      ⌘⇧[]
+                    </span>
+                  </Show>
+                </span>
                 <ChevronDown size={10} />
               </button>
               <Show when={selectorOpen()}>
@@ -362,22 +399,17 @@ export const PromptComposer = (props: PromptComposerProps) => {
             </div>
           </Show>
 
-          {/* Textarea — full width, 3 rows default */}
-          <div class={styles.textAreaWrap}>
-            <TextField class={styles.textField}>
-              <TextField.TextArea
-                ref={textAreaRef}
-                class={styles.textArea}
-                autoResize
-                rows={3}
-                placeholder="Message Phantom..."
-                value={prompt()}
-                onInput={(e: InputEvent) =>
-                  setPrompt((e.target as HTMLTextAreaElement).value)
-                }
-                onKeyDown={handleKeyDown}
-              />
-            </TextField>
+          {/* Rich markdown input */}
+          <div
+            class={styles.textAreaWrap}
+            style={composerColor() ? { 'border-color': composerColor()! } : undefined}
+          >
+            <MilkdownEditor
+              placeholder="Message Phantom... (⌘+Enter to send)"
+              onSubmit={(md) => { handleSubmit(); }}
+              onInput={(md) => setPrompt(md)}
+              autoFocus={props.visible}
+            />
           </div>
 
           {/* Bottom bar — paperclip left, send right */}

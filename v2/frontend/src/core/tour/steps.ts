@@ -102,13 +102,6 @@ export const TOUR_STEPS: TourStep[] = [
     align: 'end',
   },
   {
-    element: '[data-tour="hunter-button"]',
-    title: '[SYSTEM] Hunter Profile',
-    description: 'Level, XP, daily quests, achievements. Click to dive into your profile and stats.',
-    side: 'bottom',
-    align: 'end',
-  },
-  {
     title: '[SYSTEM] You\'re All Set',
     description: '⌘P for command palette · ⌘T for new terminal · right-click anything for more options.\n\nWelcome to The System.',
   },

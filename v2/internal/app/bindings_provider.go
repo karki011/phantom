@@ -14,7 +14,6 @@ import (
 	"sort"
 
 	"github.com/subashkarki/phantom-os-v2/internal/provider"
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // ---------------------------------------------------------------------------
@@ -314,10 +313,7 @@ func (a *App) SetActiveProvider(name string) error {
 
 	// Emit event so frontend knows the active provider changed.
 	if a.ctx != nil {
-		wailsRuntime.EventsEmit(a.ctx, EventProviderChanged, map[string]string{
-			"name":         p.Name(),
-			"display_name": p.DisplayName(),
-		})
+		a.EmitProviderChanged(p.Name(), p.DisplayName())
 	}
 
 	return nil
@@ -488,7 +484,7 @@ func (a *App) reloadRegistry() error {
 	}
 
 	if a.ctx != nil {
-		wailsRuntime.EventsEmit(a.ctx, EventProviderReload, nil)
+		a.EmitProviderReload()
 	}
 
 	return nil

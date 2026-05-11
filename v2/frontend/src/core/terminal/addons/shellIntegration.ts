@@ -72,6 +72,8 @@ function getOrCreateState(sessionId: string, terminal: Terminal): SessionState {
       titleListeners: new Set(),
     };
     sessions.set(sessionId, state);
+  } else {
+    state.terminal = terminal;
   }
   return state;
 }
@@ -275,6 +277,7 @@ function handleOscPayload(state: SessionState, payload: string): void {
 }
 
 function handlePromptStart(state: SessionState): void {
+  if (!state.terminal) return;
   const marker = state.terminal.registerMarker(0);
   if (!marker) return;
 
@@ -291,13 +294,13 @@ function handlePromptStart(state: SessionState): void {
 
 function handleCommandStart(state: SessionState): void {
   const cur = state.current;
-  if (!cur) return;
+  if (!cur || !state.terminal) return;
   cur.commandStartMarker = state.terminal.registerMarker(0) ?? undefined;
 }
 
 function handleCommandExecuted(state: SessionState): void {
   const cur = state.current;
-  if (!cur) return;
+  if (!cur || !state.terminal) return;
   cur.executedMarker = state.terminal.registerMarker(0) ?? undefined;
   cur.hasOutput = true;
 }
@@ -319,7 +322,7 @@ function handleCommandFinished(state: SessionState, rest: string): void {
     return;
   }
 
-  cur.endMarker = state.terminal.registerMarker(0) ?? undefined;
+  cur.endMarker = state.terminal?.registerMarker(0) ?? undefined;
 
   state.commands.push(cur);
   state.current = null;

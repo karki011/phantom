@@ -43,8 +43,12 @@ func (s *TreeOfThoughtStrategy) ShouldActivate(t TaskAssessment) (float64, strin
 	case (t.Complexity == Complex || t.Complexity == Critical) &&
 		(t.Risk == MediumRisk || t.Risk == HighRisk || t.Risk == CriticalRisk):
 		return 0.6, fmt.Sprintf("Complex task (%s) with %s risk — multiple approaches worth exploring", t.Complexity, t.Risk)
+	case t.Complexity == Moderate:
+		// Raised from default 0.1 → 0.25 so tree-of-thought can compete on
+		// moderate tasks against Direct's reduced base score.
+		return 0.25, "Moderate task — tree-of-thought worth considering"
 	default:
-		return 0.1, "Simple or low-risk task — single path sufficient"
+		return 0.15, "Simple or low-risk task — single path sufficient"
 	}
 }
 

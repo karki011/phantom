@@ -303,26 +303,15 @@ func (a *App) MergePrForWorkspace(worktreeId, method string, autoMerge, deleteBr
 	}
 
 	if err := git.MergePr(a.ctx, repoPath, branch, method, autoMerge, deleteBranch); err != nil {
-		wailsRuntime.EventsEmit(a.ctx, EventMergeFailed, map[string]any{
-			"worktreeId": worktreeId,
-			"prNumber":   prNumber,
-			"message":    err.Error(),
-		})
+		a.EmitMergeFailed(worktreeId, prNumber, err.Error())
 		log.Error("app/MergePrForWorkspace: merge failed", "err", err)
 		return err.Error()
 	}
 
 	if autoMerge {
-		wailsRuntime.EventsEmit(a.ctx, EventPrMerging, map[string]any{
-			"worktreeId": worktreeId,
-			"prNumber":   prNumber,
-			"autoMerge":  true,
-		})
+		a.EmitPrMerging(worktreeId, prNumber, true)
 	} else {
-		wailsRuntime.EventsEmit(a.ctx, EventPrMerged, map[string]any{
-			"worktreeId": worktreeId,
-			"prNumber":   prNumber,
-		})
+		a.EmitPrMerged(worktreeId, prNumber)
 	}
 
 	// Nudge the poller so the FE sees the new state quickly.
@@ -375,7 +364,7 @@ func (a *App) PostMergeCleanupForWorkspace(worktreeId string) string {
 		log.Error("app/PostMergeCleanupForWorkspace: failed", "err", err)
 		return err.Error()
 	}
-	wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+	a.EmitGitStatus()
 	return ""
 }
 

@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
 )
 
 const (
@@ -67,15 +66,8 @@ type KnowledgeHealth struct {
 // to consolidate similar decisions into richer patterns.
 type Compactor struct {
 	db              *sql.DB
-	vectorStore     *embedding.VectorStore
 	haikuClient     *HaikuClient
 	lastConsolidate time.Time
-}
-
-// SetVectorStore attaches a VectorStore for embedding patterns on synthesis
-// and cleaning up stale decision embeddings on prune. Nil-safe.
-func (c *Compactor) SetVectorStore(vs *embedding.VectorStore) {
-	c.vectorStore = vs
 }
 
 // NewCompactor creates a Compactor and ensures the ai_patterns table exists.
@@ -152,15 +144,6 @@ func (c *Compactor) Run() error {
 		c.lastConsolidate = time.Now()
 	}
 
-	// Prune expired embeddings alongside knowledge compaction.
-	if c.vectorStore != nil {
-		pruned, pruneErr := c.vectorStore.PruneExpired()
-		if pruneErr != nil {
-			slog.Warn("failed to prune expired embeddings", "err", pruneErr)
-		} else if pruned > 0 {
-			slog.Info("pruned expired embeddings", "count", pruned)
-		}
-	}
 	return nil
 }
 
@@ -229,14 +212,6 @@ func (c *Compactor) synthesizePatterns() error {
 		if err != nil {
 			return err
 		}
-
-		// Embed pattern for semantic retrieval.
-		if c.vectorStore != nil {
-			text := fmt.Sprintf("strategy:%s complexity:%s risk:%s success:%.2f", r.strategyID, r.complexity, r.risk, successRate)
-			if storeErr := c.vectorStore.Store("pattern", patternID, text); storeErr != nil {
-				slog.Debug("embedding pattern skipped", "id", patternID, "err", storeErr)
-			}
-		}
 	}
 	return nil
 }
@@ -248,27 +223,6 @@ func (c *Compactor) synthesizePatterns() error {
 // aware check would never prune anything.
 func (c *Compactor) pruneStale() error {
 	cutoff := time.Now().Add(-PruneTTL)
-
-	// Collect IDs of decisions that will be pruned so we can clean up embeddings.
-	var staleIDs []string
-	if c.vectorStore != nil {
-		rows, err := c.db.Query(`
-			SELECT d.id FROM ai_decisions d
-			WHERE d.created_at < ?
-			AND d.id NOT IN (
-				SELECT o.decision_id FROM ai_outcomes o WHERE o.success = 1 AND o.phase = ?
-			)
-		`, cutoff, PhaseVerifier)
-		if err == nil {
-			for rows.Next() {
-				var id string
-				if rows.Scan(&id) == nil {
-					staleIDs = append(staleIDs, id)
-				}
-			}
-			rows.Close()
-		}
-	}
 
 	// Delete orphan outcomes for decisions that will be pruned.
 	_, err := c.db.Exec(`
@@ -294,14 +248,6 @@ func (c *Compactor) pruneStale() error {
 	`, cutoff, PhaseVerifier)
 	if err != nil {
 		return err
-	}
-
-	// Clean up embeddings for pruned decisions.
-	if c.vectorStore != nil && len(staleIDs) > 0 {
-		for _, id := range staleIDs {
-			_ = c.vectorStore.Delete("decision", id)
-		}
-		slog.Info("pruned stale decision embeddings", "count", len(staleIDs))
 	}
 
 	return nil
@@ -424,11 +370,11 @@ type DecisionCluster struct {
 
 // RunLLMConsolidation finds semantic clusters and sends them to Haiku for
 // consolidation. Returns stats about what was processed. Safe to call when
-// haikuClient or vectorStore is nil (returns zero stats).
+// haikuClient is nil (returns zero stats).
 func (c *Compactor) RunLLMConsolidation() (ConsolidationStats, error) {
 	var stats ConsolidationStats
 
-	if c.haikuClient == nil || c.vectorStore == nil {
+	if c.haikuClient == nil {
 		return stats, nil
 	}
 
@@ -486,13 +432,9 @@ func (c *Compactor) RunLLMConsolidation() (ConsolidationStats, error) {
 	return stats, nil
 }
 
-// findSemanticClusters discovers groups of semantically similar decisions
-// using embedding-based cosine similarity from the VectorStore.
+// findSemanticClusters discovers groups of textually similar decisions
+// using trigram+Jaccard similarity (same algorithm as FindSimilar in decisions.go).
 func (c *Compactor) findSemanticClusters() []DecisionCluster {
-	if c.vectorStore == nil {
-		return nil
-	}
-
 	rows, err := c.db.Query(`
 		SELECT id, goal, strategy_id, confidence, complexity, risk
 		FROM ai_decisions
@@ -526,29 +468,21 @@ func (c *Compactor) findSemanticClusters() []DecisionCluster {
 			continue
 		}
 
-		similar, err := c.vectorStore.FindSimilar(d.Goal, 20, "decision")
-		if err != nil {
-			continue
-		}
+		anchorLower := strings.ToLower(d.Goal)
+		anchorTrigrams := extractTrigrams(anchorLower)
+		anchorTokens := tokenize(d.Goal)
 
-		// Build lookup from VectorStore results.
-		similarSourceIDs := make(map[string]float64, len(similar))
-		for _, mem := range similar {
-			similarSourceIDs[mem.SourceID] = mem.Score
-		}
-
-		// Match back to our decision list, filtering by similarity threshold.
 		var members []Decision
 		for _, dd := range decisions {
 			if visited[dd.ID] {
 				continue
 			}
-			// The anchor decision itself is always included.
 			if dd.ID == d.ID {
 				members = append(members, dd)
 				continue
 			}
-			if score, ok := similarSourceIDs[dd.ID]; ok && score >= SimilarityThreshold {
+			sim := combinedSimilarity(anchorLower, anchorTrigrams, anchorTokens, dd.Goal)
+			if sim >= SimilarityThreshold {
 				members = append(members, dd)
 			}
 		}
@@ -663,21 +597,10 @@ func (c *Compactor) applyConsolidation(result *ConsolidationResult, inTok, outTo
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, logID, patternID, string(consumedJSON), inTok, outTok, costUSD)
 
-	// Delete consumed decisions and their outcomes/embeddings.
+	// Delete consumed decisions and their outcomes.
 	for _, id := range result.DecisionsConsumed {
 		c.db.Exec("DELETE FROM ai_outcomes WHERE decision_id = ?", id)
 		c.db.Exec("DELETE FROM ai_decisions WHERE id = ?", id)
-		if c.vectorStore != nil {
-			_ = c.vectorStore.Delete("decision", id)
-		}
-	}
-
-	// Embed the new pattern for semantic retrieval.
-	if c.vectorStore != nil {
-		text := fmt.Sprintf("pattern: %s — %s", result.Pattern.StrategyID, result.Pattern.Description)
-		if storeErr := c.vectorStore.Store("pattern", patternID, text); storeErr != nil {
-			slog.Debug("embedding consolidated pattern skipped", "id", patternID, "err", storeErr)
-		}
 	}
 
 	return nil

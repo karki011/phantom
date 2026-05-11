@@ -24,7 +24,6 @@ export const sidebarCollapsed = style({
 
 export const searchWrapper = style({
   padding: vars.space.sm,
-  borderBottom: `1px solid ${vars.color.divider}`,
   flexShrink: 0,
   position: 'sticky',
   top: 0,
@@ -69,7 +68,6 @@ export const projectList = style({
 });
 
 export const projectSection = style({
-  borderBottom: `1px solid ${vars.color.divider}`,
   paddingTop: vars.space.sm,
   paddingBottom: vars.space.md,
 });
@@ -115,7 +113,6 @@ export const worktreeCount = style({
   fontSize: vars.fontSize.xs,
   color: vars.color.textDisabled,
   backgroundColor: vars.color.bgTertiary,
-  border: `1px solid ${vars.color.border}`,
   borderRadius: vars.radius.full,
   padding: `1px 6px`,
   lineHeight: 1.4,
@@ -164,7 +161,7 @@ export const chevron = style({
 export const worktreeList = style({
   display: 'flex',
   flexDirection: 'column',
-  gap: vars.space.xs,
+  gap: vars.space.sm,
   paddingLeft: vars.space.lg,
   marginLeft: vars.space.md,
   marginTop: vars.space.xs,
@@ -176,7 +173,7 @@ export const worktreeItem = style({
   flexDirection: 'row',
   alignItems: 'center',
   gap: vars.space.sm,
-  padding: `${vars.space.sm} ${vars.space.sm}`,
+  padding: `${vars.space.md} ${vars.space.sm}`,
   cursor: 'pointer',
   borderRadius: vars.radius.sm,
   transition: `background ${vars.animation.fast} ease`,
@@ -230,7 +227,6 @@ export const sessionDot = style({
   borderRadius: vars.radius.full,
   backgroundColor: vars.color.success,
   flexShrink: 0,
-  boxShadow: `0 0 4px ${vars.color.success}`,
 });
 
 // Live-state semantics for the session dot. The DB `status` stays narrow
@@ -238,7 +234,7 @@ export const sessionDot = style({
 // in the collector and emitted on `session:update` events.
 const liveStateBreathe = keyframes({
   '0%, 100%': { opacity: 1, transform: 'scale(1)' },
-  '50%': { opacity: 0.55, transform: 'scale(0.85)' },
+  '50%': { opacity: 0.7, transform: 'scale(0.85)' },
 });
 
 globalStyle(`${sessionDot}[data-live-state="running"]`, {

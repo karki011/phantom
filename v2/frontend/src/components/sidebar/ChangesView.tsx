@@ -295,7 +295,7 @@ export function ChangesView() {
   function closeDiffTabForFile(filePath: string) {
     const diffTab = tabs().find((t) => {
       const panes = Object.values(t.panes);
-      return panes.some((p) => p.kind === 'diff' && p.data?.filePath === filePath);
+      return panes.some((p) => p.kind === 'editor' && p.data?.filePath === filePath && p.data?.originalContent !== undefined);
     });
     if (diffTab) removeTab(diffTab.id);
   }

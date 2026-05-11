@@ -36,6 +36,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
 
+	"github.com/subashkarki/phantom-os-v2/internal/ai/classify"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/evaluator"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/orchestrator"
@@ -88,6 +89,12 @@ type Service struct {
 	// turns use `--resume <uuid>` because claude rejects --session-id reuse.
 	sessionStarted map[string]bool
 
+	// sessionTaskTypes remembers the last self-classified task type for each
+	// session (keyed by sessionID). Set when the model emits a
+	// <phantom:task_type> tag in its streaming response. Used by the
+	// orchestrator on the *next* turn to bias strategy selection.
+	sessionTaskTypes map[string]string
+
 	// engineDeps wires Phantom's AI engine (orchestrator + knowledge stores
 	// + verifier) into every Composer turn. When zero-valued, Send falls
 	// back to the raw user prompt with no strategy enrichment and no
@@ -121,11 +128,12 @@ type Service struct {
 // wailsRuntime.EventsEmit.
 func NewService(writer *sql.DB, emit func(string, interface{})) *Service {
 	return &Service{
-		writer:         writer,
-		emit:           emit,
-		runs:           make(map[string]context.CancelFunc),
-		sessions:       make(map[string]string),
-		sessionStarted: make(map[string]bool),
+		writer:           writer,
+		emit:             emit,
+		runs:             make(map[string]context.CancelFunc),
+		sessions:         make(map[string]string),
+		sessionStarted:   make(map[string]bool),
+		sessionTaskTypes: make(map[string]string),
 	}
 }
 
@@ -312,6 +320,13 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 				}
 			}
 
+			// Look up the last self-classified task type for this session.
+			// Used as a soft hint to bias strategy selection without overriding
+			// graph or assessor signals. Empty string is safe (no-op in Process).
+			s.mu.Lock()
+			priorTaskType := s.sessionTaskTypes[sessionID]
+			s.mu.Unlock()
+
 			log.Debug("composer: orchestrator — entering Process (async)",
 				"pane_id", args.PaneID,
 				"cwd", args.CWD,
@@ -319,11 +334,13 @@ func (s *Service) Send(ctx context.Context, args SendArgs) (string, error) {
 				"has_registry", turnDeps.Registry != nil,
 				"has_decisions", turnDeps.Decisions != nil,
 				"active_files", len(activeFiles),
+				"prior_task_type", priorTaskType,
 			)
 			result, err := orchestrator.Process(ctx, turnDeps, orchestrator.ProcessInput{
 				Goal:        args.Prompt,
 				CWD:         args.CWD,
 				ActiveFiles: activeFiles,
+				TaskType:    priorTaskType,
 			})
 			if err != nil {
 				log.Warn("composer: orchestrator process failed", "err", err)
@@ -694,9 +711,9 @@ func (s *Service) DeleteSession(ctx context.Context, sessionID string) error {
 const readTimeoutDuration = 120 * time.Second
 
 // enrichmentTimeout caps how long s.run waits for the async orchestrator
-// before falling through with the unenriched prompt. Keep it short — the
-// whole point is to unblock first-token latency.
-const enrichmentTimeout = 2 * time.Second
+// before falling through with the unenriched prompt. Extended to accommodate
+// Haiku CLI assessment (~3-5s subprocess startup + API call).
+const enrichmentTimeout = 10 * time.Second
 
 // enrichmentResult carries the orchestrator output from the async goroutine
 // to s.run. A nil value means the orchestrator either failed or timed out.
@@ -828,6 +845,14 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 				Content: fmt.Sprintf("Session memory: %d chars injected", len(block)),
 			})
 		}
+	}
+
+	// Classification directive injection — first turn only, appended to the
+	// system prompt so the model emits a <phantom:task_type> tag that the
+	// stream processor can extract and strip from user-visible output.
+	if !isResume && !args.NoContext {
+		cliArgs = append(cliArgs, "--append-system-prompt", classify.ClassificationDirective)
+		log.Debug("composer: classification directive injected", "session", sessionID)
 	}
 
 	cmd := exec.CommandContext(ctx, cliPath, cliArgs...)
@@ -965,7 +990,7 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		case "assistant":
 			thinkingLen = s.extractThinking(args.PaneID, turnID, raw["message"], thinkingLen)
 			if !seenDeltas {
-				s.handleAssistant(ctx, args.PaneID, turnID, args.CWD, raw["message"], &responseText)
+				s.handleAssistant(ctx, args.PaneID, turnID, args.CWD, sessionID, raw["message"], &responseText)
 			}
 			eventSeq++
 			aLine, _ := json.Marshal(raw)
@@ -1009,7 +1034,7 @@ func (s *Service) run(ctx context.Context, cliPath string, args SendArgs, sessio
 		// events. We handle them so streaming feels instant.
 		case "content_block_delta":
 			seenDeltas = true
-			s.handleContentBlockDelta(args.PaneID, turnID, raw, &responseText)
+			s.handleContentBlockDelta(args.PaneID, turnID, sessionID, raw, &responseText)
 			// Persist for replay
 			eventSeq++
 			dLine, _ := json.Marshal(raw)
@@ -1130,7 +1155,7 @@ func friendlyComposerError(raw string) string {
 // handleContentBlockDelta processes incremental text/thinking chunks from the
 // richer stream-json protocol. These arrive more frequently than batched
 // "assistant" events, providing sub-second streaming granularity.
-func (s *Service) handleContentBlockDelta(paneID, turnID string, raw map[string]json.RawMessage, responseText *strings.Builder) {
+func (s *Service) handleContentBlockDelta(paneID, turnID, sessionID string, raw map[string]json.RawMessage, responseText *strings.Builder) {
 	var delta struct {
 		Delta struct {
 			Type        string `json:"type"`
@@ -1147,14 +1172,23 @@ func (s *Service) handleContentBlockDelta(paneID, turnID string, raw map[string]
 	switch delta.Delta.Type {
 	case "text_delta":
 		if delta.Delta.Text != "" {
-			s.emit("composer:event", Event{PaneID: paneID, TurnID: turnID, Type: "delta", Content: delta.Delta.Text})
+			// Strip any classification tag before forwarding to the frontend.
+			// The tag appears early in the response (first chunk or two), so
+			// this check is effectively free on subsequent chunks.
+			visibleText, taskType, classFound := classify.ExtractAndStrip(delta.Delta.Text)
+			s.emit("composer:event", Event{PaneID: paneID, TurnID: turnID, Type: "delta", Content: visibleText})
 			if responseText != nil && responseText.Len() < maxResponseText {
 				remain := maxResponseText - responseText.Len()
-				if len(delta.Delta.Text) <= remain {
-					responseText.WriteString(delta.Delta.Text)
+				if len(visibleText) <= remain {
+					responseText.WriteString(visibleText)
 				} else {
-					responseText.WriteString(delta.Delta.Text[:remain])
+					responseText.WriteString(visibleText[:remain])
 				}
+			}
+			// When the model emits a valid task type tag, store it for the
+			// next turn's strategy bias and notify the frontend.
+			if classFound {
+				s.storeAndEmitTaskType(sessionID, paneID, turnID, string(taskType))
 			}
 		}
 	case "thinking_delta":
@@ -1202,7 +1236,7 @@ func (s *Service) handleContentBlockStart(ctx context.Context, paneID, turnID, c
 // events + edit cards. responseText accumulates the rendered text blocks so
 // run() can persist them at end-of-turn; nil-safe for callers that don't
 // care about persistence.
-func (s *Service) handleAssistant(ctx context.Context, paneID, turnID, cwd string, raw json.RawMessage, responseText *strings.Builder) {
+func (s *Service) handleAssistant(ctx context.Context, paneID, turnID, cwd, sessionID string, raw json.RawMessage, responseText *strings.Builder) {
 	if len(raw) == 0 {
 		return
 	}
@@ -1223,14 +1257,19 @@ func (s *Service) handleAssistant(ctx context.Context, paneID, turnID, cwd strin
 		switch block.Type {
 		case "text":
 			if block.Text != "" {
-				s.emit("composer:event", Event{PaneID: paneID, TurnID: turnID, Type: "delta", Content: block.Text})
+				// Strip classification tags from batched assistant text blocks.
+				visibleText, taskType, classFound := classify.ExtractAndStrip(block.Text)
+				s.emit("composer:event", Event{PaneID: paneID, TurnID: turnID, Type: "delta", Content: visibleText})
 				if responseText != nil && responseText.Len() < maxResponseText {
 					remain := maxResponseText - responseText.Len()
-					if len(block.Text) <= remain {
-						responseText.WriteString(block.Text)
+					if len(visibleText) <= remain {
+						responseText.WriteString(visibleText)
 					} else {
-						responseText.WriteString(block.Text[:remain])
+						responseText.WriteString(visibleText[:remain])
 					}
+				}
+				if classFound {
+					s.storeAndEmitTaskType(sessionID, paneID, turnID, string(taskType))
 				}
 			}
 		case "thinking":
@@ -1297,6 +1336,26 @@ func (s *Service) handleToolResult(paneID, turnID string, raw map[string]json.Ra
 		Content:   contentStr,
 		ToolUseID: msg.ToolUseID,
 		IsError:   msg.IsError,
+	})
+}
+
+// storeAndEmitTaskType persists the self-classified task type for the session
+// and emits a "composer:task-classified" event so the frontend can display
+// what kind of work the AI identified. Called at most once per streaming turn
+// (classify.ExtractAndStrip only finds the first valid tag).
+func (s *Service) storeAndEmitTaskType(sessionID, paneID, turnID, taskType string) {
+	if taskType == "" || taskType == "unknown" {
+		return
+	}
+	s.mu.Lock()
+	s.sessionTaskTypes[sessionID] = taskType
+	s.mu.Unlock()
+	log.Info("composer: task classified", "session", sessionID, "task_type", taskType)
+	s.emit("composer:task-classified", Event{
+		PaneID:   paneID,
+		TurnID:   turnID,
+		Type:     "task_classified",
+		TaskType: taskType,
 	})
 }
 

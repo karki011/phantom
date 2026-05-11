@@ -2,9 +2,9 @@
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';
-import type { DailyJournalEntry, DailyStats, JournalEnrichedEvent } from '../types';
+import type { DailyJournalEntry, DailyStats } from '../types';
 import { getDailyJournalEntry, getDailyStatsRange } from '../bindings/journal';
-import { onWailsEvent } from '../events';
+import { onPhantomEvent } from '../events/types';
 
 // Selected date for the journal view
 export const [selectedDate, setSelectedDate] = createSignal<string>(
@@ -62,7 +62,7 @@ export const bootstrapJournal = async (): Promise<void> => {
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
 
-  onWailsEvent<JournalEnrichedEvent>('journal:enriched', (evt) => {
+  onPhantomEvent('journal:enriched', (evt) => {
     if (!evt) return;
     if (evt.date !== selectedDate()) return;
     const currentProject = selectedProject() ?? '';

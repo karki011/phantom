@@ -8,14 +8,11 @@ package knowledge
 import (
 	"database/sql"
 	"errors"
-	"fmt"
-	"log/slog"
 	"math"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
+	"github.com/subashkarki/phantom-os-v2/internal/ai"
 )
 
 // ErrInvalidDecision is returned when Record is called with empty required fields.
@@ -107,9 +104,8 @@ func (dc DecayConfig) outcomeDecayWeight(ageDays float64, success bool) float64 
 
 // DecisionStore provides CRUD access to AI decisions and outcomes.
 type DecisionStore struct {
-	db          *sql.DB
-	vectorStore *embedding.VectorStore
-	Decay       DecayConfig
+	db    *sql.DB
+	Decay DecayConfig
 }
 
 // NewDecisionStore creates a DecisionStore and ensures the schema exists.
@@ -157,12 +153,6 @@ func (ds *DecisionStore) DB() *sql.DB {
 	return ds.db
 }
 
-// SetVectorStore attaches a VectorStore for embedding decisions on Record().
-// Nil-safe: passing nil disables semantic embedding.
-func (ds *DecisionStore) SetVectorStore(vs *embedding.VectorStore) {
-	ds.vectorStore = vs
-}
-
 // Record persists a new decision and returns its ID.
 // Rejects writes with empty goal or strategyID to prevent corrupting the
 // ai_decisions table — past callers have leaked zero-value Decisions.
@@ -171,21 +161,13 @@ func (ds *DecisionStore) Record(goal, strategyID string, confidence float64, com
 		LogError("decisions", "Record-empty-fields", ErrInvalidDecision, "goal="+goal+" strategy_id="+strategyID)
 		return "", ErrInvalidDecision
 	}
-	id := uuid.New().String()
+	id := ai.NewEventID()
 	_, err := ds.db.Exec(
 		"INSERT INTO ai_decisions (id, goal, strategy_id, confidence, complexity, risk, access_count, last_accessed_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?)",
 		id, goal, strategyID, confidence, complexity, risk, time.Now().UTC(),
 	)
 	if err != nil {
 		return id, err
-	}
-
-	// Embed the decision for semantic retrieval.
-	if ds.vectorStore != nil {
-		text := fmt.Sprintf("%s [strategy:%s complexity:%s risk:%s]", goal, strategyID, complexity, risk)
-		if storeErr := ds.vectorStore.Store("decision", id, text); storeErr != nil {
-			slog.Debug("embedding decision skipped", "id", id, "err", storeErr)
-		}
 	}
 
 	return id, nil
@@ -218,7 +200,7 @@ func (ds *DecisionStore) RecordEvaluatorOutcome(decisionID string, success bool,
 // delegate here so the wire shape stays consistent and writers can't forget
 // the phase tag.
 func (ds *DecisionStore) recordOutcomeWithPhase(decisionID string, success bool, failureReason, phase string) error {
-	id := uuid.New().String()
+	id := ai.NewEventID()
 	_, err := ds.db.Exec(
 		"INSERT INTO ai_outcomes (id, decision_id, success, failure_reason, phase) VALUES (?, ?, ?, ?, ?)",
 		id, decisionID, boolToInt(success), failureReason, phase,
@@ -298,37 +280,6 @@ func (ds *DecisionStore) FindSimilar(goal string, minSimilarity float64, limits 
 	out := make([]Decision, 0, min(len(results), limit))
 	for i := 0; i < len(results) && i < limit; i++ {
 		out = append(out, results[i].decision)
-	}
-	return out, nil
-}
-
-// FindSimilarSemantic uses the VectorStore for embedding-based similarity when
-// available, falling back to trigram+Jaccard FindSimilar otherwise.
-func (ds *DecisionStore) FindSimilarSemantic(goal string, topK int) ([]Decision, error) {
-	if ds.vectorStore == nil {
-		return ds.FindSimilar(goal, 0.3, topK)
-	}
-	memories, err := ds.vectorStore.FindSimilar(goal, topK, "decision")
-	if err != nil {
-		slog.Debug("semantic FindSimilar failed, falling back to trigram", "err", err)
-		return ds.FindSimilar(goal, 0.3, topK)
-	}
-	if len(memories) == 0 {
-		return nil, nil
-	}
-
-	// Convert memories back to Decision structs by loading from DB.
-	out := make([]Decision, 0, len(memories))
-	for _, m := range memories {
-		var d Decision
-		err := ds.db.QueryRow(
-			"SELECT id, goal, strategy_id, confidence, complexity, risk, created_at, access_count, last_accessed_at FROM ai_decisions WHERE id = ?",
-			m.SourceID,
-		).Scan(&d.ID, &d.Goal, &d.StrategyID, &d.Confidence, &d.Complexity, &d.Risk, &d.CreatedAt, &d.AccessCount, &d.LastAccessedAt)
-		if err != nil {
-			continue // Decision may have been pruned — skip.
-		}
-		out = append(out, d)
 	}
 	return out, nil
 }

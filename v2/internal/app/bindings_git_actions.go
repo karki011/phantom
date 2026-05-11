@@ -13,7 +13,6 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/git"
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // ErrWorkspaceGone is returned by resolveWorkspacePath when the workspace row
@@ -61,7 +60,7 @@ func (a *App) GitFetch(projectId string) error {
 		log.Error("app/GitFetch: FetchOrigin failed", "repoPath", proj.RepoPath, "err", err)
 		return err
 	}
-	wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+	a.EmitGitStatus()
 	log.Info("app/GitFetch: success", "projectId", projectId)
 	return nil
 }
@@ -82,7 +81,7 @@ func (a *App) GitPull(workspaceId string) error {
 		log.Error("app/GitPull: Pull failed", "repoPath", repoPath, "err", err)
 		return err
 	}
-	wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+	a.EmitGitStatus()
 	log.Info("app/GitPull: success", "workspaceId", workspaceId)
 	return nil
 }
@@ -103,7 +102,7 @@ func (a *App) GitPush(workspaceId string) error {
 		log.Error("app/GitPush: Push failed", "repoPath", repoPath, "err", err)
 		return err
 	}
-	wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+	a.EmitGitStatus()
 	log.Info("app/GitPush: success", "workspaceId", workspaceId)
 	return nil
 }
@@ -151,8 +150,8 @@ func (a *App) GitCheckoutBranch(projectId, branch string) error {
 		}
 	}
 
-	wailsRuntime.EventsEmit(a.ctx, EventWorktreeUpdated)
-	wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+	a.EmitWorktreeUpdated()
+	a.EmitGitStatus()
 	log.Info("app/GitCheckoutBranch: success", "projectId", projectId, "branch", branch)
 	return nil
 }
@@ -173,7 +172,7 @@ func (a *App) GitStage(workspaceId string, paths []string) error {
 		log.Error("app/GitStage: Stage failed", "repoPath", repoPath, "err", err)
 		return err
 	}
-	wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+	a.EmitGitStatus()
 	log.Info("app/GitStage: success", "workspaceId", workspaceId, "count", len(paths))
 	return nil
 }
@@ -194,7 +193,7 @@ func (a *App) GitStageAll(workspaceId string) error {
 		log.Error("app/GitStageAll: StageAll failed", "repoPath", repoPath, "err", err)
 		return err
 	}
-	wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+	a.EmitGitStatus()
 	log.Info("app/GitStageAll: success", "workspaceId", workspaceId)
 	return nil
 }
@@ -215,7 +214,7 @@ func (a *App) GitUnstage(workspaceId string, paths []string) error {
 		log.Error("app/GitUnstage: Unstage failed", "repoPath", repoPath, "err", err)
 		return err
 	}
-	wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+	a.EmitGitStatus()
 	log.Info("app/GitUnstage: success", "workspaceId", workspaceId, "count", len(paths))
 	return nil
 }
@@ -236,7 +235,7 @@ func (a *App) GitCommit(workspaceId, message string) error {
 		log.Error("app/GitCommit: Commit failed", "repoPath", repoPath, "err", err)
 		return err
 	}
-	wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+	a.EmitGitStatus()
 	log.Info("app/GitCommit: success", "workspaceId", workspaceId)
 	return nil
 }
@@ -257,7 +256,7 @@ func (a *App) GitDiscard(workspaceId string, paths []string) error {
 		log.Error("app/GitDiscard: Discard failed", "repoPath", repoPath, "err", err)
 		return err
 	}
-	wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+	a.EmitGitStatus()
 	log.Info("app/GitDiscard: success", "workspaceId", workspaceId, "count", len(paths))
 	return nil
 }
@@ -312,7 +311,7 @@ func (a *App) RenameWorktree(worktreeId, newName string) error {
 		return err
 	}
 
-	wailsRuntime.EventsEmit(a.ctx, EventWorktreeUpdated)
+	a.EmitWorktreeUpdated()
 	log.Info("app/RenameWorktree: success", "worktreeId", worktreeId, "newName", newName, "newPath", newPath)
 	return nil
 }
@@ -356,7 +355,7 @@ func (a *App) GetWorkspaceStatus(workspaceId string) *git.RepoStatus {
 			IsActive:     ws.IsActive,
 			TicketUrl:    ws.TicketUrl,
 		})
-		wailsRuntime.EventsEmit(a.ctx, EventWorktreeUpdated)
+		a.EmitWorktreeUpdated()
 	}
 
 	log.Info("app/GetWorkspaceStatus: success", "branch", rs.Branch, "staged", len(rs.Staged), "unstaged", len(rs.Unstaged), "untracked", len(rs.Untracked))

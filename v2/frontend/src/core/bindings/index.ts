@@ -43,8 +43,6 @@ export {
   postMergeCleanup,
 } from './git';
 export { revealInFinder, openInFinder, openInDefaultApp, openURL } from './shell';
-export { getWards, saveWardRule, deleteWardRule, toggleWardRule, getWardPresets, applyWardPreset } from './wards';
-export type { WardRule, WardPreset } from './wards';
 export { readFileByPath, readFileContents, writeFileContents, getFileAtRevision, getWorkspaceBlame, createFile, createFolder, deleteFile } from './editor';
 export { getSessionsByDate, getSessionsByProject, getRecentSessions, getDailyStatsRange, getDailyStatsRangeByProject, getLastActiveSession, getDailyJournalEntry, generateMorningBrief, generateEndOfDay, updateJournalNotes, listJournalDates } from './journal';
 export { getProviders, getProviderDetail, setProviderEnabled, setActiveProvider, testProvider, autoDetectProviders, addCustomProvider, removeCustomProvider, resetProviderOverride, getActiveProvider } from './providers';
@@ -53,10 +51,11 @@ export { composerSend, composerCancel, composerDecideEdit, composerListPending }
 export type { ComposerMention, ComposerEditCard, ComposerEvent } from './composer';
 export { setAnthropicApiKey, clearAnthropicApiKey, hasAnthropicApiKey, testAnthropicApiKey } from './byok';
 export { getAllRecipes, createCustomRecipe, updateCustomRecipe, deleteCustomRecipe, toggleRecipeFavorite, getFavoriteRecipes } from './recipes';
-export { getHunterProfile, getHunterStats, updateHunterName, getAchievements, getDailyQuests, getHunterDashboard, getActivityHeatmap } from './gamification';
 export { getAIInsight } from './ai-insight';
 export type { AIInsightData, StrategyInfo, AssessmentInfo, ContextCoverage, KnowledgeStats, DecisionEntry } from './ai-insight';
 export { getEvolution } from './evolution';
 export type { EvolutionData, GapAlert, StrategyTrend } from './evolution';
 export { listMCPServers, toggleMCPServer, registerPhantomMCP } from './mcp';
 export type { MCPServer } from './mcp';
+export { searchFileContents } from './search';
+export type { SearchResult } from './search';

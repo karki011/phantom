@@ -20,8 +20,8 @@ export const AI_FEATURES: AIFeature[] = [
     key: 'ai.editGate',
     label: 'Edit Safety Gate',
     description: 'Require dependency analysis before file modifications',
-    recommended: true,
-    default: true,
+    recommended: false,
+    default: false,
   },
   {
     key: 'ai.outcomeCapture',

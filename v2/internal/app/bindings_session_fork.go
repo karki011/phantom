@@ -14,7 +14,6 @@ import (
 
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/namegen"
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // EventSessionForked is emitted after a successful fork so the frontend can
@@ -103,10 +102,7 @@ func (a *App) ForkSession(sessionID, name string) (string, error) {
 	}
 
 	if a.ctx != nil {
-		wailsRuntime.EventsEmit(a.ctx, EventSessionForked, map[string]string{
-			"session_id":        newID,
-			"parent_session_id": sessionID,
-		})
+		a.EmitSessionForked(newID, sessionID)
 	}
 
 	return newID, nil

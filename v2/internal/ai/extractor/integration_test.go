@@ -1,65 +1,15 @@
 // Author: Subash Karki
 //
-// Integration tests for the MemoryExtractor pipeline: events -> extract -> store -> find.
+// Integration tests for the MemoryExtractor pipeline: events -> extract -> store.
 package extractor
 
 import (
 	"context"
-	"crypto/sha256"
-	"database/sql"
-	"math"
 	"testing"
 	"time"
 
-	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
-
-	_ "modernc.org/sqlite"
 )
-
-// mockEmbedder produces deterministic vectors by hashing the input text.
-// This is a local copy because the embedding package's MockEmbedder lives
-// in a _test.go file and isn't visible to other packages.
-type mockEmbedder struct{}
-
-func (m *mockEmbedder) Embed(text string) ([]float32, error) {
-	h := sha256.Sum256([]byte(text))
-	v := make([]float32, embedding.Dimensions)
-	for i := range v {
-		idx := i % len(h)
-		v[i] = float32(h[idx]) / 255.0
-		v[i] += float32(i) * 0.001
-	}
-	return embedding.Normalize(v), nil
-}
-
-func (m *mockEmbedder) EmbedBatch(texts []string) ([][]float32, error) {
-	out := make([][]float32, len(texts))
-	for i, t := range texts {
-		v, err := m.Embed(t)
-		if err != nil {
-			return nil, err
-		}
-		out[i] = v
-	}
-	return out, nil
-}
-
-func (m *mockEmbedder) Dimensions() int { return embedding.Dimensions }
-func (m *mockEmbedder) Close() error    { return nil }
-
-// suppress unused import warning for math
-var _ = math.Sqrt
-
-func openTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open test db: %v", err)
-	}
-	t.Cleanup(func() { db.Close() })
-	return db
-}
 
 // buildRealisticSession constructs a sequence of events simulating a debugging
 // session with error-fix cycles. Key design choices:
@@ -129,14 +79,7 @@ func buildRealisticSession() []stream.Event {
 func TestExtractorPipeline(t *testing.T) {
 	t.Parallel()
 
-	db := openTestDB(t)
-	mockEmb := &mockEmbedder{}
-	vs, err := embedding.NewVectorStore(db, mockEmb)
-	if err != nil {
-		t.Fatalf("NewVectorStore: %v", err)
-	}
-
-	me := New(vs)
+	me := New()
 	events := buildRealisticSession()
 
 	// Extract.
@@ -163,8 +106,7 @@ func TestExtractorPipeline(t *testing.T) {
 		t.Errorf("middleware.go: expected 1 edit, got %d", mwEdits)
 	}
 
-	// Verify errors: 2 errors (both FAIL results), and they should be resolved
-	// (the successful test at index 12 resolves errors for the same file).
+	// Verify errors: 2 errors (both FAIL results).
 	if result.Errors.Total < 2 {
 		t.Errorf("expected at least 2 errors, got %d", result.Errors.Total)
 	}
@@ -205,18 +147,9 @@ func TestExtractorPipeline(t *testing.T) {
 			result.Profile.Type, result.Profile.TurnCount, result.Errors.Total, result.Files.TotalEdits)
 	}
 
-	// Store to VectorStore.
+	// Store is a no-op — just verify it doesn't error.
 	if err := me.Store(context.Background(), result); err != nil {
 		t.Fatalf("Store: %v", err)
-	}
-
-	// FindSimilar should return session memories.
-	memories, err := vs.FindSimilar("fix auth bug", 5)
-	if err != nil {
-		t.Fatalf("FindSimilar after Store: %v", err)
-	}
-	if len(memories) == 0 {
-		t.Error("expected at least 1 memory after Store")
 	}
 }
 
@@ -224,7 +157,7 @@ func TestExtractorPipeline(t *testing.T) {
 func TestExtractorPipeline_EmptyEvents(t *testing.T) {
 	t.Parallel()
 
-	me := New(nil) // nil VectorStore — Store becomes a no-op.
+	me := New()
 
 	result := me.Extract("s-empty", nil)
 	if result == nil {
@@ -242,16 +175,16 @@ func TestExtractorPipeline_EmptyEvents(t *testing.T) {
 	}
 }
 
-// TestExtractorPipeline_StoreNilVectorStore verifies Store is a safe no-op.
-func TestExtractorPipeline_StoreNilVectorStore(t *testing.T) {
+// TestExtractorPipeline_StoreIsNoOp verifies Store is always a safe no-op.
+func TestExtractorPipeline_StoreIsNoOp(t *testing.T) {
 	t.Parallel()
 
-	me := New(nil)
+	me := New()
 	result := me.Extract("s-1", buildRealisticSession())
 
 	err := me.Store(context.Background(), result)
 	if err != nil {
-		t.Fatalf("Store with nil VectorStore should be no-op, got error: %v", err)
+		t.Fatalf("Store should be a no-op, got error: %v", err)
 	}
 }
 
@@ -297,7 +230,7 @@ func TestExtractorPipeline_ProfileClassification(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			me := New(nil)
+			me := New()
 			result := me.Extract("s-"+tt.name, tt.events)
 			if result.Profile.Type != tt.want {
 				t.Errorf("expected profile %q, got %q", tt.want, result.Profile.Type)

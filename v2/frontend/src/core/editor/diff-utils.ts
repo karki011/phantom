@@ -34,13 +34,15 @@ export const showFileDiff = (options: {
     readOnly,
   } = options;
 
-  // Only reuse an existing entry if it's already a diff pane. If the file is
-  // open in a regular EditorPane (Files tab / Cmd+P), we still want to open a
-  // new diff tab — clicking from the Changes list should always show the diff.
+  // Only reuse an existing entry if it's already open as a diff in the editor.
+  // If the file is open in a regular EditorPane (Files tab / Cmd+P), we still
+  // want to open a new diff tab — clicking from the Changes list should always
+  // show the diff.
   const existing = getOpenFileEntry(filePath);
   if (existing) {
     const owningTab = tabs().find((t) => existing.paneId in t.panes);
-    if (owningTab?.panes[existing.paneId]?.kind === 'diff') {
+    const existingPane = owningTab?.panes[existing.paneId];
+    if (existingPane?.kind === 'editor' && existingPane.data?.originalContent !== undefined) {
       setActivePaneInTab(existing.paneId);
       return;
     }
@@ -60,7 +62,7 @@ export const showFileDiff = (options: {
     readOnly: readOnly ?? false,
   };
 
-  const paneId = addTabWithData('diff', label, data);
+  const paneId = addTabWithData('editor', label, data);
   if (paneId) {
     registerOpenFile(filePath, { paneId, tabIndex: 0, workspaceId });
   }

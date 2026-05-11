@@ -33,8 +33,6 @@ import { ChangesView } from './ChangesView';
 import { GitActivityPanel } from './GitActivityPanel';
 import { RightResizeHandle } from './RightResizeHandle';
 import { RightRail } from './RightRail';
-import { WardAlerts } from '@/shared/WardAlerts/WardAlerts';
-import { wardAlertCount } from '@/core/signals/wards';
 import * as styles from '@/styles/right-sidebar.css';
 
 function setIfChanged<T>(current: () => T, setter: (v: T) => void, next: T) {
@@ -125,12 +123,6 @@ export function RightSidebar() {
                 <span class={styles.tabBadgeChanges}>{changesCount()}</span>
               </Show>
             </Tabs.Trigger>
-            <Tabs.Trigger value="alerts" class={styles.tab}>
-              Alerts
-              <Show when={wardAlertCount() > 0}>
-                <span class={styles.tabBadge}>{wardAlertCount()}</span>
-              </Show>
-            </Tabs.Trigger>
             <Tabs.Trigger value="activity" class={styles.tab}>
               Activity
               <Show
@@ -174,10 +166,6 @@ export function RightSidebar() {
 
           <Tabs.Content value="changes" class={styles.tabPanel}>
             <ChangesView />
-          </Tabs.Content>
-
-          <Tabs.Content value="alerts" class={styles.tabPanel}>
-            <WardAlerts />
           </Tabs.Content>
 
           <Tabs.Content value="activity" class={styles.tabPanel}>

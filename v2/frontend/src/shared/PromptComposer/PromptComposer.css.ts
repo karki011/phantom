@@ -26,24 +26,23 @@ export const composer = style({
   width: '50vw',
   zIndex: 1000,
 
-  background: `color-mix(in srgb, ${vars.color.bgTertiary} 80%, transparent)`,
+  background: `color-mix(in srgb, ${vars.color.bgSecondary} 95%, transparent)`,
   backdropFilter: 'blur(16px)',
   WebkitBackdropFilter: 'blur(16px)',
-  borderWidth: '2px',
-  borderStyle: 'solid',
-  borderColor: `color-mix(in srgb, ${vars.color.accent} 20%, transparent)`,
-  borderRadius: '20px',
-  boxShadow: `${vars.shadow.lg}, ${vars.shadow.glow}`,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.lg,
+  boxShadow: vars.shadow.lg,
 
   animation: `${fadeIn} 200ms ease-out`,
 
   display: 'flex',
   flexDirection: 'column',
+  marginBottom: 48,
 });
 
 export const composerDragOver = style({
-  borderColor: vars.color.accent,
-  boxShadow: `${vars.shadow.lg}, 0 0 30px ${vars.color.accentMuted}`,
+  borderColor: vars.color.borderFocus,
+  boxShadow: `${vars.shadow.lg}, ${vars.shadow.glow}`,
 });
 
 // ---------------------------------------------------------------------------
@@ -297,6 +296,7 @@ export const chipRemove = style({
 
 export const textAreaWrap = style({
   padding: `0 ${vars.space.lg}`,
+  borderColor: vars.color.border,
 });
 
 // ---------------------------------------------------------------------------

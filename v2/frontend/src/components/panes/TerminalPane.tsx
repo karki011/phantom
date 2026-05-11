@@ -5,6 +5,7 @@
 // SolidJS component unmount/remount cycles (tab switches, worktree changes).
 
 import { onMount, onCleanup, createSignal, createEffect, createMemo, Show } from 'solid-js';
+import { TerminalContextMenu } from '@/shared/TerminalContextMenu';
 import { TextField } from '@kobalte/core/text-field';
 import type { ILink } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
@@ -28,6 +29,9 @@ import { installJumpToPrompt } from '@/core/terminal/addons/jumpToPrompt';
 import { TerminalCommandPalette } from '@/components/terminal/TerminalCommandPalette';
 import type { Terminal } from '@xterm/xterm';
 import { activeTerminalThemeId, resolveTerminalTheme } from '@/core/terminal/theme-manager';
+import { getSessionCwd } from '@/core/terminal/addons/shellIntegration';
+import { splitPane, closePane, getPaneColor } from '@/core/panes/signals';
+import { openComposer, setComposerTarget } from '@/core/signals/composer';
 import {
   createTerminal as createBackendTerminal,
   restoreTerminal as restoreBackendTerminal,
@@ -82,6 +86,165 @@ export default function TerminalPane(props: TerminalPaneProps) {
   const sessionId = effectiveSessionId;
   const [showSearch, setShowSearch] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
+
+  // ── Context menu ────────────────────────────────────────────────────────────
+  interface ContextMenuState { x: number; y: number }
+  const [contextMenu, setContextMenu] = createSignal<ContextMenuState | null>(null);
+
+  function buildContextMenuSections() {
+    const session = getSession(sessionId);
+    const term = session?.terminal;
+    const hasSelection = !!(term?.getSelection());
+    const cwd = getSessionCwd(sessionId) || props.cwd || '';
+
+    return [
+      // Copy section
+      {
+        items: [
+          {
+            id: 'copy',
+            label: 'Copy',
+            shortcut: '⌘C',
+            disabled: !hasSelection,
+            action: () => {
+              const text = term?.getSelection();
+              if (text) void navigator.clipboard.writeText(text);
+            },
+          },
+          {
+            id: 'copy-output',
+            label: 'Copy Output',
+            action: () => {
+              if (!term) return;
+              const buf = term.buffer.active;
+              const lines: string[] = [];
+              for (let i = 0; i < buf.length; i++) {
+                const line = buf.getLine(i);
+                if (line) lines.push(line.translateToString(true));
+              }
+              void navigator.clipboard.writeText(lines.join('\n').trimEnd());
+            },
+          },
+        ],
+      },
+      // Info section
+      {
+        items: [
+          {
+            id: 'copy-cwd',
+            label: 'Copy Working Directory',
+            disabled: !cwd,
+            action: () => {
+              if (cwd) void navigator.clipboard.writeText(cwd);
+            },
+          },
+          {
+            id: 'copy-branch',
+            label: 'Copy Git Branch',
+            disabled: !props.worktreeId,
+            action: async () => {
+              if (!props.worktreeId) return;
+              try {
+                const { getWorkspaceStatus } = await import('@/core/bindings/git');
+                const status = await getWorkspaceStatus(props.worktreeId);
+                if (status?.branch) {
+                  void navigator.clipboard.writeText(status.branch);
+                }
+              } catch { /* noop */ }
+            },
+          },
+        ],
+      },
+      // Session section
+      {
+        items: [
+          {
+            id: 'attach-composer',
+            label: 'Attach to Composer',
+            action: () => {
+              setComposerTarget(sessionId);
+              openComposer();
+            },
+          },
+          {
+            id: 'open-in-editor',
+            label: 'Open Selection in Editor',
+            disabled: !hasSelection,
+            action: () => {
+              const text = term?.getSelection()?.trim();
+              if (!text) return;
+              // Treat selection as a file path if it looks like one
+              let filePath = text.split(':')[0]; // strip :line:col
+              if (!filePath.startsWith('/') && cwd) {
+                filePath = filePath.startsWith('./') ? filePath.slice(2) : filePath;
+                filePath = `${cwd.replace(/\/$/, '')}/${filePath}`;
+              }
+              void openFileInEditor({ workspaceId: props.worktreeId ?? '', filePath });
+            },
+          },
+        ],
+      },
+      // Navigation section
+      {
+        items: [
+          {
+            id: 'search',
+            label: 'Search in Terminal',
+            shortcut: '⌘F',
+            action: () => {
+              setShowSearch(true);
+              requestAnimationFrame(() => searchInputRef?.focus());
+            },
+          },
+          {
+            id: 'clear',
+            label: 'Clear Terminal',
+            action: () => term?.clear(),
+          },
+          {
+            id: 'scroll-top',
+            label: 'Scroll to Top',
+            action: () => term?.scrollToTop(),
+          },
+          {
+            id: 'scroll-bottom',
+            label: 'Scroll to Bottom',
+            action: () => term?.scrollToBottom(),
+          },
+        ],
+      },
+      // Layout section
+      {
+        items: [
+          {
+            id: 'split-right',
+            label: 'Split Right',
+            shortcut: '⌘\\',
+            action: () => splitPane(props.paneId, 'horizontal'),
+          },
+          {
+            id: 'split-down',
+            label: 'Split Down',
+            shortcut: '⌘⇧\\',
+            action: () => splitPane(props.paneId, 'vertical'),
+          },
+          {
+            id: 'close-pane',
+            label: 'Close Pane',
+            shortcut: '⌘W',
+            action: () => closePane(props.paneId),
+          },
+        ],
+      },
+    ];
+  }
+
+  function handleContextMenu(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  }
+  // ── End context menu ────────────────────────────────────────────────────────
   const [linkedSessionId, setLinkedSessionId] = createSignal<string | null>(null);
   const isReattach = hasSession(sessionId);
 
@@ -149,12 +312,12 @@ export default function TerminalPane(props: TerminalPaneProps) {
 
     const explicitTheme = resolveTerminalTheme(activeTerminalThemeId());
     const session = createSession(sessionId, {
-      theme: explicitTheme ?? {
+      theme: (explicitTheme ?? {
         background: resolve(vars.color.terminalBg, '#0a0a1a'),
         foreground: resolve(vars.color.terminalText, '#c8c5d4'),
         cursor: resolve(vars.color.terminalCursor, '#b794f6'),
         selectionBackground: resolve(vars.color.terminalSelection, 'rgba(139,92,255,0.3)'),
-      },
+      }) as Record<string, string>,
     });
 
     // Store the working directory on the session for file path resolution
@@ -626,12 +789,20 @@ export default function TerminalPane(props: TerminalPaneProps) {
     }
   };
 
+  const paneColor = getPaneColor(props.paneId);
+
   return (
     <div
       class={termStyles.terminalWrapper}
       ref={wrapperRef!}
+      style={{
+        border: `1px solid color-mix(in srgb, ${paneColor} 40%, transparent)`,
+        'border-radius': '4px',
+        margin: '1px',
+      }}
       onDragOver={(e: DragEvent) => e.preventDefault()}
       onDrop={handleTerminalDrop}
+      onContextMenu={handleContextMenu}
     >
       <div class={termStyles.terminalContainer} ref={containerRef!} />
       {/* Cmd+P command palette — mounts a popover when paletteOpen() is true. */}
@@ -670,6 +841,14 @@ export default function TerminalPane(props: TerminalPaneProps) {
             ✕
           </button>
         </div>
+      </Show>
+      <Show when={contextMenu() !== null}>
+        <TerminalContextMenu
+          x={contextMenu()!.x}
+          y={contextMenu()!.y}
+          sections={buildContextMenuSections()}
+          onClose={() => setContextMenu(null)}
+        />
       </Show>
     </div>
   );

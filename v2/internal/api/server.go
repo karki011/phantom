@@ -235,7 +235,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 // defaultAIPrefs are the fallback preference values when no DB row exists.
 var defaultAIPrefs = map[string]bool{
 	"ai.autoContext":     true,
-	"ai.editGate":        true,
+	"ai.editGate":        false,
 	"ai.outcomeCapture":  true,
 	"ai.fileSync":        true,
 	"ai.mcpTools":        true,

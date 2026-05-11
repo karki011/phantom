@@ -60,11 +60,16 @@ type EnrichmentOutput struct {
 
 // collectorResult is the internal return value from a single collector.
 type collectorResult struct {
-	Source string
-	XML    string
-	Tokens int
-	Err    error
-	Label  string // optional: chip label when XML is empty but result is valid (e.g. DirectStrategy)
+	Source        string
+	XML           string
+	Tokens        int
+	Err           error
+	Label         string  // optional: chip label when XML is empty but result is valid (e.g. DirectStrategy)
+	StrategyName  string  // strategy name for strategy-source results (e.g. "Decompose")
+	StrategyScore float64 // 0-1 confidence score for strategy-source results
+	Complexity    string  // task complexity from orchestrator (e.g. "complex")
+	Risk          string  // task risk from orchestrator (e.g. "high")
+	BlastRadius   int     // number of affected files from orchestrator
 }
 
 // collectorOutcome pairs a collector's output with whether it completed.
@@ -225,9 +230,14 @@ func assembleOutput(results map[string]collectorOutcome, input EnrichmentInput) 
 // buildChip generates a ChipEvent for a single source based on its result.
 func buildChip(source string, ir collectorOutcome) ChipEvent {
 	chip := ChipEvent{
-		Category: "context",
-		Source:   source,
-		Tokens:   ir.result.Tokens,
+		Category:      "context",
+		Source:        source,
+		Tokens:        ir.result.Tokens,
+		StrategyName:  ir.result.StrategyName,
+		StrategyScore: ir.result.StrategyScore,
+		Complexity:    ir.result.Complexity,
+		Risk:          ir.result.Risk,
+		BlastRadius:   ir.result.BlastRadius,
 	}
 
 	switch {
@@ -271,6 +281,9 @@ func buildChipLabel(source string, r collectorResult) string {
 		}
 		return "Editor: active"
 	case "strategy":
+		if r.StrategyName != "" {
+			return fmt.Sprintf("Strategy: %s (%.0f%%)", r.StrategyName, r.StrategyScore*100)
+		}
 		return fmt.Sprintf("Strategy: %d tokens", r.Tokens)
 	case "graph":
 		return fmt.Sprintf("Graph: %d tokens", r.Tokens)

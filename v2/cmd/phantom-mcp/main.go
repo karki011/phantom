@@ -14,7 +14,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/knowledge"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/strategies"
 	"github.com/subashkarki/phantom-os-v2/internal/conflict"
@@ -49,6 +48,23 @@ func main() {
 	pool := mcpserver.NewIndexerPool()
 	defer pool.Close()
 
+	// Auto-trigger graph build when a project is detected so tools are
+	// immediately usable without requiring an explicit phantom_graph_build call.
+	// The build runs in the background; graph tools degrade gracefully while
+	// the indexer warms up (returning "build the graph first" until ready).
+	if projectID != "" {
+		project, err := queries.GetProject(context.Background(), projectID)
+		if err == nil {
+			if _, _, buildErr := pool.Build(context.Background(), projectID, project.RepoPath); buildErr != nil {
+				fmt.Fprintf(os.Stderr, "[phantom-mcp] auto-build: %v\n", buildErr)
+			} else {
+				fmt.Fprintf(os.Stderr, "[phantom-mcp] graph build started for %s\n", projectID)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "[phantom-mcp] auto-build skipped: project not in db: %v\n", err)
+		}
+	}
+
 	// Wire the learning loop. All knowledge components are best-effort: if any
 	// fails to initialize, we log to stderr and continue with a stateless
 	// orchestrator — Process degrades gracefully when fields are nil.
@@ -67,25 +83,6 @@ func main() {
 	autoTune := strategies.NewThresholdTracker()
 	if err := autoTune.LoadThresholds(database.Reader); err != nil {
 		fmt.Fprintf(os.Stderr, "[phantom-mcp] load auto-tune: %v (using defaults)\n", err)
-	}
-
-	// Create embedding engine and vector store for semantic memory features.
-	// Both degrade gracefully: embedder falls back to a stub when ONNX is
-	// unavailable, and VectorStore returns nil on failure — all consumers
-	// nil-check before use.
-	embedder, _ := embedding.NewEmbedder()
-	vectorStore, vsErr := embedding.NewVectorStore(database.Writer, embedder)
-	if vsErr != nil {
-		fmt.Fprintf(os.Stderr, "[phantom-mcp] vector store: %v (semantic features disabled)\n", vsErr)
-		vectorStore = nil
-	}
-
-	// Wire vector store into knowledge components for semantic retrieval.
-	if decisions != nil && vectorStore != nil {
-		decisions.SetVectorStore(vectorStore)
-	}
-	if compactor != nil && vectorStore != nil {
-		compactor.SetVectorStore(vectorStore)
 	}
 
 	// Conflict tracker — enables multi-session conflict awareness so the
@@ -119,7 +116,6 @@ func main() {
 		GapDetector:     strategies.NewGapDetector(),
 		Compactor:       compactor,
 		ConflictTracker: tracker,
-		VectorStore:     vectorStore,
 	}
 
 	if err := mcpserver.Run(deps); err != nil {

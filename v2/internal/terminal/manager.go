@@ -279,10 +279,12 @@ func resolveShell() string {
 // buildCleanEnv creates a sanitised copy of the current environment suitable
 // for a terminal session.
 func buildCleanEnv() []string {
-	// Keys to strip — these leak Electron/Node context into the shell.
+	// Keys to strip — these leak Electron/Node/Warp context into the shell.
 	strip := map[string]bool{
 		"ELECTRON_RUN_AS_NODE": true,
 		"npm_config_prefix":    true,
+		"TERM_PROGRAM":         true,
+		"TERM_PROGRAM_VERSION": true,
 	}
 
 	var env []string
@@ -296,7 +298,7 @@ func buildCleanEnv() []string {
 			key = kv[:idx]
 		}
 
-		if strip[key] {
+		if strip[key] || strings.HasPrefix(key, "WARP_") {
 			continue
 		}
 
@@ -325,6 +327,8 @@ func buildCleanEnv() []string {
 	if !hasPath {
 		env = append(env, "PATH=/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin")
 	}
+
+	env = append(env, "TERM_PROGRAM=PhantomOS")
 
 	return env
 }

@@ -24,6 +24,8 @@ import {
   ayuDarkTheme,
   kanagawaTheme,
   vscodeDarkTheme,
+  fleetDarkTheme,
+  fleetLightTheme,
 } from '../../styles/theme.css';
 import { getPref, setPref } from './preferences';
 import { vars } from '../../styles/theme.css';
@@ -50,7 +52,9 @@ export type ThemeId =
   | 'solarized-dark'
   | 'ayu-dark'
   | 'kanagawa'
-  | 'vscode-dark';
+  | 'vscode-dark'
+  | 'fleet-dark'
+  | 'fleet-light';
 
 const [activeTheme, setActiveTheme] = createSignal<ThemeId>('shadow-monarch-dark');
 
@@ -77,6 +81,8 @@ const themeClassMap: Record<ThemeId, string> = {
   'ayu-dark': ayuDarkTheme,
   'kanagawa': kanagawaTheme,
   'vscode-dark': vscodeDarkTheme,
+  'fleet-dark': fleetDarkTheme,
+  'fleet-light': fleetLightTheme,
 };
 
 export function applyTheme(theme: ThemeId): void {
@@ -137,8 +143,10 @@ export function initTheme(savedTheme: string): void {
     'ayu-dark',
     'kanagawa',
     'vscode-dark',
+    'fleet-dark',
+    'fleet-light',
   ];
-  const theme: ThemeId = (validIds.includes(savedTheme as ThemeId) ? savedTheme : 'shadow-monarch-dark') as ThemeId;
+  const theme: ThemeId = (validIds.includes(savedTheme as ThemeId) ? savedTheme : 'fleet-dark') as ThemeId;
   applyTheme(theme);
 }
 

@@ -18,7 +18,8 @@ import (
 
 	"net/http"
 
-	"github.com/subashkarki/phantom-os-v2/internal/ai/embedding"
+	"github.com/subashkarki/phantom-os-v2/internal/ai/assess"
+	"github.com/subashkarki/phantom-os-v2/internal/ai/detect"
 	graphctx "github.com/subashkarki/phantom-os-v2/internal/ai/graph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/knowledge"
@@ -30,12 +31,10 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/composer"
 	"github.com/subashkarki/phantom-os-v2/internal/conflict"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
-	"github.com/subashkarki/phantom-os-v2/internal/gamification"
 	"github.com/subashkarki/phantom-os-v2/internal/git"
 	"github.com/subashkarki/phantom-os-v2/internal/integration"
 	"github.com/subashkarki/phantom-os-v2/internal/linker"
 	"github.com/subashkarki/phantom-os-v2/internal/provider"
-	"github.com/subashkarki/phantom-os-v2/internal/safety"
 	"github.com/subashkarki/phantom-os-v2/internal/session"
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
 	"github.com/subashkarki/phantom-os-v2/internal/terminal"
@@ -88,11 +87,9 @@ type App struct {
 	Linker            *linker.Linker
 	Stream            *stream.Service
 	SessionCtrl       *session.Controller
-	Safety            *safety.Service
 	Composer          *composer.Service
 	ComposerV2Mgr     *composer.Manager
 	ComposerV2Bind    *composer.Bindings
-	Gamification      *gamification.Service
 	ConflictTracker   *conflict.Tracker
 	collectorRegistry *collector.Registry
 
@@ -141,9 +138,6 @@ func (a *App) SetCollectorRegistry(r *collector.Registry) { a.collectorRegistry 
 // SetStream injects the stream service before Wails calls Startup.
 func (a *App) SetStream(s *stream.Service) { a.Stream = s }
 
-// SetSafety injects the Safety service before Wails calls Startup.
-func (a *App) SetSafety(s *safety.Service) { a.Safety = s }
-
 // SetSessionCtrl injects the session controller before Wails calls Startup.
 func (a *App) SetSessionCtrl(c *session.Controller) { a.SessionCtrl = c }
 
@@ -155,9 +149,6 @@ func (a *App) SetComposerV2(mgr *composer.Manager, bindings *composer.Bindings) 
 	a.ComposerV2Mgr = mgr
 	a.ComposerV2Bind = bindings
 }
-
-// SetGamification injects the gamification service before Wails calls Startup.
-func (a *App) SetGamification(g *gamification.Service) { a.Gamification = g }
 
 // SetProvider injects the active AI provider before Wails calls Startup.
 func (a *App) SetProvider(p provider.Provider) { a.prov = p }
@@ -199,6 +190,14 @@ func (a *App) Startup(ctx context.Context) {
 		a.ComposerV2Bind.SetContext(ctx)
 	}
 
+	// One-time cleanup: clear poisoned performance data from pre-v2 builds
+	// (the old code recorded success=true at selection time, not after verification)
+	if a.DB != nil {
+		if _, err := a.DB.Writer.Exec(`DELETE FROM ai_performance`); err != nil {
+			log.Warn("app: failed to clear stale ai_performance", "err", err)
+		}
+	}
+
 	// Start WebSocket hub and server.
 	a.wsHub = ws.NewHub()
 	go a.wsHub.Run(a.ctx)
@@ -212,13 +211,6 @@ func (a *App) Startup(ctx context.Context) {
 	if a.collectorRegistry != nil {
 		if err := a.collectorRegistry.StartAll(a.ctx); err != nil {
 			log.Error("app: collector registry start failed", "err", err)
-		}
-	}
-
-	// Start safety service (hot-reload watcher).
-	if a.Safety != nil {
-		if err := a.Safety.Start(a.ctx); err != nil {
-			log.Error("app: safety service start failed", "err", err)
 		}
 	}
 
@@ -323,7 +315,7 @@ func (a *App) Startup(ctx context.Context) {
 		})
 	}
 
-	// Wire stream event hook — chains safety evaluation + activity detection + terminal activity.
+	// Wire stream event hook — activity detection + terminal activity.
 	if a.Stream != nil {
 		a.Stream.SetEventHook(func(ctx context.Context, ev *stream.Event) {
 			// Activity detection (async, zero-blocking) — runs for all providers.
@@ -331,20 +323,6 @@ func (a *App) Startup(ctx context.Context) {
 
 			// Terminal activity bridge — emit terminal:activity for linked panes.
 			a.emitTerminalActivity(ev)
-
-			// Ward safety evaluation — synchronous, can pause sessions.
-			if a.Safety != nil && a.SessionCtrl != nil && a.GetPreference("wards_enabled") == "true" {
-				evals := a.Safety.Evaluate(ctx, ev)
-				for _, eval := range evals {
-					log.Warn("app: ward triggered", "rule", eval.RuleID, "level", eval.Level, "session_id", ev.SessionID)
-					if eval.Level == safety.LevelBlock || eval.Level == safety.LevelConfirm {
-						if err := a.SessionCtrl.Pause(ctx, ev.SessionID); err != nil {
-							log.Error("app: safety pause failed", "session_id", ev.SessionID, "rule", eval.RuleID, "err", err)
-						}
-						break
-					}
-				}
-			}
 		})
 	}
 
@@ -382,8 +360,8 @@ func (a *App) handleGitWatcherEvents() {
 
 		switch event.Type {
 		case git.GitEventBranchChanged:
-			wailsRuntime.EventsEmit(a.ctx, EventGitBranchChanged)
-			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+			a.EmitGitBranchChanged()
+			a.EmitGitStatus()
 			if a.journal != nil {
 				today := time.Now().Format("2006-01-02")
 				ts := time.Now().Format("15:04")
@@ -394,11 +372,11 @@ func (a *App) handleGitWatcherEvents() {
 			default:
 			}
 		case git.GitEventIndexChanged:
-			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+			a.EmitGitStatus()
 		case git.GitEventStatusChanged:
-			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+			a.EmitGitStatus()
 		case git.GitEventWorkingTreeChanged:
-			wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+			a.EmitGitStatus()
 		}
 	}
 }
@@ -441,32 +419,13 @@ func (a *App) wireComposerEngine() {
 
 	deps := orchestrator.Dependencies{}
 
-	// Create embedding engine (graceful degradation if ONNX not available).
-	embedder, _ := embedding.NewEmbedder()
-
-	// Create vector store backed by the main DB.
-	var vectorStore *embedding.VectorStore
-	if vs, vsErr := embedding.NewVectorStore(a.DB.Writer, embedder); vsErr == nil {
-		vectorStore = vs
-		deps.VectorStore = vs
-		log.Info("app: vector store initialized", "memories", vs.Stats().TotalMemories)
-	} else {
-		log.Warn("app: vector store init failed (semantic features disabled)", "err", vsErr)
-	}
-
 	if ds, err := knowledge.NewDecisionStore(a.DB.Writer); err == nil {
-		if vectorStore != nil {
-			ds.SetVectorStore(vectorStore)
-		}
 		deps.Decisions = ds
 	} else {
 		log.Warn("app: composer engine — decision store init failed", "err", err)
 	}
 
 	if comp, err := knowledge.NewCompactor(a.DB.Writer); err == nil {
-		if vectorStore != nil {
-			comp.SetVectorStore(vectorStore)
-		}
 		// Wire LLM-powered pattern consolidation (graceful: nil key = skip).
 		if apiKey, ok := composer.GetAnthropicAPIKey(); ok {
 			comp.SetHaikuClient(knowledge.NewHaikuClient(apiKey))
@@ -489,6 +448,43 @@ func (a *App) wireComposerEngine() {
 		log.Warn("app: composer engine — auto-tune load failed (using defaults)", "err", err)
 	}
 	deps.AutoTune = autoTune
+
+	// Wire Haiku-backed LLM assessor as the primary assessment path.
+	// Prefers API key (faster, direct), falls back to CLI (uses existing auth),
+	// then to keyword logic if neither is available.
+	assessorInst := strategies.NewAssessor()
+	assessorInst.SetThresholdTracker(autoTune)
+	var haikuWired bool
+	// Try 1: direct API key (fastest — ~150ms, no subprocess)
+	var haikuAPIKey string
+	if k, ok := composer.GetAnthropicAPIKey(); ok {
+		haikuAPIKey = k
+	} else if k := os.Getenv("ANTHROPIC_API_KEY"); k != "" {
+		haikuAPIKey = k
+	}
+	if haikuAPIKey != "" {
+		haikuClient := knowledge.NewHaikuClient(haikuAPIKey)
+		haikuAssessor := assess.NewHaikuAssessorFromKnowledge(haikuClient)
+		adapter := assess.NewStrategiesAdapter(haikuAssessor)
+		assessorInst.SetLLMAssessor(adapter)
+		log.Info("app: Haiku assessor wired via API key")
+		haikuWired = true
+	}
+	// Try 2: claude CLI (uses existing auth — ~500ms with subprocess)
+	if !haikuWired {
+		cliClient := assess.NewCLIHaikuClient()
+		if cliClient != nil {
+			haikuAssessor := assess.NewHaikuAssessor(cliClient)
+			adapter := assess.NewStrategiesAdapter(haikuAssessor)
+			assessorInst.SetLLMAssessor(adapter)
+			log.Info("app: Haiku assessor wired via claude CLI")
+			haikuWired = true
+		}
+	}
+	if !haikuWired {
+		log.Info("app: Haiku assessor unavailable, using keyword fallback")
+	}
+	deps.Assessor = assessorInst
 
 	deps.GapDetector = strategies.NewGapDetector()
 
@@ -516,6 +512,31 @@ func (a *App) wireComposerEngine() {
 	} else {
 		log.Warn("app: global pattern store init failed (cross-project patterns disabled)", "err", err)
 	}
+
+	// Build the detector coordinator and inject into deps.
+	// BlastRadiusDetector holds a direct reference to a.fileIndexers — the map
+	// is initialized by initFileGraph (which runs before wireComposerEngine) and
+	// mutated in place by StartFileGraph, so entries added later are visible.
+	// The detector takes its own read of the map at Detect() time, so no extra
+	// locking is needed here at wire time.
+	blastDet := &detect.BlastRadiusDetector{
+		Indexers: a.fileIndexers,
+	}
+	var priorDet *detect.PriorOutcomeDetector
+	if deps.Decisions != nil {
+		priorDet = &detect.PriorOutcomeDetector{Decisions: deps.Decisions}
+	}
+	detectors := []detect.Detector{
+		&detect.FileComplexityDetector{},
+		blastDet,
+		&detect.WorkTypeDetector{},
+		&detect.BranchContextDetector{},
+	}
+	if priorDet != nil {
+		detectors = append(detectors, priorDet)
+	}
+	deps.DetectorCoordinator = detect.NewCoordinator(detectors...)
+	log.Info("app: detector coordinator wired", "detectors", len(detectors))
 
 	a.Composer.SetEngineDeps(deps)
 	a.Composer.SetIndexerResolver(a.resolveIndexerForCwd)
@@ -741,14 +762,7 @@ func (a *App) emitMCPFailure(phase string, err error) {
 	if err == nil || a.ctx == nil {
 		return
 	}
-	payload := map[string]any{
-		"phase": phase,
-		"error": err.Error(),
-	}
-	if hint := mcpErrorHint(err); hint != "" {
-		payload["hint"] = hint
-	}
-	wailsRuntime.EventsEmit(a.ctx, EventMCPRegistrationFailed, payload)
+	a.EmitMCPRegistrationFailed(phase, err.Error(), mcpErrorHint(err))
 }
 
 // mcpErrorHint returns a user-friendly remediation hint for known error
@@ -960,10 +974,6 @@ func (a *App) doTeardown(persistTerminalState bool) {
 
 	if a.collectorRegistry != nil {
 		a.collectorRegistry.StopAll()
-	}
-
-	if a.Safety != nil {
-		a.Safety.Stop()
 	}
 
 	if a.Stream != nil {

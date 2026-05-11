@@ -1,6 +1,14 @@
 // MCP server bootstrap and tool registration.
-// Builds an mcp-go MCPServer, registers all 12 phantom_* tools, and exposes
-// Run for the standalone stdio binary.
+// Builds an mcp-go MCPServer, registers the 8 focused phantom_* tools, and
+// exposes Run for the standalone stdio binary.
+//
+// Removed tools (still implemented internally, not exposed as MCP tools):
+//   - phantom_graph_build     — auto-triggered on startup by the MCP binary
+//   - phantom_graph_path      — niche BFS utility, rarely needed externally
+//   - phantom_task_status     — build lifecycle is internal implementation detail
+//   - phantom_evaluate_output — heuristic scorer, internal to strategy pipeline
+//   - phantom_orchestrator_strategies — static list; included in Instructions
+//   - phantom_list_projects   — project list available through other means
 //
 // Author: Subash Karki
 package mcp
@@ -27,9 +35,18 @@ This gives you everything in one call: dependencies, blast radius, related files
 - phantom_graph_blast_radius: What breaks if this file changes
 - phantom_graph_related: Find all files involved in a feature
 - phantom_graph_stats: Graph coverage statistics
-- phantom_graph_path: Shortest dependency path between two files
 - phantom_orchestrator_process: Route complex goals through the strategy pipeline
 - phantom_orchestrator_history: Learn from past decisions
+- phantom_conflict_status: Detect if other active sessions are editing the same repository
+
+### REASONING STRATEGIES (used automatically by phantom_orchestrator_process)
+- direct: Straightforward single-pass reasoning (fastest)
+- decompose: Break complex goals into sub-tasks
+- advisor: Multi-perspective expert analysis
+- self_refine: Iterative self-critique and refinement
+- tree_of_thought: Explore branching solution paths
+- debate: Simulate pro/con debate for contentious decisions
+- graph_of_thought: Graph-structured reasoning for highly complex goals
 
 ### WHAT YOU GET
 The engine automatically tracks your decisions and outcomes. Over time, it learns
@@ -72,7 +89,7 @@ func projectIDOpt(scoped bool) mcp.ToolOption {
 }
 
 func registerTools(s *server.MCPServer, deps *Deps, scoped bool) {
-	// 1. phantom_before_edit
+	// 1. phantom_before_edit — composite: context + blast radius + related + strategy
 	s.AddTool(mcp.NewTool("phantom_before_edit",
 		mcp.WithDescription("REQUIRED before modifying files. Returns graph context, blast radius, related files, and strategy recommendation in one call."),
 		projectIDOpt(scoped),
@@ -86,7 +103,7 @@ func registerTools(s *server.MCPServer, deps *Deps, scoped bool) {
 		),
 	), deps.HandleBeforeEdit)
 
-	// 2. phantom_graph_context
+	// 2. phantom_graph_context — deep-dive into one file's dependencies
 	s.AddTool(mcp.NewTool("phantom_graph_context",
 		mcp.WithDescription("Get files related to a specific file with relevance scores and dependency edges."),
 		projectIDOpt(scoped),
@@ -99,7 +116,7 @@ func registerTools(s *server.MCPServer, deps *Deps, scoped bool) {
 		),
 	), deps.HandleGraphContext)
 
-	// 3. phantom_graph_blast_radius
+	// 3. phantom_graph_blast_radius — what breaks if file changes
 	s.AddTool(mcp.NewTool("phantom_graph_blast_radius",
 		mcp.WithDescription("Predict which files will break if a given file is changed."),
 		projectIDOpt(scoped),
@@ -109,7 +126,7 @@ func registerTools(s *server.MCPServer, deps *Deps, scoped bool) {
 		),
 	), deps.HandleBlastRadius)
 
-	// 4. phantom_graph_related
+	// 4. phantom_graph_related — all files involved in a feature
 	s.AddTool(mcp.NewTool("phantom_graph_related",
 		mcp.WithDescription("Find files related to a set of files."),
 		projectIDOpt(scoped),
@@ -123,57 +140,13 @@ func registerTools(s *server.MCPServer, deps *Deps, scoped bool) {
 		),
 	), deps.HandleRelated)
 
-	// 5. phantom_graph_stats
+	// 5. phantom_graph_stats — graph coverage info
 	s.AddTool(mcp.NewTool("phantom_graph_stats",
 		mcp.WithDescription("Get graph statistics — file count, edge count, module count, coverage."),
 		projectIDOpt(scoped),
 	), deps.HandleStats)
 
-	// 6. phantom_graph_path
-	s.AddTool(mcp.NewTool("phantom_graph_path",
-		mcp.WithDescription("Find the shortest dependency path between two files."),
-		projectIDOpt(scoped),
-		mcp.WithString("from",
-			mcp.Description("Source file path"),
-			mcp.Required(),
-		),
-		mcp.WithString("to",
-			mcp.Description("Target file path"),
-			mcp.Required(),
-		),
-	), deps.HandlePath)
-
-	// 7. phantom_graph_build
-	s.AddTool(mcp.NewTool("phantom_graph_build",
-		mcp.WithDescription("Trigger a graph rebuild after major changes. Returns immediately while build runs in background."),
-		projectIDOpt(scoped),
-	), deps.HandleBuild)
-
-	// 8. phantom_task_status
-	s.AddTool(mcp.NewTool("phantom_task_status",
-		mcp.WithDescription("Poll the build lifecycle status of a project graph."),
-		projectIDOpt(scoped),
-	), deps.HandleTaskStatus)
-
-	// 9. phantom_list_projects
-	s.AddTool(mcp.NewTool("phantom_list_projects",
-		mcp.WithDescription("List all known projects with their IDs and repo paths."),
-	), deps.HandleListProjects)
-
-	// 10. phantom_evaluate_output
-	s.AddTool(mcp.NewTool("phantom_evaluate_output",
-		mcp.WithDescription("Evaluate a strategy output for quality. Returns a confidence score (0–1) and brief feedback."),
-		mcp.WithString("goal",
-			mcp.Description("The goal or task the output was generated for"),
-			mcp.Required(),
-		),
-		mcp.WithString("output",
-			mcp.Description("The strategy output to evaluate"),
-			mcp.Required(),
-		),
-	), deps.HandleEvaluateOutput)
-
-	// 11. phantom_orchestrator_process
+	// 6. phantom_orchestrator_process (was 11)
 	s.AddTool(mcp.NewTool("phantom_orchestrator_process",
 		mcp.WithDescription("Route a goal through the AI strategy pipeline."),
 		projectIDOpt(scoped),
@@ -201,7 +174,7 @@ func registerTools(s *server.MCPServer, deps *Deps, scoped bool) {
 		),
 	), deps.HandleOrchestratorProcess)
 
-	// 12. phantom_orchestrator_history
+	// 7. phantom_orchestrator_history (was 12)
 	s.AddTool(mcp.NewTool("phantom_orchestrator_history",
 		mcp.WithDescription("View past orchestrator decisions, strategies used, and outcomes."),
 		projectIDOpt(scoped),
@@ -210,13 +183,7 @@ func registerTools(s *server.MCPServer, deps *Deps, scoped bool) {
 		),
 	), deps.HandleOrchestratorHistory)
 
-	// 13. phantom_orchestrator_strategies
-	s.AddTool(mcp.NewTool("phantom_orchestrator_strategies",
-		mcp.WithDescription("List all available reasoning strategies and whether they are enabled."),
-		projectIDOpt(scoped),
-	), deps.HandleOrchestratorStrategies)
-
-	// 14. phantom_conflict_status
+	// 8. phantom_conflict_status (was 14)
 	s.AddTool(mcp.NewTool("phantom_conflict_status",
 		mcp.WithDescription("Check if other active sessions are editing the same repository. Returns active session count and conflict details."),
 		mcp.WithString("cwd",

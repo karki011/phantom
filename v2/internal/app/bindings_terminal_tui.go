@@ -13,7 +13,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/uuid"
-	"github.com/subashkarki/phantom-os-v2/internal/safety"
 	"github.com/subashkarki/phantom-os-v2/internal/tui"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -112,46 +111,6 @@ func (a *App) RunBubbleteaProgram(programType string, args map[string]string) (s
 			AutoTune:    autoTuneStatus,
 			Strategies:  stratNames,
 		})
-
-	case "ward_manager":
-		var wardRules []tui.WardRule
-		if a.Safety != nil {
-			for _, r := range a.Safety.GetRules() {
-				wardRules = append(wardRules, tui.WardRule{
-					ID: r.ID, Name: r.Name, Level: string(r.Level),
-					Tool: r.Tool, Pattern: r.Pattern, Message: r.Message,
-					EventType: r.EventType, Enabled: r.Enabled,
-				})
-			}
-		}
-		actions := tui.WardAction{
-			Toggle: func(ruleID string, enabled bool) error {
-				if a.Safety == nil {
-					return fmt.Errorf("safety not available")
-				}
-				return a.Safety.ToggleRule(ruleID, enabled)
-			},
-			Delete: func(ruleID string) error {
-				if a.Safety == nil {
-					return fmt.Errorf("safety not available")
-				}
-				return a.Safety.DeleteRule(ruleID)
-			},
-			Save: func(rule tui.WardRule) error {
-				if a.Safety == nil {
-					return fmt.Errorf("safety not available")
-				}
-				return a.Safety.SaveRule(safety.Rule{
-					ID: rule.ID, Name: rule.Name, Level: safety.Level(rule.Level),
-					Tool: rule.Tool, Pattern: rule.Pattern, Message: rule.Message,
-					EventType: rule.EventType, Enabled: true, Audit: true,
-				})
-			},
-			Preset: func(presetID string) error {
-				return a.ApplyWardPreset(presetID)
-			},
-		}
-		model = tui.NewWardManager(wardRules, actions)
 
 	default:
 		return "", fmt.Errorf("RunBubbleteaProgram: unknown program type %q", programType)

@@ -1,5 +1,6 @@
 // Author: Subash Karki
-import { createSignal, onMount, Show, For } from 'solid-js'
+import { createSignal, Show, For } from 'solid-js'
+import { MilkdownEditor } from '@/shared/MilkdownEditor/MilkdownEditor'
 import { Select } from '@kobalte/core/select'
 import {
   Send, Square, Paperclip, X, GlobeLock, FolderOpen, ChevronDown,
@@ -89,7 +90,7 @@ export const ComposerInput = (props: ComposerInputProps) => {
   const [fileQuery, setFileQuery] = createSignal('')
   const [mentions, setMentions] = createSignal<string[]>([])
   const [dragOver, setDragOver] = createSignal(false)
-  let textareaRef: HTMLTextAreaElement | undefined
+  // milkdown editor — no direct DOM ref needed; submit is wired via onSubmit prop
 
   // ── Mention helpers ──────────────────────────────────────────────────
 
@@ -184,13 +185,6 @@ export const ComposerInput = (props: ComposerInputProps) => {
     fi.click()
   }
 
-  const autoResize = () => {
-    if (!textareaRef) return
-    textareaRef.style.height = 'auto'
-    const scrollHeight = Math.min(textareaRef.scrollHeight, 300)
-    textareaRef.style.height = `${Math.max(scrollHeight, 120)}px`
-  }
-
   const handleSend = () => {
     const value = text().trim()
     const currentMentions = mentions()
@@ -205,9 +199,6 @@ export const ComposerInput = (props: ComposerInputProps) => {
     setMentions([])
     setShowSlashMenu(false)
     setShowFileMenu(false)
-    if (textareaRef) {
-      textareaRef.style.height = '120px'
-    }
   }
 
   const detectMenuTriggers = (value: string) => {
@@ -240,7 +231,6 @@ export const ComposerInput = (props: ComposerInputProps) => {
   const handleSlashSelect = (command: string) => {
     setText(`/${command} `)
     setShowSlashMenu(false)
-    textareaRef?.focus()
   }
 
   const handleFileSelect = (filePath: string) => {
@@ -251,14 +241,6 @@ export const ComposerInput = (props: ComposerInputProps) => {
       setText(`${before}@${filePath} `)
     }
     setShowFileMenu(false)
-    textareaRef?.focus()
-  }
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault()
-      handleSend()
-    }
   }
 
   const placeholder = () => {
@@ -270,9 +252,7 @@ export const ComposerInput = (props: ComposerInputProps) => {
 
   const isDisabled = () => props.isPermissionPending
 
-  onMount(() => {
-    textareaRef?.focus()
-  })
+  // autoFocus is handled inside MilkdownEditor itself via its autoFocus prop
 
   return (
     <div
@@ -280,6 +260,7 @@ export const ComposerInput = (props: ComposerInputProps) => {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onPaste={handlePaste}
     >
       {/* Context chips */}
       <ContextChips
@@ -518,22 +499,19 @@ export const ComposerInput = (props: ComposerInputProps) => {
           visible={showFileMenu()}
         />
 
-        <textarea
-          ref={textareaRef}
-          class={css.textarea}
-          value={text()}
+        <MilkdownEditor
           placeholder={placeholder()}
           disabled={isDisabled()}
-          style={{ 'font-size': `${props.fontSize}px` }}
-          onInput={(e) => {
-            const val = e.currentTarget.value
-            setText(val)
-            detectMenuTriggers(val)
-            autoResize()
+          fontSize={props.fontSize}
+          autoFocus
+          onInput={(markdown) => {
+            setText(markdown)
+            detectMenuTriggers(markdown)
           }}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          rows={3}
+          onSubmit={(markdown) => {
+            setText(markdown)
+            handleSend()
+          }}
         />
       </div>
 

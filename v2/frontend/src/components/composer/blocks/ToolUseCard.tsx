@@ -14,7 +14,7 @@ import {
   groupToolCalls,
   type ToolGroup,
   type ToolUseEntry,
-} from '@/components/panes/ComposerToolSummary';
+} from '@/components/composer/ComposerToolSummary';
 import * as css from './ToolUseCard.css';
 
 // ── Icon map (same as V1) ─────────────────────────────────────────────

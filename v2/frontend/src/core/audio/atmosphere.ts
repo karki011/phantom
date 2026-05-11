@@ -15,14 +15,15 @@ interface PhaseParams {
 }
 
 const PHASE_MAP: Record<PhaseId, PhaseParams> = {
-  awakening:       { subDrone: 0.012, darkPadGain: 0,     darkPadCutoff: 200,  tensionGain: 0,     pulseHz: 0.7 },
-  'deps-check':    { subDrone: 0.016, darkPadGain: 0.008, darkPadCutoff: 250,  tensionGain: 0,     pulseHz: 0.9 },
-  'identity-bind': { subDrone: 0.020, darkPadGain: 0.015, darkPadCutoff: 350,  tensionGain: 0.012, pulseHz: 1.1 },
-  'domain-select': { subDrone: 0.020, darkPadGain: 0.020, darkPadCutoff: 400,  tensionGain: 0.020, pulseHz: 1.3 },
-  'domain-link':   { subDrone: 0.024, darkPadGain: 0.020, darkPadCutoff: 450,  tensionGain: 0.016, pulseHz: 1.3 },
-  'ai-engine':     { subDrone: 0.028, darkPadGain: 0.024, darkPadCutoff: 500,  tensionGain: 0.024, pulseHz: 1.5 },
-  'ability-awaken':{ subDrone: 0.032, darkPadGain: 0.028, darkPadCutoff: 600,  tensionGain: 0,     pulseHz: 2.0 },
-  complete:        { subDrone: 0.032, darkPadGain: 0.028, darkPadCutoff: 600,  tensionGain: 0,     pulseHz: 0   },
+  awakening:              { subDrone: 0.012, darkPadGain: 0,     darkPadCutoff: 200,  tensionGain: 0,     pulseHz: 0.7 },
+  'deps-check':           { subDrone: 0.016, darkPadGain: 0.008, darkPadCutoff: 250,  tensionGain: 0,     pulseHz: 0.9 },
+  'identity-bind':        { subDrone: 0.020, darkPadGain: 0.015, darkPadCutoff: 350,  tensionGain: 0.012, pulseHz: 1.1 },
+  'domain-select':        { subDrone: 0.020, darkPadGain: 0.020, darkPadCutoff: 400,  tensionGain: 0.020, pulseHz: 1.3 },
+  'domain-link':          { subDrone: 0.024, darkPadGain: 0.020, darkPadCutoff: 450,  tensionGain: 0.016, pulseHz: 1.3 },
+  'identity-appearance':  { subDrone: 0.022, darkPadGain: 0.018, darkPadCutoff: 380,  tensionGain: 0.016, pulseHz: 1.2 },
+  'ai-engine':            { subDrone: 0.028, darkPadGain: 0.024, darkPadCutoff: 500,  tensionGain: 0.024, pulseHz: 1.5 },
+  'ability-awaken':       { subDrone: 0.032, darkPadGain: 0.028, darkPadCutoff: 600,  tensionGain: 0,     pulseHz: 2.0 },
+  complete:               { subDrone: 0.032, darkPadGain: 0.028, darkPadCutoff: 600,  tensionGain: 0,     pulseHz: 0   },
 };
 
 const TRANSITION_TIME = 1.5;

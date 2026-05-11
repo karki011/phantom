@@ -6,7 +6,7 @@ import { onWailsEvent } from '../events';
 import { setPref, loadPref } from './preferences';
 
 export type TopTab = 'system' | 'worktree';
-export type CockpitView = 'system' | 'hunter';
+export type CockpitView = 'system';
 
 const [_activeTopTab, _setActiveTopTab] = createSignal<TopTab>('worktree');
 const [activeWorktreeId, setActiveWorktreeId] = createSignal<string | null>(null);
