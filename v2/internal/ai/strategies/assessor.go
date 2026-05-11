@@ -69,11 +69,13 @@ func (a *Assessor) Assess(message string, fileCount int, blastRadius int) TaskAs
 	}
 
 	// When no files are explicitly mentioned, use goal text as a complexity signal.
-	// Without this, "Refactor auth" is classified as "simple" just because no files
-	// were @-mentioned, giving Direct an undeserved 0.65 base score.
 	if fileCount == 0 {
 		complexity = applyGoalTextComplexity(message, complexity)
 	}
+
+	// Floor risk based on goal keywords — auth/security/payment work is risky
+	// regardless of blast radius.
+	risk = applyGoalTextRisk(message, risk)
 
 	return TaskAssessment{
 		Complexity:     complexity,
@@ -122,6 +124,34 @@ func applyGoalTextComplexity(goal string, complexity TaskComplexity) TaskComplex
 	}
 
 	return complexity
+}
+
+// applyGoalTextRisk floors risk based on security-sensitive keywords.
+// Only upgrades risk — never downgrades it.
+func applyGoalTextRisk(goal string, risk TaskRisk) TaskRisk {
+	goalLower := strings.ToLower(goal)
+
+	highRiskKeywords := []string{"auth", "oauth", "login", "password", "credential", "token", "jwt", "session", "permission", "rbac", "acl", "encrypt", "decrypt", "secret", "api key", "apikey", "certificate", "tls", "ssl"}
+	for _, kw := range highRiskKeywords {
+		if strings.Contains(goalLower, kw) {
+			if risk == LowRisk || risk == MediumRisk {
+				return HighRisk
+			}
+			return risk
+		}
+	}
+
+	mediumRiskKeywords := []string{"payment", "billing", "credit card", "stripe", "database", "migration", "deploy", "production", "delete", "remove", "drop"}
+	for _, kw := range mediumRiskKeywords {
+		if strings.Contains(goalLower, kw) {
+			if risk == LowRisk {
+				return MediumRisk
+			}
+			return risk
+		}
+	}
+
+	return risk
 }
 
 // assessComplexity maps file count to a complexity tier using hardcoded defaults.
