@@ -9,6 +9,8 @@ import { createStore, produce } from 'solid-js/store';
 import { activeWorktreeId } from '@/core/signals/app';
 import { worktreeMap } from '@/core/signals/worktrees';
 
+const VALID_PANE_TYPES = new Set(['terminal', 'tui', 'editor', 'composer', 'home']);
+
 // ---------------------------------------------------------------------------
 // Crash recovery — persist workspace state to disk via Go bindings
 // ---------------------------------------------------------------------------
@@ -29,11 +31,22 @@ function saveWorkspaceState(worktreeId: string): void {
   }, SAVE_DEBOUNCE_MS);
 }
 
+// Remove panes with deleted types (journal, diff, playground, chat, markdown-preview, composer-v1)
+function sanitizePanes(state: WorkspaceState): WorkspaceState {
+  for (const tab of state.tabs ?? []) {
+    const staleIds = Object.keys(tab.panes).filter(id => !VALID_PANE_TYPES.has(tab.panes[id].kind));
+    for (const id of staleIds) {
+      delete tab.panes[id];
+    }
+  }
+  return state;
+}
+
 export async function restoreWorkspaceState(worktreeId: string): Promise<boolean> {
   try {
     const stateJSON = await App()?.GetWorkspaceState(worktreeId);
     if (!stateJSON) return false;
-    const restored: WorkspaceState = JSON.parse(stateJSON);
+    const restored = sanitizePanes(JSON.parse(stateJSON) as WorkspaceState);
     if (!restored.tabs?.length) return false;
     setWorkspace(restored);
     return true;
@@ -48,7 +61,7 @@ export async function bootstrapWorkspaceStates(): Promise<void> {
     if (!allStates) return;
     for (const [worktreeId, stateJSON] of Object.entries(allStates)) {
       try {
-        const state: WorkspaceState = JSON.parse(stateJSON);
+        const state = sanitizePanes(JSON.parse(stateJSON) as WorkspaceState);
         if (state.tabs?.length) {
           stateCache.set(worktreeId, state);
         }

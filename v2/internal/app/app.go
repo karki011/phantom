@@ -190,6 +190,14 @@ func (a *App) Startup(ctx context.Context) {
 		a.ComposerV2Bind.SetContext(ctx)
 	}
 
+	// One-time cleanup: clear poisoned performance data from pre-v2 builds
+	// (the old code recorded success=true at selection time, not after verification)
+	if a.DB != nil {
+		if _, err := a.DB.Writer.Exec(`DELETE FROM ai_performance`); err != nil {
+			log.Warn("app: failed to clear stale ai_performance", "err", err)
+		}
+	}
+
 	// Start WebSocket hub and server.
 	a.wsHub = ws.NewHub()
 	go a.wsHub.Run(a.ctx)
