@@ -146,7 +146,7 @@ export function initTheme(savedTheme: string): void {
     'fleet-dark',
     'fleet-light',
   ];
-  const theme: ThemeId = (validIds.includes(savedTheme as ThemeId) ? savedTheme : 'shadow-monarch-dark') as ThemeId;
+  const theme: ThemeId = (validIds.includes(savedTheme as ThemeId) ? savedTheme : 'fleet-dark') as ThemeId;
   applyTheme(theme);
 }
 
