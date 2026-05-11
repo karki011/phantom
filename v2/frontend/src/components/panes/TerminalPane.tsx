@@ -797,7 +797,6 @@ export default function TerminalPane(props: TerminalPaneProps) {
       ref={wrapperRef!}
       style={{
         border: `1px solid color-mix(in srgb, ${paneColor} 40%, transparent)`,
-        'border-top': `2px solid ${paneColor}`,
         'border-radius': '4px',
         margin: '1px',
       }}
