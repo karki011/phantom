@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@kobalte/core": "^0.13.0",
+    "@milkdown/kit": "^7.20.0",
+    "@milkdown/plugin-listener": "^7.20.0",
+    "@milkdown/utils": "^7.20.0",
     "@tanstack/solid-virtual": "^3.13.24",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-search": "^0.16.0",
