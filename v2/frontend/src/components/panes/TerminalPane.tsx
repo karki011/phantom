@@ -795,7 +795,7 @@ export default function TerminalPane(props: TerminalPaneProps) {
     <div
       class={termStyles.terminalWrapper}
       ref={wrapperRef!}
-      style={{ 'border-top': `2px solid ${paneColor}` }}
+      style={{ 'box-shadow': `inset 0 2px 0 0 ${paneColor}` }}
       onDragOver={(e: DragEvent) => e.preventDefault()}
       onDrop={handleTerminalDrop}
       onContextMenu={handleContextMenu}
