@@ -99,17 +99,53 @@ export const PromptComposer = (props: PromptComposerProps) => {
 
   // Auto-focus is handled by MilkdownEditor's autoFocus prop
 
-  // -- Global Escape to close (works even when textarea isn't focused) ------
+  // -- Keyboard shortcuts when composer is visible ----------------------------
   createEffect(() => {
     if (!props.visible) return;
-    const onEsc = (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => {
+      // Escape → close
       if (e.key === 'Escape') {
         e.preventDefault();
         props.onClose();
+        return;
+      }
+      // Cmd+Shift+] or Cmd+Shift+[ → cycle terminals
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === ']' || e.key === '[')) {
+        e.preventDefault();
+        const panes = terminalPanes();
+        if (panes.length < 2) return;
+        const currentId = composerTargetSession();
+        const idx = panes.findIndex(p => p.id === currentId);
+        const next = e.key === ']'
+          ? (idx + 1) % panes.length
+          : (idx - 1 + panes.length) % panes.length;
+        handleSelectTerminal(panes[next].id);
+        return;
+      }
+      // Tab → cycle to next terminal (when dropdown is open)
+      if (e.key === 'Tab' && selectorOpen()) {
+        e.preventDefault();
+        const panes = terminalPanes();
+        if (panes.length < 2) return;
+        const currentId = composerTargetSession();
+        const idx = panes.findIndex(p => p.id === currentId);
+        const next = e.shiftKey
+          ? (idx - 1 + panes.length) % panes.length
+          : (idx + 1) % panes.length;
+        handleSelectTerminal(panes[next].id);
+        return;
+      }
+      // Cmd+T → toggle terminal selector dropdown
+      if ((e.metaKey || e.ctrlKey) && e.key === 't' && !e.shiftKey) {
+        // Only capture when prompt composer is focused, don't steal global Cmd+T
+        if (document.activeElement?.closest(`.${styles.composer}`)) {
+          e.preventDefault();
+          setSelectorOpen(!selectorOpen());
+        }
       }
     };
-    document.addEventListener('keydown', onEsc, true);
-    onCleanup(() => document.removeEventListener('keydown', onEsc, true));
+    document.addEventListener('keydown', onKey, true);
+    onCleanup(() => document.removeEventListener('keydown', onKey, true));
   });
 
   // -- Drag handling --------------------------------------------------------
@@ -293,7 +329,14 @@ export const PromptComposer = (props: PromptComposerProps) => {
                   style={{ background: composerColor() ?? undefined }}
                 />
                 <Terminal size={12} />
-                <span class={styles.selectorLabel}>{currentTargetLabel()}</span>
+                <span class={styles.selectorLabel}>
+                  {currentTargetLabel()}
+                  <Show when={terminalPanes().length > 1}>
+                    <span style={{ opacity: 0.4, 'font-size': '9px', 'margin-left': '4px' }}>
+                      ⌘⇧[]
+                    </span>
+                  </Show>
+                </span>
                 <ChevronDown size={10} />
               </button>
               <Show when={selectorOpen()}>
