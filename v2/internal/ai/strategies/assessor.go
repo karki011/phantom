@@ -6,9 +6,31 @@
 package strategies
 
 import (
+	"context"
+	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
+	"time"
 )
+
+// LLMAssessor is the interface a Haiku-backed assessor must satisfy.
+// The narrow interface avoids an import cycle between strategies ↔ assess.
+type LLMAssessor interface {
+	// Assess returns structured task metadata. Returns (nil, nil) when the LLM
+	// is unavailable; callers fall through to keyword-based logic on nil result.
+	Assess(ctx context.Context, goal string, projectContext string) (LLMAssessment, error)
+}
+
+// LLMAssessment is the normalized output from an LLMAssessor.
+type LLMAssessment struct {
+	TaskType   string   // feature, bugfix, refactor, debug, exploration, test, docs
+	Complexity string   // simple, moderate, complex, critical
+	Risk       string   // low, medium, high, critical
+	RiskReason string   // human-readable rationale
+	KeyFiles   []string // likely files or areas involved
+	Summary    string   // one-line task summary
+}
 
 // TaskComplexity indicates how involved a task is based on file count.
 type TaskComplexity string
@@ -41,6 +63,7 @@ type TaskAssessment struct {
 // Assessor evaluates tasks to produce a TaskAssessment.
 type Assessor struct {
 	tracker *ThresholdTracker
+	haiku   LLMAssessor // optional; when set, Haiku is tried first
 }
 
 // NewAssessor creates an Assessor with hardcoded default thresholds.
@@ -52,10 +75,48 @@ func (a *Assessor) SetThresholdTracker(t *ThresholdTracker) {
 	a.tracker = t
 }
 
+// SetLLMAssessor attaches a Haiku-backed LLM assessor. When non-nil it is
+// tried first; keyword logic is used as fallback on error or nil result.
+func (a *Assessor) SetLLMAssessor(l LLMAssessor) {
+	a.haiku = l
+}
+
 // Assess evaluates a user message and graph metrics to produce a TaskAssessment.
+// When a HaikuAssessor is wired in, it is tried first (2-second timeout). On
+// any error or nil result the method falls through to keyword-based logic so
+// the pipeline always produces a result.
 func (a *Assessor) Assess(message string, fileCount int, blastRadius int) TaskAssessment {
 	ambiguity := assessAmbiguity(message)
 
+	// --- Primary path: LLM assessment via Haiku ---
+	if a.haiku != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		projectCtx := fmt.Sprintf("~%d context files", fileCount)
+		if la, err := a.haiku.Assess(ctx, message, projectCtx); err != nil {
+			slog.Debug("haiku assessor error — falling back to keywords", "err", err)
+		} else if la.Complexity != "" {
+			// Map LLM result into TaskAssessment, preserving graph metrics.
+			complexity := complexityFromLLM(la.Complexity, fileCount, a.tracker)
+			risk := riskFromLLM(la.Risk, blastRadius, a.tracker)
+			slog.Debug("haiku assessment applied",
+				"complexity", la.Complexity,
+				"risk", la.Risk,
+				"task_type", la.TaskType,
+				"summary", la.Summary,
+			)
+			return TaskAssessment{
+				Complexity:     complexity,
+				Risk:           risk,
+				IsAmbiguous:    ambiguity >= 0.3,
+				AmbiguityScore: ambiguity,
+				FileCount:      fileCount,
+				BlastRadius:    blastRadius,
+			}
+		}
+	}
+
+	// --- Fallback path: keyword-based assessment ---
 	var complexity TaskComplexity
 	var risk TaskRisk
 
@@ -85,6 +146,96 @@ func (a *Assessor) Assess(message string, fileCount int, blastRadius int) TaskAs
 		FileCount:      fileCount,
 		BlastRadius:    blastRadius,
 	}
+}
+
+// complexityFromLLM maps the LLM string to a TaskComplexity, using the graph
+// file count as a floor so Haiku can only upgrade — never reduce — what the
+// graph signals.
+func complexityFromLLM(llmVal string, fileCount int, tracker *ThresholdTracker) TaskComplexity {
+	llm := complexityFromString(llmVal)
+	var graph TaskComplexity
+	if tracker != nil {
+		graph = assessComplexityWithConfig(fileCount, tracker.GetConfig())
+	} else {
+		graph = assessComplexity(fileCount)
+	}
+	if complexityRankLocal(llm) > complexityRankLocal(graph) {
+		return llm
+	}
+	return graph
+}
+
+// riskFromLLM maps the LLM string to a TaskRisk using blast radius as a floor.
+func riskFromLLM(llmVal string, blastRadius int, tracker *ThresholdTracker) TaskRisk {
+	llm := riskFromString(llmVal)
+	var graph TaskRisk
+	if tracker != nil {
+		graph = assessRiskWithConfig(blastRadius, tracker.GetConfig())
+	} else {
+		graph = assessRisk(blastRadius)
+	}
+	if riskRankLocal(llm) > riskRankLocal(graph) {
+		return llm
+	}
+	return graph
+}
+
+// complexityFromString converts a lowercase string to TaskComplexity.
+func complexityFromString(s string) TaskComplexity {
+	switch strings.ToLower(s) {
+	case "simple":
+		return Simple
+	case "moderate":
+		return Moderate
+	case "complex":
+		return Complex
+	case "critical":
+		return Critical
+	}
+	return Simple
+}
+
+// riskFromString converts a lowercase string to TaskRisk.
+func riskFromString(s string) TaskRisk {
+	switch strings.ToLower(s) {
+	case "low":
+		return LowRisk
+	case "medium":
+		return MediumRisk
+	case "high":
+		return HighRisk
+	case "critical":
+		return CriticalRisk
+	}
+	return LowRisk
+}
+
+func complexityRankLocal(c TaskComplexity) int {
+	switch c {
+	case Simple:
+		return 0
+	case Moderate:
+		return 1
+	case Complex:
+		return 2
+	case Critical:
+		return 3
+	}
+	return 0
+}
+
+func riskRankLocal(r TaskRisk) int {
+	switch r {
+	case LowRisk:
+		return 0
+	case MediumRisk:
+		return 1
+	case HighRisk:
+		return 2
+	case CriticalRisk:
+		return 3
+	}
+	return 0
 }
 
 // applyGoalTextComplexity floors complexity based on keywords in the goal text.

@@ -18,6 +18,7 @@ import (
 
 	"net/http"
 
+	"github.com/subashkarki/phantom-os-v2/internal/ai/assess"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/detect"
 	graphctx "github.com/subashkarki/phantom-os-v2/internal/ai/graph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
@@ -439,6 +440,27 @@ func (a *App) wireComposerEngine() {
 		log.Warn("app: composer engine — auto-tune load failed (using defaults)", "err", err)
 	}
 	deps.AutoTune = autoTune
+
+	// Wire Haiku-backed LLM assessor as the primary assessment path.
+	// Falls back to keyword logic when no API key is available.
+	assessorInst := strategies.NewAssessor()
+	assessorInst.SetThresholdTracker(autoTune)
+	var haikuAPIKey string
+	if k, ok := composer.GetAnthropicAPIKey(); ok {
+		haikuAPIKey = k
+	} else if k := os.Getenv("ANTHROPIC_API_KEY"); k != "" {
+		haikuAPIKey = k
+	}
+	if haikuAPIKey != "" {
+		haikuClient := knowledge.NewHaikuClient(haikuAPIKey)
+		haikuAssessor := assess.NewHaikuAssessorFromKnowledge(haikuClient)
+		adapter := assess.NewStrategiesAdapter(haikuAssessor)
+		assessorInst.SetLLMAssessor(adapter)
+		log.Info("app: Haiku LLM assessor wired (primary assessment path)")
+	} else {
+		log.Info("app: no API key — Haiku assessor disabled, using keyword fallback")
+	}
+	deps.Assessor = assessorInst
 
 	deps.GapDetector = strategies.NewGapDetector()
 
