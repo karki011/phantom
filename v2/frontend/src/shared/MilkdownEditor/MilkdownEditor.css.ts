@@ -1,6 +1,8 @@
 // Author: Subash Karki
-import { style, globalStyle } from '@vanilla-extract/css'
+import { style, globalStyle, keyframes } from '@vanilla-extract/css'
 import { vars } from '@/styles/theme.css'
+
+export const proseMirrorRoot = style({})
 
 export const editorContainer = style({
   width: '100%',
@@ -44,19 +46,32 @@ globalStyle(`${editorContainer} .ProseMirror p + p`, {
   marginTop: '0.4em',
 })
 
-// Placeholder
-globalStyle(`${editorContainer} .ProseMirror .placeholder`, {
-  color: vars.color.textDisabled,
-  pointerEvents: 'none',
-  position: 'absolute',
-})
-
-globalStyle(`${editorContainer} .ProseMirror p.is-editor-empty:first-child::before`, {
+// Placeholder — shown when editor has no content
+// ProseMirror adds an empty <p><br></p> when blank. We detect this via
+// the .ProseMirror element having data-placeholder set and only one empty child.
+globalStyle(`${editorContainer} .ProseMirror[data-placeholder]:empty::before, ${editorContainer} .ProseMirror[data-placeholder] > p:only-child:has(> br:only-child)::before`, {
   content: 'attr(data-placeholder)',
   color: vars.color.textDisabled,
   pointerEvents: 'none',
   float: 'left',
   height: 0,
+  fontStyle: 'italic',
+  opacity: 0.7,
+})
+
+// Inherit placeholder from parent for the p > br case
+globalStyle(`${editorContainer} .ProseMirror[data-placeholder] > p:only-child:has(> br:only-child)::before`, {
+  content: 'attr(data-placeholder) !important',
+})
+
+// Fallback for browsers that don't support :has() — use class-based approach
+globalStyle(`${editorContainer} .ProseMirror[data-placeholder].ProseMirror-empty::before`, {
+  content: 'attr(data-placeholder)',
+  color: vars.color.textDisabled,
+  pointerEvents: 'none',
+  position: 'absolute',
+  fontStyle: 'italic',
+  opacity: 0.7,
 })
 
 // Inline code

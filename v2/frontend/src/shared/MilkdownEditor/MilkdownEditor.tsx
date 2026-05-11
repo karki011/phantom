@@ -7,6 +7,7 @@ import { listener, listenerCtx } from '@milkdown/kit/plugin/listener'
 import { clipboard } from '@milkdown/kit/plugin/clipboard'
 import { history } from '@milkdown/kit/plugin/history'
 import { getMarkdown } from '@milkdown/utils'
+import '@milkdown/kit/prose/view/style/prosemirror.css'
 import * as styles from './MilkdownEditor.css'
 
 interface MilkdownEditorProps {
@@ -48,18 +49,17 @@ export function MilkdownEditor(props: MilkdownEditorProps) {
       .use(history)
       .create()
 
-    // Inject Cmd+Enter keymap via ProseMirror view after creation.
-    // We patch the view's props to intercept keydown at the DOM level because
-    // adding a ProseMirror keymap plugin after creation requires re-configuring
-    // the state, which is complex.  A DOM-level keydown listener on the
-    // contenteditable is simpler and equally correct.
-    const proseMirrorEl = containerRef.querySelector('[contenteditable]')
+    const proseMirrorEl = containerRef.querySelector('.ProseMirror') as HTMLElement | null
     if (proseMirrorEl) {
       proseMirrorEl.addEventListener('keydown', handleKeyDown as EventListener)
+      // Set placeholder as a data attribute for CSS ::before content
+      const placeholderText = props.placeholder ?? 'Type markdown... (⌘+Enter to send)'
+      proseMirrorEl.setAttribute('data-placeholder', placeholderText)
+      proseMirrorEl.classList.add(styles.proseMirrorRoot)
     }
 
     if (props.autoFocus) {
-      ;(proseMirrorEl as HTMLElement | null)?.focus()
+      proseMirrorEl?.focus()
     }
   })
 

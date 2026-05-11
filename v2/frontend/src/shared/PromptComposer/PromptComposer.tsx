@@ -10,7 +10,7 @@ import {
   batch,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { TextField } from '@kobalte/core/text-field';
+import { MilkdownEditor } from '@/shared/MilkdownEditor/MilkdownEditor';
 import {
   Paperclip,
   ArrowUp,
@@ -95,14 +95,9 @@ export const PromptComposer = (props: PromptComposerProps) => {
   let dragStart = { x: 0, y: 0 };
   let posStart = { x: 0, y: 0 };
   let fileInputRef: HTMLInputElement | undefined;
-  let textAreaRef: HTMLTextAreaElement | undefined;
+  // textAreaRef removed — Milkdown manages its own DOM
 
-  // -- Auto-focus textarea when composer opens ------------------------------
-  createEffect(() => {
-    if (props.visible) {
-      requestAnimationFrame(() => textAreaRef?.focus());
-    }
-  });
+  // Auto-focus is handled by MilkdownEditor's autoFocus prop
 
   // -- Global Escape to close (works even when textarea isn't focused) ------
   createEffect(() => {
@@ -362,22 +357,14 @@ export const PromptComposer = (props: PromptComposerProps) => {
             </div>
           </Show>
 
-          {/* Textarea — full width, 3 rows default */}
+          {/* Rich markdown input */}
           <div class={styles.textAreaWrap}>
-            <TextField class={styles.textField}>
-              <TextField.TextArea
-                ref={textAreaRef}
-                class={styles.textArea}
-                autoResize
-                rows={3}
-                placeholder="Message Phantom..."
-                value={prompt()}
-                onInput={(e: InputEvent) =>
-                  setPrompt((e.target as HTMLTextAreaElement).value)
-                }
-                onKeyDown={handleKeyDown}
-              />
-            </TextField>
+            <MilkdownEditor
+              placeholder="Message Phantom... (⌘+Enter to send)"
+              onSubmit={handleSubmit}
+              onInput={(md) => setPrompt(md)}
+              autoFocus={props.visible}
+            />
           </div>
 
           {/* Bottom bar — paperclip left, send right */}
