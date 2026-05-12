@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.39](https://github.com/karki011/phantom/compare/v0.1.38...v0.1.39) (2026-05-12)
+
+
+### Features
+
+* add console logs for terminal WebGL renderer status ([9d9d085](https://github.com/karki011/phantom/commit/9d9d085054898e12cb22e39902fe0bad490e6378))
+
+
+### Bug Fixes
+
+* enable WebGL renderer by loading addon after terminal.open() ([e459228](https://github.com/karki011/phantom/commit/e45922804ecacb664185e2b295cca11a0a4816e9))
+
 ## [0.1.38](https://github.com/karki011/phantom/compare/v0.1.37...v0.1.38) (2026-05-11)
 
 
