@@ -125,18 +125,23 @@ export function createSession(
   try {
     const webgl = new WebglAddon();
     webgl.onContextLoss(() => {
+      console.warn(`[terminal] ${sessionId} — WebGL context lost, retrying in 1s`);
       webgl.dispose();
       setTimeout(() => {
         try {
           const retry = new WebglAddon();
           retry.onContextLoss(() => retry.dispose());
           terminal.loadAddon(retry);
-        } catch { /* DOM fallback after failed retry */ }
+          console.log(`[terminal] ${sessionId} — WebGL recovered`);
+        } catch {
+          console.warn(`[terminal] ${sessionId} — WebGL retry failed, using DOM renderer`);
+        }
       }, 1000);
     });
     terminal.loadAddon(webgl);
+    console.log(`[terminal] ${sessionId} — WebGL renderer active`);
   } catch {
-    /* DOM fallback is fine */
+    console.warn(`[terminal] ${sessionId} — WebGL failed, using DOM renderer`);
   }
 
   const session: TerminalSession = {
