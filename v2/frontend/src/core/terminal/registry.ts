@@ -97,9 +97,9 @@ export function createSession(
     cursorStyle: 'bar',
     macOptionIsMeta: true,
     macOptionClickForcesSelection: true,
-    allowTransparency: true,
+    allowTransparency: false,
     theme: opts?.theme ?? {},
-    scrollback: 500,
+    scrollback: 5000,
   });
 
   const fitAddon = new FitAddon();
@@ -111,15 +111,6 @@ export function createSession(
   const serializeAddon = new SerializeAddon();
   terminal.loadAddon(serializeAddon);
 
-  // WebGL renderer for smooth scrolling and GPU-accelerated rendering.
-  try {
-    const webgl = new WebglAddon();
-    webgl.onContextLoss(() => webgl.dispose());
-    terminal.loadAddon(webgl);
-  } catch {
-    /* canvas fallback is fine */
-  }
-
   const wrapper = document.createElement('div');
   wrapper.style.cssText = 'width:100%;height:100%;';
   if (userPrefs.brightness && userPrefs.brightness !== 100) {
@@ -129,6 +120,24 @@ export function createSession(
   // Open into offscreen first so xterm initialises without needing visible dimensions
   getOffscreen().appendChild(wrapper);
   terminal.open(wrapper);
+
+  // WebGL renderer — must load AFTER terminal.open() which creates the canvas element.
+  try {
+    const webgl = new WebglAddon();
+    webgl.onContextLoss(() => {
+      webgl.dispose();
+      setTimeout(() => {
+        try {
+          const retry = new WebglAddon();
+          retry.onContextLoss(() => retry.dispose());
+          terminal.loadAddon(retry);
+        } catch { /* DOM fallback after failed retry */ }
+      }, 1000);
+    });
+    terminal.loadAddon(webgl);
+  } catch {
+    /* DOM fallback is fine */
+  }
 
   const session: TerminalSession = {
     terminal,
