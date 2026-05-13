@@ -41,3 +41,4 @@ agentdb.rvf.lock
 # libghostty embed (Wave 5) — ghostty cloned externally, built locally
 # Setup: git clone https://github.com/ghostty-org/ghostty third_party/ghostty && make libghostty
 third_party/
+phantom-libghostty-demo
