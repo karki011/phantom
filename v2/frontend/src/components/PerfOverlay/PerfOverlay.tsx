@@ -9,17 +9,24 @@ import {
   type PerfReport,
   type PerfTargetCheck,
 } from '../../core/bindings/perf';
+import { nativeTerminalIsEnabled } from '../../core/bindings/native-terminal';
 import * as styles from './PerfOverlay.css';
 
 export function PerfOverlay() {
   const [report, setReport] = createSignal<PerfReport | null>(null);
   const [targets, setTargets] = createSignal<Record<string, PerfTargetCheck>>({});
   const [collapsed, setCollapsed] = createSignal(false);
+  const [nativeTerm, setNativeTerm] = createSignal(false);
 
   const refresh = async () => {
-    const [r, t] = await Promise.all([getPerfReport(), getPerfTargets()]);
+    const [r, t, nt] = await Promise.all([
+      getPerfReport(),
+      getPerfTargets(),
+      nativeTerminalIsEnabled(),
+    ]);
     setReport(r);
     setTargets(t ?? {});
+    setNativeTerm(nt);
   };
 
   onMount(() => {
@@ -67,6 +74,9 @@ export function PerfOverlay() {
                 <Row label="rss" value={formatBytes(r().mem_rss_bytes)} />
                 <Row label="heap" value={formatBytes(r().heap_alloc_bytes)} />
                 <Row label="goroutines" value={String(r().goroutine_count)} />
+              </Section>
+              <Section label="terminal">
+                <Row label="native (libghostty)" value={nativeTerm() ? 'on' : 'off'} />
               </Section>
             </div>
           )}
