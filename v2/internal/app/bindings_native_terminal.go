@@ -2,11 +2,11 @@
 
 // Author: Subash Karki
 //
-// Wails-exposed methods for the libghostty-backed native terminal. These
-// are no-ops unless the feature flag is enabled (env PHANTOM_NATIVE_TERMINAL=1
-// or preference key "ai.nativeTerminal"). When enabled the frontend pane
-// creates a Surface, parents its PhantomTerminalView as a sibling of the
-// WKWebView, and drives placement from a ResizeObserver.
+// Wails-exposed methods for the libghostty-backed native terminal. Native
+// (Metal) terminal is the default on darwin; the frontend pane creates a
+// Surface, parents its PhantomTerminalView as a sibling of the WKWebView,
+// and drives placement from a ResizeObserver. Opt out via env
+// PHANTOM_NATIVE_TERMINAL=0 or the runtime toggle (SetNativeTerminalEnabled(false)).
 package app
 
 import (
@@ -20,24 +20,28 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/terminal/ghostty"
 )
 
-var nativeTerminalRuntimeFlag atomic.Bool
+// nativeTerminalDisabledFlag forces the libghostty path OFF when set —
+// inverted vs the prior "enabled" flag because native is now the default.
+var nativeTerminalDisabledFlag atomic.Bool
 
 // NativeTerminalIsEnabled returns true when the libghostty pane is active.
+// Default ON; only OFF when the runtime toggle is flipped or env
+// PHANTOM_NATIVE_TERMINAL=0/false is set.
 func (a *App) NativeTerminalIsEnabled() bool {
-	if nativeTerminalRuntimeFlag.Load() {
-		return true
+	if nativeTerminalDisabledFlag.Load() {
+		return false
 	}
-	if v := strings.TrimSpace(os.Getenv("PHANTOM_NATIVE_TERMINAL")); v == "1" || strings.EqualFold(v, "true") {
-		return true
+	if v := strings.TrimSpace(os.Getenv("PHANTOM_NATIVE_TERMINAL")); v == "0" || strings.EqualFold(v, "false") {
+		return false
 	}
-	return false
+	return true
 }
 
 // SetNativeTerminalEnabled toggles the flag at runtime (frontend setting).
 // Persisting to preferences is left to the existing prefs binding; this
 // only flips the in-memory flag so newly-opened terminals route correctly.
 func (a *App) SetNativeTerminalEnabled(on bool) {
-	nativeTerminalRuntimeFlag.Store(on)
+	nativeTerminalDisabledFlag.Store(!on)
 }
 
 // NativeTerminalCreate opens a libghostty surface, parents the resulting
