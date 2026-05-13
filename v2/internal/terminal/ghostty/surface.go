@@ -10,12 +10,16 @@ package ghostty
 #include <stdlib.h>
 #include "ghostty.h"
 
-// Defined in native_macos.m
-extern void *phantom_terminal_view_new(double width, double height);
-extern void phantom_terminal_view_release(void *handle);
-extern void phantom_terminal_view_set_frame(void *handle, double x, double y, double width, double height);
-extern double phantom_terminal_view_scale(void *handle);
-extern void phantom_terminal_view_attach_surface(void *handle, void *surface);
+// Main-thread dispatch wrappers (phantom_main_dispatch.m).
+extern void *phantom_view_new_main(double w, double h);
+extern void phantom_view_release_main(void *handle);
+extern void phantom_view_set_frame_main(void *handle, double x, double y, double w, double h);
+extern double phantom_view_scale_main(void *handle);
+extern void phantom_view_attach_surface_main(void *handle, void *surface);
+extern ghostty_surface_t phantom_surface_new_main(ghostty_app_t app, ghostty_surface_config_s *cfg);
+extern void phantom_surface_free_main(ghostty_surface_t s);
+extern void phantom_surface_request_close_main(ghostty_surface_t s);
+extern void phantom_surface_set_occlusion_main(ghostty_surface_t s, bool hidden);
 
 // Helper to build the surface config in C — easier than nested cgo for unions.
 static ghostty_surface_config_s phantom_surface_config(void *nsview, double scale, const char *cwd, const char *cmd) {
@@ -73,12 +77,12 @@ func (a *App) NewSurface(opts SurfaceOptions) (*Surface, error) {
 		opts.Height = 600
 	}
 
-	viewPtr := C.phantom_terminal_view_new(C.double(opts.Width), C.double(opts.Height))
+	viewPtr := C.phantom_view_new_main(C.double(opts.Width), C.double(opts.Height))
 	if viewPtr == nil {
 		return nil, errors.New("phantom_terminal_view_new returned nil")
 	}
 
-	scale := C.phantom_terminal_view_scale(viewPtr)
+	scale := C.phantom_view_scale_main(viewPtr)
 
 	var cwd, cmd *C.char
 	if opts.WorkingDirectory != "" {
@@ -91,14 +95,13 @@ func (a *App) NewSurface(opts SurfaceOptions) (*Surface, error) {
 	}
 
 	cfg := C.phantom_surface_config(viewPtr, scale, cwd, cmd)
-	handle := C.ghostty_surface_new(a.handle, &cfg)
+	handle := C.phantom_surface_new_main(a.handle, &cfg)
 	if handle == nil {
-		C.phantom_terminal_view_release(viewPtr)
+		C.phantom_view_release_main(viewPtr)
 		return nil, errors.New("ghostty_surface_new returned nil")
 	}
 
-	// Wire keyboard/text input from the NSView back into this surface.
-	C.phantom_terminal_view_attach_surface(viewPtr, unsafe.Pointer(handle))
+	C.phantom_view_attach_surface_main(viewPtr, unsafe.Pointer(handle))
 
 	return &Surface{
 		app:    a,
@@ -124,7 +127,7 @@ func (s *Surface) SetFrame(x, y, width, height float64) {
 	if s.closed || s.view == nil {
 		return
 	}
-	C.phantom_terminal_view_set_frame(s.view, C.double(x), C.double(y), C.double(width), C.double(height))
+	C.phantom_view_set_frame_main(s.view, C.double(x), C.double(y), C.double(width), C.double(height))
 }
 
 // RequestClose asks libghostty to flush + tear down the PTY for this
@@ -136,7 +139,7 @@ func (s *Surface) RequestClose() {
 	if s.closed || s.handle == nil {
 		return
 	}
-	C.ghostty_surface_request_close(s.handle)
+	C.phantom_surface_request_close_main(s.handle)
 }
 
 // SetOcclusion tells libghostty whether this surface is currently visible.
@@ -148,7 +151,7 @@ func (s *Surface) SetOcclusion(hidden bool) {
 	if s.closed || s.handle == nil {
 		return
 	}
-	C.ghostty_surface_set_occlusion(s.handle, C.bool(hidden))
+	C.phantom_surface_set_occlusion_main(s.handle, C.bool(hidden))
 }
 
 // Free releases the ghostty_surface_t and the native NSView.
@@ -160,11 +163,11 @@ func (s *Surface) Free() {
 	}
 	s.closed = true
 	if s.handle != nil {
-		C.ghostty_surface_free(s.handle)
+		C.phantom_surface_free_main(s.handle)
 		s.handle = nil
 	}
 	if s.view != nil {
-		C.phantom_terminal_view_release(s.view)
+		C.phantom_view_release_main(s.view)
 		s.view = nil
 	}
 }

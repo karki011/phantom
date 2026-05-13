@@ -34,9 +34,20 @@ static ghostty_runtime_config_s phantom_runtime_config(void *userdata) {
     return cfg;
 }
 
+// Main-thread dispatch wrappers (defined in phantom_main_dispatch.m).
+extern ghostty_config_t phantom_config_new_main(void);
+extern void phantom_config_load_default_files_main(ghostty_config_t);
+extern void phantom_config_load_file_main(ghostty_config_t, const char*);
+extern void phantom_config_finalize_main(ghostty_config_t);
+extern void phantom_config_free_main(ghostty_config_t);
+extern ghostty_app_t phantom_app_new_main(const ghostty_runtime_config_s*, ghostty_config_t);
+extern void phantom_app_free_main(ghostty_app_t);
+
+// Preamble helper — builds runtime config from Go pointer (relaxed CGo
+// pointer rules for preamble functions) then dispatches to main thread.
 static ghostty_app_t phantom_app_new(void *userdata, ghostty_config_t config) {
     ghostty_runtime_config_s rt = phantom_runtime_config(userdata);
-    return ghostty_app_new(&rt, config);
+    return phantom_app_new_main(&rt, config);
 }
 */
 import "C"
@@ -98,24 +109,22 @@ func NewApp() (*App, error) {
 		return nil, err
 	}
 
-	cfg := C.ghostty_config_new()
+	cfg := C.phantom_config_new_main()
 	if cfg == nil {
 		return nil, errors.New("ghostty_config_new returned nil")
 	}
-	C.ghostty_config_load_default_files(cfg)
-	// Layer Phantom-managed overrides last so they win over user defaults
-	// for the keys we care about (idle-CPU tuning).
+	C.phantom_config_load_default_files_main(cfg)
 	if path := writePhantomGhosttyConfig(); path != "" {
 		cpath := C.CString(path)
-		C.ghostty_config_load_file(cfg, cpath)
+		C.phantom_config_load_file_main(cfg, cpath)
 		C.free(unsafe.Pointer(cpath))
 	}
-	C.ghostty_config_finalize(cfg)
+	C.phantom_config_finalize_main(cfg)
 
 	a := &App{config: cfg}
 	a.handle = C.phantom_app_new(unsafe.Pointer(a), cfg)
 	if a.handle == nil {
-		C.ghostty_config_free(cfg)
+		C.phantom_config_free_main(cfg)
 		return nil, errors.New("ghostty_app_new returned nil")
 	}
 	return a, nil
@@ -151,7 +160,7 @@ func (a *App) Free() {
 	}
 	a.closed = true
 	if a.handle != nil {
-		C.ghostty_app_free(a.handle)
+		C.phantom_app_free_main(a.handle)
 		a.handle = nil
 	}
 	// config is owned by app after ghostty_app_new — don't free separately
