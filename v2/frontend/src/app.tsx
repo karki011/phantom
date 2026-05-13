@@ -70,6 +70,14 @@ export function App() {
 
     await waitForWails();
 
+    // Sync native-terminal feature flag so pane routing in signals.ts is
+    // correct before any tab is created.
+    try {
+      const { nativeTerminalIsEnabled } = await import('@/core/bindings/native-terminal');
+      const { setNativeTerminalFlagCached } = await import('@/core/panes/signals');
+      setNativeTerminalFlagCached(await nativeTerminalIsEnabled());
+    } catch {}
+
     const savedTheme = await loadPref('theme');
     if (savedTheme) initTheme(savedTheme);
 

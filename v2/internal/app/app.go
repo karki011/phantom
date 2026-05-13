@@ -124,6 +124,14 @@ type App struct {
 
 	// shutdownOnce ensures graceful teardown (including factory reset) runs at most once.
 	shutdownOnce sync.Once
+
+	// Native (libghostty) terminal state — lazily initialized on first
+	// NativeTerminalCreate call when the feature flag is on. The map is
+	// keyed by frontend pane (terminal) ID. See bindings_native_terminal.go.
+	nativeTerminals  map[string]nativeTerminal
+	nativeHost       nativeHostHandle
+	ghosttyApp       ghosttyAppHandle
+	nativeMu         sync.Mutex
 }
 
 func New() *App {
@@ -1027,6 +1035,8 @@ func (a *App) doTeardown(persistTerminalState bool) {
 		delete(a.tuiSessions, id)
 	}
 	a.tuiSessionsMu.Unlock()
+
+	a.shutdownNativeTerminals()
 
 	if a.cancel != nil {
 		a.cancel()
