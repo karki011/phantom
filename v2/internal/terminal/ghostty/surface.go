@@ -67,9 +67,19 @@ func (a *App) NewSurface(opts SurfaceOptions) (*Surface, error) {
 	if !Available() {
 		return nil, ErrNotAvailable
 	}
-	if a == nil || a.handle == nil {
+	if a == nil {
 		return nil, errors.New("nil app")
 	}
+
+	// Copy handle under lock to guard against concurrent App.Free().
+	a.mu.Lock()
+	if a.closed || a.handle == nil {
+		a.mu.Unlock()
+		return nil, errors.New("app closed or nil handle")
+	}
+	appHandle := a.handle
+	a.mu.Unlock()
+
 	if opts.Width <= 0 {
 		opts.Width = 800
 	}
@@ -95,7 +105,7 @@ func (a *App) NewSurface(opts SurfaceOptions) (*Surface, error) {
 	}
 
 	cfg := C.phantom_surface_config(viewPtr, scale, cwd, cmd)
-	handle := C.phantom_surface_new_main(a.handle, &cfg)
+	handle := C.phantom_surface_new_main(appHandle, &cfg)
 	if handle == nil {
 		C.phantom_view_release_main(viewPtr)
 		return nil, errors.New("ghostty_surface_new returned nil")

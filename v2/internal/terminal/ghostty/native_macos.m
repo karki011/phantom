@@ -402,9 +402,7 @@ void phantom_terminal_view_set_frame(void *handle, double x, double y, double wi
     if (!handle) return;
     NSView *view = (NSView *)handle;
     NSRect rect = NSMakeRect(x, y, width, height);
-    dispatch_async(dispatch_get_main_queue(), ^{
-        view.frame = rect;
-    });
+    view.frame = rect;
 }
 
 double phantom_terminal_view_scale(void *handle) {
@@ -420,7 +418,6 @@ void phantom_terminal_view_attach_surface(void *handle, void *surface) {
     view.surface = (ghostty_surface_t)surface;
     // Push the initial size now so libghostty's renderer + PTY start
     // at the correct rows/cols rather than the placeholder.
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [view pushSizeToSurface];
-    });
+    // Already on main thread via phantom_view_attach_surface_main wrapper.
+    [view pushSizeToSurface];
 }

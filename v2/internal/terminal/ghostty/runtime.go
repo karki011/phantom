@@ -42,6 +42,8 @@ extern void phantom_config_finalize_main(ghostty_config_t);
 extern void phantom_config_free_main(ghostty_config_t);
 extern ghostty_app_t phantom_app_new_main(const ghostty_runtime_config_s*, ghostty_config_t);
 extern void phantom_app_free_main(ghostty_app_t);
+extern void phantom_app_tick_main(ghostty_app_t);
+extern void phantom_app_set_focus_main(ghostty_app_t, bool);
 
 // Preamble helper — builds runtime config from Go pointer (relaxed CGo
 // pointer rules for preamble functions) then dispatches to main thread.
@@ -138,7 +140,7 @@ func (a *App) Tick() {
 	if a.closed || a.handle == nil {
 		return
 	}
-	C.ghostty_app_tick(a.handle)
+	C.phantom_app_tick_main(a.handle)
 }
 
 // SetFocus toggles app focus.
@@ -148,7 +150,7 @@ func (a *App) SetFocus(focused bool) {
 	if a.closed || a.handle == nil {
 		return
 	}
-	C.ghostty_app_set_focus(a.handle, C.bool(focused))
+	C.phantom_app_set_focus_main(a.handle, C.bool(focused))
 }
 
 // Free releases the ghostty_app_t and its config.

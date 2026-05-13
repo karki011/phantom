@@ -46,6 +46,11 @@ func (a *App) SetNativeTerminalEnabled(on bool) {
 
 // NativeTerminalCreate opens a libghostty surface, parents the resulting
 // PhantomTerminalView under the Wails NSWindow, and tracks it by paneID.
+//
+// The mutex is held only around map/field reads and writes. The heavy
+// dispatch_sync calls (ghostty.NewApp, ghostty.FindHostWindow, NewSurface)
+// run outside the lock to prevent a deadlock when a ghostty callback on the
+// main thread tries to acquire nativeMu.
 func (a *App) NativeTerminalCreate(paneID, worktreeID, cwd string) (string, error) {
 	if paneID == "" {
 		return "", errors.New("paneID required")
@@ -57,33 +62,38 @@ func (a *App) NativeTerminalCreate(paneID, worktreeID, cwd string) (string, erro
 		return "", errors.New("libghostty not available on this build")
 	}
 
+	// Check for existing entry and snapshot current app/host — under lock,
+	// but do NOT call into ghostty while holding it.
 	a.nativeMu.Lock()
-	defer a.nativeMu.Unlock()
-
 	if a.nativeTerminals == nil {
 		a.nativeTerminals = make(map[string]nativeTerminal)
 	}
 	if _, ok := a.nativeTerminals[paneID]; ok {
 		// Idempotent — caller probably remounted.
+		a.nativeMu.Unlock()
 		return paneID, nil
 	}
+	gapp := a.ghosttyApp
+	host := a.nativeHost
+	a.nativeMu.Unlock()
 
-	if a.ghosttyApp == nil {
-		gapp, err := ghostty.NewApp()
+	// Heavy work (dispatch_sync to main thread) runs WITHOUT the mutex.
+	if gapp == nil {
+		var err error
+		gapp, err = ghostty.NewApp()
 		if err != nil {
 			return "", err
 		}
-		a.ghosttyApp = gapp
 	}
-	if a.nativeHost == nil {
-		host, err := ghostty.FindHostWindow()
+	if host == nil {
+		var err error
+		host, err = ghostty.FindHostWindow()
 		if err != nil {
 			return "", err
 		}
-		a.nativeHost = host
 	}
 
-	surf, err := a.ghosttyApp.NewSurface(ghostty.SurfaceOptions{
+	surf, err := gapp.NewSurface(ghostty.SurfaceOptions{
 		WorkingDirectory: cwd,
 	})
 	if err != nil {
@@ -91,10 +101,16 @@ func (a *App) NativeTerminalCreate(paneID, worktreeID, cwd string) (string, erro
 	}
 
 	view := surf.NSView()
-	a.nativeHost.AttachSubview(view)
-	a.nativeHost.FocusSubview(view)
+	host.AttachSubview(view)
+	host.FocusSubview(view)
 
+	// Re-acquire lock to store results.
+	a.nativeMu.Lock()
+	a.ghosttyApp = gapp
+	a.nativeHost = host
 	a.nativeTerminals[paneID] = nativeTerminal{surface: surf, view: view}
+	a.nativeMu.Unlock()
+
 	log.Info("native terminal created", "pane", paneID, "worktree", worktreeID, "cwd", cwd)
 	return paneID, nil
 }
@@ -175,6 +191,9 @@ func (a *App) shutdownNativeTerminals() {
 	a.nativeMu.Unlock()
 
 	for _, t := range terms {
+		if t.surface != nil {
+			t.surface.RequestClose()
+		}
 		if t.view != 0 {
 			ghostty.DetachSubview(t.view)
 		}

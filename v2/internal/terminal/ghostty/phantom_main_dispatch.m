@@ -66,6 +66,14 @@ void phantom_app_free_main(ghostty_app_t app) {
     on_main_sync(^{ ghostty_app_free(app); });
 }
 
+void phantom_app_tick_main(ghostty_app_t app) {
+    on_main_sync(^{ ghostty_app_tick(app); });
+}
+
+void phantom_app_set_focus_main(ghostty_app_t app, bool focused) {
+    on_main_sync(^{ ghostty_app_set_focus(app, focused); });
+}
+
 // ---------------------------------------------------------------------------
 // ghostty_surface wrappers
 // ---------------------------------------------------------------------------
