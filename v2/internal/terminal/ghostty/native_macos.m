@@ -18,6 +18,7 @@
 @property (assign, nonatomic) ghostty_surface_t surface;
 @property (assign, nonatomic) ghostty_input_mods_e currentMods;
 @property (retain, nonatomic) NSMutableString *pendingMarked;
+- (void)pushSizeToSurface;
 @end
 
 // ---- key map -----------------------------------------------------------
@@ -160,6 +161,41 @@ static ghostty_input_mods_e phantom_mods_from_event(NSEvent *evt) {
     [super dealloc];
 }
 
+// ---- resize / scale ------------------------------------------------
+- (void)pushSizeToSurface {
+    if (self.surface == NULL) return;
+    CGFloat scale = self.window.screen.backingScaleFactor;
+    if (scale <= 0) scale = NSScreen.mainScreen.backingScaleFactor;
+    if (scale <= 0) scale = 2.0;
+    uint32_t w = (uint32_t)(self.bounds.size.width  * scale);
+    uint32_t h = (uint32_t)(self.bounds.size.height * scale);
+    if (w == 0 || h == 0) return;
+    ghostty_surface_set_content_scale(self.surface, scale, scale);
+    ghostty_surface_set_size(self.surface, w, h);
+    // Keep the CAMetalLayer drawableSize in lockstep so Metal doesn't stretch.
+    CAMetalLayer *layer = (CAMetalLayer *)self.layer;
+    if ([layer isKindOfClass:[CAMetalLayer class]]) {
+        layer.contentsScale = scale;
+        layer.drawableSize = CGSizeMake(w, h);
+    }
+}
+
+- (void)setFrameSize:(NSSize)newSize {
+    [super setFrameSize:newSize];
+    [self pushSizeToSurface];
+}
+
+- (void)viewDidChangeBackingProperties {
+    [super viewDidChangeBackingProperties];
+    [self pushSizeToSurface];
+}
+
+- (void)viewDidMoveToWindow {
+    [super viewDidMoveToWindow];
+    [self updateTrackingAreas];
+    [self pushSizeToSurface];
+}
+
 - (BOOL)acceptsFirstResponder { return YES; }
 - (BOOL)becomeFirstResponder {
     BOOL ok = [super becomeFirstResponder];
@@ -280,11 +316,6 @@ static ghostty_input_mods_e phantom_mods_from_event(NSEvent *evt) {
     [area release];
 }
 
-- (void)viewDidMoveToWindow {
-    [super viewDidMoveToWindow];
-    [self updateTrackingAreas];
-}
-
 - (NSPoint)mouseLocalPoint:(NSEvent *)event {
     NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
     // ghostty expects top-left origin; AppKit is bottom-left. Flip Y.
@@ -359,4 +390,9 @@ void phantom_terminal_view_attach_surface(void *handle, void *surface) {
     if (!handle) return;
     PhantomTerminalView *view = (PhantomTerminalView *)handle;
     view.surface = (ghostty_surface_t)surface;
+    // Push the initial size now so libghostty's renderer + PTY start
+    // at the correct rows/cols rather than the placeholder.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [view pushSizeToSurface];
+    });
 }
