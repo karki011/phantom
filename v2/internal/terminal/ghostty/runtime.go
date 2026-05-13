@@ -43,9 +43,38 @@ import "C"
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"sync"
 	"unsafe"
 )
+
+// phantomGhosttyConfig contains the libghostty config overrides Phantom
+// always applies on top of user defaults. Currently focused on idle-CPU
+// minimization (drop the 2Hz cursor blink which would otherwise wake the
+// Metal renderer twice per second per surface).
+const phantomGhosttyConfig = `# Phantom-managed defaults — do not edit, regenerated on app start.
+cursor-style-blink = false
+`
+
+// writePhantomGhosttyConfig drops phantomGhosttyConfig into a stable path
+// under the user's home and returns the path. Returns "" on any IO error;
+// callers should treat that as "skip the override" rather than fatal.
+func writePhantomGhosttyConfig() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	dir := filepath.Join(home, ".phantom-os")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return ""
+	}
+	path := filepath.Join(dir, "ghostty.config")
+	if err := os.WriteFile(path, []byte(phantomGhosttyConfig), 0o644); err != nil {
+		return ""
+	}
+	return path
+}
 
 // App wraps a ghostty_app_t. Use NewApp to construct, Free to release.
 type App struct {
@@ -74,6 +103,13 @@ func NewApp() (*App, error) {
 		return nil, errors.New("ghostty_config_new returned nil")
 	}
 	C.ghostty_config_load_default_files(cfg)
+	// Layer Phantom-managed overrides last so they win over user defaults
+	// for the keys we care about (idle-CPU tuning).
+	if path := writePhantomGhosttyConfig(); path != "" {
+		cpath := C.CString(path)
+		C.ghostty_config_load_file(cfg, cpath)
+		C.free(unsafe.Pointer(cpath))
+	}
 	C.ghostty_config_finalize(cfg)
 
 	a := &App{config: cfg}
