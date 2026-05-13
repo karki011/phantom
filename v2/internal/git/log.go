@@ -25,7 +25,21 @@ const logFormat = "%H|%h|%an|%ae|%at|%s|%P"
 const logSeparator = "|"
 
 // Log returns commit history for the repo with limit/offset pagination.
+//
+// Tier-0 fast path uses the in-process go-git pool when offset == 0; otherwise
+// the CLI handles pagination natively.
 func Log(ctx context.Context, repoPath string, limit, offset int) ([]CommitInfo, error) {
+	if offset == 0 {
+		// LogFast handles its own CLI fallback internally, so this is the
+		// terminal path when offset == 0.
+		return LogFast(ctx, repoPath, limit)
+	}
+	return logCLI(ctx, repoPath, limit, offset)
+}
+
+// logCLI is the original CLI-backed Log implementation. Kept separate so the
+// go-git fast path can fall back here without recursing through Log.
+func logCLI(ctx context.Context, repoPath string, limit, offset int) ([]CommitInfo, error) {
 	args := []string{
 		"log",
 		"--format=" + logFormat,

@@ -137,7 +137,11 @@ func AheadBehind(ctx context.Context, repoPath, branch string) (ahead int, behin
 		}
 	}
 
-	ahead, behind, err = computeAheadBehind(ctx, repoPath, branch)
+	// Tier-0 fast path: in-process go-git rev-walk. Falls back to CLI on any error.
+	ahead, behind, err = AheadBehindFast(ctx, repoPath, branch)
+	if err != nil {
+		ahead, behind, err = computeAheadBehind(ctx, repoPath, branch)
+	}
 	aheadBehindCache.Store(key, aheadBehindEntry{
 		ahead:     ahead,
 		behind:    behind,

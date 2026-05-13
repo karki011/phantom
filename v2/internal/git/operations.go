@@ -233,6 +233,9 @@ func FetchOrigin(ctx context.Context, repoPath string) error {
 	defer cancel()
 
 	_, _ = runGit(fetchCtx, repoPath, "fetch", "origin")
+	// Fetch updates remote-tracking refs; drop the cached go-git handle so
+	// subsequent fast reads see the new refs.
+	DefaultRepoPool().Invalidate(repoPath)
 	return nil
 }
 
@@ -264,6 +267,9 @@ func Unstage(ctx context.Context, repoPath string, paths ...string) error {
 // Commit creates a commit with the given message.
 func Commit(ctx context.Context, repoPath, message string) error {
 	_, err := runGit(ctx, repoPath, "commit", "-m", message)
+	if err == nil {
+		DefaultRepoPool().Invalidate(repoPath)
+	}
 	return err
 }
 
@@ -282,6 +288,9 @@ func Push(ctx context.Context, repoPath string) error {
 		defer cancel2()
 		_, err = runGit(pushCtx2, repoPath, "push", "-u", "origin", branch)
 	}
+	if err == nil {
+		DefaultRepoPool().Invalidate(repoPath)
+	}
 	return err
 }
 
@@ -290,6 +299,9 @@ func Pull(ctx context.Context, repoPath string) error {
 	pullCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	_, err := runGit(pullCtx, repoPath, "pull")
+	if err == nil {
+		DefaultRepoPool().Invalidate(repoPath)
+	}
 	return err
 }
 
