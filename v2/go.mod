@@ -9,6 +9,7 @@ require (
 	github.com/charmbracelet/log v1.0.0
 	github.com/creack/pty v1.1.24
 	github.com/fsnotify/fsnotify v1.9.0
+	github.com/go-git/go-git/v5 v5.19.0
 	github.com/google/uuid v1.6.0
 	github.com/keybase/go-keychain v0.0.1
 	github.com/lmittmann/tint v1.1.3
@@ -45,7 +46,6 @@ require (
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.9.0 // indirect
-	github.com/go-git/go-git/v5 v5.19.0 // indirect
 	github.com/go-logfmt/logfmt v0.6.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
