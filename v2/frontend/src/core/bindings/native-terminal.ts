@@ -53,3 +53,11 @@ export async function nativeTerminalDestroy(paneId: string): Promise<void> {
     console.error('[native-terminal] destroy failed', { paneId, error });
   }
 }
+
+export async function nativeTerminalFocus(paneId: string): Promise<void> {
+  try {
+    await App()?.NativeTerminalFocus(paneId);
+  } catch (error) {
+    console.error('[native-terminal] focus failed', { paneId, error });
+  }
+}

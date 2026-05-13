@@ -88,10 +88,24 @@ func (a *App) NativeTerminalCreate(paneID, worktreeID, cwd string) (string, erro
 
 	view := surf.NSView()
 	a.nativeHost.AttachSubview(view)
+	a.nativeHost.FocusSubview(view)
 
 	a.nativeTerminals[paneID] = nativeTerminal{surface: surf, view: view}
 	log.Info("native terminal created", "pane", paneID, "worktree", worktreeID, "cwd", cwd)
 	return paneID, nil
+}
+
+// NativeTerminalFocus re-acquires keyboard focus for paneID's surface.
+// Called by the frontend when the pane becomes active or on click.
+func (a *App) NativeTerminalFocus(paneID string) {
+	a.nativeMu.Lock()
+	t, ok := a.nativeTerminals[paneID]
+	host := a.nativeHost
+	a.nativeMu.Unlock()
+	if !ok || t.view == 0 || host == nil {
+		return
+	}
+	host.FocusSubview(t.view)
 }
 
 // NativeTerminalSetPlacement repositions the NSView for paneID using

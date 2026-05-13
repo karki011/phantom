@@ -19,4 +19,6 @@ func (a *App) NativeTerminalSetPlacement(paneID string, x, y, width, height floa
 
 func (a *App) NativeTerminalDestroy(paneID string) {}
 
+func (a *App) NativeTerminalFocus(paneID string) {}
+
 func (a *App) shutdownNativeTerminals() {}

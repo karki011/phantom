@@ -13,6 +13,7 @@ extern void *phantom_window_content_view(void *window);
 extern double phantom_window_content_height(void *window);
 extern void phantom_add_native_subview(void *parent, void *child);
 extern void phantom_remove_native_subview(void *child);
+extern void phantom_make_first_responder(void *window, void *view);
 */
 import "C"
 
@@ -76,4 +77,14 @@ func DetachSubview(view uintptr) {
 		return
 	}
 	C.phantom_remove_native_subview(unsafe.Pointer(view))
+}
+
+// FocusSubview makes the given NSView the first responder of the host
+// window. WKWebView claims focus on click; this re-routes keystrokes to
+// the libghostty surface after attach and on user-driven activation.
+func (h *HostWindow) FocusSubview(view uintptr) {
+	if h == nil || h.window == nil || view == 0 {
+		return
+	}
+	C.phantom_make_first_responder(h.window, unsafe.Pointer(view))
 }

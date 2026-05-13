@@ -10,6 +10,7 @@ import { onMount, onCleanup } from 'solid-js';
 import {
   nativeTerminalCreate,
   nativeTerminalDestroy,
+  nativeTerminalFocus,
   nativeTerminalSetPlacement,
 } from '@/core/bindings/native-terminal';
 
@@ -66,9 +67,14 @@ export default function NativeTerminalPane(props: NativeTerminalPaneProps) {
     void nativeTerminalDestroy(props.paneId);
   });
 
+  const onPointerDown = () => {
+    void nativeTerminalFocus(props.paneId);
+  };
+
   return (
     <div
       ref={containerRef}
+      onPointerDown={onPointerDown}
       style={{
         height: '100%',
         width: '100%',

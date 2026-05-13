@@ -75,3 +75,16 @@ void phantom_remove_native_subview(void *child) {
         [c removeFromSuperview];
     });
 }
+
+// Forces the surface view to become first responder so keystrokes reach
+// libghostty instead of the WKWebView. Call after the view is parented
+// and visible. WKWebView aggressively claims focus on click, so we also
+// re-acquire focus when the user interacts with the surface region.
+void phantom_make_first_responder(void *window, void *view) {
+    if (window == NULL || view == NULL) return;
+    NSWindow *win = (__bridge NSWindow *)window;
+    NSView *v = (__bridge NSView *)view;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [win makeFirstResponder:v];
+    });
+}
