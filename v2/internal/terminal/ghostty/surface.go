@@ -15,6 +15,7 @@ extern void *phantom_terminal_view_new(double width, double height);
 extern void phantom_terminal_view_release(void *handle);
 extern void phantom_terminal_view_set_frame(void *handle, double x, double y, double width, double height);
 extern double phantom_terminal_view_scale(void *handle);
+extern void phantom_terminal_view_attach_surface(void *handle, void *surface);
 
 // Helper to build the surface config in C — easier than nested cgo for unions.
 static ghostty_surface_config_s phantom_surface_config(void *nsview, double scale, const char *cwd, const char *cmd) {
@@ -95,6 +96,9 @@ func (a *App) NewSurface(opts SurfaceOptions) (*Surface, error) {
 		C.phantom_terminal_view_release(viewPtr)
 		return nil, errors.New("ghostty_surface_new returned nil")
 	}
+
+	// Wire keyboard/text input from the NSView back into this surface.
+	C.phantom_terminal_view_attach_surface(viewPtr, unsafe.Pointer(handle))
 
 	return &Surface{
 		app:    a,
