@@ -122,6 +122,8 @@ func (a *App) NativeTerminalSetPlacement(paneID string, x, y, width, height floa
 }
 
 // NativeTerminalDestroy removes the NSView and frees the surface.
+// Sends ghostty_surface_request_close first so the PTY flushes / shell
+// exits cleanly before the surface tears down.
 func (a *App) NativeTerminalDestroy(paneID string) {
 	a.nativeMu.Lock()
 	t, ok := a.nativeTerminals[paneID]
@@ -132,6 +134,9 @@ func (a *App) NativeTerminalDestroy(paneID string) {
 	if !ok {
 		return
 	}
+	if t.surface != nil {
+		t.surface.RequestClose()
+	}
 	if t.view != 0 {
 		ghostty.DetachSubview(t.view)
 	}
@@ -139,6 +144,19 @@ func (a *App) NativeTerminalDestroy(paneID string) {
 		t.surface.Free()
 	}
 	log.Info("native terminal destroyed", "pane", paneID)
+}
+
+// NativeTerminalSetOcclusion marks paneID's surface as visible (false) or
+// occluded (true). Frontend calls this when a pane becomes inactive so
+// libghostty drops to a low-power render state.
+func (a *App) NativeTerminalSetOcclusion(paneID string, hidden bool) {
+	a.nativeMu.Lock()
+	t, ok := a.nativeTerminals[paneID]
+	a.nativeMu.Unlock()
+	if !ok || t.surface == nil {
+		return
+	}
+	t.surface.SetOcclusion(hidden)
 }
 
 // shutdownNativeTerminals tears down all surfaces + the ghostty app.

@@ -127,6 +127,30 @@ func (s *Surface) SetFrame(x, y, width, height float64) {
 	C.phantom_terminal_view_set_frame(s.view, C.double(x), C.double(y), C.double(width), C.double(height))
 }
 
+// RequestClose asks libghostty to flush + tear down the PTY for this
+// surface. Call this before Free so the shell exits cleanly. No-op if
+// already closed.
+func (s *Surface) RequestClose() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || s.handle == nil {
+		return
+	}
+	C.ghostty_surface_request_close(s.handle)
+}
+
+// SetOcclusion tells libghostty whether this surface is currently visible.
+// When occluded (true means hidden), the renderer drops to a low-power
+// state — required to keep idle CPU near zero for backgrounded panes.
+func (s *Surface) SetOcclusion(hidden bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || s.handle == nil {
+		return
+	}
+	C.ghostty_surface_set_occlusion(s.handle, C.bool(hidden))
+}
+
 // Free releases the ghostty_surface_t and the native NSView.
 func (s *Surface) Free() {
 	s.mu.Lock()

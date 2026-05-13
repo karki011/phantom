@@ -21,4 +21,6 @@ func (a *App) NativeTerminalDestroy(paneID string) {}
 
 func (a *App) NativeTerminalFocus(paneID string) {}
 
+func (a *App) NativeTerminalSetOcclusion(paneID string, hidden bool) {}
+
 func (a *App) shutdownNativeTerminals() {}

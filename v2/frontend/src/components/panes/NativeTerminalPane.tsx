@@ -6,13 +6,15 @@
 // (PhantomTerminalView) attached to the Wails NSWindow's contentView and
 // positioned to match this div on every layout change.
 
-import { onMount, onCleanup } from 'solid-js';
+import { onMount, onCleanup, createEffect } from 'solid-js';
 import {
   nativeTerminalCreate,
   nativeTerminalDestroy,
   nativeTerminalFocus,
+  nativeTerminalSetOcclusion,
   nativeTerminalSetPlacement,
 } from '@/core/bindings/native-terminal';
+import { activePaneId } from '@/core/panes/signals';
 
 interface NativeTerminalPaneProps {
   paneId: string;
@@ -55,6 +57,15 @@ export default function NativeTerminalPane(props: NativeTerminalPaneProps) {
     scrollListenerTarget = window;
     scrollListenerTarget.addEventListener('scroll', pushPlacement, true);
     scrollListenerTarget.addEventListener('resize', pushPlacement);
+  });
+
+  // Mark the surface occluded whenever this pane isn't the active one —
+  // libghostty drops to a low-power render state so backgrounded terminals
+  // don't burn CPU. Re-runs cheaply on activePaneId changes.
+  createEffect(() => {
+    if (!alive) return;
+    const hidden = activePaneId() !== props.paneId;
+    void nativeTerminalSetOcclusion(props.paneId, hidden);
   });
 
   onCleanup(() => {

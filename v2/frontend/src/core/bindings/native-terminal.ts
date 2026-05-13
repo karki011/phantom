@@ -61,3 +61,14 @@ export async function nativeTerminalFocus(paneId: string): Promise<void> {
     console.error('[native-terminal] focus failed', { paneId, error });
   }
 }
+
+export async function nativeTerminalSetOcclusion(
+  paneId: string,
+  hidden: boolean,
+): Promise<void> {
+  try {
+    await App()?.NativeTerminalSetOcclusion(paneId, hidden);
+  } catch (error) {
+    console.error('[native-terminal] setOcclusion failed', { paneId, error });
+  }
+}
