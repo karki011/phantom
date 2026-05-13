@@ -62,7 +62,19 @@ export interface TerminalSession {
   searchAddon?: { findNext(term: string, opts?: object): void; findPrevious(term: string, opts?: object): void };
   /** Cached serialize() output captured on the most recent detachSession call. */
   lastSerializedState?: string;
+  /** Whether this session is the currently visible/active pane — drives scrollback retention policy. */
+  isActive?: boolean;
+  /** True once setActive(false) has shrunk scrollback to BACKGROUND_SCROLLBACK. */
+  scrollbackReduced?: boolean;
 }
+
+// Scrollback retention policy:
+// - Active pane keeps full history so user can scroll back freely.
+// - Background panes shrink to a smaller buffer to release renderer memory and
+//   speed up serialize() snapshots. Original lines beyond the cap are dropped
+//   from the renderer buffer — the PTY's own backlog is unaffected.
+const ACTIVE_SCROLLBACK = 5000;
+const BACKGROUND_SCROLLBACK = 1000;
 
 const sessions = new Map<string, TerminalSession>();
 
@@ -99,7 +111,7 @@ export function createSession(
     macOptionClickForcesSelection: true,
     allowTransparency: false,
     theme: opts?.theme ?? {},
-    scrollback: 5000,
+    scrollback: ACTIVE_SCROLLBACK,
   });
 
   const fitAddon = new FitAddon();
@@ -151,10 +163,43 @@ export function createSession(
     wrapper,
     sessionId,
     attached: false,
+    isActive: false,
+    scrollbackReduced: false,
   };
 
   sessions.set(sessionId, session);
   return session;
+}
+
+/**
+ * Toggle a session's active state. Background sessions shrink their scrollback
+ * buffer to free renderer memory; activating restores the full buffer cap.
+ *
+ * Additive API — existing callers that never call this keep the previous
+ * always-5000-lines behaviour.
+ */
+export function setSessionActive(sessionId: string, active: boolean): void {
+  const session = sessions.get(sessionId);
+  if (!session) return;
+  if (session.isActive === active) return;
+  session.isActive = active;
+
+  // xterm.js exposes scrollback via setOption (deprecated) or the options
+  // accessor on newer versions. Use the typed options shim with a cast to
+  // stay compatible with both.
+  const term = session.terminal as Terminal & { options: { scrollback?: number } };
+  try {
+    if (active) {
+      term.options.scrollback = ACTIVE_SCROLLBACK;
+      session.scrollbackReduced = false;
+    } else {
+      // Reducing the cap evicts the oldest lines beyond the new limit.
+      term.options.scrollback = BACKGROUND_SCROLLBACK;
+      session.scrollbackReduced = true;
+    }
+  } catch {
+    // Older xterm versions — silently keep current behaviour.
+  }
 }
 
 export function attachSession(

@@ -68,15 +68,19 @@ func Open(dbPath string) (*DB, error) {
 	reader.SetMaxOpenConns(4)
 
 	// Configure reader pragmas (no WAL needed — set by writer)
-	if _, err := reader.Exec("PRAGMA busy_timeout=5000"); err != nil {
-		writer.Close()
-		reader.Close()
-		return nil, fmt.Errorf("set reader busy_timeout: %w", err)
+	readerPragmas := []string{
+		"PRAGMA busy_timeout=5000",
+		"PRAGMA foreign_keys=ON",
+		"PRAGMA cache_size=-64000",
+		"PRAGMA mmap_size=268435456",
+		"PRAGMA temp_store=MEMORY",
 	}
-	if _, err := reader.Exec("PRAGMA foreign_keys=ON"); err != nil {
-		writer.Close()
-		reader.Close()
-		return nil, fmt.Errorf("set reader foreign_keys: %w", err)
+	for _, p := range readerPragmas {
+		if _, err := reader.Exec(p); err != nil {
+			writer.Close()
+			reader.Close()
+			return nil, fmt.Errorf("exec reader %q: %w", p, err)
+		}
 	}
 
 	d := &DB{
@@ -128,8 +132,12 @@ func RemoveDatabaseFiles(dbPath string) error {
 func setPragmas(conn *sql.DB) error {
 	pragmas := []string{
 		"PRAGMA journal_mode=WAL",
+		"PRAGMA synchronous=NORMAL",
 		"PRAGMA busy_timeout=5000",
 		"PRAGMA foreign_keys=ON",
+		"PRAGMA cache_size=-64000",
+		"PRAGMA mmap_size=268435456",
+		"PRAGMA temp_store=MEMORY",
 	}
 	for _, p := range pragmas {
 		if _, err := conn.Exec(p); err != nil {

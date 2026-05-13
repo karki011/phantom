@@ -1,14 +1,45 @@
 // Author: Subash Karki
 package app
 
-import wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+import (
+	"sync"
+	"time"
+
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+)
 
 // Typed event emitters — compile-time safety for event names and payloads.
 // These are additive helpers; existing runtime.EventsEmit calls are unchanged.
 
+const gitStatusDebounceWindow = 150 * time.Millisecond
+
+// gitStatusDebouncers coalesces rapid EmitGitStatus calls keyed by worktree ID.
+// Stores *time.Timer per key; new calls reset the timer, on fire the event emits once.
+var gitStatusDebouncers sync.Map
+
 // EmitGitStatus emits a git status change event (no payload — listeners re-fetch).
+// Calls within a 150ms window are coalesced into a single emission.
 func (a *App) EmitGitStatus() {
-	wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+	a.emitGitStatusDebounced("")
+}
+
+// EmitGitStatusFor debounces emission keyed by worktree ID so concurrent worktrees
+// don't suppress each other's status refreshes.
+func (a *App) EmitGitStatusFor(worktreeID string) {
+	a.emitGitStatusDebounced(worktreeID)
+}
+
+func (a *App) emitGitStatusDebounced(key string) {
+	fire := func() {
+		gitStatusDebouncers.Delete(key)
+		wailsRuntime.EventsEmit(a.ctx, EventGitStatus)
+	}
+	timer := time.AfterFunc(gitStatusDebounceWindow, fire)
+	if prev, loaded := gitStatusDebouncers.Swap(key, timer); loaded {
+		if t, ok := prev.(*time.Timer); ok {
+			t.Stop()
+		}
+	}
 }
 
 // EmitGitBranchChanged emits when the active branch changes for a worktree.

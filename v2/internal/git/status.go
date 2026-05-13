@@ -7,6 +7,10 @@ import (
 	"context"
 	"strconv"
 	"strings"
+
+	"golang.org/x/sync/errgroup"
+
+	"github.com/subashkarki/phantom-os-v2/internal/perf"
 )
 
 // FileStatus represents a single file's status in the working tree.
@@ -155,24 +159,44 @@ func parseRenameEntry(rest string, rs *RepoStatus) {
 }
 
 // GetWorktreeStatus returns an enriched WorktreeStatus for the given worktree path.
+// Branch, commit, and repo status are fetched concurrently — only GetRepoStatus
+// errors propagate; branch/commit failures fall back to empty (matching prior behavior).
 func GetWorktreeStatus(ctx context.Context, worktreePath string) (*WorktreeStatus, error) {
-	// Get base WorktreeInfo by listing worktrees from the main repo (via common dir).
-	branch := GetCurrentBranch(ctx, worktreePath)
-	commit, _ := runGit(ctx, worktreePath, "rev-parse", "HEAD")
+	defer perf.Time(perf.RecordGitStatus)()
+	var (
+		branch string
+		commit string
+		rs     *RepoStatus
+	)
 
-	wti := WorktreeInfo{
-		Path:   worktreePath,
-		Branch: branch,
-		Commit: commit,
-	}
+	g, gctx := errgroup.WithContext(ctx)
 
-	rs, err := GetRepoStatus(ctx, worktreePath)
-	if err != nil {
+	g.Go(func() error {
+		branch = GetCurrentBranch(gctx, worktreePath)
+		return nil
+	})
+
+	g.Go(func() error {
+		commit, _ = runGit(gctx, worktreePath, "rev-parse", "HEAD")
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		rs, err = GetRepoStatus(gctx, worktreePath)
+		return err
+	})
+
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
 	return &WorktreeStatus{
-		WorktreeInfo: wti,
-		RepoStatus:   *rs,
+		WorktreeInfo: WorktreeInfo{
+			Path:   worktreePath,
+			Branch: branch,
+			Commit: commit,
+		},
+		RepoStatus: *rs,
 	}, nil
 }

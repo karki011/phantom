@@ -9,7 +9,33 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
+
+const aheadBehindCacheTTL = 5 * time.Second
+
+// aheadBehindCache memoizes per-branch upstream divergence for 5s.
+// Keyed by "repoPath\x00branch" to avoid path/branch ambiguity.
+var aheadBehindCache sync.Map // map[string]aheadBehindEntry
+
+type aheadBehindEntry struct {
+	ahead     int
+	behind    int
+	err       error
+	expiresAt time.Time
+}
+
+// InvalidateAheadBehindCache clears AheadBehind cache for a repo (all branches).
+func InvalidateAheadBehindCache(repoPath string) {
+	prefix := repoPath + "\x00"
+	aheadBehindCache.Range(func(k, _ any) bool {
+		if ks, ok := k.(string); ok && strings.HasPrefix(ks, prefix) {
+			aheadBehindCache.Delete(k)
+		}
+		return true
+	})
+}
 
 // BranchInfo describes a single git branch.
 type BranchInfo struct {
@@ -101,9 +127,27 @@ func ListRemoteBranches(ctx context.Context, repoPath string) ([]BranchInfo, err
 }
 
 // AheadBehind returns how many commits branch is ahead/behind its upstream.
-// It uses git rev-list --left-right --count branch...upstream.
+// Cached for aheadBehindCacheTTL — both subprocesses are skipped on cache hit.
 func AheadBehind(ctx context.Context, repoPath, branch string) (ahead int, behind int, err error) {
-	// Resolve upstream tracking ref.
+	key := repoPath + "\x00" + branch
+	if v, ok := aheadBehindCache.Load(key); ok {
+		entry := v.(aheadBehindEntry)
+		if time.Now().Before(entry.expiresAt) {
+			return entry.ahead, entry.behind, entry.err
+		}
+	}
+
+	ahead, behind, err = computeAheadBehind(ctx, repoPath, branch)
+	aheadBehindCache.Store(key, aheadBehindEntry{
+		ahead:     ahead,
+		behind:    behind,
+		err:       err,
+		expiresAt: time.Now().Add(aheadBehindCacheTTL),
+	})
+	return ahead, behind, err
+}
+
+func computeAheadBehind(ctx context.Context, repoPath, branch string) (int, int, error) {
 	upstream, upErr := runGit(ctx, repoPath, "rev-parse", "--abbrev-ref", branch+"@{upstream}")
 	if upErr != nil {
 		return 0, 0, fmt.Errorf("no upstream for branch %s: %w", branch, upErr)
@@ -119,8 +163,8 @@ func AheadBehind(ctx context.Context, repoPath, branch string) (ahead int, behin
 		return 0, 0, fmt.Errorf("unexpected rev-list output: %q", out)
 	}
 
-	ahead, _ = strconv.Atoi(parts[0])
-	behind, _ = strconv.Atoi(parts[1])
+	ahead, _ := strconv.Atoi(parts[0])
+	behind, _ := strconv.Atoi(parts[1])
 	return ahead, behind, nil
 }
 

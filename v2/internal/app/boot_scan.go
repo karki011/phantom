@@ -293,48 +293,74 @@ func (a *App) BootScan() (*BootScanResult, error) {
 	home, _ := os.UserHomeDir()
 	r := &BootScanResult{}
 
-	gitBin, gitOK := lookBin("git",
-		"/opt/homebrew/bin/git",
-		"/usr/local/bin/git",
-		"/usr/bin/git",
-	)
-	if gitOK {
-		r.GitInstalled = true
-		r.GitVersion = extractSemver(versionWithTimeout(gitBin, "--version"))
-		if out, err := exec.Command(gitBin, "config", "--global", "user.name").Output(); err == nil {
-			r.Operator = strings.TrimSpace(string(out))
+	var probeWG sync.WaitGroup
+	probeWG.Add(5)
+
+	go func() {
+		defer probeWG.Done()
+		gitBin, gitOK := lookBin("git",
+			"/opt/homebrew/bin/git",
+			"/usr/local/bin/git",
+			"/usr/bin/git",
+		)
+		if gitOK {
+			r.GitInstalled = true
+			r.GitVersion = extractSemver(versionWithTimeout(gitBin, "--version"))
+			if out, err := exec.Command(gitBin, "config", "--global", "user.name").Output(); err == nil {
+				r.Operator = strings.TrimSpace(string(out))
+			}
 		}
-	}
+	}()
 
-	if bin, ok := lookBin("gh",
-		"/opt/homebrew/bin/gh",
-		"/usr/local/bin/gh",
-	); ok {
-		r.GhInstalled = true
-		r.GhPath = bin
-		r.GhVersion = extractSemver(versionWithTimeout(bin, "--version"))
-	}
-
-	if bin, ok := lookBin("node",
-		"/opt/homebrew/bin/node",
-		"/usr/local/bin/node",
-	); ok {
-		if out, err := exec.Command(bin, "--version").Output(); err == nil {
-			r.NodeVersion = strings.TrimSpace(strings.TrimPrefix(string(out), "v"))
+	go func() {
+		defer probeWG.Done()
+		if bin, ok := lookBin("gh",
+			"/opt/homebrew/bin/gh",
+			"/usr/local/bin/gh",
+		); ok {
+			r.GhInstalled = true
+			r.GhPath = bin
+			r.GhVersion = extractSemver(versionWithTimeout(bin, "--version"))
 		}
-	}
+	}()
 
-	if bin, ok := lookBin("bun",
-		"/opt/homebrew/bin/bun",
-		"/usr/local/bin/bun",
-		"~/.bun/bin/bun",
-	); ok {
-		if out, err := exec.Command(bin, "--version").Output(); err == nil {
-			r.BunVersion = strings.TrimSpace(string(out))
+	go func() {
+		defer probeWG.Done()
+		if bin, ok := lookBin("node",
+			"/opt/homebrew/bin/node",
+			"/usr/local/bin/node",
+		); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			if out, err := exec.CommandContext(ctx, bin, "--version").Output(); err == nil {
+				r.NodeVersion = strings.TrimSpace(strings.TrimPrefix(string(out), "v"))
+			}
 		}
-	}
+	}()
 
-	r.Agents = detectAgents(home, a.provRegistry)
+	go func() {
+		defer probeWG.Done()
+		if bin, ok := lookBin("bun",
+			"/opt/homebrew/bin/bun",
+			"/usr/local/bin/bun",
+			"~/.bun/bin/bun",
+		); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			if out, err := exec.CommandContext(ctx, bin, "--version").Output(); err == nil {
+				r.BunVersion = strings.TrimSpace(string(out))
+			}
+		}
+	}()
+
+	var agents []AgentStatus
+	go func() {
+		defer probeWG.Done()
+		agents = detectAgents(home, a.provRegistry)
+	}()
+
+	probeWG.Wait()
+	r.Agents = agents
 	// Backward compat: populate legacy Claude fields
 	for _, ag := range r.Agents {
 		if ag.Name == "Claude Code" {
