@@ -19,6 +19,7 @@
 @property (assign, nonatomic) ghostty_input_mods_e currentMods;
 @property (retain, nonatomic) NSMutableString *pendingMarked;
 - (void)pushSizeToSurface;
+- (void)pushDisplayIDToSurface;
 @end
 
 // ---- key map -----------------------------------------------------------
@@ -157,6 +158,7 @@ static ghostty_input_mods_e phantom_mods_from_event(NSEvent *evt) {
 }
 
 - (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
     [_pendingMarked release];
     [super dealloc];
 }
@@ -180,6 +182,16 @@ static ghostty_input_mods_e phantom_mods_from_event(NSEvent *evt) {
     }
 }
 
+- (void)pushDisplayIDToSurface {
+    if (self.surface == NULL) return;
+    NSScreen *screen = self.window.screen ?: NSScreen.mainScreen;
+    NSNumber *num = screen.deviceDescription[@"NSScreenNumber"];
+    if (num == nil) return;
+    uint32_t displayID = (uint32_t)num.unsignedIntValue;
+    if (displayID == 0) return;
+    ghostty_surface_set_display_id(self.surface, displayID);
+}
+
 - (void)setFrameSize:(NSSize)newSize {
     [super setFrameSize:newSize];
     [self pushSizeToSurface];
@@ -188,12 +200,28 @@ static ghostty_input_mods_e phantom_mods_from_event(NSEvent *evt) {
 - (void)viewDidChangeBackingProperties {
     [super viewDidChangeBackingProperties];
     [self pushSizeToSurface];
+    [self pushDisplayIDToSurface];
 }
 
 - (void)viewDidMoveToWindow {
     [super viewDidMoveToWindow];
     [self updateTrackingAreas];
     [self pushSizeToSurface];
+    [self pushDisplayIDToSurface];
+    // Listen for window→screen moves so ProMotion + display refresh follow.
+    NSNotificationCenter *nc = NSNotificationCenter.defaultCenter;
+    [nc removeObserver:self name:NSWindowDidChangeScreenNotification object:nil];
+    if (self.window) {
+        [nc addObserver:self
+               selector:@selector(phantomWindowDidChangeScreen:)
+                   name:NSWindowDidChangeScreenNotification
+                 object:self.window];
+    }
+}
+
+- (void)phantomWindowDidChangeScreen:(NSNotification *)note {
+    [self pushSizeToSurface];
+    [self pushDisplayIDToSurface];
 }
 
 - (BOOL)acceptsFirstResponder { return YES; }
