@@ -131,7 +131,7 @@ func Targets() map[string]TargetCheck {
 		"git_status_p50_under_100ms": {Target: "<100ms (p50)", Actual: r.GitStatus.P50.String(), Met: r.GitStatus.P50 > 0 && r.GitStatus.P50 < 100*time.Millisecond},
 		"project_switch_p50_under_200ms": {Target: "<200ms (p50)", Actual: r.ProjectSwitch.P50.String(), Met: r.ProjectSwitch.P50 > 0 && r.ProjectSwitch.P50 < 200*time.Millisecond},
 		"sidebar_p50_under_100ms": {Target: "<100ms (p50)", Actual: r.SidebarRefresh.P50.String(), Met: r.SidebarRefresh.P50 > 0 && r.SidebarRefresh.P50 < 100*time.Millisecond},
-		"memory_baseline_under_60mb": {Target: "<60MB Sys", Actual: humanBytes(r.MemRSSBytes), Met: r.MemRSSBytes > 0 && r.MemRSSBytes < 60*1024*1024},
+		"memory_go_runtime_under_60mb": {Target: "<60MB Go runtime (WebKit RSS accepted)", Actual: humanBytes(r.MemRSSBytes), Met: r.MemRSSBytes > 0 && r.MemRSSBytes < 60*1024*1024},
 	}
 }
 
