@@ -5,26 +5,41 @@ type SoundCue = 'typing' | 'scan' | 'ok' | 'reveal' | 'whoosh' | 'bass' | 'cerem
 let ctx: AudioContext | null = null;
 let humOsc: OscillatorNode | null = null;
 let humGain: GainNode | null = null;
-let keepAliveOsc: OscillatorNode | null = null;
 let enabled = true;
 let volume = 0.5;
 
+// Idle suspension — AudioContext suspends after N ms of no playback to free CPU.
+// Hum sound counts as continuous playback and prevents suspension while active.
+const IDLE_SUSPEND_MS = 30_000;
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
 function getCtx(): AudioContext {
   if (!ctx) {
+    // Start in suspended state — only resume on first actual playback.
     ctx = new AudioContext();
-    startKeepAlive(ctx);
   }
-  if (ctx.state === 'suspended') ctx.resume();
+  ensureRunning();
   return ctx;
 }
 
-function startKeepAlive(c: AudioContext): void {
-  if (keepAliveOsc) return;
-  keepAliveOsc = c.createOscillator();
-  const silentGain = c.createGain();
-  silentGain.gain.value = 0;
-  keepAliveOsc.connect(silentGain).connect(c.destination);
-  keepAliveOsc.start();
+function ensureRunning(): void {
+  if (!ctx) return;
+  if (ctx.state === 'suspended') {
+    void ctx.resume();
+  }
+  scheduleIdleSuspend();
+}
+
+function scheduleIdleSuspend(): void {
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    idleTimer = null;
+    // Don't suspend if the ambient hum is active — it's intentional continuous playback.
+    if (humOsc) return;
+    if (ctx && ctx.state === 'running') {
+      void ctx.suspend();
+    }
+  }, IDLE_SUSPEND_MS);
 }
 
 function playTone(

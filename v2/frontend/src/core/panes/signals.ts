@@ -9,7 +9,14 @@ import { createStore, produce } from 'solid-js/store';
 import { activeWorktreeId } from '@/core/signals/app';
 import { worktreeMap } from '@/core/signals/worktrees';
 
-const VALID_PANE_TYPES = new Set(['terminal', 'tui', 'editor', 'composer', 'home']);
+const VALID_PANE_TYPES = new Set(['terminal', 'native-terminal', 'tui', 'editor', 'composer', 'home']);
+
+// Native (libghostty) terminal feature flag — refreshed at startup and on
+// toggle. addTabWithData consults this synchronously to decide whether a
+// requested 'terminal' pane should be promoted to 'native-terminal'.
+let nativeTerminalFlag = false;
+export function setNativeTerminalFlagCached(on: boolean): void { nativeTerminalFlag = on; }
+export function getNativeTerminalFlagCached(): boolean { return nativeTerminalFlag; }
 
 // ---------------------------------------------------------------------------
 // Crash recovery — persist workspace state to disk via Go bindings
@@ -206,6 +213,7 @@ export function focusOrCreateTab(paneType: PaneType, label?: string, data?: Reco
 }
 
 export function addTab(paneType: PaneType = 'terminal'): void {
+  if (paneType === 'terminal' && nativeTerminalFlag) paneType = 'native-terminal';
   const tab = makeTab(paneType);
   setWorkspace(produce((s) => { s.tabs.push(tab); }));
   queueMicrotask(() => setWorkspace('activeTabId', tab.id));
@@ -222,6 +230,7 @@ export function addTabWithData(
   label: string,
   data: Record<string, unknown>,
 ): string {
+  if (paneType === 'terminal' && nativeTerminalFlag) paneType = 'native-terminal';
   const tab = makeTab(paneType, label);
   const paneId = tab.activePaneId;
   if (paneId && tab.panes[paneId]) {

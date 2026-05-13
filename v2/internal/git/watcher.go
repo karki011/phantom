@@ -35,6 +35,7 @@ type Watcher struct {
 	eventCh  chan GitEvent
 	mu       sync.Mutex
 	debounce map[string]*time.Timer
+	active   *activeProjectRegistry
 }
 
 func NewWatcher(ctx context.Context) (*Watcher, error) {
@@ -49,12 +50,39 @@ func NewWatcher(ctx context.Context) (*Watcher, error) {
 		watcher:  fsw,
 		eventCh:  make(chan GitEvent, 32),
 		debounce: make(map[string]*time.Timer),
+		active:   newActiveProjectRegistry(),
 	}
 	go w.run()
 	return w, nil
 }
 
 func (w *Watcher) Events() <-chan GitEvent { return w.eventCh }
+
+// SetActiveProjects narrows event delivery to the given repo roots. Passing an
+// empty slice restores backward-compatible "all active" behavior. Repos that
+// transition from paused to active receive one synthetic refresh event to
+// catch changes missed while paused.
+func (w *Watcher) SetActiveProjects(repoPaths []string) {
+	if w == nil || w.active == nil {
+		return
+	}
+	resumed := w.active.setActive(repoPaths)
+	for range resumed {
+		select {
+		case w.eventCh <- GitEvent{Type: GitEventStatusChanged}:
+		default:
+		}
+	}
+}
+
+// SetActiveProject is a convenience for the single-focused-project case.
+func (w *Watcher) SetActiveProject(repoPath string) {
+	if repoPath == "" {
+		w.SetActiveProjects(nil)
+		return
+	}
+	w.SetActiveProjects([]string{repoPath})
+}
 
 func (w *Watcher) WatchRepo(repoPath string) error {
 	gitDir := resolveGitDir(repoPath)
@@ -67,6 +95,8 @@ func (w *Watcher) WatchRepo(repoPath string) error {
 	}
 
 	log.Info("git/Watcher: watching repo", "repoPath", repoPath, "gitDir", gitDir, "commonDir", commonDir)
+
+	w.active.register(repoPath, gitDir, commonDir)
 
 	if _, err := os.Stat(filepath.Join(gitDir, "HEAD")); err == nil {
 		w.watcher.Add(gitDir)
@@ -227,6 +257,13 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 	// .lock briefly even for read-only ops (esp. inside linked worktrees),
 	// and reacting to it loops: refresh -> git lock -> fsnotify -> refresh.
 	if strings.HasSuffix(name, ".lock") || strings.HasSuffix(name, "~") || strings.HasPrefix(name, ".#") {
+		return
+	}
+
+	// Gate early: when the user has narrowed the active set, drop events for
+	// paused projects before doing any further work. Keeps fsnotify subscribed
+	// (no state loss) but suppresses downstream cost.
+	if !w.active.isActive(event.Name) {
 		return
 	}
 

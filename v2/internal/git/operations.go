@@ -14,14 +14,33 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/subashkarki/phantom-os-v2/internal/perf"
 )
 
 const defaultTimeout = 30 * time.Second
+
+const defaultBranchCacheTTL = 5 * time.Minute
 
 var (
 	ghOnce sync.Once
 	ghPath string
 )
+
+// defaultBranchCache caches the resolved default branch per repo path.
+// Default branch rarely changes, so a 5-minute TTL is safe.
+// TODO: integrate with the file watcher to invalidate on ref changes.
+var defaultBranchCache sync.Map // map[string]defaultBranchEntry
+
+type defaultBranchEntry struct {
+	branch    string
+	expiresAt time.Time
+}
+
+// InvalidateDefaultBranchCache clears the cached default branch for a repo.
+func InvalidateDefaultBranchCache(repoPath string) {
+	defaultBranchCache.Delete(repoPath)
+}
 
 // ghBin returns the absolute path to the gh binary.
 // macOS GUI apps don't inherit the shell PATH, so Homebrew paths are checked explicitly.
@@ -97,29 +116,50 @@ func GetRepoName(repoPath string) string {
 }
 
 // GetDefaultBranch determines the default branch for the repository.
-// It tries origin/HEAD first, then checks for "main", then "master",
-// falling back to "main" if nothing else works.
+// It resolves origin/HEAD in one call, then falls back to scanning local
+// refs for main/master with a single for-each-ref. Results are cached for
+// defaultBranchCacheTTL since the default branch rarely changes.
 func GetDefaultBranch(ctx context.Context, repoPath string) string {
-	// Try symbolic-ref of origin/HEAD
-	out, err := runGit(ctx, repoPath, "symbolic-ref", "refs/remotes/origin/HEAD")
-	if err == nil {
-		branch := strings.TrimPrefix(out, "refs/remotes/origin/")
-		if branch != "" {
-			return branch
+	if v, ok := defaultBranchCache.Load(repoPath); ok {
+		entry := v.(defaultBranchEntry)
+		if time.Now().Before(entry.expiresAt) {
+			return entry.branch
 		}
 	}
 
-	// Check if "main" branch exists
-	if _, err := runGit(ctx, repoPath, "rev-parse", "--verify", "main"); err == nil {
-		return "main"
+	branch := resolveDefaultBranch(ctx, repoPath)
+
+	// Cache positive results and the empty-repo signal; never cache an arbitrary fallback
+	// if we hit an unexpected state — but here both outcomes are deterministic.
+	defaultBranchCache.Store(repoPath, defaultBranchEntry{
+		branch:    branch,
+		expiresAt: time.Now().Add(defaultBranchCacheTTL),
+	})
+	return branch
+}
+
+// resolveDefaultBranch performs the actual git calls without consulting the cache.
+func resolveDefaultBranch(ctx context.Context, repoPath string) string {
+	// One call: resolve origin/HEAD symbolically.
+	if out, err := runGit(ctx, repoPath, "symbolic-ref", "refs/remotes/origin/HEAD"); err == nil {
+		if b := strings.TrimPrefix(out, "refs/remotes/origin/"); b != "" {
+			return b
+		}
 	}
 
-	// Check if "master" branch exists
-	if _, err := runGit(ctx, repoPath, "rev-parse", "--verify", "master"); err == nil {
-		return "master"
+	// One call: list local heads matching main/master.
+	if out, err := runGit(ctx, repoPath,
+		"for-each-ref", "--format=%(refname:short)",
+		"refs/heads/main", "refs/heads/master",
+	); err == nil && out != "" {
+		for _, name := range strings.Split(out, "\n") {
+			name = strings.TrimSpace(name)
+			if name == "main" || name == "master" {
+				return name
+			}
+		}
 	}
 
-	// No default branch found — if repo has no commits, signal empty repo
 	if !HasCommits(ctx, repoPath) {
 		return ""
 	}
@@ -193,6 +233,9 @@ func FetchOrigin(ctx context.Context, repoPath string) error {
 	defer cancel()
 
 	_, _ = runGit(fetchCtx, repoPath, "fetch", "origin")
+	// Fetch updates remote-tracking refs; drop the cached go-git handle so
+	// subsequent fast reads see the new refs.
+	DefaultRepoPool().Invalidate(repoPath)
 	return nil
 }
 
@@ -224,6 +267,9 @@ func Unstage(ctx context.Context, repoPath string, paths ...string) error {
 // Commit creates a commit with the given message.
 func Commit(ctx context.Context, repoPath, message string) error {
 	_, err := runGit(ctx, repoPath, "commit", "-m", message)
+	if err == nil {
+		DefaultRepoPool().Invalidate(repoPath)
+	}
 	return err
 }
 
@@ -242,6 +288,9 @@ func Push(ctx context.Context, repoPath string) error {
 		defer cancel2()
 		_, err = runGit(pushCtx2, repoPath, "push", "-u", "origin", branch)
 	}
+	if err == nil {
+		DefaultRepoPool().Invalidate(repoPath)
+	}
 	return err
 }
 
@@ -250,20 +299,21 @@ func Pull(ctx context.Context, repoPath string) error {
 	pullCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	_, err := runGit(pullCtx, repoPath, "pull")
+	if err == nil {
+		DefaultRepoPool().Invalidate(repoPath)
+	}
 	return err
 }
 
 // Discard discards working-tree changes for the specified paths.
+// Partitions tracked vs untracked in a single `git ls-files` call instead of N.
 func Discard(ctx context.Context, repoPath string, paths ...string) error {
-	var tracked, untracked []string
-	for _, p := range paths {
-		_, err := runGit(ctx, repoPath, "ls-files", "--error-unmatch", p)
-		if err != nil {
-			untracked = append(untracked, p)
-		} else {
-			tracked = append(tracked, p)
-		}
+	if len(paths) == 0 {
+		return nil
 	}
+
+	tracked, untracked := partitionTracked(ctx, repoPath, paths)
+
 	if len(tracked) > 0 {
 		args := append([]string{"checkout", "--"}, tracked...)
 		if _, err := runGit(ctx, repoPath, args...); err != nil {
@@ -277,6 +327,36 @@ func Discard(ctx context.Context, repoPath string, paths ...string) error {
 		}
 	}
 	return nil
+}
+
+// partitionTracked splits paths into tracked vs untracked using a single
+// `git ls-files -- p1 p2 ...` invocation. Output contains only tracked paths;
+// anything in the input not in the output is treated as untracked.
+func partitionTracked(ctx context.Context, repoPath string, paths []string) (tracked, untracked []string) {
+	args := append([]string{"ls-files", "--"}, paths...)
+	out, err := runGit(ctx, repoPath, args...)
+	if err != nil {
+		// On error, fall back to treating everything as untracked so `clean` can run.
+		return nil, paths
+	}
+
+	trackedSet := make(map[string]struct{}, len(paths))
+	if out != "" {
+		for _, line := range strings.Split(out, "\n") {
+			if line = strings.TrimSpace(line); line != "" {
+				trackedSet[line] = struct{}{}
+			}
+		}
+	}
+
+	for _, p := range paths {
+		if _, ok := trackedSet[p]; ok {
+			tracked = append(tracked, p)
+		} else {
+			untracked = append(untracked, p)
+		}
+	}
+	return tracked, untracked
 }
 
 // DiscardAll discards all working-tree changes in the repo.
@@ -325,12 +405,12 @@ type FileEntry struct {
 
 // ListDirectory returns one-level directory listing with git status applied.
 // It skips .git and gitignored entries, and is not recursive — the frontend handles lazy loading.
-// Directories receive a git status badge if any child file has a status.
+// Directories receive a git status badge if any descendant file has a status,
+// looked up via a pre-built parent-prefix map (O(1) per entry instead of O(n*m)).
 func ListDirectory(ctx context.Context, repoPath, dirPath string) ([]FileEntry, error) {
-	// Build status map from cached porcelain output (2s TTL).
-	statusMap := getCachedStatus(ctx, repoPath)
+	defer perf.Time(perf.RecordSidebarRefresh)()
+	statusMap, dirStatusMap := getCachedStatusAndDirs(ctx, repoPath)
 
-	// Compute relative directory path for building relative entry paths.
 	relDir, _ := filepath.Rel(repoPath, dirPath)
 	if relDir == "." {
 		relDir = ""
@@ -341,10 +421,8 @@ func ListDirectory(ctx context.Context, repoPath, dirPath string) ([]FileEntry, 
 		return nil, fmt.Errorf("ListDirectory: read dir %s: %w", dirPath, err)
 	}
 
-	// Load cached in-process gitignore rules (no subprocess, 30 s TTL).
 	gitignoreRules := getCachedGitignoreRules(repoPath)
 
-	// Build ignoredSet by evaluating each entry against the cached rules.
 	ignoredSet := make(map[string]bool)
 	for _, entry := range entries {
 		name := entry.Name()
@@ -389,12 +467,8 @@ func ListDirectory(ctx context.Context, repoPath, dirPath string) ([]FileEntry, 
 				fe.GitStatus = normalizeStatus(status)
 			}
 		} else {
-			prefix := relPath + "/"
-			for filePath, status := range statusMap {
-				if strings.HasPrefix(filePath, prefix) {
-					fe.GitStatus = normalizeStatus(status)
-					break
-				}
+			if status, ok := dirStatusMap[relPath]; ok {
+				fe.GitStatus = normalizeStatus(status)
 			}
 		}
 

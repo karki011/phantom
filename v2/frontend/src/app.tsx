@@ -55,6 +55,7 @@ import { AICommandCenter } from './components/ai-command-center/AICommandCenter'
 import ComposerDrawer from './components/composer/ComposerDrawer';
 import ComposerStatusPill from './components/composer/ComposerStatusPill';
 import { DigestDrawer } from './shared/DigestDrawer/DigestDrawer';
+import { PerfOverlay } from './components/PerfOverlay/PerfOverlay';
 
 export function App() {
   const [ready, setReady] = createSignal(false);
@@ -68,6 +69,14 @@ export function App() {
     document.body.classList.add(shadowMonarchDarkTheme);
 
     await waitForWails();
+
+    // Sync native-terminal feature flag so pane routing in signals.ts is
+    // correct before any tab is created.
+    try {
+      const { nativeTerminalIsEnabled } = await import('@/core/bindings/native-terminal');
+      const { setNativeTerminalFlagCached } = await import('@/core/panes/signals');
+      setNativeTerminalFlagCached(await nativeTerminalIsEnabled());
+    } catch {}
 
     const savedTheme = await loadPref('theme');
     if (savedTheme) initTheme(savedTheme);
@@ -284,6 +293,9 @@ export function App() {
       <DigestDrawer />
       <ComposerDrawer />
       <ComposerStatusPill />
+      <Show when={typeof window !== 'undefined' && (localStorage.getItem('phantom.perf') === '1' || new URLSearchParams(window.location.search).has('perf'))}>
+        <PerfOverlay />
+      </Show>
     </div>
   );
 }

@@ -34,6 +34,7 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/git"
 	"github.com/subashkarki/phantom-os-v2/internal/integration"
 	"github.com/subashkarki/phantom-os-v2/internal/linker"
+	"github.com/subashkarki/phantom-os-v2/internal/perf"
 	"github.com/subashkarki/phantom-os-v2/internal/provider"
 	"github.com/subashkarki/phantom-os-v2/internal/session"
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
@@ -73,6 +74,14 @@ type App struct {
 
 	// gitWatcher provides instant change detection via .git file watching.
 	gitWatcher *git.Watcher
+
+	// gitPriorityPool runs git work with a high (active project) / low
+	// (background) lane so active-project operations jump the queue.
+	gitPriorityPool *git.PriorityPool
+
+	// gitWarmCache returns stale snapshots instantly on project switch and
+	// triggers background refresh that fans out via SSE/events.
+	gitWarmCache *git.WarmCache
 
 	// journal appends notable events to the daily work log.
 	journal journalAppender
@@ -115,6 +124,14 @@ type App struct {
 
 	// shutdownOnce ensures graceful teardown (including factory reset) runs at most once.
 	shutdownOnce sync.Once
+
+	// Native (libghostty) terminal state — lazily initialized on first
+	// NativeTerminalCreate call when the feature flag is on. The map is
+	// keyed by frontend pane (terminal) ID. See bindings_native_terminal.go.
+	nativeTerminals  map[string]nativeTerminal
+	nativeHost       nativeHostHandle
+	ghosttyApp       ghosttyAppHandle
+	nativeMu         sync.Mutex
 }
 
 func New() *App {
@@ -179,6 +196,7 @@ type HealthResponse struct {
 }
 
 func (a *App) Startup(ctx context.Context) {
+	defer perf.Time(perf.RecordBoot)()
 	a.ctx, a.cancel = context.WithCancel(ctx)
 	a.terminalSubs = make(map[string]context.CancelFunc)
 	a.tuiSessions = make(map[string]*tui.Session)
@@ -343,6 +361,24 @@ func (a *App) Startup(ctx context.Context) {
 	} else {
 		log.Error("app: git watcher start failed", "err", err)
 	}
+
+	// Priority pool + warm cache power the instant-switch UX. Status/branch/log
+	// refreshes for the active project ride the high lane; background fetches
+	// for other projects ride the low lane.
+	a.gitPriorityPool = git.NewPriorityPool(a.ctx, 0)
+	a.gitWarmCache = git.NewWarmCache(a.gitPriorityPool)
+	a.gitWarmCache.SetCallbacks(
+		func(repoPath string, _ *git.RepoStatus) {
+			git.InvalidateStatusCache(repoPath)
+			a.EmitGitStatus()
+		},
+		func(_ string, _ []git.BranchInfo) {
+			a.EmitGitBranchChanged()
+		},
+		func(_ string, _ []git.CommitInfo) {
+			a.EmitGitStatus()
+		},
+	)
 }
 
 func (a *App) DomReady(ctx context.Context) {
@@ -972,6 +1008,10 @@ func (a *App) doTeardown(persistTerminalState bool) {
 		a.gitWatcher.Stop()
 	}
 
+	if a.gitPriorityPool != nil {
+		a.gitPriorityPool.Stop()
+	}
+
 	if a.collectorRegistry != nil {
 		a.collectorRegistry.StopAll()
 	}
@@ -995,6 +1035,8 @@ func (a *App) doTeardown(persistTerminalState bool) {
 		delete(a.tuiSessions, id)
 	}
 	a.tuiSessionsMu.Unlock()
+
+	a.shutdownNativeTerminals()
 
 	if a.cancel != nil {
 		a.cancel()

@@ -37,3 +37,10 @@ vendor/
 # AgentDB (claude-flow runtime files)
 agentdb.rvf
 agentdb.rvf.lock
+
+# libghostty embed (Wave 5) — ghostty cloned externally, built locally
+# Setup: git clone https://github.com/ghostty-org/ghostty third_party/ghostty && make libghostty
+third_party/
+# Built binary at repo root from `go build ./cmd/phantom-libghostty-demo/`.
+# Anchored so the source dir `cmd/phantom-libghostty-demo/` stays tracked.
+/phantom-libghostty-demo

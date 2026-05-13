@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/git"
+	"github.com/subashkarki/phantom-os-v2/internal/perf"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -22,6 +23,7 @@ func (a *App) WatchWorktree(worktreeId string) {
 
 	log.Info("app/WatchWorktree: watching", "worktreeId", worktreeId)
 
+	var newPath string
 	if a.gitWatcher != nil {
 		if old != "" && old != worktreeId {
 			if oldPath, err := a.resolveWorkspacePath(old); err == nil {
@@ -29,11 +31,45 @@ func (a *App) WatchWorktree(worktreeId string) {
 			}
 		}
 		if worktreeId != "" {
-			if newPath, err := a.resolveWorkspacePath(worktreeId); err == nil {
+			if p, err := a.resolveWorkspacePath(worktreeId); err == nil {
+				newPath = p
 				a.gitWatcher.WatchRepo(newPath)
+				a.gitWatcher.SetActiveProject(newPath)
 			}
+		} else {
+			a.gitWatcher.SetActiveProjects(nil)
 		}
 	}
+
+	if newPath != "" && a.gitWarmCache != nil {
+		a.gitWarmCache.Warm(a.ctx, newPath)
+	}
+}
+
+// SetActiveWorktree is the explicit project-switch entry point. It updates
+// the watcher's active set and warms the cache so the UI receives stale data
+// instantly while fresh data flows in via SSE. Returns the warm snapshot.
+func (a *App) SetActiveWorktree(worktreeId string) *git.WarmSnapshot {
+	defer perf.Time(perf.RecordProjectSwitch)()
+	if worktreeId == "" {
+		if a.gitWatcher != nil {
+			a.gitWatcher.SetActiveProjects(nil)
+		}
+		return nil
+	}
+	repoPath, err := a.resolveWorkspacePath(worktreeId)
+	if err != nil {
+		log.Error("app/SetActiveWorktree: resolve failed", "worktreeId", worktreeId, "err", err)
+		return nil
+	}
+	if a.gitWatcher != nil {
+		a.gitWatcher.SetActiveProject(repoPath)
+	}
+	if a.gitWarmCache == nil {
+		return nil
+	}
+	snap := a.gitWarmCache.Warm(a.ctx, repoPath)
+	return &snap
 }
 
 // IsGhAvailable returns true if the gh CLI is authenticated on this machine.

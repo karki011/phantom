@@ -23,6 +23,7 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/knowledge"
 	"github.com/subashkarki/phantom-os-v2/internal/ai/orchestrator"
+	"github.com/subashkarki/phantom-os-v2/internal/perf"
 )
 
 // DefaultPort is the port hooks expect.
@@ -214,6 +215,18 @@ func (s *Server) registerRoutes() {
 
 	// Errors (for structured error logging)
 	s.mux.HandleFunc("GET /api/errors", s.handleGetErrors)
+
+	// Perf (runtime metrics + target checks)
+	s.mux.HandleFunc("GET /api/perf", s.handlePerfReport)
+	s.mux.HandleFunc("GET /api/perf/targets", s.handlePerfTargets)
+}
+
+func (s *Server) handlePerfReport(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, perf.GetReport())
+}
+
+func (s *Server) handlePerfTargets(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, perf.Targets())
 }
 
 // ---------------------------------------------------------------------------
