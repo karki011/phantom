@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.40](https://github.com/karki011/phantom/compare/v0.1.39...v0.1.40) (2026-05-13)
+
+
+### Performance
+
+* native Metal terminal via libghostty + performance overhaul ([#120](https://github.com/karki011/phantom/issues/120)) ([f7b5b06](https://github.com/karki011/phantom/commit/f7b5b0692b5f1fcce10adc229f783cddd431b9ad))
+
 ## [0.1.39](https://github.com/karki011/phantom/compare/v0.1.38...v0.1.39) (2026-05-12)
 
 

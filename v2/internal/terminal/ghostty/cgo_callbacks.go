@@ -27,17 +27,11 @@ import (
 	"unsafe"
 )
 
-// focusedSurface tracks the most recently focused surface handle so clipboard
-// callbacks can complete the request on the correct surface. Set by
-// SetFocusedSurface, read by the clipboard callbacks. Access serialised
-// by focusedMu.
 var (
 	focusedMu      sync.Mutex
 	focusedSurface C.ghostty_surface_t
 )
 
-// SetFocusedSurface records which surface is currently focused. Called from
-// the bindings layer when a pane gets focus.
 func SetFocusedSurface(s *Surface) {
 	focusedMu.Lock()
 	defer focusedMu.Unlock()
