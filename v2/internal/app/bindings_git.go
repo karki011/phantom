@@ -153,6 +153,9 @@ func (a *App) RemoveWorktree(worktreeId, worktreePath string) error {
 		// want to emit the event so the watcher-driven refresh picks it up.
 	}
 
+	// Clean up persisted workspace layout (pane_states) regardless of DB presence.
+	a.DeleteWorkspaceState(worktreeId)
+
 	if dbErr == nil {
 		wq := db.New(a.DB.Writer)
 		if err := wq.DeleteWorkspace(a.ctx, worktreeId); err != nil {

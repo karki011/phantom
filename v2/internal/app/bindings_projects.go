@@ -106,6 +106,8 @@ func (a *App) AddProject(repoPath string) (*db.Project, error) {
 }
 
 // RemoveProject deletes a project and all related data by ID.
+// Worktrees are removed from disk (git worktree remove + prune) before
+// their DB rows are deleted so nothing is left orphaned.
 func (a *App) RemoveProject(id string) error {
 	rq := db.New(a.DB.Reader)
 	workspaces, err := rq.ListWorkspacesByProject(a.ctx, id)
@@ -114,6 +116,15 @@ func (a *App) RemoveProject(id string) error {
 	}
 	wq := db.New(a.DB.Writer)
 	for _, ws := range workspaces {
+		// Remove worktree from disk + run git worktree prune.
+		// Only attempt for actual worktrees (type="worktree") that have a path.
+		if ws.Type == "worktree" && ws.WorktreePath.Valid && ws.WorktreePath.String != "" {
+			if err := git.Remove(a.ctx, ws.WorktreePath.String); err != nil {
+				slog.Warn("RemoveProject: git.Remove failed (continuing)", "path", ws.WorktreePath.String, "err", err)
+			}
+		}
+		// Clean up persisted workspace layout (pane_states).
+		a.DeleteWorkspaceState(ws.ID)
 		if err := wq.DeleteWorkspace(a.ctx, ws.ID); err != nil {
 			slog.Warn("RemoveProject: delete workspace failed", "workspaceID", ws.ID, "err", err)
 		}
