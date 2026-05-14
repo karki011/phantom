@@ -1,3 +1,5 @@
+//go:build ghostty
+
 // Author: Subash Karki
 //
 // Runtime config + ghostty_app_t lifecycle. The callbacks below are the

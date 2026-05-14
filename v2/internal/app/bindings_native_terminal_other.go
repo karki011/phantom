@@ -1,8 +1,8 @@
-//go:build !darwin
+//go:build !(darwin && ghostty)
 
 // Author: Subash Karki
 //
-// Non-darwin stubs — the libghostty integration is macOS-only today.
+// Stubs when libghostty is not available (non-darwin or missing build tag).
 package app
 
 import "errors"

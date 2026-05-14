@@ -8,6 +8,9 @@ LIBGHOSTTY_OUT := $(LIBGHOSTTY_DIR)/macos/GhosttyKit.xcframework
 LIBGHOSTTY_LIB := $(LIBGHOSTTY_OUT)/macos-arm64/libghostty-internal-fat.a
 ZIG_BIN        := $(shell command -v /opt/homebrew/opt/zig@0.15/bin/zig 2>/dev/null || command -v zig)
 
+# Auto-detect libghostty: pass -tags ghostty to Go/Wails only when the lib exists.
+GHOSTTY_TAGS := $(if $(wildcard $(LIBGHOSTTY_LIB)),-tags ghostty,)
+
 libghostty: $(LIBGHOSTTY_LIB)
 $(LIBGHOSTTY_LIB):
 	@command -v $(ZIG_BIN) >/dev/null || (echo "zig 0.15 not found: brew install zig@0.15"; exit 1)
@@ -44,11 +47,11 @@ VERSION       := $(shell cat VERSION 2>/dev/null || echo dev)
 
 # Development
 dev: mcp-build
-	wails dev
+	wails dev $(GHOSTTY_TAGS)
 
 # Production build — also bundles the phantom-mcp child binary into the .app.
 build: mcp-build
-	wails build -clean
+	wails build -clean $(GHOSTTY_TAGS)
 	$(MAKE) mcp-bundle
 
 # Frontend
@@ -111,7 +114,7 @@ docs-llm:
 
 # Go
 go-build:
-	go build -o build/bin/phantomos .
+	go build $(GHOSTTY_TAGS) -o build/bin/phantomos .
 
 # Standalone MCP stdio binary spawned by Claude Code.
 mcp-build:
@@ -135,7 +138,7 @@ mcp-bundle:
 	@echo "✓ phantom-mcp bundled at $(APP_MACOS)/phantom-mcp"
 
 go-test:
-	go test ./... -v -race
+	go test $(GHOSTTY_TAGS) ./... -v -race
 
 go-lint:
 	golangci-lint run ./...
@@ -171,7 +174,7 @@ release: release-dmg
 
 release-build: mcp-build-universal
 	@echo "==> wails build (universal, trimmed)"
-	wails build -clean -trimpath -platform darwin/universal -ldflags "-s -w"
+	wails build -clean -trimpath -platform darwin/universal -ldflags "-s -w" $(GHOSTTY_TAGS)
 	@echo "==> bundling phantom-mcp into .app"
 	$(MAKE) mcp-bundle
 

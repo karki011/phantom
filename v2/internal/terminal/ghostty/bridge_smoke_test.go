@@ -1,3 +1,5 @@
+//go:build ghostty
+
 // Author: Subash Karki
 package ghostty
 

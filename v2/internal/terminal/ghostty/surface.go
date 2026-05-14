@@ -1,3 +1,5 @@
+//go:build ghostty
+
 // Author: Subash Karki
 //
 // Surface — wraps a ghostty_surface_t. A surface owns a per-terminal

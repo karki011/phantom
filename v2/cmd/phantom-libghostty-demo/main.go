@@ -1,3 +1,5 @@
+//go:build ghostty
+
 // Author: Subash Karki
 //
 // phantom-libghostty-demo — a minimal standalone binary that opens a native

@@ -1,3 +1,5 @@
+//go:build ghostty
+
 // Author: Subash Karki
 //
 // CGo //export functions called by libghostty back into Go. These are the
