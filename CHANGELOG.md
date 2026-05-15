@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.43](https://github.com/karki011/phantom/compare/v0.1.42...v0.1.43) (2026-05-15)
+
+
+### Bug Fixes
+
+* build universal libghostty xcframework for CI release ([#126](https://github.com/karki011/phantom/issues/126)) ([4636290](https://github.com/karki011/phantom/commit/463629017bfcead0009982275b72a7211222e9ab))
+
 ## [0.1.42](https://github.com/karki011/phantom/compare/v0.1.41...v0.1.42) (2026-05-15)
 
 
