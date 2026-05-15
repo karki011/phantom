@@ -271,7 +271,7 @@ func ListOpenPrsForBase(ctx context.Context, repoPath, baseBranch string, limit 
 		"--base", baseBranch,
 		"--state", "open",
 		"--limit", fmt.Sprintf("%d", limit),
-		"--json", "number,title,state,url,headRefName,baseRefName,isDraft,author,createdAt,statusCheckRollup",
+		"--json", "number,title,state,url,headRefName,baseRefName,isDraft,author,createdAt,statusCheckRollup,reviewDecision,latestReviews,reviewRequests,mergeable,mergeStateStatus,autoMergeRequest,mergedAt",
 	)
 	cmd.Dir = repoPath
 	var stdout, stderr bytes.Buffer

@@ -1952,6 +1952,43 @@ export const shipItSubText = style({
   marginLeft: vars.space.sm,
 });
 
+export const prCardActions = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  paddingTop: '2px',
+});
+
+export const prReviewBtn = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '2px 6px',
+  borderRadius: vars.radius.sm,
+  background: 'transparent',
+  border: 'none',
+  cursor: 'pointer',
+  fontFamily: vars.font.mono,
+  fontSize: '0.65rem',
+  color: vars.color.accent,
+  transition: `all ${vars.animation.fast} ease`,
+  ':hover': {
+    background: `color-mix(in srgb, ${vars.color.accent} 10%, transparent)`,
+  },
+});
+
+export const prApprovedBadge = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '2px 6px',
+  borderRadius: vars.radius.sm,
+  background: `color-mix(in srgb, ${vars.color.success} 10%, transparent)`,
+  fontFamily: vars.font.mono,
+  fontSize: '0.65rem',
+  color: vars.color.success,
+});
+
 export const shipItMergedPill = style({
   display: 'inline-flex',
   alignItems: 'center',

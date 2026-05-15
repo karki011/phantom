@@ -24,10 +24,10 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // Monaco editor — large (~4MB), isolate into its own chunk so it
-          // loads lazily only when an editor pane is opened.
-          if (id.includes('node_modules/monaco-editor')) {
-            return 'monaco';
+          // Shiki syntax highlighter — isolate into its own chunk so it
+          // loads lazily only when a file viewer pane is opened.
+          if (id.includes('node_modules/shiki')) {
+            return 'shiki';
           }
           // xterm.js + addons — pulled in only when a terminal pane mounts.
           if (id.includes('node_modules/@xterm/')) {

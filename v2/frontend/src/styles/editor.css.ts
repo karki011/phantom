@@ -148,11 +148,6 @@ export const editorContainer = style({
   position: 'relative',
 });
 
-// Override Monaco's scrollbar to match theme
-globalStyle(`${editorContainer} .monaco-scrollable-element > .scrollbar > .slider`, {
-  borderRadius: '4px',
-});
-
 // ---------------------------------------------------------------------------
 // Status bar — bottom info strip
 // ---------------------------------------------------------------------------
