@@ -85,11 +85,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: v2/third_party/ghostty/macos/GhosttyKit.xcframework
-          key: libghostty-${{ env.GHOSTTY_SHA }}
+          key: libghostty-universal-${{ env.GHOSTTY_SHA }}
 
-      - name: Build libghostty
+      - name: Build libghostty (universal)
         if: steps.cache-libghostty.outputs.cache-hit != 'true'
-        run: make libghostty
+        run: make libghostty-universal
 
       - name: Sync version into wails.json + VERSION
         run: |
