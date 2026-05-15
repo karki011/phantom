@@ -11,3 +11,4 @@ export { RightResizeHandle } from './RightResizeHandle';
 export { FilesView } from './FilesView';
 export { ChangesView } from './ChangesView';
 export { GitActivityPanel } from './GitActivityPanel';
+export { LiveSessionSection } from './LiveSessionSection';

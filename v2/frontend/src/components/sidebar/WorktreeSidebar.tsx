@@ -1,7 +1,7 @@
 // Phantom — Left sidebar: project/worktree navigation
 // Author: Subash Karki
 
-import { For, Show, onMount, createSignal } from 'solid-js';
+import { For, Show, onMount, onCleanup, createSignal } from 'solid-js';
 import { LeftRail } from './LeftRail';
 import { ChevronsLeft, ChevronsDownUp, ChevronsUpDown, FolderPlus, GitBranch, HardDriveDownload, Settings2 } from 'lucide-solid';
 import { TextField } from '@kobalte/core/text-field';
@@ -32,6 +32,8 @@ import { showWarningToast } from '@/shared/Toast/Toast';
 import { refreshProjects } from '@/core/signals/projects';
 import { ProjectSection } from './ProjectSection';
 import { ResizeHandle } from './ResizeHandle';
+import { LiveSessionSection } from './LiveSessionSection';
+import { bootstrapLiveSessions, cleanupLiveSessions } from '@/core/signals/live-sessions';
 
 export function WorktreeSidebar() {
   // Gate the width transition until after the first frame so the initial
@@ -39,8 +41,10 @@ export function WorktreeSidebar() {
   const [mounted, setMounted] = createSignal(false);
   onMount(() => {
     bootstrapWorktrees();
+    bootstrapLiveSessions();
     requestAnimationFrame(() => setMounted(true));
   });
+  onCleanup(cleanupLiveSessions);
 
   const allProjectsExpanded = () => expandedProjects().size >= projects().length;
 
@@ -141,6 +145,8 @@ export function WorktreeSidebar() {
             </button>
           </Tip>
         </div>
+
+        <LiveSessionSection />
 
         {/* Project list */}
         <div class={styles.projectList}>

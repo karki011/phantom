@@ -261,6 +261,65 @@ globalStyle(`${sessionDot}[data-live-state="error"]`, {
   animation: 'none',
 });
 
+// ── Live Session section ─────────────────────────────────────────────────────
+
+export const liveSessionSection = style({
+  display: 'flex',
+  flexDirection: 'column',
+  padding: `${vars.space.xs} ${vars.space.sm}`,
+  borderBottom: `1px solid ${vars.color.divider}`,
+});
+
+export const liveSessionHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.xs,
+  padding: `${vars.space.xs} ${vars.space.sm}`,
+  fontSize: '10px',
+  fontFamily: vars.font.mono,
+  fontWeight: 600,
+  color: vars.color.accent,
+  textTransform: 'uppercase',
+  letterSpacing: '0.08em',
+  userSelect: 'none',
+});
+
+export const liveSessionItem = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: vars.space.sm,
+  padding: `${vars.space.xs} ${vars.space.sm}`,
+  cursor: 'pointer',
+  borderRadius: vars.radius.sm,
+  transition: `background ${vars.animation.fast} ease`,
+  ':hover': {
+    backgroundColor: vars.color.bgHover,
+  },
+});
+
+export const liveSessionBranch = style({
+  fontSize: vars.fontSize.xs,
+  fontFamily: vars.font.mono,
+  color: vars.color.textPrimary,
+  flex: 1,
+  minWidth: 0,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+});
+
+export const liveSessionProject = style({
+  fontSize: '10px',
+  fontFamily: vars.font.mono,
+  color: vars.color.textDisabled,
+  flexShrink: 1,
+  minWidth: '40px',
+  maxWidth: '35%',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+});
+
 export const inlineInput = style({
   display: 'flex',
   alignItems: 'center',
