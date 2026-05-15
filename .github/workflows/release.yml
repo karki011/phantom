@@ -14,6 +14,9 @@ on:
 permissions:
   contents: write
 
+env:
+  GHOSTTY_SHA: b0f8276658fbcc75318d2125d40146074a3fc505
+
 jobs:
   release:
     name: Build, sign, notarize, publish
@@ -64,6 +67,29 @@ jobs:
         run: |
           go install github.com/wailsapp/wails/v2/cmd/wails@latest
           echo "$HOME/go/bin" >> "$GITHUB_PATH"
+
+      - name: Install Zig 0.15
+        run: |
+          brew install zig@0.15
+          echo "/opt/homebrew/opt/zig@0.15/bin" >> "$GITHUB_PATH"
+
+      - name: Clone ghostty (pinned commit)
+        run: |
+          git init third_party/ghostty
+          git -C third_party/ghostty remote add origin https://github.com/ghostty-org/ghostty.git
+          git -C third_party/ghostty fetch --depth 1 origin "$GHOSTTY_SHA"
+          git -C third_party/ghostty checkout FETCH_HEAD
+
+      - name: Cache libghostty xcframework
+        id: cache-libghostty
+        uses: actions/cache@v4
+        with:
+          path: v2/third_party/ghostty/macos/GhosttyKit.xcframework
+          key: libghostty-${{ env.GHOSTTY_SHA }}
+
+      - name: Build libghostty
+        if: steps.cache-libghostty.outputs.cache-hit != 'true'
+        run: make libghostty
 
       - name: Sync version into wails.json + VERSION
         run: |
