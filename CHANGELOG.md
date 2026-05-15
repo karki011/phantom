@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.41](https://github.com/karki011/phantom/compare/v0.1.40...v0.1.41) (2026-05-15)
+
+
+### Features
+
+* Shiki file viewer, side-by-side diff, PR review button ([#122](https://github.com/karki011/phantom/issues/122)) ([65bee90](https://github.com/karki011/phantom/commit/65bee90cb91755f64559f0de680012765305906b))
+
 ## [0.1.40](https://github.com/karki011/phantom/compare/v0.1.39...v0.1.40) (2026-05-13)
 
 
