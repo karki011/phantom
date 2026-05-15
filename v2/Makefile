@@ -1,4 +1,4 @@
-.PHONY: dev build clean test lint sqlc frontend-install frontend-build frontend-typecheck go-build go-test go-lint ci mcp-build mcp-bundle docs-llm release release-build release-sign release-notarize release-zip release-dmg libghostty libghostty-clean perf-bench
+.PHONY: dev build clean test lint sqlc frontend-install frontend-build frontend-typecheck go-build go-test go-lint ci mcp-build mcp-bundle docs-llm release release-build release-sign release-notarize release-zip release-dmg libghostty libghostty-universal libghostty-clean perf-bench
 
 # Build libghostty xcframework for embedding (Metal renderer).
 # Requires: zig@0.15 (brew install zig@0.15) and Xcode Metal Toolchain
@@ -18,6 +18,17 @@ $(LIBGHOSTTY_LIB):
 	cd $(LIBGHOSTTY_DIR) && $(ZIG_BIN) build \
 		--release=fast \
 		-Dxcframework-target=native \
+		-Demit-xcframework=true \
+		-Demit-exe=false \
+		-Demit-macos-app=false \
+		-Demit-docs=false
+
+libghostty-universal:
+	@command -v $(ZIG_BIN) >/dev/null || (echo "zig 0.15 not found: brew install zig@0.15"; exit 1)
+	@xcrun -find metal >/dev/null 2>&1 || (echo "Metal toolchain missing: xcodebuild -downloadComponent MetalToolchain"; exit 1)
+	cd $(LIBGHOSTTY_DIR) && $(ZIG_BIN) build \
+		--release=fast \
+		-Dxcframework-target=universal \
 		-Demit-xcframework=true \
 		-Demit-exe=false \
 		-Demit-macos-app=false \
