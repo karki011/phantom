@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.44](https://github.com/karki011/phantom/compare/v0.1.43...v0.1.44) (2026-05-15)
+
+
+### Features
+
+* Live Session sidebar section showing active terminal worktrees ([#128](https://github.com/karki011/phantom/issues/128)) ([bc37480](https://github.com/karki011/phantom/commit/bc374803ee0337061ef95abb32eaa4e95da8fb43))
+
 ## [0.1.43](https://github.com/karki011/phantom/compare/v0.1.42...v0.1.43) (2026-05-15)
 
 
