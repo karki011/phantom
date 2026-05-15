@@ -96,6 +96,10 @@ void phantom_surface_set_occlusion_main(ghostty_surface_t s, bool hidden) {
     on_main_sync(^{ ghostty_surface_set_occlusion(s, hidden); });
 }
 
+void phantom_surface_complete_clipboard_main(ghostty_surface_t s, const char *data, void *state, bool confirmed) {
+    on_main_sync(^{ ghostty_surface_complete_clipboard_request(s, data, state, confirmed); });
+}
+
 // ---------------------------------------------------------------------------
 // NSView (PhantomTerminalView) wrappers
 // ---------------------------------------------------------------------------

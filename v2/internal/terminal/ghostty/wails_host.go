@@ -1,3 +1,5 @@
+//go:build ghostty
+
 // Author: Subash Karki
 //
 // Wails host bridge — locates the Wails NSWindow from Go and attaches

@@ -1,3 +1,5 @@
+//go:build ghostty
+
 // Author: Subash Karki
 //
 // SetPlacement — translates web-coordinate bounds (top-down Y, origin

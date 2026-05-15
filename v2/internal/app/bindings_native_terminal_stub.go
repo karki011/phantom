@@ -1,9 +1,9 @@
-//go:build !darwin
+//go:build !(darwin && ghostty)
 
 // Author: Subash Karki
 //
-// Non-darwin placeholder types so App struct compiles on linux/windows.
-// Native terminal is currently macOS-only (libghostty + AppKit).
+// Placeholder types when libghostty is not available (non-darwin or missing build tag).
+// Native terminal is macOS-only and requires `-tags ghostty`.
 package app
 
 type nativeTerminal struct{}

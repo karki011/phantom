@@ -1,3 +1,5 @@
+//go:build ghostty
+
 // Author: Subash Karki
 //
 // Runtime config + ghostty_app_t lifecycle. The callbacks below are the
@@ -68,6 +70,7 @@ import (
 // Metal renderer twice per second per surface).
 const phantomGhosttyConfig = `# Phantom-managed defaults — do not edit, regenerated on app start.
 cursor-style-blink = false
+scrollback-limit = 10000
 `
 
 // writePhantomGhosttyConfig drops phantomGhosttyConfig into a stable path

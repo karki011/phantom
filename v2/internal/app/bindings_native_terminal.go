@@ -1,4 +1,4 @@
-//go:build darwin
+//go:build darwin && ghostty
 
 // Author: Subash Karki
 //
@@ -103,6 +103,7 @@ func (a *App) NativeTerminalCreate(paneID, worktreeID, cwd string) (string, erro
 	view := surf.NSView()
 	host.AttachSubview(view)
 	host.FocusSubview(view)
+	ghostty.SetFocusedSurface(surf)
 
 	// Re-acquire lock to store results.
 	a.nativeMu.Lock()
@@ -126,6 +127,7 @@ func (a *App) NativeTerminalFocus(paneID string) {
 		return
 	}
 	host.FocusSubview(t.view)
+	ghostty.SetFocusedSurface(t.surface)
 }
 
 // NativeTerminalSetPlacement repositions the NSView for paneID using

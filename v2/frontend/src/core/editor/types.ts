@@ -1,8 +1,6 @@
 // Phantom — Editor type definitions
 // Author: Subash Karki
 
-import type * as monaco from 'monaco-editor';
-
 // ---------------------------------------------------------------------------
 // File state within an editor pane
 // ---------------------------------------------------------------------------
@@ -12,7 +10,7 @@ export interface EditorFileState {
   filePath: string;
   /** Workspace this file belongs to */
   workspaceId: string;
-  /** Monaco language ID (auto-detected from extension) */
+  /** Language ID (auto-detected from extension) */
   language: string;
   /** Display label (filename) */
   label: string;
@@ -20,8 +18,8 @@ export interface EditorFileState {
   dirty: boolean;
   /** Content at last save — used for dirty comparison */
   originalContent: string;
-  /** Monaco editor view state for save/restore on tab switch */
-  viewState: monaco.editor.ICodeEditorViewState | null;
+  /** Saved view state (scroll position, etc.) */
+  viewState: unknown;
   /**
    * True when filePath is an absolute path under an allow-listed plan
    * directory. Routes I/O through readPlanFile/writePlanFile instead of

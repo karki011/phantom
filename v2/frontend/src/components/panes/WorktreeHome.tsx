@@ -2,7 +2,7 @@
 // Author: Subash Karki
 
 import { createMemo, createSignal, createEffect, on, onCleanup, onMount, Show, For, Index } from 'solid-js';
-import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw, Activity, ChevronDown, GitMerge, Rocket } from 'lucide-solid';
+import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw, Activity, ChevronDown, GitMerge, Rocket, Eye } from 'lucide-solid';
 import { activeWorktreeId } from '@/core/signals/app';
 import { activeProject, activeWorktree } from '@/core/signals/worktrees';
 import { addTabWithData } from '@/core/panes/signals';
@@ -959,6 +959,28 @@ function OpenPrCard(props: {
       <div class={styles.prCardRow} onClick={() => openURL(pr.url)}>
         <span class={styles.prCardBranch}>{pr.head_ref_name}</span>
         <span class={styles.prCardMeta}>{pr.author} · {props.prAge(pr.created_at)}</span>
+      </div>
+
+      <div class={styles.prCardActions}>
+        <Show when={pr.review_decision === 'APPROVED'}>
+          <span class={styles.prApprovedBadge}>
+            <CheckCircle size={10} />
+            Approved by {pr.approvers?.map((r) => r.login).join(', ') || 'reviewer'}
+          </span>
+        </Show>
+        <Show when={pr.review_decision !== 'APPROVED'}>
+          <button
+            type="button"
+            class={styles.prReviewBtn}
+            onClick={(e) => {
+              e.stopPropagation();
+              addTabWithData('terminal', 'Review PR #' + pr.number, { cwd: activeWorktree()?.worktree_path ?? '', command: 'claude --dangerously-skip-permissions "/review ' + pr.url + '"' });
+            }}
+          >
+            <Eye size={11} />
+            Review
+          </button>
+        </Show>
       </div>
 
       <Show when={pr.checks_failed > 0}>

@@ -1,3 +1,5 @@
+//go:build ghostty
+
 // Author: Subash Karki
 //
 // Thin Go wrappers around the NSWindow helpers in native_window.m.

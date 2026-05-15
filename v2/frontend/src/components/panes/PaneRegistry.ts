@@ -10,7 +10,7 @@ const registry: Partial<Record<PaneType, Component<any>>> = {
   tui: lazy(() => import('./TerminalPane')),
   'native-terminal': lazy(() => import('./NativeTerminalPane')),
   home: lazy(() => import('./WorktreeHome')),
-  editor: lazy(() => import('./EditorPane')),
+  editor: lazy(() => import('./FileViewer')),
   'composer': lazy(() => import('../composer/ComposerPaneV2')),
 };
 
