@@ -1,7 +1,7 @@
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';
-import { mruWorktrees } from './worktree-mru';
+import { liveWorktrees } from './live-sessions';
 import { selectWorktree } from './worktrees';
 import { switchWorkspace } from '../panes/signals';
 import { setActiveTopTab } from './app';
@@ -13,9 +13,9 @@ export const switcherVisible = visible;
 export const switcherSelectedIndex = selectedIndex;
 
 export const openSwitcher = (): void => {
-  const mru = mruWorktrees();
-  if (mru.length < 2) return; // need at least 2 to switch
-  setSelectedIndex(1); // start at second item (first after current)
+  const live = liveWorktrees();
+  if (live.length < 2) return;
+  setSelectedIndex(1);
   setVisible(true);
 };
 
@@ -25,16 +25,16 @@ export const closeSwitcher = (): void => {
 };
 
 export const advanceSwitcher = (delta: number): void => {
-  const len = mruWorktrees().length;
+  const len = liveWorktrees().length;
   if (len === 0) return;
   setSelectedIndex((prev) => ((prev + delta) % len + len) % len);
 };
 
 export const commitSwitcher = (): void => {
-  const mru = mruWorktrees();
+  const live = liveWorktrees();
   const idx = selectedIndex();
-  if (idx >= 0 && idx < mru.length) {
-    const worktreeId = mru[idx];
+  if (idx >= 0 && idx < live.length) {
+    const worktreeId = live[idx].worktreeId;
     selectWorktree(worktreeId);
     switchWorkspace(worktreeId);
     setActiveTopTab('worktree');

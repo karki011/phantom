@@ -26,12 +26,12 @@ export function registerKeyboardShortcuts(): () => void {
   // Tear down any previous listeners (survives HMR module re-evaluation)
   const prev = (window as any)[HMR_KEY] as ((e: KeyboardEvent) => void) | undefined;
   if (prev) {
-    document.removeEventListener('keydown', prev);
+    document.removeEventListener('keydown', prev, { capture: true });
     (window as any)[HMR_KEY] = undefined;
   }
   const prevKeyup = (window as any)[HMR_KEYUP_KEY] as ((e: KeyboardEvent) => void) | undefined;
   if (prevKeyup) {
-    document.removeEventListener('keyup', prevKeyup);
+    document.removeEventListener('keyup', prevKeyup, { capture: true });
     (window as any)[HMR_KEYUP_KEY] = undefined;
   }
 
@@ -273,11 +273,11 @@ export function registerKeyboardShortcuts(): () => void {
 
   (window as any)[HMR_KEY] = handler;
   (window as any)[HMR_KEYUP_KEY] = keyupHandler;
-  document.addEventListener('keydown', handler);
-  document.addEventListener('keyup', keyupHandler);
+  document.addEventListener('keydown', handler, { capture: true });
+  document.addEventListener('keyup', keyupHandler, { capture: true });
   return () => {
-    document.removeEventListener('keydown', handler);
-    document.removeEventListener('keyup', keyupHandler);
+    document.removeEventListener('keydown', handler, { capture: true });
+    document.removeEventListener('keyup', keyupHandler, { capture: true });
     if ((window as any)[HMR_KEY] === handler) (window as any)[HMR_KEY] = undefined;
     if ((window as any)[HMR_KEYUP_KEY] === keyupHandler) (window as any)[HMR_KEYUP_KEY] = undefined;
   };

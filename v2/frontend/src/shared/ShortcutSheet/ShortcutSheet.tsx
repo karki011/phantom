@@ -53,8 +53,8 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
     name: 'Worktree',
     shortcuts: [
-      { label: 'Switch Worktree (forward)', keys: ['⌃', '⇥'] },
-      { label: 'Switch Worktree (backward)', keys: ['⌃', '⇧', '⇥'] },
+      { label: 'Switch Live Session (forward)', keys: ['⌃', '⇥'] },
+      { label: 'Switch Live Session (backward)', keys: ['⌃', '⇧', '⇥'] },
     ],
   },
   {

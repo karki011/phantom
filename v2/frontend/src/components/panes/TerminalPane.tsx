@@ -26,7 +26,6 @@ import { installShellIntegration } from '@/core/terminal/addons/shellIntegration
 import { installQuickFix } from '@/core/terminal/addons/quickFix';
 import { installStickyScroll } from '@/core/terminal/addons/stickyScroll';
 import { installJumpToPrompt } from '@/core/terminal/addons/jumpToPrompt';
-import { TerminalCommandPalette } from '@/components/terminal/TerminalCommandPalette';
 import type { Terminal } from '@xterm/xterm';
 import { activeTerminalThemeId, resolveTerminalTheme } from '@/core/terminal/theme-manager';
 import { getSessionCwd } from '@/core/terminal/addons/shellIntegration';
@@ -69,15 +68,12 @@ export default function TerminalPane(props: TerminalPaneProps) {
   // mount because the wrapper is fresh each time, even when the xterm
   // Terminal instance is reattached from the registry.
   const addonCleanups: Array<() => void> = [];
-  const [paletteOpen, setPaletteOpen] = createSignal(false);
 
   const installPaneAddons = (terminal: Terminal) => {
     try { addonCleanups.push(installQuickFix(terminal, sessionId, wrapperRef)); } catch {}
     try { addonCleanups.push(installStickyScroll(terminal, sessionId, wrapperRef)); } catch {}
     try {
-      addonCleanups.push(installJumpToPrompt(terminal, sessionId, wrapperRef, {
-        onOpenPalette: () => setPaletteOpen(true),
-      }));
+      addonCleanups.push(installJumpToPrompt(terminal, sessionId, wrapperRef));
     } catch {}
   };
   // TUI panes supply their own sessionId; plain terminal panes use the paneId.
@@ -482,15 +478,6 @@ export default function TerminalPane(props: TerminalPaneProps) {
     session.terminal.loadAddon(searchAddon);
     session.searchAddon = searchAddon;
 
-    // Shift+Enter → send CSI u sequence so Claude Code recognizes it as newline
-    session.terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-      if (e.type === 'keydown' && e.key === 'Enter' && e.shiftKey) {
-        void writeTerminal(sessionId, '\x1b[13;2u');
-        return false;
-      }
-      return true;
-    });
-
     // Wire user input to Go backend — TUI panes use WriteBubbleteaProgram
     session.terminal.onData((data: string) => {
       if (isTui) {
@@ -805,20 +792,6 @@ export default function TerminalPane(props: TerminalPaneProps) {
       onContextMenu={handleContextMenu}
     >
       <div class={termStyles.terminalContainer} ref={containerRef!} />
-      {/* Cmd+P command palette — mounts a popover when paletteOpen() is true. */}
-      <Show when={paletteOpen()}>
-        {(_) => {
-          const session = getSession(sessionId);
-          return session ? (
-            <TerminalCommandPalette
-              open={paletteOpen}
-              onClose={() => setPaletteOpen(false)}
-              sessionId={sessionId}
-              terminal={session.terminal}
-            />
-          ) : null;
-        }}
-      </Show>
       <Show when={showSearch()}>
         <div class={termStyles.searchBar}>
           <TextField class={termStyles.searchInput}>

@@ -1,21 +1,14 @@
 // Author: Subash Karki
-// Phantom — Cmd+Up / Cmd+Down jump-to-prompt + Cmd+P palette opener
+// Phantom — Cmd+Up / Cmd+Down jump-to-prompt
 //
 // Wires keyboard shortcuts on the terminal host element. Reads the per-session
 // command timeline from `shellIntegration` and uses xterm's
 // `terminal.scrollToLine(absLine)` to jump the viewport to a previous /
 // next prompt's `promptStartMarker.line`.
-//
-// Cmd+P (or Ctrl+P on linux) is forwarded to the caller via `ctx.onOpenPalette`
-// so the host pane can render `<TerminalCommandPalette>` over the terminal.
 
 import type { Terminal } from '@xterm/xterm';
 import { getCommands } from './shellIntegration';
-
-interface InstallCtx {
-  /** Called when the user presses Cmd+P (or Ctrl+P on non-mac). */
-  onOpenPalette: () => void;
-}
+import { writeTerminal } from '@/core/bindings';
 
 /** Returns true when the platform-appropriate "command" modifier is held. */
 function hasCmdModifier(e: KeyboardEvent): boolean {
@@ -87,30 +80,27 @@ export function installJumpToPrompt(
   terminal: Terminal,
   sessionId: string,
   host: HTMLElement,
-  ctx: InstallCtx,
 ): () => void {
   const isOurKey = (e: KeyboardEvent): boolean => {
     if (!hasCmdModifier(e)) return false;
-    return e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key.toLowerCase() === 'p';
+    return e.key === 'ArrowUp' || e.key === 'ArrowDown';
   };
 
   // Layer 1: tell xterm not to consume our keys.
   // attachCustomKeyEventHandler: returning false stops xterm from handling the event.
   // We intentionally do NOT preventDefault here — that's done in the host listener
   // after we know we acted on the event.
-  terminal.attachCustomKeyEventHandler((e) => !isOurKey(e));
+  terminal.attachCustomKeyEventHandler((e) => {
+    if (e.type === 'keydown' && e.key === 'Enter' && e.shiftKey) {
+      void writeTerminal(sessionId, '\x1b[13;2u');
+      return false;
+    }
+    return !isOurKey(e);
+  });
 
   // Layer 2: actual handlers.
   const onKeyDown = (e: KeyboardEvent): void => {
     if (!isOurKey(e)) return;
-
-    // Cmd+P → palette
-    if (e.key.toLowerCase() === 'p') {
-      e.preventDefault();
-      e.stopPropagation();
-      ctx.onOpenPalette();
-      return;
-    }
 
     // Cmd+↑ → previous prompt
     if (e.key === 'ArrowUp') {

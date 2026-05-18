@@ -3,11 +3,9 @@
 
 import { Show, For, createMemo } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { mruWorktrees } from '@/core/signals/worktree-mru';
+import { liveWorktrees } from '@/core/signals/live-sessions';
 import { switcherVisible, switcherSelectedIndex, commitSwitcherAt } from '@/core/signals/worktree-switcher';
 import { activeWorktreeId } from '@/core/signals/app';
-import { worktreeMap } from '@/core/signals/worktrees';
-import { projects } from '@/core/signals/projects';
 import { projectGlyph } from '@/core/sidebar/glyph';
 import * as css from './WorktreeSwitcher.css';
 
@@ -29,28 +27,13 @@ function lastPathSegments(path: string, n: number): string {
 
 const WorktreeSwitcher = () => {
   const items = createMemo<SwitcherItem[]>(() => {
-    const ids = mruWorktrees();
-    const wtMap = worktreeMap();
-    const projs = projects();
-
-    return ids
-      .map((id) => {
-        for (const [projId, wts] of Object.entries(wtMap)) {
-          const wt = wts.find((w) => w.id === id);
-          if (wt) {
-            const proj = projs.find((p) => p.id === projId);
-            return {
-              id: wt.id,
-              branch: wt.branch || wt.name || 'unknown',
-              projectName: proj?.name ?? 'Unknown',
-              glyph: projectGlyph(proj?.name ?? ''),
-              shortPath: lastPathSegments(wt.worktree_path ?? '', 2),
-            } satisfies SwitcherItem;
-          }
-        }
-        return null;
-      })
-      .filter((x): x is SwitcherItem => x !== null);
+    return liveWorktrees().map((lw) => ({
+      id: lw.worktreeId,
+      branch: lw.branch,
+      projectName: lw.projectName,
+      glyph: projectGlyph(lw.projectName),
+      shortPath: lastPathSegments(lw.worktreePath, 2),
+    }));
   });
 
   return (
