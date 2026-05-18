@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.45](https://github.com/karki011/phantom/compare/v0.1.44...v0.1.45) (2026-05-18)
+
+
+### Features
+
+* Ctrl+Tab cycles live sessions, fix terminal shortcuts, remove command history ([b34e3df](https://github.com/karki011/phantom/commit/b34e3df086df1d5abfac4818c364a0f01a01a9ff))
+
 ## [0.1.44](https://github.com/karki011/phantom/compare/v0.1.43...v0.1.44) (2026-05-15)
 
 
