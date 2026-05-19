@@ -11,6 +11,7 @@
 ### Bug Fixes
 
 * Ctrl+Tab works in terminal, compact switcher, no flicker ([9c6c208](https://github.com/karki011/phantom/commit/9c6c2086877bd6f6aeec9c5e189c9f1bab95b6ac))
+* Show gitignored files (.env etc) in sidebar file tree ([dc630d6](https://github.com/karki011/phantom/commit/dc630d69b71f33d3f4124335c85d9cdd48b66187))
 
 ## [0.1.46](https://github.com/karki011/phantom/compare/v0.1.45...v0.1.46) (2026-05-19)
 
