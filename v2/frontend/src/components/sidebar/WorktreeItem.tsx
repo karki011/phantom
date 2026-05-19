@@ -132,11 +132,11 @@ export function WorktreeItem(props: WorktreeItemProps) {
         }}
       >
         {deleting() ? (
-          <LoaderCircle size={13} class={`${styles.worktreeIcon} ${spin}`} />
+          <LoaderCircle size={8} class={`${styles.worktreeIcon} ${spin}`} />
         ) : props.worktree.type === 'branch' ? (
-          <GitBranch size={13} class={styles.worktreeIcon} />
+          <GitBranch size={8} class={styles.worktreeIcon} />
         ) : (
-          <GitFork size={13} class={styles.worktreeIcon} />
+          <GitFork size={8} class={styles.worktreeIcon} />
         )}
         <span class={styles.branchName}>
           {props.worktree.branch}

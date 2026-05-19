@@ -161,10 +161,10 @@ export const chevron = style({
 export const worktreeList = style({
   display: 'flex',
   flexDirection: 'column',
-  gap: '2px',
+  gap: '4px',
   paddingLeft: vars.space.lg,
   marginLeft: vars.space.md,
-  marginTop: '2px',
+  marginTop: '4px',
   borderLeft: `1px solid ${vars.color.divider}`,
 });
 
