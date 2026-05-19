@@ -218,7 +218,6 @@ export function FilesView() {
 
     function walk(nodes: FileNode[], depth: number) {
       for (const node of nodes) {
-        if (node.gitStatus === '!') continue;
         const isExpanded = node.isDir && exp.has(node.path);
         const cached = node.isDir ? childMap.get(node.path) : undefined;
         result.push({

@@ -321,7 +321,7 @@ export const gitBadgeQ = style([
 ]);
 
 export const fileItemIgnored = style({
-  opacity: 0.35,
+  opacity: 0.7,
 });
 
 // ── Changes view ──────────────────────────────────────────────────────────────
