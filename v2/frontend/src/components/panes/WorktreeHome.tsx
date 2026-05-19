@@ -759,6 +759,24 @@ export default function WorktreeHome() {
                   <span class={styles.prCardBranch}>{prStatus()!.head_ref_name} → {prStatus()!.base_ref_name}</span>
                   <span class={styles.prCardMeta}>{prStatus()!.author} · {prAge(prStatus()!.created_at)}</span>
                 </div>
+                <Show when={prStatus()!.labels && prStatus()!.labels!.length > 0}>
+                  <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '4px', padding: '0 8px', 'margin-top': '2px' }}>
+                    <For each={prStatus()!.labels!}>
+                      {(label) => (
+                        <span style={{
+                          'font-size': '0.55rem',
+                          'font-weight': '600',
+                          padding: '1px 6px',
+                          'border-radius': '10px',
+                          'background-color': `#${label.color}33`,
+                          color: `#${label.color}`,
+                          border: `1px solid #${label.color}55`,
+                          'white-space': 'nowrap',
+                        }}>{label.name}</span>
+                      )}
+                    </For>
+                  </div>
+                </Show>
               </div>
 
               {/* Reviewer row + Ship-It action */}
@@ -952,6 +970,19 @@ function OpenPrCard(props: {
             </span>
           </Tip>
         </Show>
+        <Show when={pr.is_draft}>
+          <span style={{
+            'font-size': '0.55rem',
+            'font-weight': '700',
+            'text-transform': 'uppercase',
+            'letter-spacing': '0.06em',
+            color: vars.color.textDisabled,
+            'background-color': `color-mix(in srgb, ${vars.color.textDisabled} 15%, transparent)`,
+            padding: '1px 5px',
+            'border-radius': '3px',
+            'flex-shrink': '0',
+          }}>DRAFT</span>
+        </Show>
         <span class={styles.prCardTitle}>{pr.title}</span>
         <span class={styles.prCardNumber}>#{pr.number}</span>
         <ExternalLink size={10} class={styles.iconExternalLink} />
@@ -960,6 +991,24 @@ function OpenPrCard(props: {
         <span class={styles.prCardBranch}>{pr.head_ref_name}</span>
         <span class={styles.prCardMeta}>{pr.author} · {props.prAge(pr.created_at)}</span>
       </div>
+      <Show when={pr.labels && pr.labels!.length > 0}>
+        <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '4px', padding: '0 8px', 'margin-top': '2px' }}>
+          <For each={pr.labels!}>
+            {(label) => (
+              <span style={{
+                'font-size': '0.55rem',
+                'font-weight': '600',
+                padding: '1px 6px',
+                'border-radius': '10px',
+                'background-color': `#${label.color}33`,
+                color: `#${label.color}`,
+                border: `1px solid #${label.color}55`,
+                'white-space': 'nowrap',
+              }}>{label.name}</span>
+            )}
+          </For>
+        </div>
+      </Show>
 
       <div class={styles.prCardActions}>
         <Show when={pr.review_decision === 'APPROVED'}>

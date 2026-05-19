@@ -18,10 +18,12 @@ import (
 // 10s when any CI run is still pending, 60s otherwise.
 func (a *App) startGitHubPoller() {
 	var (
-		cachedPr      string // JSON of last-emitted *git.PrStatus
-		cachedCi      string // JSON of last-emitted []git.CiRun
-		cachedPrsList string // JSON of last-emitted []git.PrStatus
-		lastWorktree  string
+		cachedPr        string // JSON of last-emitted *git.PrStatus
+		cachedCi        string // JSON of last-emitted []git.CiRun
+		cachedPrsList   string // JSON of last-emitted []git.PrStatus
+		cachedWorkflows string // JSON of last-emitted []git.Workflow
+		cachedRuns      string // JSON of last-emitted []git.WorkflowRun
+		lastWorktree    string
 
 		// Journal state — tracks what we've already logged to avoid duplicates.
 		journalPrState  string // last logged PR state (e.g. "OPEN", "MERGED")
@@ -47,9 +49,17 @@ func (a *App) startGitHubPoller() {
 			cachedPr = ""
 			cachedCi = ""
 			cachedPrsList = ""
+			cachedWorkflows = ""
+			cachedRuns = ""
 			journalPrState = ""
 			journalCiState = ""
 			lastWorktree = wtId
+		}
+
+		// Skip API calls when the window is unfocused — saves CPU and rate limit.
+		if !a.isWindowFocused() {
+			log.Debug("app/GitHubPoller: window not focused, skipping poll")
+			return 60 * time.Second
 		}
 
 		repoPath, branch, err := a.resolveRepoBranch(wtId)
@@ -171,9 +181,37 @@ func (a *App) startGitHubPoller() {
 			}
 		}
 
-		// Shorten interval while any run is still in-progress.
+		// Workflow definitions and runs (uses gh CLI).
+		wfs, _ := git.GetWorkflows(a.ctx, repoPath)
+		if wfs == nil {
+			wfs = []git.Workflow{}
+		}
+		wfJ := marshalOrEmpty(wfs)
+		if wfJ != cachedWorkflows {
+			cachedWorkflows = wfJ
+			wailsRuntime.EventsEmit(a.ctx, EventWorkflowsUpdated, wfs)
+			log.Info("app/GitHubPoller: workflows:updated emitted", "count", len(wfs))
+		}
+
+		wfRuns, _ := git.GetRecentWorkflowRuns(a.ctx, repoPath, 10)
+		if wfRuns == nil {
+			wfRuns = []git.WorkflowRun{}
+		}
+		runsJ := marshalOrEmpty(wfRuns)
+		if runsJ != cachedRuns {
+			cachedRuns = runsJ
+			wailsRuntime.EventsEmit(a.ctx, EventWorkflowRunsUpdated, wfRuns)
+			log.Info("app/GitHubPoller: workflow-runs:updated emitted", "count", len(wfRuns))
+		}
+
+		// Shorten interval while any CI run is still in-progress.
 		for _, r := range runs {
 			if r.Conclusion == "" {
+				return 10 * time.Second
+			}
+		}
+		for _, r := range wfRuns {
+			if r.Status == "in_progress" || r.Status == "queued" {
 				return 10 * time.Second
 			}
 		}
@@ -198,6 +236,15 @@ func (a *App) startGitHubPoller() {
 			interval = poll()
 			timer.Reset(interval)
 		case <-a.branchRefresh:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			interval = poll()
+			timer.Reset(interval)
+		case <-a.workflowRefresh:
 			if !timer.Stop() {
 				select {
 				case <-timer.C:

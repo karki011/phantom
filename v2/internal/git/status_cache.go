@@ -75,7 +75,7 @@ func getCachedStatusAndDirs(ctx context.Context, repoPath string) (map[string]st
 // unifying on the same v2 format used by GetRepoStatus.
 func parseGitStatus(ctx context.Context, repoPath string) map[string]string {
 	statusMap := make(map[string]string)
-	out, err := runGit(ctx, repoPath, "status", "--porcelain=v2")
+	out, err := runGitWithRetry(ctx, repoPath, "status", "--porcelain=v2")
 	if err != nil || out == "" {
 		return statusMap
 	}

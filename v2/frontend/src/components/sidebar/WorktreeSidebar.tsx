@@ -1,9 +1,10 @@
 // Phantom — Left sidebar: project/worktree navigation
 // Author: Subash Karki
 
-import { For, Show, onMount, onCleanup, createSignal } from 'solid-js';
+import { For, Show, onMount, onCleanup, createSignal, createMemo } from 'solid-js';
+import { Collapsible } from '@kobalte/core/collapsible';
 import { LeftRail } from './LeftRail';
-import { ChevronsLeft, ChevronsDownUp, ChevronsUpDown, FolderPlus, GitBranch, HardDriveDownload, Settings2 } from 'lucide-solid';
+import { ChevronsLeft, ChevronsDownUp, ChevronsUpDown, ChevronRight, FolderGit2, FolderPlus, GitBranch, HardDriveDownload, Settings2, Star } from 'lucide-solid';
 import { TextField } from '@kobalte/core/text-field';
 import { Tip } from '@/shared/Tip/Tip';
 import { PhantomModal, phantomModalStyles } from '@/shared/PhantomModal/PhantomModal';
@@ -26,7 +27,7 @@ import {
   expandedProjects,
   setAllProjectsExpanded,
 } from '@/core/signals/worktrees';
-import { projects } from '@/core/signals/projects';
+import { projects, starredProjects } from '@/core/signals/projects';
 import { addProject, browseDirectory, cloneRepository, isGitRepo, initGitRepo } from '@/core/bindings';
 import { showWarningToast } from '@/shared/Toast/Toast';
 import { refreshProjects } from '@/core/signals/projects';
@@ -50,6 +51,17 @@ export function WorktreeSidebar() {
 
   const [gitInitPath, setGitInitPath] = createSignal('');
   const gitInitOpen = () => gitInitPath() !== '';
+  const [favoritesCollapsed, setFavoritesCollapsed] = createSignal(false);
+  const [projectsCollapsed, setProjectsCollapsed] = createSignal(false);
+
+  // Split filtered projects into favorites and the rest
+  const starredIds = createMemo(() => new Set(starredProjects().map((p) => p.id)));
+  const favoriteProjects = createMemo(() =>
+    filteredProjects().filter((p) => starredIds().has(p.id)),
+  );
+  const otherProjects = createMemo(() =>
+    filteredProjects().filter((p) => !starredIds().has(p.id)),
+  );
 
   async function handleAddProject() {
     const path = await browseDirectory('Select project directory');
@@ -148,11 +160,43 @@ export function WorktreeSidebar() {
 
         <LiveSessionSection />
 
-        {/* Project list */}
+        {/* Project list — split into Favorites and Projects */}
         <div class={styles.projectList}>
-          <For each={filteredProjects()}>
-            {(project) => <ProjectSection project={project} />}
-          </For>
+          <Show when={favoriteProjects().length > 0}>
+            <Collapsible
+              open={!favoritesCollapsed()}
+              onOpenChange={(open) => setFavoritesCollapsed(!open)}
+            >
+              <Collapsible.Trigger class={styles.sidebarSectionHeader}>
+                <ChevronRight size={10} class={styles.sidebarChevron} />
+                <Star size={10} />
+                <span>Favorites</span>
+                <span class={styles.sectionCount}>{favoriteProjects().length}</span>
+              </Collapsible.Trigger>
+              <Collapsible.Content>
+                <For each={favoriteProjects()}>
+                  {(project) => <ProjectSection project={project} />}
+                </For>
+              </Collapsible.Content>
+            </Collapsible>
+          </Show>
+
+          <Collapsible
+            open={!projectsCollapsed()}
+            onOpenChange={(open) => setProjectsCollapsed(!open)}
+          >
+            <Collapsible.Trigger class={styles.sidebarSectionHeader}>
+              <ChevronRight size={10} class={styles.sidebarChevron} />
+              <FolderGit2 size={10} />
+              <span>Projects</span>
+              <span class={styles.sectionCount}>{otherProjects().length}</span>
+            </Collapsible.Trigger>
+            <Collapsible.Content>
+              <For each={otherProjects()}>
+                {(project) => <ProjectSection project={project} />}
+              </For>
+            </Collapsible.Content>
+          </Collapsible>
         </div>
 
         {/* Bottom actions */}

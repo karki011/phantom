@@ -24,10 +24,12 @@ import {
   ciRuns, setCiRuns,
   isCreatingPr,
   ghAvailable, setGhAvailable,
+  workflows, setWorkflows,
+  workflowRuns, setWorkflowRuns,
 } from '@/core/signals/activity';
-import { getCiRuns, getPrStatus, isGhCliAvailable, watchWorktree } from '@/core/bindings';
+import { getCiRuns, getPrStatus, isGhCliAvailable, watchWorktree, getWorkflows, getWorkflowRuns } from '@/core/bindings';
 import { onWailsEvent } from '@/core/events';
-import type { PrStatus, CiRun } from '@/core/types';
+import type { PrStatus, CiRun, Workflow, WorkflowRun } from '@/core/types';
 import { FilesView } from './FilesView';
 import { ChangesView } from './ChangesView';
 import { GitActivityPanel } from './GitActivityPanel';
@@ -57,13 +59,17 @@ export function RightSidebar() {
   createEffect(on(activeWorktreeId, (wtId) => {
     setPrStatus(null);
     setCiRuns(null);
+    setWorkflows(null);
+    setWorkflowRuns(null);
     if (!wtId) return;
     watchWorktree(wtId);
     const requestedId = wtId;
-    void Promise.all([getPrStatus(wtId), getCiRuns(wtId)]).then(([pr, runs]) => {
+    void Promise.all([getPrStatus(wtId), getCiRuns(wtId), getWorkflows(wtId), getWorkflowRuns(wtId)]).then(([pr, runs, wfs, wfRuns]) => {
       if (activeWorktreeId() !== requestedId) return;
       setPrStatus(pr);
       setCiRuns(runs ?? []);
+      setWorkflows(wfs);
+      setWorkflowRuns(wfRuns);
     }).catch(() => { /* poller will retry */ });
   }));
 
@@ -79,6 +85,12 @@ export function RightSidebar() {
   });
   onWailsEvent<CiRun[]>('ci:updated', (runs) => {
     setIfChanged(ciRuns, setCiRuns, runs);
+  });
+  onWailsEvent<Workflow[]>('workflows:updated', (wfs) => {
+    setIfChanged(workflows, setWorkflows, wfs);
+  });
+  onWailsEvent<WorkflowRun[]>('workflow-runs:updated', (runs) => {
+    setIfChanged(workflowRuns, setWorkflowRuns, runs);
   });
 
   const collapsed = () => rightSidebarCollapsed();

@@ -41,6 +41,9 @@ const (
 	EventCiUpdated      = "ci:updated"       // payload: []git.CiRun
 	EventPrsListUpdated = "prs:list-updated" // payload: []git.PrStatus
 
+	EventWorkflowsUpdated    = "workflows:updated"      // payload: []git.Workflow
+	EventWorkflowRunsUpdated = "workflow-runs:updated"   // payload: []git.WorkflowRun
+
 	// Ship-It (merge action) lifecycle events.
 	EventPrMerging    = "pr:merging"     // payload: { worktreeId, prNumber, autoMerge bool }
 	EventPrMerged     = "pr:merged"      // payload: { worktreeId, prNumber }

@@ -41,6 +41,11 @@ export {
   mergePr,
   disableAutoMerge,
   postMergeCleanup,
+  getWorkflows,
+  getWorkflowRuns,
+  dispatchWorkflow,
+  rerunWorkflow,
+  cancelWorkflowRun,
 } from './git';
 export { revealInFinder, openInFinder, openInDefaultApp, openURL } from './shell';
 export { readFileByPath, readFileContents, writeFileContents, getFileAtRevision, getWorkspaceBlame, createFile, createFolder, deleteFile } from './editor';

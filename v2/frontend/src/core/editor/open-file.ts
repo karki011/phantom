@@ -5,8 +5,8 @@
 // All entry points (file tree, Quick Open, terminal links, Claude events)
 // must route through this function. It enforces single-instance tabs.
 
-import { getOpenFileEntry } from './open-file-registry';
-import { addTabWithData, setActivePaneInTab, activeTab } from '@/core/panes/signals';
+import { getOpenFileEntry, unregisterOpenFile } from './open-file-registry';
+import { addTabWithData, setActivePaneInTab, activeTab, tabs } from '@/core/panes/signals';
 import type { OpenFileOptions } from './types';
 
 /**
@@ -25,12 +25,18 @@ export const openFileInEditor = (options: OpenFileOptions): void => {
 
   // 1. Check if file is already open somewhere
   const existing = getOpenFileEntry(filePath);
-  if (existing) {
-    setActivePaneInTab(existing.paneId);
-    window.dispatchEvent(new CustomEvent('phantom:editor-open-file', {
-      detail: { paneId: existing.paneId, workspaceId, filePath, line, column },
-    }));
-    return;
+  if (existing && existing.paneId) {
+    // Verify the pane still exists — stale entries block reopening
+    const paneStillExists = tabs().some((t) => existing.paneId in t.panes);
+    if (paneStillExists) {
+      setActivePaneInTab(existing.paneId);
+      window.dispatchEvent(new CustomEvent('phantom:editor-open-file', {
+        detail: { paneId: existing.paneId, workspaceId, filePath, line, column },
+      }));
+      return;
+    }
+    // Pane is gone — clean up the stale entry
+    unregisterOpenFile(filePath);
   }
 
   // 2. File is NOT open — find an existing editor pane or create a new tab

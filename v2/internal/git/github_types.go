@@ -3,6 +3,12 @@
 // Author: Subash Karki
 package git
 
+// Label holds a GitHub label attached to a PR or issue.
+type Label struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
 // Reviewer is a GitHub user surfaced in PR review state.
 type Reviewer struct {
 	Login     string `json:"login"`
@@ -39,6 +45,7 @@ type PrStatus struct {
 	Approvers          []Reviewer `json:"approvers"`
 	ChangesRequestedBy []Reviewer `json:"changes_requested_by"`
 	AwaitingReviewFrom []Reviewer `json:"awaiting_review_from"`
+	Labels             []Label    `json:"labels"`
 }
 
 // RepoMergeConfig holds repo-level merge settings used to drive the Ship-It UI.
@@ -77,4 +84,28 @@ type FailedStep struct {
 	Name   string   `json:"name"`
 	Number int      `json:"number"`
 	Errors []string `json:"errors"`
+}
+
+// Workflow holds metadata for a GitHub Actions workflow definition.
+type Workflow struct {
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+	State string `json:"state"`
+}
+
+// WorkflowRun holds metadata for a single GitHub Actions workflow run.
+type WorkflowRun struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+	HeadBranch string `json:"head_branch"`
+	Event      string `json:"event"`
+	RunNumber  int    `json:"run_number"`
+	HTMLURL    string `json:"html_url"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+	WorkflowID int64  `json:"workflow_id"`
+	ActorLogin string `json:"actor_login"`
 }

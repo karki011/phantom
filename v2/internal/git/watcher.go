@@ -36,6 +36,11 @@ type Watcher struct {
 	mu       sync.Mutex
 	debounce map[string]*time.Timer
 	active   *activeProjectRegistry
+
+	// statusDebouncer coalesces rapid status-related events (working tree,
+	// index, status) into a single emission with a 5s cooldown — matching
+	// VS Code's 3-tier suppression pattern. Branch changes bypass this.
+	statusDebouncer *Debouncer
 }
 
 func NewWatcher(ctx context.Context) (*Watcher, error) {
@@ -52,6 +57,19 @@ func NewWatcher(ctx context.Context) (*Watcher, error) {
 		debounce: make(map[string]*time.Timer),
 		active:   newActiveProjectRegistry(),
 	}
+
+	// VS Code-style 3-tier suppression for status events:
+	//   FS events → debounce(1s) → emit → cooldown(5s)
+	// This prevents excessive git-status refreshes during rapid file saves
+	// (e.g., Claude writing multiple files, IDE auto-save, build output).
+	w.statusDebouncer = NewDebouncer(1*time.Second, 5*time.Second, func() {
+		select {
+		case w.eventCh <- GitEvent{Type: GitEventStatusChanged}:
+			log.Debug("git/Watcher: status debouncer fired")
+		default:
+		}
+	})
+
 	go w.run()
 	return w, nil
 }
@@ -224,6 +242,9 @@ func (w *Watcher) UnwatchRepo(repoPath string) {
 
 func (w *Watcher) Stop() {
 	w.cancel()
+	if w.statusDebouncer != nil {
+		w.statusDebouncer.Stop()
+	}
 	w.watcher.Close()
 }
 
@@ -284,28 +305,32 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 
 		switch {
 		case name == "HEAD":
+			// Branch changes are immediate — user expects instant feedback.
 			w.emitDebounced("HEAD:"+dir, GitEventBranchChanged, 0)
-		case name == "index":
-			w.emitDebounced("index:"+dir, GitEventIndexChanged, 1000*time.Millisecond)
-		case name == "FETCH_HEAD":
-			w.emitDebounced("FETCH_HEAD:"+dir, GitEventStatusChanged, 500*time.Millisecond)
 		case name == "MERGE_HEAD" || name == "REBASE_HEAD" || name == "CHERRY_PICK_HEAD":
+			// Merge/rebase state changes are immediate — user-initiated.
+			// Emitted directly (delay=0) to bypass cooldown.
 			w.emitDebounced("merge:"+dir, GitEventStatusChanged, 0)
-		case name == "packed-refs":
-			w.emitDebounced("packed-refs:"+dir, GitEventStatusChanged, 500*time.Millisecond)
-		case name == "config":
-			w.emitDebounced("config:"+dir, GitEventStatusChanged, 500*time.Millisecond)
 		case name == "stash":
+			// Stash is immediate — explicit user action.
+			// Emitted directly (delay=0) to bypass cooldown.
 			w.emitDebounced("stash:"+dir, GitEventStatusChanged, 0)
+		case name == "index":
+			// Index changes go through the global debounce+cooldown gate.
+			w.statusDebouncer.Trigger()
+		case name == "FETCH_HEAD",
+			name == "packed-refs",
+			name == "config":
+			// Background git ops — route through debounce+cooldown.
+			w.statusDebouncer.Trigger()
 		case strings.Contains(event.Name, "/worktrees"):
-			// External `git worktree add/remove/prune` — refresh sidebar.
-			w.emitDebounced("worktrees:"+dir, GitEventStatusChanged, 300*time.Millisecond)
-		case strings.Contains(event.Name, "refs/heads"):
-			w.emitDebounced("refs-heads:"+dir, GitEventStatusChanged, 500*time.Millisecond)
-		case strings.Contains(event.Name, "refs/remotes"):
-			w.emitDebounced("refs-remotes:"+dir, GitEventStatusChanged, 500*time.Millisecond)
-		case strings.Contains(event.Name, "refs/tags"):
-			w.emitDebounced("refs-tags:"+dir, GitEventStatusChanged, 500*time.Millisecond)
+			// External worktree add/remove — route through debounce+cooldown.
+			w.statusDebouncer.Trigger()
+		case strings.Contains(event.Name, "refs/heads"),
+			strings.Contains(event.Name, "refs/remotes"),
+			strings.Contains(event.Name, "refs/tags"):
+			// Ref updates — route through debounce+cooldown.
+			w.statusDebouncer.Trigger()
 		}
 		return
 	}
@@ -321,8 +346,10 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 		}
 	}
 
-	// Working tree file change — 1s debounce like VS Code
-	w.emitDebounced("worktree:"+dir, GitEventWorkingTreeChanged, 1000*time.Millisecond)
+	// Working tree file change — routed through the VS Code-style debounce+cooldown.
+	// The per-key debounce in emitDebounced still coalesces per-dir bursts, but the
+	// final emission goes through statusDebouncer for the global cooldown gate.
+	w.statusDebouncer.Trigger()
 }
 
 func (w *Watcher) emitDebounced(key string, eventType GitEventType, delay time.Duration) {

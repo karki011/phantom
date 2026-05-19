@@ -7,7 +7,7 @@ import {
   Monitor, GitBranch, GitFork, Settings, FileSearch, BookOpen,
   Pause, Play, Square, Sun, Moon, ZoomIn, ZoomOut, RotateCcw,
   PenTool, Sidebar, PanelRight, LayoutGrid, Eye, Plug, Sparkles, Keyboard,
-  ClipboardList,
+  ClipboardList, Zap,
 } from 'lucide-solid';
 
 // === Pane signals ===
@@ -28,7 +28,7 @@ import { toggleDocs } from '@/core/signals/docs';
 import { toggleShortcutSheet } from '@/core/signals/shortcut-sheet';
 
 // === Sidebar signals ===
-import { leftSidebarCollapsed, setLeftSidebarCollapsed, worktreeMap, selectWorktree } from '@/core/signals/worktrees';
+import { leftSidebarCollapsed, setLeftSidebarCollapsed, worktreeMap, selectWorktree, activeWorktree } from '@/core/signals/worktrees';
 import { rightSidebarCollapsed, setRightSidebarCollapsed } from '@/core/signals/files';
 
 // === Zoom signals ===

@@ -43,8 +43,9 @@ type WorktreeStatus struct {
 }
 
 // GetRepoStatus returns the full working-tree status using `git status --porcelain=v2 --branch`.
+// Uses runGitWithRetry to handle transient lock contention (index.lock).
 func GetRepoStatus(ctx context.Context, repoPath string) (*RepoStatus, error) {
-	out, err := runGit(ctx, repoPath, "status", "--porcelain=v2", "--branch")
+	out, err := runGitWithRetry(ctx, repoPath, "status", "--porcelain=v2", "--branch")
 	if err != nil {
 		return nil, err
 	}

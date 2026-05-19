@@ -42,6 +42,7 @@ import { CommandPalette } from './shared/CommandPalette';
 import { ShortcutSheet } from './shared/ShortcutSheet/ShortcutSheet';
 import { WorktreeSwitcher } from './shared/WorktreeSwitcher';
 import { RecipePicker } from './shared/RecipePicker';
+import { AgentsOverlay } from './shared/AgentsOverlay';
 import { McpManagerDialog } from './shared/McpManagerDialog';
 import { PromptComposer } from './shared/PromptComposer';
 import { composerVisible, closeComposer } from './core/signals/composer';
@@ -130,6 +131,27 @@ export function App() {
     const today = new Date().toISOString().slice(0, 10);
     generateMorningBrief(today).catch(() => {});
 
+    // Notify Go backend of window focus/blur so background pollers can throttle.
+    // Use both window focus/blur (covers app-level) and visibilitychange (covers
+    // WebView tab/minimize) for robustness in Wails WebKit.
+    const handleFocus = () => window.go?.app?.App?.OnWindowFocused();
+    const handleBlur = () => window.go?.app?.App?.OnWindowBlurred();
+    const handleVisChange = () => {
+      if (document.hidden) {
+        window.go?.app?.App?.OnWindowBlurred();
+      } else {
+        window.go?.app?.App?.OnWindowFocused();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+    document.addEventListener('visibilitychange', handleVisChange);
+    cleanupFocusListeners = () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+      document.removeEventListener('visibilitychange', handleVisChange);
+    };
+
     setReady(true);
   });
 
@@ -137,6 +159,10 @@ export function App() {
   const cleanupShortcuts = registerKeyboardShortcuts();
   onCleanup(cleanupShortcuts);
   onCleanup(stopFullscreenDetection);
+
+  // Window focus/blur listener cleanup — assigned inside onMount, called on teardown.
+  let cleanupFocusListeners: (() => void) | undefined;
+  onCleanup(() => cleanupFocusListeners?.());
 
   createEffect(() => {
     const wtId = activeWorktreeId();
@@ -236,6 +262,7 @@ export function App() {
       <QuickOpen />
       <SearchPanel />
       <CommandPalette />
+      <AgentsOverlay />
       <ShortcutSheet />
       <WorktreeSwitcher />
       <RecipePicker />

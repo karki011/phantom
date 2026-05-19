@@ -174,3 +174,28 @@ export async function postMergeCleanup(worktreeId: string): Promise<string> {
   try { return (await App()?.PostMergeCleanupForWorkspace(worktreeId)) ?? ''; }
   catch (err) { return err instanceof Error ? err.message : 'cleanup failed'; }
 }
+
+// ── Workflows ────────────────────────────────────────────────────────────
+
+export async function getWorkflows(worktreeId: string): Promise<import('../types').Workflow[] | null> {
+  try { return (await App()?.GetWorkflowsForWorkspace(worktreeId)) ?? null; } catch { return null; }
+}
+
+export async function getWorkflowRuns(worktreeId: string): Promise<import('../types').WorkflowRun[] | null> {
+  try { return (await App()?.GetWorkflowRunsForWorkspace(worktreeId)) ?? null; } catch { return null; }
+}
+
+export async function dispatchWorkflow(worktreeId: string, workflowId: number, ref: string): Promise<string> {
+  try { return (await App()?.DispatchWorkflowForWorkspace(worktreeId, workflowId, ref)) ?? ''; }
+  catch (err) { return err instanceof Error ? err.message : 'dispatch failed'; }
+}
+
+export async function rerunWorkflow(worktreeId: string, runId: number): Promise<string> {
+  try { return (await App()?.RerunWorkflowForWorkspace(worktreeId, runId)) ?? ''; }
+  catch (err) { return err instanceof Error ? err.message : 'rerun failed'; }
+}
+
+export async function cancelWorkflowRun(worktreeId: string, runId: number): Promise<string> {
+  try { return (await App()?.CancelWorkflowRunForWorkspace(worktreeId, runId)) ?? ''; }
+  catch (err) { return err instanceof Error ? err.message : 'cancel failed'; }
+}

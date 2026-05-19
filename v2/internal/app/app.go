@@ -72,6 +72,9 @@ type App struct {
 	// branchRefresh signals the GitHub poller to immediately re-poll on branch change.
 	branchRefresh chan struct{}
 
+	// workflowRefresh signals the GitHub poller to immediately re-fetch workflow runs (e.g. after dispatch).
+	workflowRefresh chan struct{}
+
 	// gitWatcher provides instant change detection via .git file watching.
 	gitWatcher *git.Watcher
 
@@ -124,6 +127,11 @@ type App struct {
 
 	// shutdownOnce ensures graceful teardown (including factory reset) runs at most once.
 	shutdownOnce sync.Once
+
+	// windowFocused tracks whether the app window has focus. Used to gate
+	// background pollers (GitHub, etc.) so they skip API calls when unfocused.
+	windowFocused   bool
+	windowFocusedMu sync.RWMutex
 
 	// Native (libghostty) terminal state — lazily initialized on first
 	// NativeTerminalCreate call when the feature flag is on. The map is
@@ -202,6 +210,8 @@ func (a *App) Startup(ctx context.Context) {
 	a.tuiSessions = make(map[string]*tui.Session)
 	a.prRefresh = make(chan struct{}, 1)
 	a.branchRefresh = make(chan struct{}, 1)
+	a.workflowRefresh = make(chan struct{}, 1)
+	a.windowFocused = true
 
 	// Inject Wails context into Composer V2 bindings so EventsEmit works.
 	if a.ComposerV2Bind != nil {
@@ -389,13 +399,18 @@ func (a *App) DomReady(ctx context.Context) {
 }
 
 func (a *App) handleGitWatcherEvents() {
-	for event := range a.gitWatcher.Events() {
-		// Invalidate the git status cache so the next ListDirectory call
-		// picks up fresh data instead of stale porcelain output.
+	// Throttle status refreshes so rapid filesystem events (e.g. multi-file
+	// saves, rebase, stash) coalesce into one status check — VS Code's
+	// @throttle pattern: at most one in-flight + one queued (latest-wins).
+	statusThrottle := git.NewThrottle(func() {
 		git.InvalidateAllStatusCaches()
+		a.EmitGitStatus()
+	})
 
+	for event := range a.gitWatcher.Events() {
 		switch event.Type {
 		case git.GitEventBranchChanged:
+			git.InvalidateAllStatusCaches()
 			a.EmitGitBranchChanged()
 			a.EmitGitStatus()
 			if a.journal != nil {
@@ -407,12 +422,12 @@ func (a *App) handleGitWatcherEvents() {
 			case a.branchRefresh <- struct{}{}:
 			default:
 			}
-		case git.GitEventIndexChanged:
-			a.EmitGitStatus()
-		case git.GitEventStatusChanged:
-			a.EmitGitStatus()
-		case git.GitEventWorkingTreeChanged:
-			a.EmitGitStatus()
+		case git.GitEventIndexChanged,
+			git.GitEventStatusChanged,
+			git.GitEventWorkingTreeChanged:
+			// Coalesce rapid events — at most one status refresh runs at a
+			// time, with one queued behind it (depth-1 latest-wins queue).
+			statusThrottle.Trigger()
 		}
 	}
 }
@@ -1227,6 +1242,31 @@ func (a *App) HealthCheck() HealthResponse {
 		Goroutines: runtime.NumGoroutine(),
 		MemAllocMB: float64(m.Alloc) / 1024 / 1024,
 	}
+}
+
+// OnWindowFocused is called by the frontend when the app window gains focus.
+// It re-enables full-speed background polling (GitHub, etc.).
+func (a *App) OnWindowFocused() {
+	a.windowFocusedMu.Lock()
+	a.windowFocused = true
+	a.windowFocusedMu.Unlock()
+	log.Debug("app/OnWindowFocused: window gained focus")
+}
+
+// OnWindowBlurred is called by the frontend when the app window loses focus.
+// Background pollers will skip API calls and use a slower tick interval.
+func (a *App) OnWindowBlurred() {
+	a.windowFocusedMu.Lock()
+	a.windowFocused = false
+	a.windowFocusedMu.Unlock()
+	log.Debug("app/OnWindowBlurred: window lost focus")
+}
+
+// isWindowFocused returns whether the app window currently has focus.
+func (a *App) isWindowFocused() bool {
+	a.windowFocusedMu.RLock()
+	defer a.windowFocusedMu.RUnlock()
+	return a.windowFocused
 }
 
 func (a *App) healthPulseLoop() {

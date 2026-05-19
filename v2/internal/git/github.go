@@ -59,6 +59,10 @@ type ghPrJSON struct {
 	AutoMergeRequest  *ghAutoMergeJSON      `json:"autoMergeRequest"`
 	LatestReviews     []ghReviewJSON        `json:"latestReviews"`
 	ReviewRequests    []ghReviewRequestJSON `json:"reviewRequests"`
+	Labels            []struct {
+		Name  string `json:"name"`
+		Color string `json:"color"`
+	} `json:"labels"`
 }
 
 type ghAuthorJSON struct {
@@ -89,6 +93,20 @@ type ghCheckRunJSON struct {
 	Status     string `json:"status"`
 }
 
+func mapLabels(raw []struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}) []Label {
+	if len(raw) == 0 {
+		return nil
+	}
+	labels := make([]Label, len(raw))
+	for i, l := range raw {
+		labels[i] = Label{Name: l.Name, Color: l.Color}
+	}
+	return labels
+}
+
 func computeCheckSummary(checks []ghCheckRunJSON) (passed, failed, pending int) {
 	for _, c := range checks {
 		switch strings.ToUpper(c.Conclusion) {
@@ -113,7 +131,7 @@ func GetPrStatus(ctx context.Context, repoPath, branch string) (*PrStatus, error
 	log.Info("git/GetPrStatus: called", "repoPath", repoPath, "branch", branch)
 
 	cmd := exec.CommandContext(ctx, ghBin(), "pr", "view", branch,
-		"--json", "number,title,state,url,headRefName,baseRefName,isDraft,author,createdAt,mergedAt,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision,autoMergeRequest,latestReviews,reviewRequests",
+		"--json", "number,title,state,url,headRefName,baseRefName,isDraft,author,createdAt,mergedAt,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision,autoMergeRequest,latestReviews,reviewRequests,labels",
 	)
 	cmd.Dir = repoPath
 	var stdout, stderr bytes.Buffer
@@ -163,6 +181,7 @@ func GetPrStatus(ctx context.Context, repoPath, branch string) (*PrStatus, error
 		Approvers:          approvers,
 		ChangesRequestedBy: changesRequested,
 		AwaitingReviewFrom: awaiting,
+		Labels:             mapLabels(raw.Labels),
 	}
 
 	// Best-effort: fetch merge queue state via GraphQL.
@@ -271,7 +290,7 @@ func ListOpenPrsForBase(ctx context.Context, repoPath, baseBranch string, limit 
 		"--base", baseBranch,
 		"--state", "open",
 		"--limit", fmt.Sprintf("%d", limit),
-		"--json", "number,title,state,url,headRefName,baseRefName,isDraft,author,createdAt,statusCheckRollup,reviewDecision,latestReviews,reviewRequests,mergeable,mergeStateStatus,autoMergeRequest,mergedAt",
+		"--json", "number,title,state,url,headRefName,baseRefName,isDraft,author,createdAt,statusCheckRollup,reviewDecision,latestReviews,reviewRequests,mergeable,mergeStateStatus,autoMergeRequest,mergedAt,labels",
 	)
 	cmd.Dir = repoPath
 	var stdout, stderr bytes.Buffer
@@ -321,6 +340,7 @@ func ListOpenPrsForBase(ctx context.Context, repoPath, baseBranch string, limit 
 			Approvers:          approvers,
 			ChangesRequestedBy: changesRequested,
 			AwaitingReviewFrom: awaiting,
+			Labels:             mapLabels(r.Labels),
 		})
 	}
 	log.Info("git/ListOpenPrsForBase: success", "count", len(prs))

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/log"
 	"github.com/subashkarki/phantom-os-v2/internal/perf"
 )
 
@@ -96,6 +97,39 @@ func runGit(ctx context.Context, repoPath string, args ...string) (string, error
 	}
 
 	return strings.TrimSpace(stdout.String()), nil
+}
+
+// runGitWithRetry wraps runGit with retry logic for lock contention errors.
+// Git operations can fail transiently when another process holds index.lock or
+// similar lock files. This mirrors VS Code's retry strategy: up to 10 attempts
+// with quadratic backoff (attempt² × 50ms). Only lock-related errors trigger
+// retries; all other errors return immediately.
+func runGitWithRetry(ctx context.Context, repoPath string, args ...string) (string, error) {
+	const maxRetries = 10
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		out, err := runGit(ctx, repoPath, args...)
+		if err == nil {
+			return out, nil
+		}
+		lastErr = err
+		errStr := err.Error()
+		if !isLockContention(errStr) {
+			return out, err
+		}
+		backoff := time.Duration(attempt*attempt) * 50 * time.Millisecond
+		log.Debug("git/runGitWithRetry: lock contention, retrying",
+			"attempt", attempt+1, "backoff", backoff, "args", strings.Join(args, " "))
+		time.Sleep(backoff)
+	}
+	return "", fmt.Errorf("runGitWithRetry: exhausted %d retries: %w", maxRetries, lastErr)
+}
+
+// isLockContention checks if the error string indicates a git lock file conflict.
+func isLockContention(errStr string) bool {
+	return strings.Contains(errStr, "index.lock") ||
+		strings.Contains(errStr, ".lock': File exists") ||
+		strings.Contains(errStr, "Unable to create")
 }
 
 // IsGitRepo checks whether the given path is inside a git repository.
@@ -192,8 +226,9 @@ func ResolvePrMergeBase(ctx context.Context, repoPath, preferred string) string 
 
 // HasUncommittedChanges checks whether the repo has uncommitted changes.
 // It returns true if there are changes, along with the porcelain status output.
+// Uses runGitWithRetry to handle transient lock contention.
 func HasUncommittedChanges(ctx context.Context, repoPath string) (bool, string) {
-	out, err := runGit(ctx, repoPath, "status", "--porcelain")
+	out, err := runGitWithRetry(ctx, repoPath, "status", "--porcelain")
 	if err != nil {
 		return false, ""
 	}

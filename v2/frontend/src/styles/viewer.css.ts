@@ -426,3 +426,37 @@ export const emptyStateKbd = style({
   fontSize: '10px',
   fontWeight: 600,
 });
+
+// CM6 container — fills the codeContainer flex parent
+export const cmFillContainer = style({
+  width: '100%',
+  height: '100%',
+  overflow: 'hidden',
+});
+
+// Wrap toggle button in the status bar
+export const wrapToggleBtn = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 18,
+  height: 16,
+  padding: 0,
+  border: `1px solid color-mix(in srgb, ${vars.color.border} 60%, transparent)`,
+  borderRadius: vars.radius.sm,
+  background: 'transparent',
+  color: vars.color.textDisabled,
+  cursor: 'pointer',
+  transition: `color ${vars.animation.fast} ease, background ${vars.animation.fast} ease`,
+  ':hover': {
+    color: vars.color.textPrimary,
+    background: vars.color.bgHover,
+  },
+  selectors: {
+    '&[data-active="true"]': {
+      color: vars.color.accent,
+      borderColor: `color-mix(in srgb, ${vars.color.accent} 40%, transparent)`,
+      background: `color-mix(in srgb, ${vars.color.accentMuted} 30%, transparent)`,
+    },
+  },
+});

@@ -236,6 +236,12 @@ export interface PrStatus {
   approvers?: Reviewer[];
   changes_requested_by?: Reviewer[];
   awaiting_review_from?: Reviewer[];
+  labels?: Label[];
+}
+
+export interface Label {
+  name: string;
+  color: string;
 }
 
 export interface CiRun {
@@ -261,6 +267,28 @@ export interface FailedStep {
   name: string;
   number: number;
   errors: string[];
+}
+
+export interface Workflow {
+  id: number;
+  name: string;
+  path: string;
+  state: string;
+}
+
+export interface WorkflowRun {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string;
+  head_branch: string;
+  event: string;
+  run_number: number;
+  html_url: string;
+  created_at: string;
+  updated_at: string;
+  workflow_id: number;
+  actor_login: string;
 }
 
 export interface SessionState {

@@ -89,11 +89,7 @@ interface ContextTarget {
 
 // ── Search result item ──────────────────────────────────────────────────────
 
-function SearchResultItem(props: { entry: FileEntry }) {
-  const dirPart = () => {
-    const idx = props.entry.path.lastIndexOf('/');
-    return idx > 0 ? props.entry.path.substring(0, idx) : '';
-  };
+function SearchResultItem(props: { entry: FileEntry; onContextMenu: (e: MouseEvent, entry: FileEntry) => void }) {
   const isSelected = () => selectedFile() === props.entry.path;
 
   return (
@@ -104,13 +100,11 @@ function SearchResultItem(props: { entry: FileEntry }) {
         const wtId = activeWorktreeId();
         if (wtId) openFileInEditor({ workspaceId: wtId, filePath: props.entry.path });
       }}
+      onContextMenu={(e: MouseEvent) => props.onContextMenu(e, props.entry)}
       title={props.entry.path}
     >
       <FileText size={14} class={styles.fileIcon} />
       <span class={styles.fileName}>{props.entry.name}</span>
-      <Show when={dirPart()}>
-        <span class={styles.searchResultPath}>{dirPart()}</span>
-      </Show>
     </div>
   );
 }
@@ -602,83 +596,6 @@ export function FilesView() {
               </Show>
             </div>
 
-            {/* Native positioned context menu — portal to body to escape containment */}
-            <Show when={contextTarget()}>
-              {(target) => {
-                let menuRef!: HTMLDivElement;
-                const handleClickAway = (e: MouseEvent) => {
-                  if (menuRef && !menuRef.contains(e.target as Node)) closeContextMenu();
-                };
-                const handleEscape = (e: KeyboardEvent) => {
-                  if (e.key === 'Escape') closeContextMenu();
-                };
-                createEffect(() => {
-                  document.addEventListener('mousedown', handleClickAway);
-                  document.addEventListener('keydown', handleEscape);
-                  onCleanup(() => {
-                    document.removeEventListener('mousedown', handleClickAway);
-                    document.removeEventListener('keydown', handleEscape);
-                  });
-                });
-
-                return (
-                  <Portal>
-                    <div
-                      ref={(el: HTMLDivElement) => { menuRef = el; }}
-                      class={styles.contextMenuContent}
-                      style={{
-                        position: 'fixed',
-                        left: `${target().x}px`,
-                        top: `${target().y}px`,
-                        'z-index': 9999,
-                      }}
-                    >
-                    <Show when={target().isDir}>
-                      <div class={styles.contextMenuItem} onClick={() => { ctxNewFile(); closeContextMenu(); }}>
-                        <FilePlus size={13} /> New File
-                      </div>
-                      <div class={styles.contextMenuItem} onClick={() => { ctxNewFolder(); closeContextMenu(); }}>
-                        <FolderPlus size={13} /> New Folder
-                      </div>
-                      <div class={styles.contextMenuSeparator} />
-                      <div class={styles.contextMenuItem} onClick={() => { ctxOpenInFinder(); closeContextMenu(); }}>
-                        <FolderOpen size={13} /> Open in Finder
-                      </div>
-                      <div class={styles.contextMenuItem} onClick={() => { ctxOpenInTerminal(); closeContextMenu(); }}>
-                        <Terminal size={13} /> Open in Terminal
-                      </div>
-                      <div class={styles.contextMenuSeparator} />
-                      <div class={styles.contextMenuItem} onClick={() => { ctxDelete(); closeContextMenu(); }}>
-                        <Trash2 size={13} /> Delete Folder
-                      </div>
-                    </Show>
-                    <Show when={!target().isDir}>
-                      <div class={styles.contextMenuItem} onClick={() => { ctxRevealInFinder(); closeContextMenu(); }}>
-                        <Eye size={13} /> Reveal in Finder
-                      </div>
-                      <div class={styles.contextMenuItem} onClick={() => { ctxOpenInDefaultApp(); closeContextMenu(); }}>
-                        <AppWindow size={13} /> Open File
-                      </div>
-                      <div class={styles.contextMenuSeparator} />
-                      <div class={styles.contextMenuItem} onClick={() => { ctxDelete(); closeContextMenu(); }}>
-                        <Trash2 size={13} /> Delete
-                      </div>
-                    </Show>
-                    <div class={styles.contextMenuSeparator} />
-                    <div class={styles.contextMenuItem} onClick={() => { ctxCopyName(); closeContextMenu(); }}>
-                      <Clipboard size={13} /> Copy Name
-                    </div>
-                    <div class={styles.contextMenuItem} onClick={() => { ctxCopyPath(); closeContextMenu(); }}>
-                      <Clipboard size={13} /> Copy Path
-                    </div>
-                    <div class={styles.contextMenuItem} onClick={() => { ctxCopyAbsolutePath(); closeContextMenu(); }}>
-                      <Clipboard size={13} /> Copy Absolute Path
-                    </div>
-                  </div>
-                  </Portal>
-                );
-              }}
-            </Show>
           </Show>
         }
       >
@@ -693,10 +610,103 @@ export function FilesView() {
         >
           <div class={styles.fileTree}>
             <For each={searchResults()}>
-              {(entry) => <SearchResultItem entry={entry} />}
+              {(entry) => (
+                <SearchResultItem
+                  entry={entry}
+                  onContextMenu={(e: MouseEvent, ent: FileEntry) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setContextTarget({
+                      path: ent.path,
+                      name: ent.name,
+                      isDir: ent.is_dir,
+                      x: e.clientX,
+                      y: e.clientY,
+                    });
+                  }}
+                />
+              )}
             </For>
           </div>
         </Show>
+      </Show>
+
+      {/* Native positioned context menu — portal to body to escape containment */}
+      <Show when={contextTarget()}>
+        {(target) => {
+          let menuRef!: HTMLDivElement;
+          const handleClickAway = (e: MouseEvent) => {
+            if (menuRef && !menuRef.contains(e.target as Node)) closeContextMenu();
+          };
+          const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') closeContextMenu();
+          };
+          createEffect(() => {
+            document.addEventListener('mousedown', handleClickAway);
+            document.addEventListener('keydown', handleEscape);
+            onCleanup(() => {
+              document.removeEventListener('mousedown', handleClickAway);
+              document.removeEventListener('keydown', handleEscape);
+            });
+          });
+
+          return (
+            <Portal>
+              <div
+                ref={(el: HTMLDivElement) => { menuRef = el; }}
+                class={styles.contextMenuContent}
+                style={{
+                  position: 'fixed',
+                  left: `${target().x}px`,
+                  top: `${target().y}px`,
+                  'z-index': 9999,
+                }}
+              >
+                <Show when={target().isDir}>
+                  <div class={styles.contextMenuItem} onClick={() => { ctxNewFile(); closeContextMenu(); }}>
+                    <FilePlus size={13} /> New File
+                  </div>
+                  <div class={styles.contextMenuItem} onClick={() => { ctxNewFolder(); closeContextMenu(); }}>
+                    <FolderPlus size={13} /> New Folder
+                  </div>
+                  <div class={styles.contextMenuSeparator} />
+                  <div class={styles.contextMenuItem} onClick={() => { ctxOpenInFinder(); closeContextMenu(); }}>
+                    <FolderOpen size={13} /> Open in Finder
+                  </div>
+                  <div class={styles.contextMenuItem} onClick={() => { ctxOpenInTerminal(); closeContextMenu(); }}>
+                    <Terminal size={13} /> Open in Terminal
+                  </div>
+                  <div class={styles.contextMenuSeparator} />
+                  <div class={styles.contextMenuItem} onClick={() => { ctxDelete(); closeContextMenu(); }}>
+                    <Trash2 size={13} /> Delete Folder
+                  </div>
+                </Show>
+                <Show when={!target().isDir}>
+                  <div class={styles.contextMenuItem} onClick={() => { ctxRevealInFinder(); closeContextMenu(); }}>
+                    <Eye size={13} /> Reveal in Finder
+                  </div>
+                  <div class={styles.contextMenuItem} onClick={() => { ctxOpenInDefaultApp(); closeContextMenu(); }}>
+                    <AppWindow size={13} /> Open File
+                  </div>
+                  <div class={styles.contextMenuSeparator} />
+                  <div class={styles.contextMenuItem} onClick={() => { ctxDelete(); closeContextMenu(); }}>
+                    <Trash2 size={13} /> Delete
+                  </div>
+                </Show>
+                <div class={styles.contextMenuSeparator} />
+                <div class={styles.contextMenuItem} onClick={() => { ctxCopyName(); closeContextMenu(); }}>
+                  <Clipboard size={13} /> Copy Name
+                </div>
+                <div class={styles.contextMenuItem} onClick={() => { ctxCopyPath(); closeContextMenu(); }}>
+                  <Clipboard size={13} /> Copy Path
+                </div>
+                <div class={styles.contextMenuItem} onClick={() => { ctxCopyAbsolutePath(); closeContextMenu(); }}>
+                  <Clipboard size={13} /> Copy Absolute Path
+                </div>
+              </div>
+            </Portal>
+          );
+        }}
       </Show>
     </>
   );

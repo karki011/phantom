@@ -132,8 +132,10 @@ func Remove(ctx context.Context, worktreePath string) error {
 	if mainRepo != "" {
 		// Try force remove
 		_, removeErr := runGit(ctx, mainRepo, "worktree", "remove", worktreePath, "--force")
-		if removeErr != nil {
-			// Fallback: manual directory removal
+		_ = removeErr // logged by caller; continue to cleanup
+		// Ensure directory is gone even if git worktree remove succeeded
+		// partially or left behind untracked files.
+		if _, statErr := os.Stat(worktreePath); statErr == nil {
 			_ = os.RemoveAll(worktreePath)
 		}
 		// Always prune to clean up stale git worktree metadata

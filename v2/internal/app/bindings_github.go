@@ -404,6 +404,118 @@ func (a *App) PostMergeCleanupForWorkspace(worktreeId string) string {
 	return ""
 }
 
+// GetWorkflowsForWorkspace returns GitHub Actions workflow definitions for the workspace's repo.
+func (a *App) GetWorkflowsForWorkspace(worktreeId string) []git.Workflow {
+	log.Info("app/GetWorkflowsForWorkspace: called", "worktreeId", worktreeId)
+	repoPath, err := a.resolveWorkspacePath(worktreeId)
+	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GetWorkflowsForWorkspace: workspace gone, returning nil", "worktreeId", worktreeId)
+			return nil
+		}
+		log.Error("app/GetWorkflowsForWorkspace: resolve failed", "err", err)
+		return nil
+	}
+	workflows, err := git.GetWorkflows(a.ctx, repoPath)
+	if err != nil {
+		log.Error("app/GetWorkflowsForWorkspace: failed", "err", err)
+		return nil
+	}
+	log.Info("app/GetWorkflowsForWorkspace: success", "count", len(workflows))
+	return workflows
+}
+
+// GetWorkflowRunsForWorkspace returns recent GitHub Actions workflow runs for the workspace's repo.
+func (a *App) GetWorkflowRunsForWorkspace(worktreeId string) []git.WorkflowRun {
+	log.Info("app/GetWorkflowRunsForWorkspace: called", "worktreeId", worktreeId)
+	repoPath, err := a.resolveWorkspacePath(worktreeId)
+	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			log.Debug("app/GetWorkflowRunsForWorkspace: workspace gone, returning nil", "worktreeId", worktreeId)
+			return nil
+		}
+		log.Error("app/GetWorkflowRunsForWorkspace: resolve failed", "err", err)
+		return nil
+	}
+	runs, err := git.GetRecentWorkflowRuns(a.ctx, repoPath, 10)
+	if err != nil {
+		log.Error("app/GetWorkflowRunsForWorkspace: failed", "err", err)
+		return nil
+	}
+	log.Info("app/GetWorkflowRunsForWorkspace: success", "count", len(runs))
+	return runs
+}
+
+// DispatchWorkflowForWorkspace triggers a workflow_dispatch event.
+// Returns "" on success, error message on failure.
+func (a *App) DispatchWorkflowForWorkspace(worktreeId string, workflowID int64, ref string) string {
+	log.Info("app/DispatchWorkflowForWorkspace: called", "worktreeId", worktreeId, "workflowID", workflowID, "ref", ref)
+	repoPath, err := a.resolveWorkspacePath(worktreeId)
+	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			return ""
+		}
+		return fmt.Sprintf("workspace not found: %v", err)
+	}
+	if err := git.DispatchWorkflow(a.ctx, repoPath, workflowID, ref); err != nil {
+		log.Error("app/DispatchWorkflowForWorkspace: failed", "err", err)
+		return err.Error()
+	}
+	// Nudge the poller for immediate re-fetch
+	select {
+	case a.workflowRefresh <- struct{}{}:
+	default:
+	}
+	log.Info("app/DispatchWorkflowForWorkspace: success", "worktreeId", worktreeId)
+	return ""
+}
+
+// RerunWorkflowForWorkspace re-runs all jobs in a workflow run.
+// Returns "" on success, error message on failure.
+func (a *App) RerunWorkflowForWorkspace(worktreeId string, runID int64) string {
+	log.Info("app/RerunWorkflowForWorkspace: called", "worktreeId", worktreeId, "runID", runID)
+	repoPath, err := a.resolveWorkspacePath(worktreeId)
+	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			return ""
+		}
+		return fmt.Sprintf("workspace not found: %v", err)
+	}
+	if err := git.RerunWorkflow(a.ctx, repoPath, runID); err != nil {
+		log.Error("app/RerunWorkflowForWorkspace: failed", "err", err)
+		return err.Error()
+	}
+	select {
+	case a.workflowRefresh <- struct{}{}:
+	default:
+	}
+	log.Info("app/RerunWorkflowForWorkspace: success", "worktreeId", worktreeId)
+	return ""
+}
+
+// CancelWorkflowRunForWorkspace cancels an in-progress workflow run.
+// Returns "" on success, error message on failure.
+func (a *App) CancelWorkflowRunForWorkspace(worktreeId string, runID int64) string {
+	log.Info("app/CancelWorkflowRunForWorkspace: called", "worktreeId", worktreeId, "runID", runID)
+	repoPath, err := a.resolveWorkspacePath(worktreeId)
+	if err != nil {
+		if errors.Is(err, ErrWorkspaceGone) {
+			return ""
+		}
+		return fmt.Sprintf("workspace not found: %v", err)
+	}
+	if err := git.CancelWorkflowRun(a.ctx, repoPath, runID); err != nil {
+		log.Error("app/CancelWorkflowRunForWorkspace: failed", "err", err)
+		return err.Error()
+	}
+	select {
+	case a.workflowRefresh <- struct{}{}:
+	default:
+	}
+	log.Info("app/CancelWorkflowRunForWorkspace: success", "worktreeId", worktreeId)
+	return ""
+}
+
 // resolveBaseBranch returns the base branch for a workspace by consulting the project's
 // DefaultBranch field, falling back to git auto-detection.
 func resolveBaseBranch(a *App, worktreeId, repoPath string) string {

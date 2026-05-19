@@ -10,6 +10,7 @@ import { projects } from '@/core/signals/projects';
 import PrSection from './PrSection';
 import { CommitsSection } from './CommitsSection';
 import { CiSection } from './CiSection';
+import { WorkflowsSection } from './WorkflowsSection';
 import * as styles from '@/styles/right-sidebar.css';
 
 export function GitActivityPanel() {
@@ -35,6 +36,8 @@ export function GitActivityPanel() {
               <CommitsSection worktreeId={wtId()} repoUrl={prStatus()?.url?.replace(/\/pull\/\d+$/, '') ?? undefined} />
               <div class={styles.activityDivider} />
               <CiSection worktreeId={wtId()} />
+              <div class={styles.activityDivider} />
+              <WorkflowsSection worktreeId={wtId()} />
             </>
           )}
         </Show>

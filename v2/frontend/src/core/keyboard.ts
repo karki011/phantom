@@ -1,10 +1,10 @@
 // Phantom — Global keyboard shortcuts
 // Author: Subash Karki
 
-import { setActiveTopTab } from './signals/app';
-import { setLeftSidebarCollapsed, leftSidebarCollapsed } from './signals/worktrees';
+import { setActiveTopTab, activeWorktreeId } from './signals/app';
+import { setLeftSidebarCollapsed, leftSidebarCollapsed, activeWorktree } from './signals/worktrees';
 import { setRightSidebarCollapsed, rightSidebarCollapsed } from './signals/files';
-import { addTab, splitPane, activePaneId, tabs, activeTab, setActiveTab, removeTab, setActivePaneInTab } from './panes/signals';
+import { addTab, addTabWithData, splitPane, activePaneId, tabs, activeTab, setActiveTab, removeTab, setActivePaneInTab } from './panes/signals';
 import { getLayoutPaneIds } from './panes/layout-utils';
 import { zoomIn, zoomOut, zoomReset } from './signals/zoom';
 import { openSettings } from './signals/settings';
@@ -14,6 +14,7 @@ import { toggleComposerDrawer } from './composer/signals';
 import { toggleCommandPalette } from './signals/command-palette';
 import { openRecipePicker } from './signals/recipes';
 import { toggleShortcutSheet } from './signals/shortcut-sheet';
+import { toggleAgentsOverlay } from './signals/agents-overlay';
 
 import { switcherVisible, openSwitcher, closeSwitcher, advanceSwitcher, commitSwitcher } from './signals/worktree-switcher';
 import { goBack, goForward } from './signals/navigation';
@@ -199,12 +200,20 @@ export function registerKeyboardShortcuts(): () => void {
       return;
     }
 
+    // Cmd+Shift+G: Agents overlay
+    if (meta && e.shiftKey && (e.key === 'G' || e.key === 'g')) {
+      e.preventDefault();
+      toggleAgentsOverlay();
+      return;
+    }
+
     // Cmd+Shift+F: Search file contents
     if (meta && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
       e.preventDefault();
       toggleSearchPanel();
       return;
     }
+
 
     // Cmd+Shift+]: Next tab (must come before Cmd+])
     if (meta && e.shiftKey && e.key === ']') {

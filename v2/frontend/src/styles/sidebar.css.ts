@@ -68,8 +68,8 @@ export const projectList = style({
 });
 
 export const projectSection = style({
-  paddingTop: vars.space.sm,
-  paddingBottom: vars.space.md,
+  paddingTop: '2px',
+  paddingBottom: '2px',
 });
 
 export const projectHeader = style({
@@ -84,7 +84,7 @@ export const projectHeader = style({
   flexDirection: 'row',
   alignItems: 'center',
   gap: vars.space.sm,
-  padding: `${vars.space.sm} ${vars.space.md}`,
+  padding: `4px ${vars.space.md}`,
   cursor: 'pointer',
   userSelect: 'none',
   borderRadius: vars.radius.sm,
@@ -161,10 +161,10 @@ export const chevron = style({
 export const worktreeList = style({
   display: 'flex',
   flexDirection: 'column',
-  gap: vars.space.sm,
+  gap: '2px',
   paddingLeft: vars.space.lg,
   marginLeft: vars.space.md,
-  marginTop: vars.space.xs,
+  marginTop: '2px',
   borderLeft: `1px solid ${vars.color.divider}`,
 });
 
@@ -173,7 +173,7 @@ export const worktreeItem = style({
   flexDirection: 'row',
   alignItems: 'center',
   gap: vars.space.sm,
-  padding: `${vars.space.md} ${vars.space.sm}`,
+  padding: `3px ${vars.space.sm}`,
   cursor: 'pointer',
   borderRadius: vars.radius.sm,
   transition: `background ${vars.animation.fast} ease`,
@@ -282,6 +282,16 @@ export const liveSessionHeader = style({
   textTransform: 'uppercase',
   letterSpacing: '0.08em',
   userSelect: 'none',
+  cursor: 'pointer',
+  background: 'transparent',
+  border: 'none',
+  width: '100%',
+  textAlign: 'left',
+  selectors: {
+    '&:hover': {
+      opacity: 0.85,
+    },
+  },
 });
 
 export const liveSessionItem = style({
@@ -518,4 +528,48 @@ export const deleteWarningText = style({
 export const deleteWarningCount = style({
   color: vars.color.warning,
   fontWeight: 600,
+});
+
+// ── Section headers (collapsible groups) ────────────────────────────────────
+
+export const sidebarSectionHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: `6px 12px`,
+  fontSize: '0.6rem',
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  color: vars.color.textDisabled,
+  cursor: 'pointer',
+  userSelect: 'none',
+  background: 'transparent',
+  border: 'none',
+  width: '100%',
+  textAlign: 'left',
+  fontFamily: vars.font.mono,
+  selectors: {
+    '&:hover': {
+      color: vars.color.textSecondary,
+    },
+  },
+});
+
+export const sidebarChevron = style({
+  color: vars.color.textDisabled,
+  flexShrink: 0,
+  transition: `transform 120ms ease`,
+  selectors: {
+    '[data-expanded] &': {
+      transform: 'rotate(90deg)',
+    },
+  },
+});
+
+export const sectionCount = style({
+  marginLeft: 'auto',
+  fontSize: '0.55rem',
+  color: vars.color.textDisabled,
+  opacity: 0.6,
 });
