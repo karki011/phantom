@@ -1,7 +1,7 @@
 // Author: Subash Karki
 // Phantom — Ctrl+Tab worktree switcher overlay (macOS app-switcher style, premium)
 
-import { Show, For, createMemo } from 'solid-js';
+import { Show, For, createMemo, createSignal, createEffect, on } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { liveWorktrees } from '@/core/signals/live-sessions';
 import { switcherVisible, switcherSelectedIndex, commitSwitcherAt } from '@/core/signals/worktree-switcher';
@@ -26,80 +26,49 @@ function lastPathSegments(path: string, n: number): string {
 }
 
 const WorktreeSwitcher = () => {
-  const items = createMemo<SwitcherItem[]>(() => {
-    return liveWorktrees().map((lw) => ({
-      id: lw.worktreeId,
-      branch: lw.branch,
-      projectName: lw.projectName,
-      glyph: projectGlyph(lw.projectName),
-      shortPath: lastPathSegments(lw.worktreePath, 2),
-    }));
-  });
+  // Snapshot items when the switcher opens — prevents flicker from live-session polling
+  const [snapshotItems, setSnapshotItems] = createSignal<SwitcherItem[]>([]);
+
+  createEffect(on(switcherVisible, (visible) => {
+    if (visible) {
+      setSnapshotItems(liveWorktrees().map((lw) => ({
+        id: lw.worktreeId,
+        branch: lw.branch,
+        projectName: lw.projectName,
+        glyph: projectGlyph(lw.projectName),
+        shortPath: lastPathSegments(lw.worktreePath, 2),
+      })));
+    }
+  }));
+
+  const items = snapshotItems;
 
   return (
     <Show when={switcherVisible()}>
       <Portal>
         <div class={css.backdrop}>
           <div class={css.container}>
-            {/* Card row — horizontally scrollable */}
-            <div class={css.cardRow}>
-              <For each={items()}>
-                {(item, index) => {
-                  const isActive = () => item.id === activeWorktreeId();
-                  const isSelected = () => index() === switcherSelectedIndex();
+            <For each={items()}>
+              {(item, index) => {
+                const isActive = () => item.id === activeWorktreeId();
+                const isSelected = () => index() === switcherSelectedIndex();
 
-                  const cardClass = () => {
-                    const classes = [css.card];
-                    // cardActive and cardSelected can stack (active + selected)
-                    if (isActive()) classes.push(css.cardActive);
-                    if (isSelected()) classes.push(css.cardSelected);
-                    return classes.join(' ');
-                  };
+                return (
+                  <div
+                    class={`${css.row} ${isSelected() ? css.rowSelected : ''} ${isActive() ? css.rowActive : ''}`}
+                    onClick={() => commitSwitcherAt(index())}
+                  >
+                    <span class={css.rowGlyph}>{item.glyph}</span>
+                    <span class={css.rowBranch}>{item.branch}</span>
+                    <span class={css.rowProject}>{item.projectName}</span>
+                  </div>
+                );
+              }}
+            </For>
 
-                  // Stagger entrance animation delay per card index
-                  const entranceStyle = () => ({
-                    'animation-delay': `${index() * 20}ms`,
-                  });
-
-                  return (
-                    <div
-                      class={cardClass()}
-                      style={entranceStyle()}
-                      onClick={() => commitSwitcherAt(index())}
-                      title={`${item.branch} · ${item.projectName}`}
-                    >
-                      {/* Glyph */}
-                      <div class={css.glyphCircle}>{item.glyph}</div>
-
-                      {/* Branch name row with ⎇ icon */}
-                      <div class={css.branchRow}>
-                        <span class={css.branchIcon} aria-hidden="true">⎇</span>
-                        <span class={css.branchLabel} title={item.branch}>
-                          {item.branch}
-                        </span>
-                      </div>
-
-                      {/* Project name */}
-                      <div class={css.projectLabel} title={item.projectName}>
-                        {item.projectName}
-                      </div>
-
-                      {/* Short path (last 2 segments) */}
-                      <Show when={item.shortPath}>
-                        <div class={css.pathLabel} title={item.shortPath}>
-                          {item.shortPath}
-                        </div>
-                      </Show>
-                    </div>
-                  );
-                }}
-              </For>
-            </div>
-
-            {/* Footer keyboard hint */}
             <div class={css.footer}>
               <span class={css.footerKbd}>⌃Tab</span>
-              <span>to cycle</span>
+              <span>cycle</span>
               <span>·</span>
               <span>release to switch</span>
             </div>

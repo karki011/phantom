@@ -95,6 +95,10 @@ export function installJumpToPrompt(
       void writeTerminal(sessionId, '\x1b[13;2u');
       return false;
     }
+    // Let Ctrl+Tab/Ctrl+Shift+Tab bubble to the document handler for worktree switching
+    if (e.type === 'keydown' && e.key === 'Tab' && e.ctrlKey) {
+      return false;
+    }
     return !isOurKey(e);
   });
 
