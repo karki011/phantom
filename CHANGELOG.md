@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.47](https://github.com/karki011/phantom/compare/v0.1.46...v0.1.47) (2026-05-19)
+
+
+### Features
+
+* Perf overlay background + settings toggle ([5da2263](https://github.com/karki011/phantom/commit/5da2263b1d0586d83972e1e972969d1901fbb766))
+
+
+### Bug Fixes
+
+* Ctrl+Tab works in terminal, compact switcher, no flicker ([9c6c208](https://github.com/karki011/phantom/commit/9c6c2086877bd6f6aeec9c5e189c9f1bab95b6ac))
+
 ## [0.1.46](https://github.com/karki011/phantom/compare/v0.1.45...v0.1.46) (2026-05-19)
 
 
