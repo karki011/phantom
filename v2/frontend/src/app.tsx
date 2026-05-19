@@ -65,6 +65,14 @@ export function App() {
   const [bootCeremonyDone, setBootCeremonyDone] = createSignal(false);
   const [shuttingDown, setShuttingDown] = createSignal(false);
   const [shutdownStats, setShutdownStats] = createSignal<ShutdownStats | undefined>();
+  const [showPerf, setShowPerf] = createSignal(
+    localStorage.getItem('phantom.perf') === '1' || new URLSearchParams(window.location.search).has('perf'),
+  );
+
+  // Listen for perf overlay toggle from Settings
+  const perfToggleHandler = () => setShowPerf(localStorage.getItem('phantom.perf') === '1');
+  window.addEventListener('phantom:perf-toggle', perfToggleHandler);
+  onCleanup(() => window.removeEventListener('phantom:perf-toggle', perfToggleHandler));
 
   onMount(async () => {
     document.body.classList.add(shadowMonarchDarkTheme);
@@ -320,7 +328,7 @@ export function App() {
       <DigestDrawer />
       <ComposerDrawer />
       <ComposerStatusPill />
-      <Show when={typeof window !== 'undefined' && (localStorage.getItem('phantom.perf') === '1' || new URLSearchParams(window.location.search).has('perf'))}>
+      <Show when={showPerf()}>
         <PerfOverlay />
       </Show>
     </div>

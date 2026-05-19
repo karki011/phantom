@@ -11,6 +11,7 @@ import * as styles from '../SettingsDialog.css';
 export default function FeaturesSection() {
   const [conciseMode, setConciseMode] = createSignal(false);
   const [wardsEnabled, setWardsEnabled] = createSignal(false);
+  const [perfOverlay, setPerfOverlay] = createSignal(false);
 
   onMount(async () => {
     const savedCaveman = await getPreference('caveman');
@@ -18,6 +19,8 @@ export default function FeaturesSection() {
 
     const savedWards = await getPreference('wards_enabled');
     if (savedWards === 'true') setWardsEnabled(true);
+
+    setPerfOverlay(localStorage.getItem('phantom.perf') === '1');
   });
 
   function handleConciseModeChange(checked: boolean) {
@@ -28,6 +31,12 @@ export default function FeaturesSection() {
   function handleWardsChange(checked: boolean) {
     setWardsEnabled(checked);
     void setPref('wards_enabled', String(checked));
+  }
+
+  function handlePerfOverlayChange(checked: boolean) {
+    setPerfOverlay(checked);
+    localStorage.setItem('phantom.perf', checked ? '1' : '0');
+    window.dispatchEvent(new CustomEvent('phantom:perf-toggle'));
   }
 
   return (
@@ -91,6 +100,28 @@ export default function FeaturesSection() {
             class={styles.switchRoot}
             checked={composerV2Enabled()}
             onChange={(checked: boolean) => void setComposerV2Enabled(checked)}
+          >
+            <KobalteSwitch.Input />
+            <KobalteSwitch.Control class={styles.switchControl}>
+              <KobalteSwitch.Thumb class={styles.switchThumb} />
+            </KobalteSwitch.Control>
+          </KobalteSwitch>
+        </div>
+      </div>
+
+      {/* Performance Overlay */}
+      <div class={styles.settingGroup}>
+        <div class={styles.settingRow}>
+          <div>
+            <div class={styles.settingLabel}>Performance Overlay</div>
+            <div class={styles.settingDescription}>
+              Show CPU, memory, and session metrics in a floating panel
+            </div>
+          </div>
+          <KobalteSwitch
+            class={styles.switchRoot}
+            checked={perfOverlay()}
+            onChange={handlePerfOverlayChange}
           >
             <KobalteSwitch.Input />
             <KobalteSwitch.Control class={styles.switchControl}>
