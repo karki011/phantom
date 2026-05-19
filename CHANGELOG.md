@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.48](https://github.com/karki011/phantom/compare/v0.1.47...v0.1.48) (2026-05-19)
+
+
+### Bug Fixes
+
+* Smaller worktree icons (8px), adjust spacing ([9093591](https://github.com/karki011/phantom/commit/909359153ac652be98e534430c08768d0b274e29))
+
 ## [0.1.47](https://github.com/karki011/phantom/compare/v0.1.46...v0.1.47) (2026-05-19)
 
 
