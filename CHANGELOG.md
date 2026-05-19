@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.46](https://github.com/karki011/phantom/compare/v0.1.45...v0.1.46) (2026-05-19)
+
+
+### Features
+
+* GitHub workflows sidebar, CodeMirror 6 editor, VS Code perf patterns, Agents overlay ([f7883bd](https://github.com/karki011/phantom/commit/f7883bd2176d9e36459f92fbe5d4a01285af436a))
+
 ## [0.1.45](https://github.com/karki011/phantom/compare/v0.1.44...v0.1.45) (2026-05-18)
 
 
