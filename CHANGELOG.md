@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.53](https://github.com/karki011/phantom/compare/v0.1.52...v0.1.53) (2026-05-20)
+
+
+### Features
+
+* custom diff viewer with word-level highlighting and collapsible regions ([#141](https://github.com/karki011/phantom/issues/141)) ([313fd71](https://github.com/karki011/phantom/commit/313fd71a637ba65ead7c6ee68ecc827b499d085e))
+
 ## [0.1.52](https://github.com/karki011/phantom/compare/v0.1.51...v0.1.52) (2026-05-20)
 
 
