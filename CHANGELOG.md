@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.50](https://github.com/karki011/phantom/compare/v0.1.49...v0.1.50) (2026-05-20)
+
+
+### Features
+
+* GSAP animations, inline terminal AI, libghostty action dispatch, UX polish ([#136](https://github.com/karki011/phantom/issues/136)) ([71d96d4](https://github.com/karki011/phantom/commit/71d96d42b15825379047e052173f221a188455ee))
+
 ## [0.1.49](https://github.com/karki011/phantom/compare/v0.1.48...v0.1.49) (2026-05-20)
 
 
