@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.51](https://github.com/karki011/phantom/compare/v0.1.50...v0.1.51) (2026-05-20)
+
+
+### Features
+
+* lightweight workspace rename, right sidebar collapsed by default, quick action visibility ([85b059b](https://github.com/karki011/phantom/commit/85b059b84b7cf3ac32531576fc32ef0cca639050))
+
 ## [0.1.50](https://github.com/karki011/phantom/compare/v0.1.49...v0.1.50) (2026-05-20)
 
 
