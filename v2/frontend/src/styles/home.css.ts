@@ -1470,13 +1470,13 @@ export const quickLaunchCard = style({
   padding: `${vars.space.xl} ${vars.space.md}`,
   borderRadius: vars.radius.lg,
   background: vars.color.bgTertiary,
-  border: `1px solid color-mix(in srgb, ${vars.color.border} 50%, transparent)`,
+  border: `1px solid ${vars.color.border}`,
   cursor: 'pointer',
   transition: `all 200ms ease`,
   overflow: 'hidden',
   ':hover': {
-    background: `color-mix(in srgb, ${vars.color.accent} 6%, ${vars.color.bgTertiary})`,
-    borderColor: `color-mix(in srgb, ${vars.color.accent} 40%, ${vars.color.border})`,
+    background: `color-mix(in srgb, ${vars.color.accent} 8%, ${vars.color.bgTertiary})`,
+    borderColor: `color-mix(in srgb, ${vars.color.accent} 50%, ${vars.color.border})`,
     transform: 'translateY(-2px)',
     boxShadow: `0 4px 20px color-mix(in srgb, ${vars.color.accent} 15%, transparent), 0 0 0 1px color-mix(in srgb, ${vars.color.accent} 10%, transparent)`,
   },
@@ -1506,7 +1506,7 @@ export const quickLaunchIcon = style({
   height: '32px',
   color: vars.color.accent,
   flexShrink: 0,
-  filter: `drop-shadow(0 0 6px color-mix(in srgb, ${vars.color.accent} 30%, transparent))`,
+  filter: `drop-shadow(0 0 8px color-mix(in srgb, ${vars.color.accent} 45%, transparent))`,
 });
 
 export const quickLaunchLabel = style({
@@ -1520,7 +1520,7 @@ export const quickLaunchLabel = style({
 export const quickLaunchDesc = style({
   fontFamily: vars.font.mono,
   fontSize: '0.6rem',
-  color: vars.color.textDisabled,
+  color: vars.color.textSecondary,
   textAlign: 'center',
   lineHeight: 1.4,
 });

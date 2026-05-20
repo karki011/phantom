@@ -35,5 +35,8 @@ WHERE id = ?;
 -- name: SetWorkspaceActive :exec
 UPDATE workspaces SET is_active = ? WHERE id = ?;
 
+-- name: RenameWorkspace :exec
+UPDATE workspaces SET name = ? WHERE id = ?;
+
 -- name: DeleteWorkspace :exec
 DELETE FROM workspaces WHERE id = ?;

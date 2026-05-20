@@ -53,7 +53,7 @@ const activityCount = createMemo(() => recentCommits().length);
 
 // Right sidebar UI state
 const [rightSidebarWidth, setRightSidebarWidth] = createSignal(300);
-const [rightSidebarCollapsed, setRightSidebarCollapsed] = createSignal(false);
+const [rightSidebarCollapsed, setRightSidebarCollapsed] = createSignal(true);
 // True while the user is dragging the resize handle — used to pause the
 // collapse/expand width animation so per-pixel drag doesn't ease.
 const [isRightResizing, setIsRightResizing] = createSignal(false);

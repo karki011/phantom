@@ -261,6 +261,24 @@ func (a *App) GitDiscard(workspaceId string, paths []string) error {
 	return nil
 }
 
+// RenameWorkspaceDisplay sets the display name for any workspace (branch or worktree)
+// without moving files or touching git. DB-only update.
+func (a *App) RenameWorkspaceDisplay(workspaceId, displayName string) error {
+	log.Info("app/RenameWorkspaceDisplay: called", "workspaceId", workspaceId, "displayName", displayName)
+	displayName = strings.TrimSpace(displayName)
+	if displayName == "" {
+		return fmt.Errorf("display name cannot be empty")
+	}
+	wq := db.New(a.DB.Writer)
+	if err := wq.RenameWorkspace(a.ctx, db.RenameWorkspaceParams{Name: displayName, ID: workspaceId}); err != nil {
+		log.Error("app/RenameWorkspaceDisplay: DB update failed", "err", err)
+		return fmt.Errorf("rename failed: %w", err)
+	}
+	a.EmitWorktreeUpdated()
+	log.Info("app/RenameWorkspaceDisplay: success", "workspaceId", workspaceId, "displayName", displayName)
+	return nil
+}
+
 // RenameWorktree moves the worktree to a new path derived from newName and updates the DB.
 func (a *App) RenameWorktree(worktreeId, newName string) error {
 	log.Info("app/RenameWorktree: called", "worktreeId", worktreeId, "newName", newName)

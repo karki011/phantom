@@ -77,6 +77,10 @@ export async function renameWorktree(worktreeId: string, newName: string): Promi
   try { await App()?.RenameWorktree(worktreeId, newName); return true; } catch { return false; }
 }
 
+export async function renameWorkspaceDisplay(workspaceId: string, displayName: string): Promise<boolean> {
+  try { await App()?.RenameWorkspaceDisplay(workspaceId, displayName); return true; } catch { return false; }
+}
+
 export async function getWorkspaceStatus(workspaceId: string): Promise<RepoStatus | null> {
   try { return (await App()?.GetWorkspaceStatus(workspaceId)) ?? null; } catch { return null; }
 }

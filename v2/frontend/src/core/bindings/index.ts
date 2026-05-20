@@ -20,6 +20,7 @@ export {
   gitCommit,
   gitDiscard,
   renameWorktree,
+  renameWorkspaceDisplay,
   getWorkspaceStatus,
   refreshWorkspaceStatus,
   getWorkspaceChanges,

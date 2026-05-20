@@ -135,6 +135,20 @@ func (q *Queries) ListWorkspacesByProject(ctx context.Context, projectID string)
 	return items, nil
 }
 
+const renameWorkspace = `-- name: RenameWorkspace :exec
+UPDATE workspaces SET name = ? WHERE id = ?
+`
+
+type RenameWorkspaceParams struct {
+	Name string `json:"name"`
+	ID   string `json:"id"`
+}
+
+func (q *Queries) RenameWorkspace(ctx context.Context, arg RenameWorkspaceParams) error {
+	_, err := q.db.ExecContext(ctx, renameWorkspace, arg.Name, arg.ID)
+	return err
+}
+
 const setWorkspaceActive = `-- name: SetWorkspaceActive :exec
 UPDATE workspaces SET is_active = ? WHERE id = ?
 `

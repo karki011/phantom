@@ -1,11 +1,12 @@
 // Phantom — Rename worktree dialog
 // Author: Subash Karki
 
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { TextField } from '@kobalte/core/text-field';
 import { PhantomModal, phantomModalStyles } from '@/shared/PhantomModal/PhantomModal';
 import { showWarningToast } from '@/shared/Toast/Toast';
-import { renameWorktree } from '@/core/bindings';
+import { vars } from '@/styles/theme.css';
+import { renameWorkspaceDisplay } from '@/core/bindings';
 import { refreshAllWorktrees } from '@/core/signals/worktrees';
 import { buttonRecipe } from '@/styles/recipes.css';
 import * as styles from './RenameWorktreeDialog.css';
@@ -15,6 +16,7 @@ interface RenameWorktreeDialogProps {
   onClose: () => void;
   worktreeId: string;
   currentName: string;
+  branch?: string;
 }
 
 export function RenameWorktreeDialog(props: RenameWorktreeDialogProps) {
@@ -25,13 +27,13 @@ export function RenameWorktreeDialog(props: RenameWorktreeDialogProps) {
     const newName = name().trim();
     if (!newName || newName === props.currentName) return;
     setLoading(true);
-    const ok = await renameWorktree(props.worktreeId, newName);
+    const ok = await renameWorkspaceDisplay(props.worktreeId, newName);
     setLoading(false);
     if (ok) {
       await refreshAllWorktrees();
       props.onClose();
     } else {
-      showWarningToast('Rename failed', 'Could not rename worktree');
+      showWarningToast('Rename failed', 'Could not update display name');
     }
   }
 
@@ -47,19 +49,24 @@ export function RenameWorktreeDialog(props: RenameWorktreeDialogProps) {
     <PhantomModal
       open={props.open}
       onOpenChange={handleOpenChange}
-      title="Rename Worktree"
+      title="Rename"
       size="sm"
     >
       <div class={styles.form}>
         <TextField class={styles.textFieldRoot} value={name()} onChange={setName}>
-          <TextField.Label class={styles.textFieldLabel}>New Name</TextField.Label>
+          <TextField.Label class={styles.textFieldLabel}>Display Name</TextField.Label>
           <TextField.Input
             class={styles.textFieldInput}
-            placeholder="e.g. my-feature"
+            placeholder="e.g. Auth refactor"
             autofocus
             onKeyDown={handleKeyDown}
           />
         </TextField>
+        <Show when={props.branch}>
+          <span style={{ 'font-size': '11px', color: vars.color.textDisabled, 'font-family': vars.font.mono }}>
+            branch: {props.branch}
+          </span>
+        </Show>
       </div>
 
       <div class={phantomModalStyles.actions}>

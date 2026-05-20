@@ -234,12 +234,13 @@ export function WorktreeItem(props: WorktreeItemProps) {
             Copy Path
           </ContextMenu.Item>
 
+          <ContextMenu.Separator class={styles.contextMenuSeparator} />
+          <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => setShowRename(true)}>
+            <Pencil size={13} />
+            Rename
+          </ContextMenu.Item>
+
           <Show when={props.worktree.type !== 'branch'}>
-            <ContextMenu.Separator class={styles.contextMenuSeparator} />
-            <ContextMenu.Item class={styles.contextMenuItem} onSelect={() => setShowRename(true)}>
-              <Pencil size={13} />
-              Rename
-            </ContextMenu.Item>
             <ContextMenu.Item
               class={styles.contextMenuItem}
               onSelect={() => addTabWithData('terminal', 'Terminal', { cwd: props.worktree.worktree_path ?? '' })}
@@ -266,14 +267,13 @@ export function WorktreeItem(props: WorktreeItemProps) {
       projectId={props.projectId}
       defaultBranch={props.defaultBranch}
     />
-    <Show when={props.worktree.type !== 'branch'}>
-      <RenameWorktreeDialog
-        open={showRename}
-        onClose={() => setShowRename(false)}
-        worktreeId={props.worktree.id}
-        currentName={props.worktree.name}
-      />
-    </Show>
+    <RenameWorktreeDialog
+      open={showRename}
+      onClose={() => setShowRename(false)}
+      worktreeId={props.worktree.id}
+      currentName={props.worktree.name}
+      branch={props.worktree.branch}
+    />
     <PhantomModal
       open={showDeleteConfirm}
       onOpenChange={(open) => { if (!open) setShowDeleteConfirm(false); }}
