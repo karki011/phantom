@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.52](https://github.com/karki011/phantom/compare/v0.1.51...v0.1.52) (2026-05-20)
+
+
+### Features
+
+* add type labels to sidebar worktree items ([#139](https://github.com/karki011/phantom/issues/139)) ([deaa8ad](https://github.com/karki011/phantom/commit/deaa8ad5790effe0821516584df1af1427354000))
+
 ## [0.1.51](https://github.com/karki011/phantom/compare/v0.1.50...v0.1.51) (2026-05-20)
 
 
