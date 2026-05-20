@@ -144,6 +144,9 @@ export function WorktreeItem(props: WorktreeItemProps) {
         <span class={styles.branchName}>
           {props.worktree.branch}
         </span>
+        <span class={styles.typeLabel}>
+          {props.worktree.type === 'branch' ? 'branch' : 'worktree'}
+        </span>
         <Show when={dirtyStatus()}>
           {(d) => (
             <span
