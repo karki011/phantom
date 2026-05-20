@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.49](https://github.com/karki011/phantom/compare/v0.1.48...v0.1.49) (2026-05-20)
+
+
+### Performance
+
+* Terminal optimization — batch PTY output, RAF writes, 16KB buffer ([a3ba210](https://github.com/karki011/phantom/commit/a3ba21006a05a67a11512e31bf83b1b415938ced))
+
 ## [0.1.48](https://github.com/karki011/phantom/compare/v0.1.47...v0.1.48) (2026-05-19)
 
 
