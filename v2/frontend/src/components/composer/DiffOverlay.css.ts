@@ -53,41 +53,6 @@ export const diffBody = style({
   lineHeight: '1.6',
 })
 
-export const lineRow = style({
-  display: 'flex',
-  minHeight: '22px',
-  padding: `0 ${vars.space.md}`,
-})
-
-export const lineNumber = style({
-  width: '48px',
-  flexShrink: 0,
-  textAlign: 'right',
-  paddingRight: vars.space.sm,
-  color: vars.color.textDisabled,
-  userSelect: 'none',
-})
-
-export const lineContent = style({
-  flex: 1,
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-all',
-})
-
-export const lineSame = style({
-  color: vars.color.textPrimary,
-})
-
-export const lineAdd = style({
-  background: vars.color.editorDiffAdd,
-  color: vars.color.success,
-})
-
-export const lineRemove = style({
-  background: vars.color.editorDiffRemove,
-  color: vars.color.danger,
-})
-
 export const footer = style({
   display: 'flex',
   alignItems: 'center',

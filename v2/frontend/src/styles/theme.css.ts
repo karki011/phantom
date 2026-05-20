@@ -62,6 +62,8 @@ export const vars = createThemeContract({
 		editorSelection: "",
 		editorDiffAdd: "",
 		editorDiffRemove: "",
+		editorDiffAddWord: "",
+		editorDiffRemoveWord: "",
 	},
 	font: {
 		body: "",
@@ -151,6 +153,8 @@ export const systemCoreDarkTheme = createTheme(vars, {
 		editorSelection: "rgba(86, 204, 255, 0.25)",
 		editorDiffAdd: "rgba(46, 230, 166, 0.2)",
 		editorDiffRemove: "rgba(255, 98, 126, 0.2)",
+		editorDiffAddWord: "rgba(46, 230, 166, 0.4)",
+		editorDiffRemoveWord: "rgba(255, 98, 126, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationDark,
@@ -204,6 +208,8 @@ export const systemCoreLightTheme = createTheme(vars, {
 		editorSelection: "rgba(22, 157, 219, 0.2)",
 		editorDiffAdd: "rgba(19, 182, 122, 0.15)",
 		editorDiffRemove: "rgba(216, 74, 103, 0.15)",
+		editorDiffAddWord: "rgba(19, 182, 122, 0.3)",
+		editorDiffRemoveWord: "rgba(216, 74, 103, 0.3)",
 	},
 	...withPhantomChrome({
 		...elevationLight,
@@ -257,6 +263,8 @@ export const shadowMonarchDarkTheme = createTheme(vars, {
 		editorSelection: "rgba(139, 92, 255, 0.25)",
 		editorDiffAdd: "rgba(58, 232, 176, 0.2)",
 		editorDiffRemove: "rgba(255, 93, 135, 0.2)",
+		editorDiffAddWord: "rgba(58, 232, 176, 0.4)",
+		editorDiffRemoveWord: "rgba(255, 93, 135, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationDark,
@@ -310,6 +318,8 @@ export const shadowMonarchLightTheme = createTheme(vars, {
 		editorSelection: "rgba(111, 69, 232, 0.2)",
 		editorDiffAdd: "rgba(25, 184, 131, 0.15)",
 		editorDiffRemove: "rgba(219, 81, 118, 0.15)",
+		editorDiffAddWord: "rgba(25, 184, 131, 0.3)",
+		editorDiffRemoveWord: "rgba(219, 81, 118, 0.3)",
 	},
 	...withPhantomChrome({
 		...elevationLight,
@@ -363,6 +373,8 @@ export const hunterRankDarkTheme = createTheme(vars, {
 		editorSelection: "rgba(61, 220, 151, 0.25)",
 		editorDiffAdd: "rgba(39, 217, 138, 0.2)",
 		editorDiffRemove: "rgba(255, 107, 107, 0.2)",
+		editorDiffAddWord: "rgba(39, 217, 138, 0.4)",
+		editorDiffRemoveWord: "rgba(255, 107, 107, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationDark,
@@ -416,6 +428,8 @@ export const hunterRankLightTheme = createTheme(vars, {
 		editorSelection: "rgba(18, 183, 106, 0.2)",
 		editorDiffAdd: "rgba(15, 169, 104, 0.15)",
 		editorDiffRemove: "rgba(219, 91, 91, 0.15)",
+		editorDiffAddWord: "rgba(15, 169, 104, 0.3)",
+		editorDiffRemoveWord: "rgba(219, 91, 91, 0.3)",
 	},
 	...withPhantomChrome({
 		...elevationLight,
@@ -469,6 +483,8 @@ export const tealDarkTheme = createTheme(vars, {
 		editorSelection: "rgba(69, 153, 172, 0.25)",
 		editorDiffAdd: "rgba(34, 197, 94, 0.2)",
 		editorDiffRemove: "rgba(239, 68, 68, 0.2)",
+		editorDiffAddWord: "rgba(34, 197, 94, 0.4)",
+		editorDiffRemoveWord: "rgba(239, 68, 68, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationTealDark,
@@ -522,6 +538,8 @@ export const tealLightTheme = createTheme(vars, {
 		editorSelection: "rgba(34, 134, 161, 0.2)",
 		editorDiffAdd: "rgba(22, 163, 74, 0.15)",
 		editorDiffRemove: "rgba(218, 10, 1, 0.15)",
+		editorDiffAddWord: "rgba(22, 163, 74, 0.3)",
+		editorDiffRemoveWord: "rgba(218, 10, 1, 0.3)",
 	},
 	...withPhantomChrome({
 		...elevationTealLight,
@@ -575,6 +593,8 @@ export const cyberpunkTheme = createTheme(vars, {
 		editorSelection: "rgba(236, 72, 153, 0.25)",
 		editorDiffAdd: "rgba(16, 185, 129, 0.2)",
 		editorDiffRemove: "rgba(248, 113, 113, 0.2)",
+		editorDiffAddWord: "rgba(16, 185, 129, 0.4)",
+		editorDiffRemoveWord: "rgba(248, 113, 113, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationCyberpunk,
@@ -632,6 +652,8 @@ export const draculaTheme = createTheme(vars, {
 		editorSelection: "rgba(189, 147, 249, 0.25)",
 		editorDiffAdd: "rgba(80, 250, 123, 0.2)",
 		editorDiffRemove: "rgba(255, 85, 85, 0.2)",
+		editorDiffAddWord: "rgba(80, 250, 123, 0.4)",
+		editorDiffRemoveWord: "rgba(255, 85, 85, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationDracula,
@@ -685,6 +707,8 @@ export const nordDarkTheme = createTheme(vars, {
 		editorSelection: "rgba(136, 192, 208, 0.25)",
 		editorDiffAdd: "rgba(163, 190, 140, 0.2)",
 		editorDiffRemove: "rgba(191, 97, 106, 0.2)",
+		editorDiffAddWord: "rgba(163, 190, 140, 0.4)",
+		editorDiffRemoveWord: "rgba(191, 97, 106, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationNord,
@@ -738,6 +762,8 @@ export const nordLightTheme = createTheme(vars, {
 		editorSelection: "rgba(94, 129, 172, 0.2)",
 		editorDiffAdd: "rgba(163, 190, 140, 0.15)",
 		editorDiffRemove: "rgba(191, 97, 106, 0.15)",
+		editorDiffAddWord: "rgba(163, 190, 140, 0.3)",
+		editorDiffRemoveWord: "rgba(191, 97, 106, 0.3)",
 	},
 	...withPhantomChrome({
 		...elevationNord,
@@ -791,6 +817,8 @@ export const oneDarkProTheme = createTheme(vars, {
 		editorSelection: "rgba(97, 175, 239, 0.25)",
 		editorDiffAdd: "rgba(152, 195, 121, 0.2)",
 		editorDiffRemove: "rgba(224, 108, 117, 0.2)",
+		editorDiffAddWord: "rgba(152, 195, 121, 0.4)",
+		editorDiffRemoveWord: "rgba(224, 108, 117, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationDark,
@@ -844,6 +872,8 @@ export const githubDarkTheme = createTheme(vars, {
 		editorSelection: "rgba(88, 166, 255, 0.25)",
 		editorDiffAdd: "rgba(63, 185, 80, 0.2)",
 		editorDiffRemove: "rgba(248, 81, 73, 0.2)",
+		editorDiffAddWord: "rgba(63, 185, 80, 0.4)",
+		editorDiffRemoveWord: "rgba(248, 81, 73, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationDark,
@@ -897,6 +927,8 @@ export const catppuccinTheme = createTheme(vars, {
 		editorSelection: "rgba(203, 166, 247, 0.25)",
 		editorDiffAdd: "rgba(166, 227, 161, 0.2)",
 		editorDiffRemove: "rgba(243, 139, 168, 0.2)",
+		editorDiffAddWord: "rgba(166, 227, 161, 0.4)",
+		editorDiffRemoveWord: "rgba(243, 139, 168, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationDark,
@@ -950,6 +982,8 @@ export const rosePineTheme = createTheme(vars, {
 		editorSelection: "rgba(196, 167, 231, 0.25)",
 		editorDiffAdd: "rgba(49, 116, 143, 0.2)",
 		editorDiffRemove: "rgba(235, 111, 146, 0.2)",
+		editorDiffAddWord: "rgba(49, 116, 143, 0.4)",
+		editorDiffRemoveWord: "rgba(235, 111, 146, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationDark,
@@ -1003,6 +1037,8 @@ export const tokyoNightTheme = createTheme(vars, {
 		editorSelection: "rgba(122, 162, 247, 0.25)",
 		editorDiffAdd: "rgba(158, 206, 106, 0.2)",
 		editorDiffRemove: "rgba(247, 118, 142, 0.2)",
+		editorDiffAddWord: "rgba(158, 206, 106, 0.4)",
+		editorDiffRemoveWord: "rgba(247, 118, 142, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationDark,
@@ -1056,6 +1092,8 @@ export const gruvboxTheme = createTheme(vars, {
 		editorSelection: "rgba(254, 128, 25, 0.25)",
 		editorDiffAdd: "rgba(184, 187, 38, 0.2)",
 		editorDiffRemove: "rgba(251, 73, 52, 0.2)",
+		editorDiffAddWord: "rgba(184, 187, 38, 0.4)",
+		editorDiffRemoveWord: "rgba(251, 73, 52, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationDark,
@@ -1109,6 +1147,8 @@ export const solarizedDarkTheme = createTheme(vars, {
 		editorSelection: "rgba(38, 139, 210, 0.25)",
 		editorDiffAdd: "rgba(133, 153, 0, 0.2)",
 		editorDiffRemove: "rgba(220, 50, 47, 0.2)",
+		editorDiffAddWord: "rgba(133, 153, 0, 0.4)",
+		editorDiffRemoveWord: "rgba(220, 50, 47, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationDark,
@@ -1162,6 +1202,8 @@ export const ayuDarkTheme = createTheme(vars, {
 		editorSelection: "rgba(230, 180, 80, 0.25)",
 		editorDiffAdd: "rgba(127, 217, 98, 0.2)",
 		editorDiffRemove: "rgba(217, 87, 87, 0.2)",
+		editorDiffAddWord: "rgba(127, 217, 98, 0.4)",
+		editorDiffRemoveWord: "rgba(217, 87, 87, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationDark,
@@ -1215,6 +1257,8 @@ export const kanagawaTheme = createTheme(vars, {
 		editorSelection: "rgba(126, 156, 216, 0.25)",
 		editorDiffAdd: "rgba(118, 148, 106, 0.2)",
 		editorDiffRemove: "rgba(195, 64, 67, 0.2)",
+		editorDiffAddWord: "rgba(118, 148, 106, 0.4)",
+		editorDiffRemoveWord: "rgba(195, 64, 67, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationDark,
@@ -1268,6 +1312,8 @@ export const fleetDarkTheme = createTheme(vars, {
 		editorSelection: "#2e436e",
 		editorDiffAdd: "rgba(106, 171, 115, 0.15)",
 		editorDiffRemove: "rgba(247, 84, 100, 0.15)",
+		editorDiffAddWord: "rgba(106, 171, 115, 0.3)",
+		editorDiffRemoveWord: "rgba(247, 84, 100, 0.3)",
 	},
 	...withPhantomChrome({
 		sm: "0 1px 2px rgba(0,0,0,0.2)",
@@ -1323,6 +1369,8 @@ export const fleetLightTheme = createTheme(vars, {
 		editorSelection: "rgba(124, 77, 255, 0.15)",
 		editorDiffAdd: "rgba(77, 158, 88, 0.12)",
 		editorDiffRemove: "rgba(214, 53, 80, 0.12)",
+		editorDiffAddWord: "rgba(77, 158, 88, 0.24)",
+		editorDiffRemoveWord: "rgba(214, 53, 80, 0.24)",
 	},
 	...withPhantomChrome({
 		...elevationLight,
@@ -1376,6 +1424,8 @@ export const vscodeDarkTheme = createTheme(vars, {
 		editorSelection: "rgba(79, 193, 255, 0.25)",
 		editorDiffAdd: "rgba(137, 209, 133, 0.2)",
 		editorDiffRemove: "rgba(241, 76, 76, 0.2)",
+		editorDiffAddWord: "rgba(137, 209, 133, 0.4)",
+		editorDiffRemoveWord: "rgba(241, 76, 76, 0.4)",
 	},
 	...withPhantomChrome({
 		...elevationDark,
