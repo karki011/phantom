@@ -112,6 +112,14 @@ export function createSession(
     allowTransparency: false,
     theme: opts?.theme ?? {},
     scrollback: ACTIVE_SCROLLBACK,
+    // Performance: GPU-drawn box/powerline glyphs, skip font fallback lookup
+    customGlyphs: true,
+    // Performance: fewer color lookups per cell for bold text
+    drawBoldTextInBrightColors: false,
+    // Performance: better rendering of wide/overlapping chars
+    rescaleOverlappingGlyphs: true,
+    // Performance: Alt+scroll = 5x scroll speed (modifier is Alt by default)
+    fastScrollSensitivity: 5,
   });
 
   const fitAddon = new FitAddon();

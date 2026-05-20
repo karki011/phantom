@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/terminal"
@@ -40,21 +41,55 @@ func (a *App) SubscribeTerminal(sessionID string) {
 
 	eventName := fmt.Sprintf("terminal:%s:data", sessionID)
 
+	// Batch PTY output with 2ms coalescing to reduce Wails event count by
+	// 10-100x during high throughput (builds, log tailing) while adding at
+	// most 2ms latency (imperceptible — human reaction time is 100ms+).
+	const (
+		batchInterval = 2 * time.Millisecond
+		maxBatchSize  = 32768 // 32KB
+	)
+
 	go func() {
-		defer func() {
-			sess.Unsubscribe(listenerID)
-		}()
+		defer sess.Unsubscribe(listenerID)
+
+		var batch []byte
+		timer := time.NewTimer(batchInterval)
+		timer.Stop()
+		timerRunning := false
+
+		emit := func() {
+			if len(batch) == 0 {
+				return
+			}
+			wailsRuntime.EventsEmit(a.ctx, eventName,
+				base64.StdEncoding.EncodeToString(batch))
+			batch = batch[:0]
+			timerRunning = false
+		}
 
 		for {
 			select {
 			case <-subCtx.Done():
+				emit() // flush remaining
 				return
 			case data, ok := <-ch:
 				if !ok {
-					// Channel closed — session ended.
+					emit()
 					return
 				}
-				wailsRuntime.EventsEmit(a.ctx, eventName, base64.StdEncoding.EncodeToString(data))
+				batch = append(batch, data...)
+				if len(batch) >= maxBatchSize {
+					if timerRunning {
+						timer.Stop()
+					}
+					emit()
+				} else if !timerRunning {
+					timer.Reset(batchInterval)
+					timerRunning = true
+				}
+			case <-timer.C:
+				timerRunning = false
+				emit()
 			}
 		}
 	}()

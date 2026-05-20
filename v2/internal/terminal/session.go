@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	readBufSize     = 4096 // 4KB read buffer for PTY goroutine
+	readBufSize     = 16384 // 16KB read buffer — reduces syscall count 4x during high-throughput (builds, log tailing)
 	listenerBufSize = 256  // buffered channel capacity per listener
 )
 
@@ -67,7 +67,7 @@ func (s *Session) Start() {
 	go s.readLoop()
 }
 
-// readLoop is the hot-path PTY reader. It reuses a single 4KB buffer to
+// readLoop is the hot-path PTY reader. It reuses a single 16KB buffer to
 // minimise allocations.
 func (s *Session) readLoop() {
 	buf := make([]byte, readBufSize)

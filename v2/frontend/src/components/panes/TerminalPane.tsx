@@ -21,6 +21,7 @@ import {
   hasSession,
   getSession,
   safeFit,
+  setSessionActive,
 } from '@/core/terminal/registry';
 import { installShellIntegration } from '@/core/terminal/addons/shellIntegration';
 import { installQuickFix } from '@/core/terminal/addons/quickFix';
@@ -29,7 +30,7 @@ import { installJumpToPrompt } from '@/core/terminal/addons/jumpToPrompt';
 import type { Terminal } from '@xterm/xterm';
 import { activeTerminalThemeId, resolveTerminalTheme } from '@/core/terminal/theme-manager';
 import { getSessionCwd } from '@/core/terminal/addons/shellIntegration';
-import { splitPane, closePane, getPaneColor } from '@/core/panes/signals';
+import { splitPane, closePane, getPaneColor, activePaneId } from '@/core/panes/signals';
 import { openComposer, setComposerTarget } from '@/core/signals/composer';
 import {
   createTerminal as createBackendTerminal,
@@ -279,6 +280,13 @@ export default function TerminalPane(props: TerminalPaneProps) {
 
   onWailsEvent<{ paneId: string; sessionId: string }>('terminal:linked', (data) => {
     if (data.paneId === sessionId) setLinkedSessionId(data.sessionId);
+  });
+
+  // Scrollback retention: active pane gets full scrollback (5000),
+  // background panes shrink to 1000 to free renderer memory.
+  createEffect(() => {
+    const isActive = activePaneId() === props.paneId;
+    setSessionActive(sessionId, isActive);
   });
 
   onMount(async () => {
@@ -553,9 +561,30 @@ export default function TerminalPane(props: TerminalPaneProps) {
       }
     }
 
-    // Subscribe to terminal output events emitted from Go via Wails runtime
+    // Subscribe to terminal output events emitted from Go via Wails runtime.
+    // RAF-batched: during high-throughput scenarios (builds, log tailing),
+    // hundreds of events/sec arrive. We coalesce all chunks and flush at most
+    // once per animation frame (~16ms at 60fps) via a single terminal.write().
     const runtime = (window as any).runtime;
     if (typeof runtime?.EventsOn === 'function') {
+      let pendingData: Uint8Array[] = [];
+      let rafScheduled = false;
+      let rafHandle = 0;
+
+      const flushWrites = () => {
+        rafScheduled = false;
+        if (pendingData.length === 0) return;
+        const total = pendingData.reduce((sum, d) => sum + d.length, 0);
+        const merged = new Uint8Array(total);
+        let offset = 0;
+        for (const chunk of pendingData) {
+          merged.set(chunk, offset);
+          offset += chunk.length;
+        }
+        pendingData = [];
+        session.terminal.write(merged);
+      };
+
       const cleanup = runtime.EventsOn(
         `terminal:${sessionId}:data`,
         (data: string) => {
@@ -563,14 +592,28 @@ export default function TerminalPane(props: TerminalPaneProps) {
             const binary = atob(data);
             const bytes = new Uint8Array(binary.length);
             for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            session.terminal.write(bytes);
+            pendingData.push(bytes);
           } catch {
-            session.terminal.write(data);
+            // Fallback: treat as UTF-8 text
+            const encoder = new TextEncoder();
+            pendingData.push(encoder.encode(data));
+          }
+          if (!rafScheduled) {
+            rafScheduled = true;
+            rafHandle = requestAnimationFrame(flushWrites);
           }
         },
       );
       if (typeof cleanup === 'function') {
-        session.unsubscribe = cleanup;
+        session.unsubscribe = () => {
+          cleanup();
+          // Cancel any pending RAF to prevent writes after unmount
+          if (rafScheduled) {
+            cancelAnimationFrame(rafHandle);
+            rafScheduled = false;
+            pendingData = [];
+          }
+        };
       }
     }
 
@@ -635,12 +678,20 @@ export default function TerminalPane(props: TerminalPaneProps) {
   // has display:none during a tab switch) to avoid reflowing content to
   // MINIMUM_COLS and sending a bogus resize to the PTY backend.
   onMount(() => {
+    let resizeRAF: number | null = null;
     const ro = new ResizeObserver(() => {
-      const session = getSession(sessionId);
-      if (session?.attached) safeFit(session);
+      if (resizeRAF !== null) return;
+      resizeRAF = requestAnimationFrame(() => {
+        resizeRAF = null;
+        const session = getSession(sessionId);
+        if (session?.attached) safeFit(session);
+      });
     });
     ro.observe(containerRef);
-    onCleanup(() => ro.disconnect());
+    onCleanup(() => {
+      ro.disconnect();
+      if (resizeRAF !== null) cancelAnimationFrame(resizeRAF);
+    });
   });
 
   // IntersectionObserver: refit when the terminal becomes visible (tab switch).
