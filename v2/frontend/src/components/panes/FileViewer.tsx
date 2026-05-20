@@ -17,7 +17,7 @@ import { setActivePaneInTab, tabs, removeTab, activePaneId } from '@/core/panes/
 import { worktreeMap } from '@/core/signals/worktrees';
 import { showToast } from '@/shared/Toast/Toast';
 import CodeMirrorEditor from '@/core/editor/CodeMirrorEditor';
-import CodeMirrorDiff from '@/core/editor/CodeMirrorDiff';
+import DiffViewer from '@/shared/DiffViewer/DiffViewer';
 import { loadLanguage } from '@/core/editor/cm-languages';
 import { phantomThemeExtension } from '@/core/editor/cm-theme';
 import { TextWrap, Clipboard, X as XIcon } from 'lucide-solid';
@@ -584,12 +584,9 @@ export default function FileViewer(props: FileViewerProps) {
 
         {/* Diff view — CodeMirror merge */}
         <Show when={!loading() && mode() === 'diff' && activeDiff()}>
-          <CodeMirrorDiff
+          <DiffViewer
             originalContent={activeDiff()!.originalContent}
             modifiedContent={activeDiff()!.modifiedContent}
-            language={langExtension()}
-            lineWrapping={lineWrapping()}
-            theme={phantomThemeExtension}
             class={styles.cmFillContainer}
           />
         </Show>

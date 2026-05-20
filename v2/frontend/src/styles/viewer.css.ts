@@ -141,69 +141,6 @@ export const diffTabClose = style({
   },
 });
 
-// Side-by-side diff
-export const diffTable = style({
-  width: '100%',
-  borderCollapse: 'collapse',
-  fontFamily: vars.font.mono,
-  fontSize: '13px',
-  lineHeight: '20px',
-  tableLayout: 'fixed',
-});
-
-export const diffRow = style({});
-
-export const diffCell = style({
-  width: '50%',
-  verticalAlign: 'top',
-  borderRight: `1px solid color-mix(in srgb, ${vars.color.border} 30%, transparent)`,
-  padding: 0,
-  overflow: 'hidden',
-  display: 'table-cell',
-  selectors: {
-    '&:last-child': {
-      borderRight: 'none',
-    },
-  },
-});
-
-export const diffCellAdd = style({
-  background: vars.color.editorDiffAdd,
-});
-
-export const diffCellRemove = style({
-  background: vars.color.editorDiffRemove,
-});
-
-export const diffCellEmpty = style({
-  background: `color-mix(in srgb, ${vars.color.bgTertiary} 40%, transparent)`,
-});
-
-export const diffLineNum = style({
-  display: 'inline-block',
-  width: '40px',
-  minWidth: '40px',
-  textAlign: 'right',
-  paddingRight: vars.space.sm,
-  color: vars.color.textDisabled,
-  userSelect: 'none',
-});
-
-export const diffLineCode = style({
-  whiteSpace: 'pre',
-  paddingLeft: vars.space.xs,
-});
-
-// Keep old names for backwards compat with any existing references
-export const diffLineAdd = style({
-  background: vars.color.editorDiffAdd,
-});
-
-export const diffLineRemove = style({
-  background: vars.color.editorDiffRemove,
-});
-
-export const diffPrefix = style({});
 
 export const diffHeader = style({
   display: 'flex',
