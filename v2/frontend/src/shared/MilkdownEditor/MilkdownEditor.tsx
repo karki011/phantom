@@ -18,6 +18,8 @@ interface MilkdownEditorProps {
   disabled?: boolean
   fontSize?: number
   clearOnSubmit?: boolean
+  /** If provided, set this as the initial editor content on mount. */
+  initialValue?: string
 }
 
 export function MilkdownEditor(props: MilkdownEditorProps) {
@@ -34,7 +36,7 @@ export function MilkdownEditor(props: MilkdownEditorProps) {
     editorInstance = await Editor.make()
       .config((ctx) => {
         ctx.set(rootCtx, containerRef!)
-        ctx.set(defaultValueCtx, '')
+        ctx.set(defaultValueCtx, props.initialValue ?? '')
       })
       .config((ctx) => {
         const l = ctx.get(listenerCtx)
@@ -57,6 +59,12 @@ export function MilkdownEditor(props: MilkdownEditorProps) {
       const placeholderText = props.placeholder ?? 'Type markdown... (⌘+Enter to send)'
       proseMirrorEl.setAttribute('data-placeholder', placeholderText)
       proseMirrorEl.classList.add(styles.proseMirrorRoot)
+    }
+
+    // Sync latestMarkdown with initial value so submit reads correct content
+    if (props.initialValue) {
+      latestMarkdown = props.initialValue
+      props.onInput?.(props.initialValue)
     }
 
     if (props.autoFocus) {

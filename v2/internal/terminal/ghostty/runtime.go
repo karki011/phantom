@@ -46,6 +46,7 @@ extern ghostty_app_t phantom_app_new_main(const ghostty_runtime_config_s*, ghost
 extern void phantom_app_free_main(ghostty_app_t);
 extern void phantom_app_tick_main(ghostty_app_t);
 extern void phantom_app_set_focus_main(ghostty_app_t, bool);
+extern void phantom_app_set_color_scheme_main(ghostty_app_t, ghostty_color_scheme_e);
 
 // Preamble helper — builds runtime config from Go pointer (relaxed CGo
 // pointer rules for preamble functions) then dispatches to main thread.
@@ -57,10 +58,12 @@ static ghostty_app_t phantom_app_new(void *userdata, ghostty_config_t config) {
 import "C"
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 	"unsafe"
 )
 
@@ -170,4 +173,41 @@ func (a *App) Free() {
 	}
 	// config is owned by app after ghostty_app_new — don't free separately
 	a.config = nil
+}
+
+// SetColorScheme tells libghostty to use light or dark colors. Phantom is
+// dark-only for now but this prepares for future theme switching.
+func (a *App) SetColorScheme(dark bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.closed || a.handle == nil {
+		return
+	}
+	scheme := C.ghostty_color_scheme_e(C.GHOSTTY_COLOR_SCHEME_LIGHT)
+	if dark {
+		scheme = C.ghostty_color_scheme_e(C.GHOSTTY_COLOR_SCHEME_DARK)
+	}
+	C.phantom_app_set_color_scheme_main(a.handle, scheme)
+}
+
+// StartTickLoop runs the ~60Hz event loop that drives libghostty rendering
+// and IO. It wakes immediately when libghostty signals via the wakeup
+// callback, and ticks at least once every ~16ms. The loop exits when ctx
+// is cancelled.
+func StartTickLoop(app *App, ctx context.Context) {
+	initWakeup()
+	go func() {
+		ticker := time.NewTicker(16 * time.Millisecond) // ~60Hz
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-wakeupCh:
+				app.Tick()
+			case <-ticker.C:
+				app.Tick()
+			}
+		}
+	}()
 }

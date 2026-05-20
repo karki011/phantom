@@ -7,6 +7,7 @@ import { Search } from 'lucide-solid';
 import { commandPaletteVisible, closeCommandPalette } from '@/core/signals/command-palette';
 import { getAllActions, sortByCategory, type CommandAction, type ActionCategory } from './actions';
 import { fuzzyFilter } from './fuzzy';
+import { gsap } from '@/core/animation/gsap-setup';
 import * as styles from './CommandPalette.css';
 
 // Category display order
@@ -128,6 +129,21 @@ export const CommandPalette = () => {
     if (e.target === e.currentTarget) closeCommandPalette();
   };
 
+  // Stagger-animate result items when grouped actions update
+  createEffect(() => {
+    const _ = groupedActions(); // track dependency
+    queueMicrotask(() => {
+      const items = listRef?.querySelectorAll('[data-action-item]');
+      if (items?.length) {
+        gsap.fromTo(
+          items,
+          { opacity: 0, y: 8 },
+          { opacity: 1, y: 0, stagger: 0.02, duration: 0.25, ease: 'power2.out', overwrite: true },
+        );
+      }
+    });
+  });
+
   // Build a flat index map for keyboard navigation across grouped rendering
   const flatIndexMap = createMemo(() => {
     const map = new Map<string, number>();
@@ -181,6 +197,7 @@ export const CommandPalette = () => {
                           return (
                             <div
                               class={styles.actionItem}
+                              data-action-item
                               data-selected={myIndex() === selectedIndex() ? 'true' : 'false'}
                               onClick={() => executeAction(action)}
                               onMouseEnter={() => setSelectedIndex(myIndex())}

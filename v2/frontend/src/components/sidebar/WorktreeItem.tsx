@@ -8,6 +8,7 @@ import { Terminal, Trash2, GitBranch, GitFork, FolderOpen, ExternalLink, Clipboa
 import * as styles from '@/styles/sidebar.css';
 import { spin } from '@/styles/utilities.css';
 import { activeWorktreeId } from '@/core/signals/app';
+import { liveWorktrees } from '@/core/signals/live-sessions';
 import { sessions } from '@/core/signals/sessions';
 import { selectWorktree, removeWorktreeById, statusMap } from '@/core/signals/worktrees';
 import { addTabWithData } from '@/core/panes/signals';
@@ -28,6 +29,8 @@ interface WorktreeItemProps {
 
 export function WorktreeItem(props: WorktreeItemProps) {
   const isActive = () => activeWorktreeId() === props.worktree.id;
+  const isLive = () => liveWorktrees().some(lw => lw.worktreeId === props.worktree.id);
+  const dimmed = () => !isLive() && !isActive();
   // Resolve the live session for this worktree by matching cwd to worktree_path.
   // Used purely to read `live_state` for the sidebar dot.
   const session = () => {
@@ -122,7 +125,7 @@ export function WorktreeItem(props: WorktreeItemProps) {
     <ContextMenu>
       <ContextMenu.Trigger
         as="div"
-        class={`${styles.worktreeItem}${isActive() ? ` ${styles.worktreeItemActive}` : ''}`}
+        class={`${styles.worktreeItem}${isActive() ? ` ${styles.worktreeItemActive}` : ''}${dimmed() ? ` ${styles.worktreeItemInactive}` : ''}`}
         onClick={handleClick}
         draggable={true}
         onDragStart={(e: DragEvent) => {

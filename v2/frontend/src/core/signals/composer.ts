@@ -8,6 +8,7 @@ import { sessions } from './sessions';
 const [composerVisible, setComposerVisible] = createSignal(false);
 const [composerTargetSession, setComposerTargetSession] = createSignal<string | null>(null);
 const [composerColor, setComposerColor] = createSignal<string | null>(null);
+const [composerDraftPrompt, setComposerDraftPrompt] = createSignal('');
 
 const findActiveSession = (): string | null => {
   const active = sessions().find(
@@ -71,4 +72,4 @@ createEffect(() => {
   }
 });
 
-export { composerVisible, composerTargetSession, composerColor };
+export { composerVisible, composerTargetSession, composerColor, composerDraftPrompt, setComposerDraftPrompt };

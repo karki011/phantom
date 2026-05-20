@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 
 	"github.com/charmbracelet/log"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/subashkarki/phantom-os-v2/internal/terminal/ghostty"
 )
@@ -79,11 +80,23 @@ func (a *App) NativeTerminalCreate(paneID, worktreeID, cwd string) (string, erro
 
 	// Heavy work (dispatch_sync to main thread) runs WITHOUT the mutex.
 	if gapp == nil {
+		// Register the event dispatcher before creating the app so callbacks
+		// can emit events from the very first tick.
+		ghostty.SetEventDispatcher(func(event string, data interface{}) {
+			wailsRuntime.EventsEmit(a.ctx, event, data)
+		})
+
 		var err error
 		gapp, err = ghostty.NewApp()
 		if err != nil {
 			return "", err
 		}
+
+		// Dark theme (Phantom is always dark for now).
+		gapp.SetColorScheme(true)
+
+		// Start the ~60Hz tick loop that drives rendering + IO.
+		ghostty.StartTickLoop(gapp, a.ctx)
 	}
 	if host == nil {
 		var err error

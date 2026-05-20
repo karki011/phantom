@@ -27,6 +27,8 @@ import { installShellIntegration } from '@/core/terminal/addons/shellIntegration
 import { installQuickFix } from '@/core/terminal/addons/quickFix';
 import { installStickyScroll } from '@/core/terminal/addons/stickyScroll';
 import { installJumpToPrompt } from '@/core/terminal/addons/jumpToPrompt';
+import { installInlineAI } from '@/core/terminal/addons/inlineAI';
+import { installTerminalFeedback } from '@/core/terminal/addons/terminalFeedback';
 import type { Terminal } from '@xterm/xterm';
 import { activeTerminalThemeId, resolveTerminalTheme } from '@/core/terminal/theme-manager';
 import { getSessionCwd } from '@/core/terminal/addons/shellIntegration';
@@ -76,6 +78,7 @@ export default function TerminalPane(props: TerminalPaneProps) {
     try {
       addonCleanups.push(installJumpToPrompt(terminal, sessionId, wrapperRef));
     } catch {}
+    try { addonCleanups.push(installTerminalFeedback(sessionId, wrapperRef)); } catch {}
   };
   // TUI panes supply their own sessionId; plain terminal panes use the paneId.
   const effectiveSessionId = props.sessionId || props.paneId;
@@ -486,13 +489,20 @@ export default function TerminalPane(props: TerminalPaneProps) {
     session.terminal.loadAddon(searchAddon);
     session.searchAddon = searchAddon;
 
+    // Inline AI intercept — `? <prompt>` routes to composer instead of PTY
+    const inlineAI = installInlineAI(session.terminal, sessionId, (data) => {
+      void writeTerminal(sessionId, data);
+    });
+
     // Wire user input to Go backend — TUI panes use WriteBubbleteaProgram
     session.terminal.onData((data: string) => {
       if (isTui) {
         void writeBubbleteaProgram(sessionId, data);
-      } else {
-        void writeTerminal(sessionId, data);
+        return;
       }
+      // Check if inlineAI intercepts this data (e.g. `? fix the auth bug`)
+      if (inlineAI.processData(data)) return;
+      void writeTerminal(sessionId, data);
     });
 
     // Wire resize events to Go backend with min-size guard + dedupe.

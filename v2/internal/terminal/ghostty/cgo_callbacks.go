@@ -27,7 +27,44 @@ import "C"
 import (
 	"sync"
 	"unsafe"
+
+	"github.com/charmbracelet/log"
 )
+
+// ---------------------------------------------------------------------------
+// Event dispatcher — the app layer registers a callback so //export functions
+// in this package can emit Wails events without importing the app package.
+// ---------------------------------------------------------------------------
+
+var eventDispatcher func(event string, data interface{})
+
+// SetEventDispatcher registers the function that routes native-terminal
+// events to the frontend. Must be called before any surface is created.
+func SetEventDispatcher(fn func(string, interface{})) {
+	eventDispatcher = fn
+}
+
+func emitNativeTerminalEvent(event string, data interface{}) {
+	if eventDispatcher != nil {
+		eventDispatcher(event, data)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Wakeup channel — poked by libghostty when new work is available.
+// ---------------------------------------------------------------------------
+
+var wakeupCh chan struct{}
+
+func initWakeup() {
+	wakeupCh = make(chan struct{}, 1)
+}
+
+// WakeupCh returns the channel that the tick loop selects on. Callers must
+// call initWakeup first (StartTickLoop does this automatically).
+func WakeupCh() <-chan struct{} {
+	return wakeupCh
+}
 
 var (
 	focusedMu      sync.Mutex
@@ -48,15 +85,86 @@ func SetFocusedSurface(s *Surface) {
 
 //export phantomGhosttyWakeupCB
 func phantomGhosttyWakeupCB(userdata unsafe.Pointer) {
-	_ = userdata
+	if wakeupCh == nil {
+		return
+	}
+	select {
+	case wakeupCh <- struct{}{}:
+	default:
+	}
 }
 
 //export phantomGhosttyActionCB
 func phantomGhosttyActionCB(app C.ghostty_app_t, target C.ghostty_target_s, action C.ghostty_action_s) C.bool {
 	_ = app
 	_ = target
-	_ = action
-	return C.bool(true)
+
+	switch action.tag {
+	case C.GHOSTTY_ACTION_SET_TITLE:
+		p := (*C.ghostty_action_set_title_s)(unsafe.Pointer(&action.action))
+		title := C.GoString(p.title)
+		log.Debug("ghostty/action: set_title", "title", title)
+		emitNativeTerminalEvent("native-terminal:title", title)
+		return C.bool(true)
+
+	case C.GHOSTTY_ACTION_RING_BELL:
+		log.Debug("ghostty/action: bell")
+		emitNativeTerminalEvent("native-terminal:bell", nil)
+		return C.bool(true)
+
+	case C.GHOSTTY_ACTION_OPEN_URL:
+		p := (*C.ghostty_action_open_url_s)(unsafe.Pointer(&action.action))
+		url := C.GoStringN(p.url, C.int(p.len))
+		log.Debug("ghostty/action: open_url", "url", url)
+		emitNativeTerminalEvent("native-terminal:open-url", url)
+		return C.bool(true)
+
+	case C.GHOSTTY_ACTION_PWD:
+		p := (*C.ghostty_action_pwd_s)(unsafe.Pointer(&action.action))
+		pwd := C.GoString(p.pwd)
+		log.Debug("ghostty/action: pwd", "pwd", pwd)
+		emitNativeTerminalEvent("native-terminal:pwd", pwd)
+		return C.bool(true)
+
+	case C.GHOSTTY_ACTION_MOUSE_SHAPE:
+		log.Debug("ghostty/action: mouse_shape")
+		return C.bool(true)
+
+	case C.GHOSTTY_ACTION_RENDERER_HEALTH:
+		log.Debug("ghostty/action: renderer_health")
+		return C.bool(true)
+
+	case C.GHOSTTY_ACTION_SHOW_CHILD_EXITED:
+		p := (*C.ghostty_surface_message_childexited_s)(unsafe.Pointer(&action.action))
+		exitCode := int(p.exit_code)
+		log.Info("ghostty/action: child_exited", "exitCode", exitCode)
+		emitNativeTerminalEvent("native-terminal:child-exited", exitCode)
+		return C.bool(true)
+
+	case C.GHOSTTY_ACTION_COMMAND_FINISHED:
+		p := (*C.ghostty_action_command_finished_s)(unsafe.Pointer(&action.action))
+		exitCode := int(p.exit_code)
+		log.Debug("ghostty/action: command_finished", "exitCode", exitCode)
+		return C.bool(true)
+
+	case C.GHOSTTY_ACTION_DESKTOP_NOTIFICATION:
+		p := (*C.ghostty_action_desktop_notification_s)(unsafe.Pointer(&action.action))
+		title := C.GoString(p.title)
+		body := C.GoString(p.body)
+		log.Debug("ghostty/action: notification", "title", title, "body", body)
+		return C.bool(true)
+
+	case C.GHOSTTY_ACTION_COLOR_CHANGE:
+		log.Debug("ghostty/action: color_change")
+		return C.bool(true)
+
+	case C.GHOSTTY_ACTION_SCROLLBAR:
+		log.Debug("ghostty/action: scrollbar")
+		return C.bool(true)
+
+	default:
+		return C.bool(false) // unhandled — let libghostty know
+	}
 }
 
 //export phantomGhosttyReadClipboardCB
@@ -106,6 +214,6 @@ func phantomGhosttyWriteClipboardCB(userdata unsafe.Pointer, cb C.ghostty_clipbo
 
 //export phantomGhosttyCloseSurfaceCB
 func phantomGhosttyCloseSurfaceCB(userdata unsafe.Pointer, processAlive C.bool) {
-	_ = userdata
-	_ = processAlive
+	log.Info("ghostty/closeSurface", "processAlive", bool(processAlive))
+	emitNativeTerminalEvent("native-terminal:closed", !bool(processAlive))
 }

@@ -74,6 +74,10 @@ void phantom_app_set_focus_main(ghostty_app_t app, bool focused) {
     on_main_sync(^{ ghostty_app_set_focus(app, focused); });
 }
 
+void phantom_app_set_color_scheme_main(ghostty_app_t app, ghostty_color_scheme_e scheme) {
+    on_main_sync(^{ ghostty_app_set_color_scheme(app, scheme); });
+}
+
 // ---------------------------------------------------------------------------
 // ghostty_surface wrappers
 // ---------------------------------------------------------------------------

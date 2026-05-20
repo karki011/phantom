@@ -2,6 +2,7 @@
 // Author: Subash Karki
 
 import { For, createSignal, onMount, createEffect } from 'solid-js';
+import { gsap } from '@/core/animation/gsap-setup';
 import { Collapsible } from '@kobalte/core/collapsible';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { ChevronRight, Plus, FolderOpen, Folder, Trash2, Star, BrainCircuit } from 'lucide-solid';
@@ -13,6 +14,7 @@ import {
   toggleProject,
   activeProject,
 } from '@/core/signals/worktrees';
+import { liveWorktrees } from '@/core/signals/live-sessions';
 import { removeProject, toggleStarProject } from '@/core/bindings';
 import { refreshProjects } from '@/core/signals/projects';
 import { sessions } from '@/core/signals/sessions';
@@ -84,10 +86,33 @@ export function ProjectSection(props: ProjectSectionProps) {
     (s) => s.status === 'active' || s.status === 'running',
   );
 
+  // True when no worktree in this project has a live terminal session
+  const allWorktreesInactive = () => {
+    const live = liveWorktrees();
+    return !worktrees().some(wt => live.some(lw => lw.worktreeId === wt.id));
+  };
+
   function hasActiveSession(wt: import('@/core/types').Workspace): boolean {
     const wtPath = wt.worktree_path;
     if (!wtPath) return false;
     return activeSessions().some((s) => s.cwd?.startsWith(wtPath) || s.repo === wtPath);
+  }
+
+  let worktreeListRef: HTMLDivElement | undefined;
+
+  function handleOpenChange(open: boolean) {
+    toggleProject(props.project.id);
+    if (open) {
+      queueMicrotask(() => {
+        const items = worktreeListRef?.querySelectorAll('[data-worktree-item]');
+        if (items?.length) {
+          gsap.fromTo(items,
+            { opacity: 0, x: -8 },
+            { opacity: 1, x: 0, stagger: 0.03, duration: 0.2, ease: 'power2.out' }
+          );
+        }
+      });
+    }
   }
 
   function handleHeaderClick() {
@@ -130,13 +155,13 @@ export function ProjectSection(props: ProjectSectionProps) {
     <ContextMenu>
       <Collapsible
         open={isExpanded()}
-        onOpenChange={() => toggleProject(props.project.id)}
+        onOpenChange={handleOpenChange}
         class={styles.projectSection}
       >
         {/* Project header — ContextMenu.Trigger captures right-click;
             Collapsible.Trigger captures left-click for expand/collapse */}
         <ContextMenu.Trigger as="div">
-          <Collapsible.Trigger class={styles.projectHeader}>
+          <Collapsible.Trigger class={`${styles.projectHeader}${allWorktreesInactive() ? ` ${styles.projectHeaderInactive}` : ''}`}>
             <ChevronRight size={12} class={styles.chevron} />
             {isExpanded() ? (
               <Tip label="Project (expanded)"><FolderOpen size={14} class={styles.projectIcon} /></Tip>
@@ -180,27 +205,31 @@ export function ProjectSection(props: ProjectSectionProps) {
 
         {/* Worktree list — animated by Kobalte Collapsible */}
         <Collapsible.Content>
-          <div class={styles.worktreeList}>
+          <div class={styles.worktreeList} ref={worktreeListRef}>
             {/* Branch entries first */}
             <For each={worktrees().filter(wt => wt.type === 'branch')}>
               {(wt) => (
-                <WorktreeItem
-                  worktree={wt}
-                  projectId={props.project.id}
-                  defaultBranch={props.project.default_branch ?? 'main'}
-                  hasActiveSession={hasActiveSession(wt)}
-                />
+                <div data-worktree-item>
+                  <WorktreeItem
+                    worktree={wt}
+                    projectId={props.project.id}
+                    defaultBranch={props.project.default_branch ?? 'main'}
+                    hasActiveSession={hasActiveSession(wt)}
+                  />
+                </div>
               )}
             </For>
             {/* Worktrees second */}
             <For each={worktrees().filter(wt => wt.type !== 'branch')}>
               {(wt) => (
-                <WorktreeItem
-                  worktree={wt}
-                  projectId={props.project.id}
-                  defaultBranch={props.project.default_branch ?? 'main'}
-                  hasActiveSession={hasActiveSession(wt)}
-                />
+                <div data-worktree-item>
+                  <WorktreeItem
+                    worktree={wt}
+                    projectId={props.project.id}
+                    defaultBranch={props.project.default_branch ?? 'main'}
+                    hasActiveSession={hasActiveSession(wt)}
+                  />
+                </div>
               )}
             </For>
           </div>

@@ -1,8 +1,9 @@
 // Phantom — ArcGauge SVG arc meter component
 // Author: Subash Karki
 
-import { createMemo, Show } from 'solid-js';
+import { createMemo, createEffect, Show } from 'solid-js';
 import { vars } from '@/styles/theme.css';
+import { gsap } from '@/core/animation/gsap-setup';
 import * as styles from './ArcGauge.css';
 
 import type { JSX } from 'solid-js';
@@ -47,6 +48,8 @@ const getSemanticColor = (value: number): string => {
 };
 
 export function ArcGauge(props: ArcGaugeProps): JSX.Element {
+  let arcRef: SVGPathElement | undefined;
+
   const size = () => props.size ?? 120;
   const strokeWidth = () => props.strokeWidth ?? 8;
   const cx = () => size() / 2;
@@ -78,6 +81,17 @@ export function ArcGauge(props: ArcGaugeProps): JSX.Element {
     describeArc(cx(), cy(), radius(), startAngle, endAngle),
   );
 
+  createEffect(() => {
+    const offset = dashOffset();
+    if (arcRef) {
+      gsap.to(arcRef, {
+        attr: { 'stroke-dashoffset': offset },
+        duration: 0.6,
+        ease: 'power2.out',
+      });
+    }
+  });
+
   return (
     <div class={styles.gaugeWrapper}>
       <svg
@@ -101,6 +115,7 @@ export function ArcGauge(props: ArcGaugeProps): JSX.Element {
 
         {/* Foreground arc */}
         <path
+          ref={arcRef}
           class={styles.foregroundArc}
           d={bgArcPath()}
           stroke={arcColor()}

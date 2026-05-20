@@ -7,6 +7,7 @@ import { searchPanelVisible, closeSearchPanel } from '@/core/signals/search-pane
 import { activeWorktreeId } from '@/core/signals/app';
 import { searchFileContents, type SearchResult } from '@/core/bindings/search';
 import { openFileInEditor } from '@/core/editor/open-file';
+import { gsap } from '@/core/animation/gsap-setup';
 import * as styles from './SearchPanel.css';
 
 /** Debounce helper */
@@ -72,6 +73,21 @@ export function SearchPanel() {
     setLoading(true);
     doSearch(q);
   }));
+
+  // Stagger-animate result items when results update
+  createEffect(() => {
+    const _ = results(); // track dependency
+    queueMicrotask(() => {
+      const items = listRef?.querySelectorAll('[data-result-item]');
+      if (items?.length) {
+        gsap.fromTo(
+          items,
+          { opacity: 0, y: 8 },
+          { opacity: 1, y: 0, stagger: 0.02, duration: 0.25, ease: 'power2.out', overwrite: true },
+        );
+      }
+    });
+  });
 
   // Reset state and focus input when panel opens
   createEffect(on(searchPanelVisible, (visible) => {
@@ -202,6 +218,7 @@ export function SearchPanel() {
                   {(result, i) => (
                     <div
                       class={styles.resultItem}
+                      data-result-item
                       data-selected={i() === selectedIndex() ? 'true' : 'false'}
                       onClick={() => selectResult(result)}
                       onMouseEnter={() => setSelectedIndex(i())}

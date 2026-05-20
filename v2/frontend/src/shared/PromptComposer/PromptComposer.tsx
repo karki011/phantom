@@ -22,7 +22,7 @@ import {
   ChevronDown,
 } from 'lucide-solid';
 import { writeTerminal } from '@/core/bindings';
-import { composerTargetSession, openComposer, composerColor, setComposerTarget } from '@/core/signals/composer';
+import { composerTargetSession, openComposer, composerColor, setComposerTarget, composerDraftPrompt, setComposerDraftPrompt } from '@/core/signals/composer';
 import { Tip } from '@/shared/Tip/Tip';
 import { activePaneId, activeTab, setActivePaneInTab, getPaneColor } from '@/core/panes/signals';
 import { rightSidebarCollapsed, rightSidebarWidth } from '@/core/signals/files';
@@ -51,6 +51,15 @@ interface PromptComposerProps {
 
 export const PromptComposer = (props: PromptComposerProps) => {
   // -- State ----------------------------------------------------------------
+  // Consume any draft prompt queued before the composer opened
+  const consumedDraft = () => {
+    const draft = composerDraftPrompt();
+    if (draft) {
+      // Clear the signal so it's only consumed once
+      queueMicrotask(() => setComposerDraftPrompt(''));
+    }
+    return draft;
+  };
   const [prompt, setPrompt] = createSignal('');
   const [chips, setChips] = createSignal<AttachedFile[]>([]);
   const [dragOver, setDragOver] = createSignal(false);
@@ -409,6 +418,7 @@ export const PromptComposer = (props: PromptComposerProps) => {
               onSubmit={(md) => { handleSubmit(); }}
               onInput={(md) => setPrompt(md)}
               autoFocus={props.visible}
+              initialValue={consumedDraft()}
             />
           </div>
 

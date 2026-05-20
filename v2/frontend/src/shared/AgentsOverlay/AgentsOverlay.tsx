@@ -2,6 +2,7 @@
 // Author: Subash Karki
 
 import { Show, For, createEffect, onCleanup } from 'solid-js';
+import { gsap } from '@/core/animation/gsap-setup';
 import { Portal } from 'solid-js/web';
 import { Zap } from 'lucide-solid';
 import { agentsOverlayVisible, closeAgentsOverlay } from '@/core/signals/agents-overlay';
@@ -10,6 +11,21 @@ import { selectWorktree } from '@/core/signals/worktrees';
 import * as styles from './AgentsOverlay.css';
 
 export const AgentsOverlay = () => {
+  // Stagger-animate rows when overlay opens.
+  createEffect(() => {
+    if (agentsOverlayVisible()) {
+      queueMicrotask(() => {
+        const rows = document.querySelectorAll('[data-agent-row]');
+        if (rows.length) {
+          gsap.fromTo(rows,
+            { opacity: 0, x: -10 },
+            { opacity: 1, x: 0, stagger: 0.04, duration: 0.25, ease: 'power2.out' }
+          );
+        }
+      });
+    }
+  });
+
   // Escape to close
   createEffect(() => {
     if (!agentsOverlayVisible()) return;
@@ -57,7 +73,7 @@ export const AgentsOverlay = () => {
               >
                 <For each={liveWorktrees()}>
                   {(lw) => (
-                    <div class={styles.agentRow} onClick={() => selectAndFocus(lw)}>
+                    <div class={styles.agentRow} data-agent-row onClick={() => selectAndFocus(lw)}>
                       <span
                         class={styles.dot}
                         data-live-state={lw.session?.live_state ?? 'running'}

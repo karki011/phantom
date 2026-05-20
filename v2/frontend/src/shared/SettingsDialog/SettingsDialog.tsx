@@ -1,7 +1,7 @@
 // Phantom — Settings dialog shell
 // Author: Subash Karki
 
-import { For, Switch, Match, lazy } from 'solid-js';
+import { For, Switch, Match, lazy, createEffect } from 'solid-js';
 import { Palette, Code2, Terminal, Sparkles, Brain, Cpu, Settings, Key } from 'lucide-solid';
 import { PhantomModal } from '@/shared/PhantomModal/PhantomModal';
 import {
@@ -11,6 +11,7 @@ import {
   closeSettings,
   type SettingsSection,
 } from '@/core/signals/settings';
+import { gsap } from '@/core/animation/gsap-setup';
 import * as styles from './SettingsDialog.css';
 
 const AppearanceSection = lazy(() => import('./sections/AppearanceSection'));
@@ -34,9 +35,24 @@ const sidebarItems: { id: SettingsSection; label: string; icon: typeof Palette }
 ];
 
 export function SettingsDialog() {
+  let contentRef: HTMLDivElement | undefined;
+
   function handleOpenChange(open: boolean) {
     if (!open) closeSettings();
   }
+
+  createEffect(() => {
+    const _ = settingsSection(); // track section changes
+    queueMicrotask(() => {
+      if (contentRef) {
+        gsap.fromTo(
+          contentRef,
+          { opacity: 0, x: 8 },
+          { opacity: 1, x: 0, duration: 0.25, ease: 'power2.out' },
+        );
+      }
+    });
+  });
 
   return (
     <PhantomModal
@@ -61,7 +77,7 @@ export function SettingsDialog() {
           </For>
         </nav>
 
-        <div class={styles.settingsContent}>
+        <div ref={contentRef} class={styles.settingsContent}>
           <Switch>
             <Match when={settingsSection() === 'appearance'}>
               <AppearanceSection />
