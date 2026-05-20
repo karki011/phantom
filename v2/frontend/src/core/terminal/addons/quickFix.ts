@@ -18,6 +18,7 @@
 import type { IDecoration, IMarker, Terminal } from '@xterm/xterm';
 
 import { writeTerminal } from '../../bindings/terminal';
+import { addTabWithData } from '../../panes/signals';
 import * as styles from '../../../styles/quickFix.css';
 import {
   type TerminalCommand,
@@ -63,6 +64,37 @@ const GitCreatePrRegex =
   /remote:\s*(?<link>https:\/\/github\.com\/[^\s]+\/pull\/new\/[^\s]+)/;
 const FreePortRegex =
   /(?:address already in use (?:0\.0\.0\.0|127\.0\.0\.1|localhost|::):|EADDRINUSE[^\d]*|Unable to bind [^ ]*:|can't listen on port |listen EADDRINUSE [^ ]*:)(?<portNumber>\d{2,5})/;
+
+// ---------------------------------------------------------------------------
+// Natural-language detection heuristic
+// ---------------------------------------------------------------------------
+
+const AGENT_WORDS = new Set([
+  'fix', 'explain', 'why', 'how', 'what', 'create', 'add', 'remove', 'update',
+  'refactor', 'debug', 'help', 'show', 'list', 'find', 'search', 'write',
+  'generate', 'implement', 'build', 'make', 'change', 'modify', 'delete',
+  'describe', 'analyze', 'review', 'check', 'test', 'run', 'deploy',
+  'please', 'can', 'could', 'would', 'should', 'need', 'want', 'tell',
+]);
+
+function looksLikeNaturalLanguage(command: string): boolean {
+  const words = command.trim().split(/\s+/);
+  if (words.length < 2) return false; // single word = typo, not NL
+
+  const firstWord = words[0].toLowerCase();
+
+  // If first word starts with ./ or / or contains = or $, it's a command
+  if (firstWord.startsWith('./') || firstWord.startsWith('/') ||
+      firstWord.includes('=') || firstWord.includes('$')) return false;
+
+  // If first word is a common NL word and there are 2+ words, likely NL
+  if (AGENT_WORDS.has(firstWord) && words.length >= 2) return true;
+
+  // If 4+ words and no shell metacharacters, likely NL
+  if (words.length >= 4 && !/[|>&<;${}()`]/.test(command)) return true;
+
+  return false;
+}
 
 const FIXES: QuickFix[] = [
   // 1. git push → "set the upstream"
@@ -156,6 +188,20 @@ const FIXES: QuickFix[] = [
     build(output) {
       if (!GitCreatePrRegex.test(output)) return null;
       return { label: 'Create PR with gh', suggestion: 'gh pr create --fill' };
+    },
+  },
+  // 7. NL reroute — fallback: if the failed command looks like natural language,
+  //    offer to open it in the AI composer. Must be LAST so specific fixes win.
+  {
+    id: 'nlReroute',
+    commandRegex: /.+/,
+    matchExit: isError,
+    build(_output: string, cmd: TerminalCommand) {
+      if (!looksLikeNaturalLanguage(cmd.command)) return null;
+      return {
+        label: '✦ Ask AI',
+        suggestion: '__AI__' + cmd.command,
+      };
     },
   },
 ];
@@ -275,9 +321,19 @@ export function installQuickFix(
     if (!marker) return;
 
     const onClick = (): void => {
-      // Ctrl-U clears the current input line, then we type the suggestion.
-      // Trailing space is intentional — easier for the user to append flags.
-      void writeTerminal(sessionId, `\x15${fix.suggestion} `);
+      if (fix.suggestion.startsWith('__AI__')) {
+        const prompt = fix.suggestion.slice(6);
+        const cwd = cmd.cwd ?? '';
+        const escapedPrompt = `Failed command: ${cmd.command} (exit ${cmd.exitCode}). Explain the error and suggest the correct command.`;
+        addTabWithData('terminal', 'AI Fix', {
+          cwd,
+          command: `claude --dangerously-skip-permissions "${escapedPrompt.replace(/"/g, '\\"')}"`,
+        });
+      } else {
+        // Ctrl-U clears the current input line, then we type the suggestion.
+        // Trailing space is intentional — easier for the user to append flags.
+        void writeTerminal(sessionId, `\x15${fix.suggestion} `);
+      }
       // Pop the lightbulb after click.
       cleanupOne();
     };

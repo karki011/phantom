@@ -110,6 +110,7 @@ export function createSession(
     macOptionIsMeta: true,
     macOptionClickForcesSelection: true,
     allowTransparency: false,
+    allowProposedApi: true,
     theme: opts?.theme ?? {},
     scrollback: ACTIVE_SCROLLBACK,
     // Performance: GPU-drawn box/powerline glyphs, skip font fallback lookup

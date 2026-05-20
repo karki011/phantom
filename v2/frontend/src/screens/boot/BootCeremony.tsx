@@ -2,6 +2,8 @@
 
 import { createSignal, createEffect, onMount, onCleanup, Show, For } from 'solid-js';
 import { playSound } from '@/core/audio/engine';
+import { createGsap } from '@/core/animation/create-gsap';
+import { gsap, SplitText } from '@/core/animation/gsap-setup';
 import { bootScript, type BootCeremonyLine } from './boot-script';
 import { BootRings } from './BootRings';
 import * as styles from './boot-ceremony.css';
@@ -26,6 +28,18 @@ export function BootCeremony(props: BootCeremonyProps) {
   const [dismissing, setDismissing] = createSignal(false);
   const [bootProgress, setBootProgress] = createSignal(0);
   let cancelled = false;
+  let containerRef: HTMLDivElement | undefined;
+
+  // GSAP entrance: fade + slide the terminal container on mount
+  createGsap(() => containerRef, (_ctx, el) => {
+    gsap.from(el, {
+      autoAlpha: 0,
+      y: 20,
+      duration: 0.6,
+      delay: 0.15,
+      ease: 'power2.out',
+    });
+  });
 
   const totalLines = bootScript.filter((l) => l.style !== 'separator').length;
 
@@ -95,11 +109,42 @@ export function BootCeremony(props: BootCeremonyProps) {
       try { playSound(line.sound); } catch {}
     }
     await typewriterLine(line.text, line.charDelay ?? 20);
+
+    // After typewriter completes on title/success lines, apply SplitText reveal
+    if (containerRef && (line.style === 'title' || line.style === 'success')) {
+      const allLineEls = containerRef.querySelectorAll(`.${styles.line}`);
+      const lastLine = allLineEls[allLineEls.length - 1] as HTMLElement | undefined;
+      const textSpan = lastLine?.querySelector('span') as HTMLElement | undefined;
+      if (textSpan) {
+        const split = SplitText.create(textSpan, { type: 'chars' });
+        gsap.from(split.chars, {
+          y: 6,
+          scaleY: 0.8,
+          opacity: 0.3,
+          stagger: 0.02,
+          duration: 0.25,
+          ease: 'power2.out',
+        });
+      }
+    }
   }
 
   async function dismiss() {
     setDismissing(true);
     try { playSound('reveal'); } catch {}
+
+    // GSAP-powered dismiss: stagger-fade each line upward, then complete
+    if (containerRef) {
+      const lineEls = containerRef.querySelectorAll(`.${styles.line}, .${styles.separator}`);
+      gsap.to(Array.from(lineEls), {
+        autoAlpha: 0,
+        y: -10,
+        stagger: 0.03,
+        duration: 0.35,
+        ease: 'power2.in',
+      });
+    }
+
     await sleep(1200);
     if (!cancelled) props.onComplete();
   }
@@ -137,7 +182,7 @@ export function BootCeremony(props: BootCeremonyProps) {
     <div class={`${styles.bootScreen} ${dismissing() ? styles.bootScreenDismiss : ''}`}>
       <div class={styles.flickerOverlay} />
       <BootRings progress={bootProgress()} total={totalLines} />
-      <div class={styles.terminalContainer}>
+      <div ref={containerRef} class={styles.terminalContainer}>
         <For each={lines()}>
           {(line, i) => (
             <Show

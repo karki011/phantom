@@ -2,6 +2,7 @@
 // Author: Subash Karki
 
 import { createMemo, createSignal, createEffect, on, onCleanup, onMount, Show, For, Index } from 'solid-js';
+import { gsap } from '@/core/animation/gsap-setup';
 import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw, Activity, ChevronDown, GitMerge, Rocket, Eye } from 'lucide-solid';
 import { activeWorktreeId } from '@/core/signals/app';
 import { activeProject, activeWorktree } from '@/core/signals/worktrees';
@@ -256,11 +257,28 @@ export default function WorktreeHome() {
   const [creatingPrAsDraft, setCreatingPrAsDraft] = createSignal(false);
   const [repoStatus, setRepoStatus] = createSignal<RepoStatus | null>(null);
   const [openPrs, setOpenPrs] = createSignal<PrStatusType[]>([]);
+  let prListRef: HTMLDivElement | undefined;
   const [ciSummary, setCiSummary] = createSignal<CiRun[] | null>(null);
   const [statusLoading, setStatusLoading] = createSignal(true);
   const [activityLoading, setActivityLoading] = createSignal(true);
   const [refreshing, setRefreshing] = createSignal(false);
   const [repoMergeCfg, setRepoMergeCfg] = createSignal<RepoMergeConfig | null>(null);
+
+  // Stagger-animate PR cards when the list populates.
+  createEffect(() => {
+    const prs = openPrs();
+    if (prs && prs.length > 0) {
+      queueMicrotask(() => {
+        const cards = prListRef?.querySelectorAll('[data-pr-card]');
+        if (cards?.length) {
+          gsap.fromTo(cards,
+            { opacity: 0, y: 10 },
+            { opacity: 1, y: 0, stagger: 0.05, duration: 0.3, ease: 'power2.out', overwrite: true }
+          );
+        }
+      });
+    }
+  });
 
   // Composer "✦ NEW" badge — dismissed after first click, persisted in prefs.
   const [composerSeen, setComposerSeen] = createSignal(true);
@@ -448,13 +466,28 @@ export default function WorktreeHome() {
     return vars.color.danger;
   }
 
+  let quickLaunchRef: HTMLDivElement | undefined;
+
+  onMount(() => {
+    queueMicrotask(() => {
+      const tiles = quickLaunchRef?.querySelectorAll('[data-quick-tile]');
+      if (tiles?.length) {
+        gsap.from(tiles, {
+          opacity: 0, y: 10, scale: 0.95,
+          stagger: 0.04, duration: 0.3, ease: 'back.out(1.2)',
+        });
+      }
+    });
+  });
+
   return (
     <div class={styles.homeContainer}>
       {/* Two-column layout: Quick Actions + Recipes */}
       <div class={styles.homeDashboardGrid}>
         {/* Left: Quick Actions */}
-        <div class={styles.quickLaunchGrid}>
+        <div class={styles.quickLaunchGrid} ref={quickLaunchRef}>
           <button
+            data-quick-tile
             class={styles.quickLaunchCard}
             type="button"
             style={{ position: 'relative' }}
@@ -497,6 +530,7 @@ export default function WorktreeHome() {
           </button>
 
           <button
+            data-quick-tile
             class={styles.quickLaunchCard}
             type="button"
             onClick={() => addTabWithData('terminal', 'Terminal', { cwd: activeWorktree()?.worktree_path ?? '' })}
@@ -512,6 +546,7 @@ export default function WorktreeHome() {
           </button>
 
           <button
+            data-quick-tile
             class={styles.quickLaunchCard}
             type="button"
             onClick={() => {
@@ -537,6 +572,7 @@ export default function WorktreeHome() {
 
           <Show when={activeProject()}>
             <button
+              data-quick-tile
               class={styles.quickLaunchCard}
               type="button"
               onClick={() => setWorktreeOpen(true)}
@@ -720,9 +756,13 @@ export default function WorktreeHome() {
               when={openPrs().length > 0}
               fallback={<span class={styles.activityEmpty}>No open PRs targeting {activeWorktree()?.branch}</span>}
             >
-              <div class={styles.prListScroll}>
+              <div class={styles.prListScroll} ref={prListRef}>
                 <For each={openPrs()}>
-                  {(pr) => <OpenPrCard pr={pr} prStateColor={prStateColor} prAge={prAge} buildCiTooltip={buildCiTooltip} />}
+                  {(pr) => (
+                    <div data-pr-card>
+                      <OpenPrCard pr={pr} prStateColor={prStateColor} prAge={prAge} buildCiTooltip={buildCiTooltip} />
+                    </div>
+                  )}
                 </For>
               </div>
             </Show>
@@ -1275,6 +1315,7 @@ function ShipItButton(props: { pr: PrStatusType; cfg: RepoMergeConfig | null }) 
   const [busy, setBusy] = createSignal(false);
   const [menuOpen, setMenuOpen] = createSignal(false);
   const [done, setDone] = createSignal<'none' | 'merged'>('none');
+  let shipItRef: HTMLDivElement | undefined;
 
   // Determine current merge method (user pref → repo default → squash).
   const persistedMethod = (): MergeMethod => {
@@ -1337,6 +1378,19 @@ function ShipItButton(props: { pr: PrStatusType; cfg: RepoMergeConfig | null }) 
       } else {
         showToast('Shipped', `Merged via ${method()}`);
         setDone('merged');
+        queueMicrotask(() => {
+          const btn = shipItRef;
+          if (btn) {
+            gsap.timeline()
+              .to(btn, { scale: 1.1, duration: 0.15, ease: 'power2.out' })
+              .to(btn, { scale: 1, duration: 0.3, ease: 'elastic.out(1, 0.5)' })
+              .fromTo(btn,
+                { boxShadow: '0 0 30px rgba(34, 197, 94, 0.6)' },
+                { boxShadow: '0 0 0px transparent', duration: 1, ease: 'power2.out' },
+                0
+              );
+          }
+        });
       }
     } finally {
       setBusy(false);
@@ -1370,7 +1424,7 @@ function ShipItButton(props: { pr: PrStatusType; cfg: RepoMergeConfig | null }) 
   };
 
   return (
-    <div class={styles.shipItRow} style={{ position: 'relative' }}>
+    <div class={styles.shipItRow} style={{ position: 'relative' }} ref={shipItRef}>
       {/* State C — merged */}
       <Show when={isMerged()}>
         <span class={styles.shipItMergedPill}>

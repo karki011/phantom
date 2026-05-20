@@ -2,6 +2,7 @@
 // Phantom — Ctrl+Tab worktree switcher overlay (macOS app-switcher style, premium)
 
 import { Show, For, createMemo, createSignal, createEffect, on } from 'solid-js';
+import { gsap } from '@/core/animation/gsap-setup';
 import { Portal } from 'solid-js/web';
 import { liveWorktrees } from '@/core/signals/live-sessions';
 import { switcherVisible, switcherSelectedIndex, commitSwitcherAt } from '@/core/signals/worktree-switcher';
@@ -31,6 +32,15 @@ const WorktreeSwitcher = () => {
 
   createEffect(on(switcherVisible, (visible) => {
     if (visible) {
+      queueMicrotask(() => {
+        const rows = document.querySelectorAll('[data-switcher-row]');
+        if (rows.length) {
+          gsap.fromTo(rows,
+            { opacity: 0, y: 6 },
+            { opacity: 1, y: 0, stagger: 0.03, duration: 0.2, ease: 'power2.out' }
+          );
+        }
+      });
       setSnapshotItems(liveWorktrees().map((lw) => ({
         id: lw.worktreeId,
         branch: lw.branch,
@@ -56,6 +66,7 @@ const WorktreeSwitcher = () => {
                 return (
                   <div
                     class={`${css.row} ${isSelected() ? css.rowSelected : ''} ${isActive() ? css.rowActive : ''}`}
+                    data-switcher-row
                     onClick={() => commitSwitcherAt(index())}
                   >
                     <span class={css.rowGlyph}>{item.glyph}</span>

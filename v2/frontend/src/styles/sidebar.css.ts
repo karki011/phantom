@@ -189,6 +189,16 @@ export const worktreeItemActive = style({
   width: '100%',
 });
 
+export const worktreeItemInactive = style({
+  opacity: 0.5,
+  transition: `opacity ${vars.animation.fast} ease`,
+});
+
+export const projectHeaderInactive = style({
+  opacity: 0.7,
+  transition: `opacity ${vars.animation.fast} ease`,
+});
+
 export const worktreeIcon = style({
   color: vars.color.accent,
   flexShrink: 0,

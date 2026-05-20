@@ -8,6 +8,7 @@ import { activeWorktreeId } from '@/core/signals/app';
 import { searchWorkspaceFiles } from '@/core/bindings';
 import { openFileInEditor } from '@/core/editor/open-file';
 import type { FileEntry } from '@/core/types';
+import { gsap } from '@/core/animation/gsap-setup';
 import * as styles from './QuickOpen.css';
 
 /** Debounce helper */
@@ -61,6 +62,21 @@ export function QuickOpen() {
     }
     doSearch(q);
   }));
+
+  // Stagger-animate result items when results update
+  createEffect(() => {
+    const _ = results(); // track dependency
+    queueMicrotask(() => {
+      const items = listRef?.querySelectorAll('[data-result-item]');
+      if (items?.length) {
+        gsap.fromTo(
+          items,
+          { opacity: 0, y: 8 },
+          { opacity: 1, y: 0, stagger: 0.02, duration: 0.25, ease: 'power2.out', overwrite: true },
+        );
+      }
+    });
+  });
 
   // Reset state when opening
   createEffect(on(quickOpenVisible, (visible) => {
@@ -190,6 +206,7 @@ export function QuickOpen() {
                   {(entry, i) => (
                     <div
                       class={styles.resultItem}
+                      data-result-item
                       data-selected={i() === selectedIndex() ? 'true' : 'false'}
                       onClick={() => selectFile(entry)}
                       onMouseEnter={() => setSelectedIndex(i())}

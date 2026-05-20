@@ -2,6 +2,8 @@
 // Author: Subash Karki
 
 import { createSignal } from 'solid-js';
+import { createGsap } from '@/core/animation/create-gsap';
+import { gsap } from '@/core/animation/gsap-setup';
 import { FolderPlus, GitBranch, ScanLine } from 'lucide-solid';
 import * as styles from '@/styles/home.css';
 import { APP_NAME_SPACED } from '@/core/branding';
@@ -25,6 +27,24 @@ export function WelcomePage() {
   const [cloneOpen, setCloneOpen] = createSignal(false);
   const [scanOpen, setScanOpen] = createSignal(false);
   const [scanParent, setScanParent] = createSignal('');
+
+  let containerRef!: HTMLDivElement;
+
+  createGsap(() => containerRef, (_ctx, el) => {
+    const tl = gsap.timeline();
+
+    tl.from(el.querySelector('[data-welcome-title]'), {
+      opacity: 0, y: 20, duration: 0.5, ease: 'power2.out',
+    });
+
+    tl.from(el.querySelector('[data-welcome-subtitle]'), {
+      opacity: 0, y: 10, duration: 0.4, ease: 'power2.out',
+    }, '-=0.2');
+
+    tl.from(el.querySelectorAll('[data-welcome-tile]'), {
+      opacity: 0, y: 15, scale: 0.95, stagger: 0.06, duration: 0.35, ease: 'back.out(1.4)',
+    }, '-=0.1');
+  });
 
   async function handleAddProject() {
     const path = await browseDirectory('Select project directory');
@@ -78,12 +98,12 @@ export function WelcomePage() {
   ];
 
   return (
-    <div class={styles.welcomeContainer}>
+    <div class={styles.welcomeContainer} ref={containerRef}>
       <BootRings progress={0} total={3} />
 
       <div class={styles.welcomeStage}>
-        <h1 class={styles.welcomeTitle}>{APP_NAME_SPACED}</h1>
-        <p class={styles.welcomeSubtitle}>standby · awaiting target</p>
+        <h1 class={styles.welcomeTitle} data-welcome-title>{APP_NAME_SPACED}</h1>
+        <p class={styles.welcomeSubtitle} data-welcome-subtitle>standby · awaiting target</p>
       </div>
 
       <div class={styles.welcomeActions} role="group" aria-label="Project actions">
@@ -92,6 +112,7 @@ export function WelcomePage() {
           return (
             <button
               type="button"
+              data-welcome-tile
               class={`${styles.welcomeTile} ${tile.primary ? styles.welcomeTilePrimary : ''}`}
               onClick={() => void tile.onPress()}
             >

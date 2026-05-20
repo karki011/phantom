@@ -1,8 +1,9 @@
 // Phantom — Pure SVG bar chart component
 // Author: Subash Karki
 
-import { createSignal, createMemo, For, Show } from 'solid-js';
+import { createSignal, createMemo, For, Show, onMount } from 'solid-js';
 import { vars } from '@/styles/theme.css';
+import { gsap } from '@/core/animation/gsap-setup';
 import * as styles from './BarChart.css';
 
 import type { JSX } from 'solid-js';
@@ -30,11 +31,25 @@ const MIN_BAR_HEIGHT = 2;
 const BAR_GAP_RATIO = 0.25; // gap as fraction of bar width
 
 export function BarChart(props: BarChartProps): JSX.Element {
+  let containerRef: SVGSVGElement | undefined;
+
   const height = () => props.height ?? 120;
   const defaultColor = () => props.barColor ?? vars.color.accent;
   const format = () => props.formatValue ?? ((v: number) => String(v));
 
   const [hoveredIndex, setHoveredIndex] = createSignal<number | null>(null);
+
+  onMount(() => {
+    const bars = containerRef?.querySelectorAll('[data-bar]');
+    if (bars?.length) {
+      gsap.from(bars, {
+        attr: { height: 0 },
+        stagger: 0.05,
+        duration: 0.5,
+        ease: 'power2.out',
+      });
+    }
+  });
 
   const viewBoxHeight = () => height();
   const chartHeight = () => viewBoxHeight() - PADDING_TOP - PADDING_BOTTOM;
@@ -84,6 +99,7 @@ export function BarChart(props: BarChartProps): JSX.Element {
     >
       <div class={styles.chartContainer}>
         <svg
+          ref={containerRef}
           class={styles.chartSvg}
           viewBox={`0 0 ${VIEWBOX_WIDTH} ${viewBoxHeight()}`}
           preserveAspectRatio="xMidYMid meet"
@@ -94,6 +110,7 @@ export function BarChart(props: BarChartProps): JSX.Element {
           <For each={barLayout()}>
             {(bar, index) => (
               <rect
+                data-bar
                 class={styles.barRect}
                 x={bar.x}
                 y={bar.y}
