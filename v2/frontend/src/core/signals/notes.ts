@@ -7,17 +7,38 @@ import { listProjectNotes, createProjectNote, updateProjectNote, deleteProjectNo
 import type { ProjectNote } from '../types';
 
 const [projectNotes, setProjectNotes] = createSignal<ProjectNote[]>([]);
+const [stickyOverlayVisible, setStickyOverlayVisible] = createSignal(false);
+const [expandedNoteIds, setExpandedNoteIds] = createSignal<Set<string>>(new Set());
 
-export { projectNotes };
+export { projectNotes, stickyOverlayVisible, expandedNoteIds };
+
+export function toggleNoteExpanded(id: string): void {
+  setExpandedNoteIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+}
+
+export function setNoteExpanded(id: string, open: boolean): void {
+  setExpandedNoteIds(prev => {
+    const next = new Set(prev);
+    if (open) next.add(id); else next.delete(id);
+    return next;
+  });
+}
+
+export function toggleStickyOverlay(): void {
+  setStickyOverlayVisible(!stickyOverlayVisible());
+}
 
 export function bootstrapProjectNotes(): void {
-  // Reload notes when active project changes
   createEffect(on(() => activeProject()?.id, (projId) => {
     if (!projId) { setProjectNotes([]); return; }
     loadNotes(projId);
   }));
 
-  // Listen for note events from the Go backend
   onWailsEvent('note:created', () => {
     const projId = activeProject()?.id;
     if (projId) loadNotes(projId);

@@ -71,16 +71,15 @@ export function NoteCard(props: NoteCardProps) {
   // ── GSAP entrance animation ─────────────────────────────────────────────
 
   onMount(() => {
-    gsap.from(cardRef, {
-      scale: 0.9,
-      opacity: 0,
-      duration: 0.3,
-      ease: 'back.out(1.7)',
-    });
+    gsap.fromTo(cardRef,
+      { scale: 0.9, opacity: 0 },
+      { scale: 1, opacity: 1, duration: 0.3, ease: 'back.out(1.7)', clearProps: 'opacity,transform' },
+    );
   });
 
   onCleanup(() => {
     if (debounceTimer) clearTimeout(debounceTimer);
+    gsap.killTweensOf(cardRef);
   });
 
   // ── Inline editing handlers ─────────────────────────────────────────────

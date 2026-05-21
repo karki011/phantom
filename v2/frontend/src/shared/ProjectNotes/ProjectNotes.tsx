@@ -45,20 +45,18 @@ export function ProjectNotes() {
     } else {
       // Expand
       gsap.to(chevronRef, { rotation: 90, duration: 0.2, ease: 'power2.inOut' });
-      gsap.set(gridRef, { height: 'auto', opacity: 1 });
-      gsap.from(gridRef, { height: 0, opacity: 0, duration: 0.25, ease: 'power2.inOut' });
-      // Stagger cards entrance
+      gsap.killTweensOf(gridRef);
+      gsap.fromTo(gridRef,
+        { height: 0, opacity: 0 },
+        { height: 'auto', opacity: 1, duration: 0.25, ease: 'power2.inOut', clearProps: 'opacity' },
+      );
       const cards = gridRef.children;
       if (cards.length > 0) {
-        gsap.from(cards, {
-          opacity: 0,
-          y: 8,
-          scale: 0.95,
-          stagger: 0.04,
-          duration: 0.3,
-          ease: 'back.out(1.2)',
-          delay: 0.1,
-        });
+        gsap.killTweensOf(cards);
+        gsap.fromTo(cards,
+          { opacity: 0, y: 8, scale: 0.95 },
+          { opacity: 1, y: 0, scale: 1, stagger: 0.04, duration: 0.3, ease: 'back.out(1.2)', delay: 0.1, clearProps: 'opacity,transform' },
+        );
       }
     }
   }
@@ -71,22 +69,27 @@ export function ProjectNotes() {
         setCollapsed(false);
         void setPref(PREF_KEY, 'false');
         gsap.to(chevronRef, { rotation: 90, duration: 0.2, ease: 'power2.inOut' });
-        gsap.set(gridRef, { height: 'auto', opacity: 1 });
-        gsap.from(gridRef, { height: 0, opacity: 0, duration: 0.25, ease: 'power2.inOut' });
+        gsap.killTweensOf(gridRef);
+        gsap.fromTo(gridRef,
+          { height: 0, opacity: 0 },
+          { height: 'auto', opacity: 1, duration: 0.25, ease: 'power2.inOut', clearProps: 'opacity' },
+        );
         const cards = gridRef.children;
         if (cards.length > 0) {
-          gsap.from(cards, {
-            opacity: 0, y: 8, scale: 0.95,
-            stagger: 0.04, duration: 0.3, ease: 'back.out(1.2)', delay: 0.1,
-          });
+          gsap.killTweensOf(cards);
+          gsap.fromTo(cards,
+            { opacity: 0, y: 8, scale: 0.95 },
+            { opacity: 1, y: 0, scale: 1, stagger: 0.04, duration: 0.3, ease: 'back.out(1.2)', delay: 0.1, clearProps: 'opacity,transform' },
+          );
         }
       } else {
         const lastCard = gridRef.children[gridRef.children.length - 1];
         if (lastCard) {
-          gsap.from(lastCard, {
-            opacity: 0, y: 8, scale: 0.95,
-            duration: 0.3, ease: 'back.out(1.2)',
-          });
+          gsap.killTweensOf(lastCard);
+          gsap.fromTo(lastCard,
+            { opacity: 0, y: 8, scale: 0.95 },
+            { opacity: 1, y: 0, scale: 1, duration: 0.3, ease: 'back.out(1.2)', clearProps: 'opacity,transform' },
+          );
         }
       }
     }

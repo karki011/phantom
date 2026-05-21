@@ -40,3 +40,12 @@ export async function deleteProjectNote(id: string): Promise<boolean> {
     return false;
   }
 }
+
+export async function updateNotePosition(id: string, posX: number, posY: number): Promise<boolean> {
+  try {
+    await App()?.UpdateNotePosition(id, Math.round(posX), Math.round(posY));
+    return true;
+  } catch {
+    return false;
+  }
+}
