@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.55](https://github.com/karki011/phantom/compare/v0.1.54...v0.1.55) (2026-05-21)
+
+
+### Features
+
+* show Greptile confidence score on PR cards ([#146](https://github.com/karki011/phantom/issues/146)) ([a9b6c69](https://github.com/karki011/phantom/commit/a9b6c6901d75b4f024f0aca1aec16c106f59bf3c))
+* sidebar section hierarchy indent and fix quick action tile dimming ([8195619](https://github.com/karki011/phantom/commit/8195619e1b4dbe1525da674acd65d72f999ac46f))
+
 ## [0.1.54](https://github.com/karki011/phantom/compare/v0.1.53...v0.1.54) (2026-05-21)
 
 
