@@ -377,6 +377,18 @@ export interface JournalEnrichedEvent {
   project: string;
 }
 
+export interface ProjectNote {
+  id: string;
+  project_id: string;
+  type: 'todo' | 'idea' | 'bug' | 'note';
+  title: string;
+  body: string;
+  pinned: boolean;
+  position: number;
+  created_at: number;
+  updated_at: number;
+}
+
 export interface DailyStats {
   date: string;
   project_id: string | null;

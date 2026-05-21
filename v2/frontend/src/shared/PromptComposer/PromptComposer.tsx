@@ -10,7 +10,7 @@ import {
   batch,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { MilkdownEditor } from '@/shared/MilkdownEditor/MilkdownEditor';
+import { TipTapEditor } from '@/shared/TipTapEditor';
 import {
   Paperclip,
   ArrowUp,
@@ -413,12 +413,14 @@ export const PromptComposer = (props: PromptComposerProps) => {
             class={styles.textAreaWrap}
             style={composerColor() ? { 'border-color': composerColor()! } : undefined}
           >
-            <MilkdownEditor
+            <TipTapEditor
               placeholder="Message Phantom... (⌘+Enter to send)"
-              onSubmit={(md) => { handleSubmit(); }}
-              onInput={(md) => setPrompt(md)}
+              onSubmit={() => handleSubmit()}
+              onInput={(text) => setPrompt(text)}
               autoFocus={props.visible}
               initialValue={consumedDraft()}
+              toolbar
+              clearOnSubmit
             />
           </div>
 

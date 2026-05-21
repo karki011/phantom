@@ -23,6 +23,7 @@ import { Tip } from '@/shared/Tip/Tip';
 import { vars } from '@/styles/theme.css';
 import { formatCost, formatDuration } from '@/core/signals/journal';
 import { openRecipePicker, recipePickerOpen } from '@/core/signals/recipes';
+import { ProjectNotes } from '@/shared/ProjectNotes';
 import type { RepoStatus, PrStatus as PrStatusType, CiRun, CheckAnnotation, FailedStep, JournalEntry, EnrichedRecipe, RepoMergeConfig, Reviewer, MergeMethod } from '@/core/types';
 import * as styles from '@/styles/home.css';
 
@@ -593,6 +594,9 @@ export default function WorktreeHome() {
         {/* Right: Recipes */}
         <RecipesCard projectId={activeProject()?.id ?? null} repoPath={activeProject()?.repo_path ?? null} />
       </div>
+
+      {/* Project Sticky Notes */}
+      <ProjectNotes />
 
       {/* Combined Status + Activity Card */}
       <div class={styles.statusCard}>

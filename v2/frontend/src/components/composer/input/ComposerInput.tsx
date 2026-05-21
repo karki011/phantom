@@ -1,6 +1,6 @@
 // Author: Subash Karki
 import { createSignal, Show, For } from 'solid-js'
-import { MilkdownEditor } from '@/shared/MilkdownEditor/MilkdownEditor'
+import { TipTapEditor } from '@/shared/TipTapEditor'
 import { Select } from '@kobalte/core/select'
 import {
   Send, Square, Paperclip, X, GlobeLock, FolderOpen, ChevronDown,
@@ -499,17 +499,19 @@ export const ComposerInput = (props: ComposerInputProps) => {
           visible={showFileMenu()}
         />
 
-        <MilkdownEditor
+        <TipTapEditor
           placeholder={placeholder()}
           disabled={isDisabled()}
           fontSize={props.fontSize}
           autoFocus
-          onInput={(markdown) => {
-            setText(markdown)
-            detectMenuTriggers(markdown)
+          toolbar
+          clearOnSubmit
+          onInput={(text) => {
+            setText(text)
+            detectMenuTriggers(text)
           }}
-          onSubmit={(markdown) => {
-            setText(markdown)
+          onSubmit={(text) => {
+            setText(text)
             handleSend()
           }}
         />

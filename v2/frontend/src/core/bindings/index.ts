@@ -65,3 +65,4 @@ export { listMCPServers, toggleMCPServer, registerPhantomMCP } from './mcp';
 export type { MCPServer } from './mcp';
 export { searchFileContents } from './search';
 export type { SearchResult } from './search';
+export { listProjectNotes, createProjectNote, updateProjectNote, deleteProjectNote } from './notes';
