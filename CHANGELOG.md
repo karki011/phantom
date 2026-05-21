@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.54](https://github.com/karki011/phantom/compare/v0.1.53...v0.1.54) (2026-05-21)
+
+
+### Features
+
+* project sticky notes with TipTap WYSIWYG editor ([#142](https://github.com/karki011/phantom/issues/142)) ([#143](https://github.com/karki011/phantom/issues/143)) ([730fedc](https://github.com/karki011/phantom/commit/730fedc9200d32319c5697638e69ca698ce2c0a1))
+
 ## [0.1.53](https://github.com/karki011/phantom/compare/v0.1.52...v0.1.53) (2026-05-20)
 
 
