@@ -257,6 +257,18 @@ type Project struct {
 	CreatedAt       int64          `json:"created_at"`
 }
 
+type ProjectNote struct {
+	ID        string `json:"id"`
+	ProjectID string `json:"project_id"`
+	Type      string `json:"type"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	Pinned    int64  `json:"pinned"`
+	Position  int64  `json:"position"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
 type RecipeFavorite struct {
 	ProjectID string `json:"project_id"`
 	RecipeID  string `json:"recipe_id"`

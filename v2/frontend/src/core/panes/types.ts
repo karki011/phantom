@@ -1,7 +1,7 @@
 // Phantom — Pane layout types
 // Author: Subash Karki
 
-export type PaneType = 'terminal' | 'native-terminal' | 'tui' | 'editor' | 'composer' | 'home';
+export type PaneType = 'terminal' | 'native-terminal' | 'tui' | 'editor' | 'composer' | 'home' | 'notes';
 
 // ---------------------------------------------------------------------------
 // Layout tree (binary tree of panes)

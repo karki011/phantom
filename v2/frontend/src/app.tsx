@@ -57,6 +57,7 @@ import ComposerDrawer from './components/composer/ComposerDrawer';
 import ComposerStatusPill from './components/composer/ComposerStatusPill';
 import { DigestDrawer } from './shared/DigestDrawer/DigestDrawer';
 import { PerfOverlay } from './components/PerfOverlay/PerfOverlay';
+import { bootstrapProjectNotes } from './core/signals/notes';
 
 export function App() {
   const [ready, setReady] = createSignal(false);
@@ -108,6 +109,7 @@ export function App() {
     bootstrapApp();
     bootstrapSessions();
     bootstrapProjects();
+    bootstrapProjectNotes();
 
     // Restore persisted activeTopTab before first render
     await restoreActiveTopTab();
