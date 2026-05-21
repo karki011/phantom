@@ -21,8 +21,8 @@ func (q *Queries) CountProjectNotes(ctx context.Context, projectID string) (int6
 }
 
 const createProjectNote = `-- name: CreateProjectNote :exec
-INSERT INTO project_notes (id, project_id, type, title, body, pinned, position, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO project_notes (id, project_id, type, title, body, pinned, position, pos_x, pos_y, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateProjectNoteParams struct {
@@ -33,6 +33,8 @@ type CreateProjectNoteParams struct {
 	Body      string `json:"body"`
 	Pinned    int64  `json:"pinned"`
 	Position  int64  `json:"position"`
+	PosX      int64  `json:"pos_x"`
+	PosY      int64  `json:"pos_y"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
 }
@@ -46,6 +48,8 @@ func (q *Queries) CreateProjectNote(ctx context.Context, arg CreateProjectNotePa
 		arg.Body,
 		arg.Pinned,
 		arg.Position,
+		arg.PosX,
+		arg.PosY,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -62,7 +66,7 @@ func (q *Queries) DeleteProjectNote(ctx context.Context, id string) error {
 }
 
 const getProjectNote = `-- name: GetProjectNote :one
-SELECT id, project_id, type, title, body, pinned, position, created_at, updated_at FROM project_notes WHERE id = ?
+SELECT id, project_id, type, title, body, pinned, position, created_at, updated_at, pos_x, pos_y FROM project_notes WHERE id = ?
 `
 
 func (q *Queries) GetProjectNote(ctx context.Context, id string) (ProjectNote, error) {
@@ -78,13 +82,15 @@ func (q *Queries) GetProjectNote(ctx context.Context, id string) (ProjectNote, e
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PosX,
+		&i.PosY,
 	)
 	return i, err
 }
 
 const listProjectNotes = `-- name: ListProjectNotes :many
 
-SELECT id, project_id, type, title, body, pinned, position, created_at, updated_at FROM project_notes WHERE project_id = ? ORDER BY pinned DESC, position ASC, created_at DESC
+SELECT id, project_id, type, title, body, pinned, position, created_at, updated_at, pos_x, pos_y FROM project_notes WHERE project_id = ? ORDER BY pinned DESC, position ASC, created_at DESC
 `
 
 // Author: Subash Karki
@@ -107,6 +113,8 @@ func (q *Queries) ListProjectNotes(ctx context.Context, projectID string) ([]Pro
 			&i.Position,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PosX,
+			&i.PosY,
 		); err != nil {
 			return nil, err
 		}
@@ -121,8 +129,29 @@ func (q *Queries) ListProjectNotes(ctx context.Context, projectID string) ([]Pro
 	return items, nil
 }
 
+const updateNotePosition = `-- name: UpdateNotePosition :exec
+UPDATE project_notes SET pos_x = ?, pos_y = ?, updated_at = ? WHERE id = ?
+`
+
+type UpdateNotePositionParams struct {
+	PosX      int64  `json:"pos_x"`
+	PosY      int64  `json:"pos_y"`
+	UpdatedAt int64  `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) UpdateNotePosition(ctx context.Context, arg UpdateNotePositionParams) error {
+	_, err := q.db.ExecContext(ctx, updateNotePosition,
+		arg.PosX,
+		arg.PosY,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	return err
+}
+
 const updateProjectNote = `-- name: UpdateProjectNote :exec
-UPDATE project_notes SET title = ?, body = ?, type = ?, pinned = ?, position = ?, updated_at = ? WHERE id = ?
+UPDATE project_notes SET title = ?, body = ?, type = ?, pinned = ?, position = ?, pos_x = ?, pos_y = ?, updated_at = ? WHERE id = ?
 `
 
 type UpdateProjectNoteParams struct {
@@ -131,6 +160,8 @@ type UpdateProjectNoteParams struct {
 	Type      string `json:"type"`
 	Pinned    int64  `json:"pinned"`
 	Position  int64  `json:"position"`
+	PosX      int64  `json:"pos_x"`
+	PosY      int64  `json:"pos_y"`
 	UpdatedAt int64  `json:"updated_at"`
 	ID        string `json:"id"`
 }
@@ -142,6 +173,8 @@ func (q *Queries) UpdateProjectNote(ctx context.Context, arg UpdateProjectNotePa
 		arg.Type,
 		arg.Pinned,
 		arg.Position,
+		arg.PosX,
+		arg.PosY,
 		arg.UpdatedAt,
 		arg.ID,
 	)

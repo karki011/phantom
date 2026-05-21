@@ -33,6 +33,8 @@ type ProjectNoteWire struct {
 	Body      string `json:"body"`
 	Pinned    bool   `json:"pinned"`
 	Position  int    `json:"position"`
+	PosX      int    `json:"pos_x"`
+	PosY      int    `json:"pos_y"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
 }
@@ -46,6 +48,8 @@ func noteToWire(n db.ProjectNote) ProjectNoteWire {
 		Body:      n.Body,
 		Pinned:    n.Pinned != 0,
 		Position:  int(n.Position),
+		PosX:      int(n.PosX),
+		PosY:      int(n.PosY),
 		CreatedAt: n.CreatedAt,
 		UpdatedAt: n.UpdatedAt,
 	}
@@ -95,6 +99,8 @@ func (a *App) CreateProjectNote(projectID, noteType, title string) (*ProjectNote
 		Body:      "",
 		Pinned:    0,
 		Position:  count + 1,
+		PosX:      100 + int64(count)*30,
+		PosY:      100 + int64(count)*30,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -113,6 +119,8 @@ func (a *App) CreateProjectNote(projectID, noteType, title string) (*ProjectNote
 		Body:      "",
 		Pinned:    false,
 		Position:  int(count + 1),
+		PosX:      100 + int(count)*30,
+		PosY:      100 + int(count)*30,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -149,6 +157,8 @@ func (a *App) UpdateProjectNote(id, title, body, noteType string, pinned bool) e
 		Type:      noteType,
 		Pinned:    pinnedInt,
 		Position:  existing.Position,
+		PosX:      existing.PosX,
+		PosY:      existing.PosY,
 		UpdatedAt: now,
 		ID:        id,
 	}
@@ -157,6 +167,39 @@ func (a *App) UpdateProjectNote(id, title, body, noteType string, pinned bool) e
 	if err := wq.UpdateProjectNote(a.ctx, params); err != nil {
 		log.Error("UpdateProjectNote: update failed", "id", id, "err", err)
 		return fmt.Errorf("UpdateProjectNote: update: %w", err)
+	}
+
+	wailsRuntime.EventsEmit(a.ctx, EventNoteUpdated, map[string]interface{}{
+		"projectId": existing.ProjectID,
+		"noteId":    id,
+	})
+
+	return nil
+}
+
+// UpdateNotePosition updates a note's floating position (x, y).
+// Emits "note:updated" with { projectId, noteId }.
+func (a *App) UpdateNotePosition(id string, posX, posY int) error {
+	now := time.Now().Unix()
+
+	rq := db.New(a.DB.Reader)
+	existing, err := rq.GetProjectNote(a.ctx, id)
+	if err != nil {
+		log.Error("UpdateNotePosition: get failed", "id", id, "err", err)
+		return fmt.Errorf("UpdateNotePosition: get: %w", err)
+	}
+
+	params := db.UpdateNotePositionParams{
+		PosX:      int64(posX),
+		PosY:      int64(posY),
+		UpdatedAt: now,
+		ID:        id,
+	}
+
+	wq := db.New(a.DB.Writer)
+	if err := wq.UpdateNotePosition(a.ctx, params); err != nil {
+		log.Error("UpdateNotePosition: update failed", "id", id, "err", err)
+		return fmt.Errorf("UpdateNotePosition: update: %w", err)
 	}
 
 	wailsRuntime.EventsEmit(a.ctx, EventNoteUpdated, map[string]interface{}{

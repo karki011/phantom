@@ -43,6 +43,7 @@ import { ShortcutSheet } from './shared/ShortcutSheet/ShortcutSheet';
 import { WorktreeSwitcher } from './shared/WorktreeSwitcher';
 import { RecipePicker } from './shared/RecipePicker';
 import { AgentsOverlay } from './shared/AgentsOverlay';
+import { StickyNotesOverlay } from './shared/StickyNotesOverlay';
 import { McpManagerDialog } from './shared/McpManagerDialog';
 import { PromptComposer } from './shared/PromptComposer';
 import { composerVisible, closeComposer } from './core/signals/composer';
@@ -267,6 +268,7 @@ export function App() {
   return (
     <div class={shellClass()}>
       <ToastRegion />
+      <StickyNotesOverlay />
       <SettingsDialog />
       <AICommandCenter />
       <QuickOpen />

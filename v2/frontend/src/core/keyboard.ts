@@ -15,6 +15,7 @@ import { toggleCommandPalette } from './signals/command-palette';
 import { openRecipePicker } from './signals/recipes';
 import { toggleShortcutSheet } from './signals/shortcut-sheet';
 import { toggleAgentsOverlay } from './signals/agents-overlay';
+import { toggleStickyOverlay } from './signals/notes';
 
 import { switcherVisible, openSwitcher, closeSwitcher, advanceSwitcher, commitSwitcher } from './signals/worktree-switcher';
 import { goBack, goForward } from './signals/navigation';
@@ -84,6 +85,13 @@ export function registerKeyboardShortcuts(): () => void {
     if (meta && e.key === '2') {
       e.preventDefault();
       setActiveTopTab('worktree');
+      return;
+    }
+
+    // Cmd+Shift+N: Toggle sticky notes overlay
+    if (meta && e.shiftKey && (e.key === 'N' || e.key === 'n')) {
+      e.preventDefault();
+      toggleStickyOverlay();
       return;
     }
 

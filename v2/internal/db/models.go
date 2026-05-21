@@ -267,6 +267,8 @@ type ProjectNote struct {
 	Position  int64  `json:"position"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
+	PosX      int64  `json:"pos_x"`
+	PosY      int64  `json:"pos_y"`
 }
 
 type RecipeFavorite struct {

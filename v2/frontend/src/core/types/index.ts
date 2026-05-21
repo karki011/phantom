@@ -386,6 +386,8 @@ export interface ProjectNote {
   body: string;
   pinned: boolean;
   position: number;
+  pos_x: number;
+  pos_y: number;
   created_at: number;
   updated_at: number;
 }

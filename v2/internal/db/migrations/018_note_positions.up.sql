@@ -1,0 +1,4 @@
+-- Author: Subash Karki
+
+ALTER TABLE project_notes ADD COLUMN pos_x INTEGER NOT NULL DEFAULT 100;
+ALTER TABLE project_notes ADD COLUMN pos_y INTEGER NOT NULL DEFAULT 100;
