@@ -46,6 +46,7 @@ type PrStatus struct {
 	ChangesRequestedBy []Reviewer `json:"changes_requested_by"`
 	AwaitingReviewFrom []Reviewer `json:"awaiting_review_from"`
 	Labels             []Label    `json:"labels"`
+	GreptileScore      string     `json:"greptile_score"` // "3/5", "" if no Greptile review
 }
 
 // RepoMergeConfig holds repo-level merge settings used to drive the Ship-It UI.

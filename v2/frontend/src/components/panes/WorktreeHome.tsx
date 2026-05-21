@@ -28,6 +28,36 @@ import type { RepoStatus, PrStatus as PrStatusType, CiRun, CheckAnnotation, Fail
 import * as styles from '@/styles/home.css';
 
 
+function GreptileBadge(props: { score: string }) {
+  const num = () => {
+    const n = parseInt(props.score);
+    return isNaN(n) ? 0 : n;
+  };
+  const color = () => {
+    const n = num();
+    if (n >= 4) return vars.color.success;
+    if (n >= 2) return vars.color.warning;
+    return vars.color.danger;
+  };
+
+  return (
+    <Tip label={`Greptile confidence: ${props.score}`}>
+      <span
+        class={styles.greptileBadge}
+        style={{
+          color: color(),
+          'background-color': `color-mix(in srgb, ${color()} 15%, transparent)`,
+        }}
+      >
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M8 0L14.928 4v8L8 16 1.072 12V4z"/>
+        </svg>
+        {props.score}
+      </span>
+    </Tip>
+  );
+}
+
 function RecentSessions(props: { repoPath: string | null }) {
   const [recentSessions, setRecentSessions] = createSignal<JournalEntry[]>([]);
 
@@ -830,6 +860,9 @@ export default function WorktreeHome() {
               </div>
 
               {/* Reviewer row + Ship-It action */}
+              <Show when={prStatus()!.greptile_score}>
+                <GreptileBadge score={prStatus()!.greptile_score!} />
+              </Show>
               <ReviewerRow pr={prStatus()!} />
               <ShipItButton pr={prStatus()!} cfg={repoMergeCfg()} />
 
@@ -1061,6 +1094,9 @@ function OpenPrCard(props: {
       </Show>
 
       <div class={styles.prCardActions}>
+        <Show when={pr.greptile_score}>
+          <GreptileBadge score={pr.greptile_score!} />
+        </Show>
         <Show when={pr.review_decision === 'APPROVED'}>
           <span class={styles.prApprovedBadge}>
             <CheckCircle size={10} />
