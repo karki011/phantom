@@ -1989,6 +1989,20 @@ export const prApprovedBadge = style({
   color: vars.color.success,
 });
 
+export const greptileBadge = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '3px',
+  fontSize: '0.55rem',
+  fontWeight: 700,
+  fontFamily: vars.font.mono,
+  padding: '1px 6px',
+  borderRadius: '3px',
+  flexShrink: 0,
+  letterSpacing: '0.03em',
+  lineHeight: '14px',
+});
+
 export const shipItMergedPill = style({
   display: 'inline-flex',
   alignItems: 'center',

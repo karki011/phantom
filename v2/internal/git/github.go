@@ -191,6 +191,9 @@ func GetPrStatus(ctx context.Context, repoPath, branch string) (*PrStatus, error
 		pr.MergeQueueEta = eta
 	}
 
+	// Best-effort: fetch Greptile confidence score from PR comments.
+	pr.GreptileScore = fetchGreptileScore(ctx, repoPath, raw.Number)
+
 	log.Info("git/GetPrStatus: success",
 		"number", pr.Number, "state", pr.State, "checks", pr.ChecksTotal,
 		"mergeState", pr.MergeStateStatus, "reviewDecision", pr.ReviewDecision)
@@ -343,8 +346,76 @@ func ListOpenPrsForBase(ctx context.Context, repoPath, baseBranch string, limit 
 			Labels:             mapLabels(r.Labels),
 		})
 	}
+
+	// Best-effort: fetch Greptile scores in parallel.
+	if len(prs) > 0 {
+		type scoreResult struct {
+			idx   int
+			score string
+		}
+		ch := make(chan scoreResult, len(prs))
+		for i, p := range prs {
+			go func(idx, num int) {
+				ch <- scoreResult{idx, fetchGreptileScore(ctx, repoPath, num)}
+			}(i, p.Number)
+		}
+		for range prs {
+			r := <-ch
+			prs[r.idx].GreptileScore = r.score
+		}
+	}
+
 	log.Info("git/ListOpenPrsForBase: success", "count", len(prs))
 	return prs, nil
+}
+
+// fetchGreptileScore fetches the Greptile confidence score for a PR from its comments.
+// Returns "X/5" or "" if no Greptile review found.
+func fetchGreptileScore(ctx context.Context, repoPath string, prNumber int) string {
+	owner, repo, err := resolveOwnerRepo(ctx, repoPath)
+	if err != nil {
+		return ""
+	}
+
+	data, err := ghAPIGet(ctx, owner, repo, fmt.Sprintf("issues/%d/comments?per_page=50", prNumber))
+	if err != nil {
+		return ""
+	}
+
+	var comments []struct {
+		User struct {
+			Login string `json:"login"`
+		} `json:"user"`
+		Body string `json:"body"`
+	}
+	if err := json.Unmarshal(data, &comments); err != nil {
+		return ""
+	}
+
+	for _, c := range comments {
+		if !strings.Contains(strings.ToLower(c.User.Login), "greptile") {
+			continue
+		}
+		// Parse "Confidence Score: X/5" from body
+		idx := strings.Index(c.Body, "Confidence Score:")
+		if idx == -1 {
+			continue
+		}
+		rest := c.Body[idx+len("Confidence Score:"):]
+		rest = strings.TrimSpace(rest)
+		// Extract "X/5" pattern
+		for i, ch := range rest {
+			if ch == '\n' || ch == '\r' || ch == '<' || i > 10 {
+				rest = rest[:i]
+				break
+			}
+		}
+		rest = strings.TrimSpace(rest)
+		if rest != "" {
+			return rest
+		}
+	}
+	return ""
 }
 
 // ghCheckJSON is the raw JSON shape returned by `gh pr checks`.

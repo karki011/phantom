@@ -237,6 +237,7 @@ export interface PrStatus {
   changes_requested_by?: Reviewer[];
   awaiting_review_from?: Reviewer[];
   labels?: Label[];
+  greptile_score?: string;
 }
 
 export interface Label {
