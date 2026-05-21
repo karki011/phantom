@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.56](https://github.com/karki011/phantom/compare/v0.1.55...v0.1.56) (2026-05-21)
+
+
+### Features
+
+* notes drawer with TipTap WYSIWYG editor and Cmd+Shift+N shortcut ([#147](https://github.com/karki011/phantom/issues/147)) ([a7411c9](https://github.com/karki011/phantom/commit/a7411c93b978a70b4d2855103acedf7ff21394d6))
+
 ## [0.1.55](https://github.com/karki011/phantom/compare/v0.1.54...v0.1.55) (2026-05-21)
 
 
