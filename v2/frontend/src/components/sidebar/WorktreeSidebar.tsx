@@ -166,6 +166,7 @@ export function WorktreeSidebar() {
             <Collapsible
               open={!favoritesCollapsed()}
               onOpenChange={(open) => setFavoritesCollapsed(!open)}
+              class={styles.sidebarSection}
             >
               <Collapsible.Trigger class={styles.sidebarSectionHeader}>
                 <ChevronRight size={10} class={styles.sidebarChevron} />
@@ -173,7 +174,7 @@ export function WorktreeSidebar() {
                 <span>Favorites</span>
                 <span class={styles.sectionCount}>{favoriteProjects().length}</span>
               </Collapsible.Trigger>
-              <Collapsible.Content>
+              <Collapsible.Content class={styles.sidebarSectionContent}>
                 <For each={favoriteProjects()}>
                   {(project) => <ProjectSection project={project} />}
                 </For>
@@ -184,6 +185,7 @@ export function WorktreeSidebar() {
           <Collapsible
             open={!projectsCollapsed()}
             onOpenChange={(open) => setProjectsCollapsed(!open)}
+            class={styles.sidebarSection}
           >
             <Collapsible.Trigger class={styles.sidebarSectionHeader}>
               <ChevronRight size={10} class={styles.sidebarChevron} />
@@ -191,7 +193,7 @@ export function WorktreeSidebar() {
               <span>Projects</span>
               <span class={styles.sectionCount}>{otherProjects().length}</span>
             </Collapsible.Trigger>
-            <Collapsible.Content>
+            <Collapsible.Content class={styles.sidebarSectionContent}>
               <For each={otherProjects()}>
                 {(project) => <ProjectSection project={project} />}
               </For>

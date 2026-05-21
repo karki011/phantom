@@ -595,3 +595,18 @@ export const sectionCount = style({
   color: vars.color.textDisabled,
   opacity: 0.6,
 });
+
+export const sidebarSectionContent = style({
+  paddingLeft: vars.space.sm,
+});
+
+export const sidebarSection = style({
+  paddingTop: vars.space.sm,
+  paddingBottom: vars.space.sm,
+  selectors: {
+    '& + &': {
+      borderTop: `1px solid ${vars.color.divider}`,
+      marginTop: vars.space.xs,
+    },
+  },
+});

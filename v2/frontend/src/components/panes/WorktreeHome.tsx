@@ -473,12 +473,18 @@ export default function WorktreeHome() {
     queueMicrotask(() => {
       const tiles = quickLaunchRef?.querySelectorAll('[data-quick-tile]');
       if (tiles?.length) {
-        gsap.from(tiles, {
-          opacity: 0, y: 10, scale: 0.95,
-          stagger: 0.04, duration: 0.3, ease: 'back.out(1.2)',
-        });
+        gsap.killTweensOf(tiles);
+        gsap.fromTo(tiles,
+          { opacity: 0, y: 10, scale: 0.95 },
+          { opacity: 1, y: 0, scale: 1, stagger: 0.04, duration: 0.3, ease: 'back.out(1.2)', clearProps: 'opacity,transform' },
+        );
       }
     });
+  });
+
+  onCleanup(() => {
+    const tiles = quickLaunchRef?.querySelectorAll('[data-quick-tile]');
+    if (tiles?.length) gsap.killTweensOf(tiles);
   });
 
   return (
