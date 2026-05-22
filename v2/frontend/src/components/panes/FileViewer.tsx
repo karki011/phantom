@@ -2,6 +2,9 @@
 
 import { createSignal, onMount, onCleanup, Show, For, createEffect, on, createMemo } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+import 'highlight.js/styles/github-dark-dimmed.min.css';
 import { detectLanguage } from '@/core/editor/language';
 import { readFileContents, writeFileContents } from '@/core/bindings/editor';
 import { readPlanFile, writePlanFile } from '@/core/bindings/plans';
@@ -20,9 +23,11 @@ import CodeMirrorEditor from '@/core/editor/CodeMirrorEditor';
 import DiffViewer from '@/shared/DiffViewer/DiffViewer';
 import { loadLanguage } from '@/core/editor/cm-languages';
 import { phantomThemeExtension } from '@/core/editor/cm-theme';
+import { highlightCode } from '@/core/composer/highlighter';
 import { TextWrap, Clipboard, X as XIcon } from 'lucide-solid';
 import type { Extension } from '@codemirror/state';
 import * as styles from '@/styles/viewer.css';
+import * as markdownStyles from '@/styles/markdown-preview.css';
 import * as sidebarStyles from '@/styles/right-sidebar.css';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -70,6 +75,7 @@ export default function FileViewer(props: FileViewerProps) {
   const [loading, setLoading] = createSignal(true);
   const [mode, setMode] = createSignal<'file' | 'diff'>('file');
   const [lineWrapping, setLineWrapping] = createSignal(false);
+  const [previewMode, setPreviewMode] = createSignal(false);
 
   // File tabs
   const [fileTabs, setFileTabs] = createSignal<FileTab[]>([]);
@@ -372,6 +378,126 @@ export default function FileViewer(props: FileViewerProps) {
     return activeFile()?.language ?? 'plaintext';
   }
 
+  const isMarkdown = () => currentLang() === 'markdown';
+
+  // ── Markdown preview rendering ──────────────────────────────────────────
+
+  // Signal for the final HTML — starts as parsed markdown, updated when highlights resolve
+  const [displayHtml, setDisplayHtml] = createSignal('');
+
+  const parsedMarkdownHtml = createMemo(() => {
+    if (!previewMode() || !isMarkdown()) return '';
+    const content = activeFile()?.content;
+    if (!content) return '';
+    const raw = marked.parse(content, { breaks: true, gfm: true });
+    // marked.parse can return string | Promise<string> — sync input returns string
+    return DOMPurify.sanitize(typeof raw === 'string' ? raw : '');
+  });
+
+  // Monotonic counter for highlight block IDs
+  let _hlCounter = 0;
+
+  // Highlight code blocks off the main thread after markdown is parsed
+  createEffect(() => {
+    const html = parsedMarkdownHtml();
+    if (!html) {
+      setDisplayHtml('');
+      return;
+    }
+
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    const fragment = template.content;
+    const codeBlocks = fragment.querySelectorAll('pre code');
+
+    if (codeBlocks.length === 0) {
+      setDisplayHtml(html);
+      return;
+    }
+
+    let pendingCount = codeBlocks.length;
+
+    codeBlocks.forEach((codeEl, index) => {
+      const code = codeEl.textContent ?? '';
+      if (!code.trim()) {
+        pendingCount--;
+        if (pendingCount === 0) setDisplayHtml(template.innerHTML);
+        return;
+      }
+
+      let language: string | undefined;
+      for (const cls of codeEl.className.split(/\s+/)) {
+        if (cls.startsWith('language-')) {
+          language = cls.slice('language-'.length);
+          break;
+        }
+      }
+
+      const blockId = `fv-hl-${index}-${++_hlCounter}`;
+      highlightCode(blockId, code, language, (_id, highlighted) => {
+        codeEl.innerHTML = highlighted;
+        codeEl.classList.add('hljs');
+        pendingCount--;
+        if (pendingCount === 0) setDisplayHtml(template.innerHTML);
+      });
+    });
+
+    // Show un-highlighted markdown immediately while highlights are pending
+    setDisplayHtml(html);
+  });
+
+  // Post-render: copy buttons on <pre> blocks, external link handling
+  let previewRef: HTMLDivElement | undefined;
+
+  createEffect(() => {
+    void displayHtml();
+    if (!previewRef) return;
+    requestAnimationFrame(() => {
+      if (!previewRef) return;
+
+      // Copy buttons on <pre> blocks
+      previewRef.querySelectorAll('pre').forEach((pre) => {
+        if (pre.querySelector('.copy-btn')) return;
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.textContent = 'Copy';
+        pre.style.position = 'relative';
+        pre.addEventListener('mouseenter', () => { btn.style.opacity = '1'; });
+        pre.addEventListener('mouseleave', () => { btn.style.opacity = '0'; });
+        btn.addEventListener('click', () => {
+          const code = pre.querySelector('code')?.textContent ?? pre.textContent ?? '';
+          navigator.clipboard.writeText(code);
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+        });
+        pre.appendChild(btn);
+      });
+
+      // External links -> system browser
+      previewRef.querySelectorAll('a[href]').forEach((a) => {
+        if ((a as HTMLElement).dataset.extWired) return;
+        const href = a.getAttribute('href') ?? '';
+        if (href.startsWith('http://') || href.startsWith('https://')) {
+          (a as HTMLElement).dataset.extWired = '1';
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.open(href, '_blank');
+          });
+        }
+      });
+    });
+  });
+
+  // Reset preview mode when switching to a non-markdown file
+  createEffect(
+    on(
+      () => activeFile()?.filePath,
+      () => {
+        if (!isMarkdown()) setPreviewMode(false);
+      },
+    ),
+  );
+
   // ── Lifecycle ────────────────────────────────────────────────────────────
 
   onMount(() => {
@@ -431,6 +557,13 @@ export default function FileViewer(props: FileViewerProps) {
       if (e.altKey && e.key === 'z') {
         e.preventDefault();
         setLineWrapping((v) => !v);
+        return;
+      }
+
+      // Cmd+Shift+P — toggle markdown preview
+      if (meta && e.shiftKey && e.key === 'p' && isMarkdown() && mode() === 'file') {
+        e.preventDefault();
+        setPreviewMode((v) => !v);
         return;
       }
 
@@ -505,6 +638,30 @@ export default function FileViewer(props: FileViewerProps) {
               Diffs ({diffTabs().length})
             </button>
           </Show>
+
+          {/* Markdown preview toggle — in tab bar for visibility */}
+          <Show when={isMarkdown()}>
+            <div class={styles.previewToggleGroup}>
+              <button
+                type="button"
+                class={styles.previewToggleBtn}
+                data-active={!previewMode()}
+                onClick={() => setPreviewMode(false)}
+                title="View source (Cmd+Shift+P)"
+              >
+                Source
+              </button>
+              <button
+                type="button"
+                class={styles.previewToggleBtn}
+                data-active={previewMode()}
+                onClick={() => setPreviewMode(true)}
+                title="Rendered preview (Cmd+Shift+P)"
+              >
+                Preview
+              </button>
+            </div>
+          </Show>
         </div>
       </Show>
 
@@ -569,17 +726,29 @@ export default function FileViewer(props: FileViewerProps) {
           </div>
         </Show>
 
-        {/* File view — CodeMirror editor (read + edit mode) */}
+        {/* File view — CodeMirror editor or markdown preview */}
         <Show when={!loading() && mode() === 'file' && activeFile()}>
-          <CodeMirrorEditor
-            content={activeFile()!.content}
-            language={langExtension()}
-            readOnly={!activeFile()!.editing}
-            lineWrapping={lineWrapping()}
-            theme={phantomThemeExtension}
-            onChange={handleContentChange}
-            class={styles.cmFillContainer}
-          />
+          <Show when={previewMode() && isMarkdown()} fallback={
+            <CodeMirrorEditor
+              content={activeFile()!.content}
+              language={langExtension()}
+              readOnly={!activeFile()!.editing}
+              lineWrapping={lineWrapping()}
+              theme={phantomThemeExtension}
+              onChange={handleContentChange}
+              class={styles.cmFillContainer}
+            />
+          }>
+            <div class={markdownStyles.previewContainer}>
+              <div class={markdownStyles.scrollArea}>
+                <div
+                  ref={previewRef}
+                  class={markdownStyles.markdownProse}
+                  innerHTML={displayHtml()}
+                />
+              </div>
+            </div>
+          </Show>
         </Show>
 
         {/* Diff view — CodeMirror merge */}
