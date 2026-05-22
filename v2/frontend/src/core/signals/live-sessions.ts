@@ -6,6 +6,7 @@ import { worktreeMap } from './worktrees';
 import { projects } from './projects';
 import { listTerminals, type TerminalInfo } from '../bindings/terminal';
 import type { Session } from '../types/index';
+import { windowVisible } from './visibility';
 
 export interface LiveWorktree {
   worktreeId: string;
@@ -24,6 +25,7 @@ let polling: ReturnType<typeof setInterval> | undefined;
 export function bootstrapLiveSessions(): void {
   listTerminals().then(setActiveTerminals);
   polling = setInterval(() => {
+    if (!windowVisible()) return;
     listTerminals().then(setActiveTerminals);
   }, 3_000);
 }

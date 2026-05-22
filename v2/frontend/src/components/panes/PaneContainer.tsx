@@ -1,7 +1,7 @@
 // Phantom — Individual pane wrapper with header + content
 // Author: Subash Karki
 
-import { Show, createSignal, lazy } from 'solid-js';
+import { Show, createSignal, lazy, ErrorBoundary } from 'solid-js';
 import { Suspense, Dynamic } from 'solid-js/web';
 import { Columns2, Rows2, X, Settings2 } from 'lucide-solid';
 import { Skeleton } from '@kobalte/core/skeleton';
@@ -9,6 +9,7 @@ import * as styles from '@/styles/panes.css';
 import { activeTab, setActivePaneInTab, splitPane, closePane, activePaneId, getPaneColor, tabs } from '@/core/panes/signals';
 import { getPaneComponent } from './PaneRegistry';
 import type { PaneLeaf } from '@/core/panes/types';
+import { vars } from '@/styles/theme.css';
 
 const TerminalSettings = lazy(() => import('./TerminalSettings'));
 
@@ -138,7 +139,20 @@ export function PaneContainer(props: PaneContainerProps) {
         <Show when={PaneComponent()} fallback={<PlaceholderContent />}>
           {(Comp) => (
             <Suspense fallback={<PlaceholderContent />}>
-              <Dynamic component={Comp()} paneId={paneId()} cwd={paneData()?.data?.cwd as string ?? ''} worktreeId={paneData()?.data?.worktreeId as string ?? ''} projectId={paneData()?.data?.projectId as string ?? ''} sessionId={paneData()?.data?.sessionId as string ?? ''} command={paneData()?.data?.command as string ?? ''} restore={!!paneData()?.data?.restore} filePath={paneData()?.data?.filePath as string ?? ''} workspaceId={paneData()?.data?.workspaceId as string ?? ''} isPlanFile={!!paneData()?.data?.isPlanFile} line={paneData()?.data?.line as number | undefined} column={paneData()?.data?.column as number | undefined} originalContent={paneData()?.data?.originalContent as string ?? ''} modifiedContent={paneData()?.data?.modifiedContent as string ?? ''} originalLabel={paneData()?.data?.originalLabel as string ?? ''} modifiedLabel={paneData()?.data?.modifiedLabel as string ?? ''} language={paneData()?.data?.language as string ?? ''} readOnly={!!paneData()?.data?.readOnly} noteId={paneData()?.data?.noteId as string ?? ''} />
+              <ErrorBoundary fallback={(err, reset) => {
+                console.error(`[ErrorBoundary:Pane:${paneType()}]`, err);
+                return (
+                  <div style={{ display: 'flex', 'flex-direction': 'column', 'align-items': 'center', 'justify-content': 'center', height: '100%', gap: vars.space.md, color: vars.color.textSecondary }}>
+                    <div style={{ 'font-family': vars.font.mono, 'font-size': vars.fontSize.sm }}>This pane crashed</div>
+                    <div style={{ 'font-family': vars.font.mono, 'font-size': vars.fontSize.xs, color: vars.color.textDisabled }}>{String(err)}</div>
+                    <button style={{ padding: `${vars.space.xs} ${vars.space.sm}`, 'border-radius': vars.radius.sm, background: vars.color.surfaceHover, color: vars.color.textPrimary, border: `1px solid ${vars.color.border}`, cursor: 'pointer', 'font-family': vars.font.body, 'font-size': vars.fontSize.xs }} onClick={() => reset()}>
+                      Retry
+                    </button>
+                  </div>
+                );
+              }}>
+                <Dynamic component={Comp()} paneId={paneId()} cwd={paneData()?.data?.cwd as string ?? ''} worktreeId={paneData()?.data?.worktreeId as string ?? ''} projectId={paneData()?.data?.projectId as string ?? ''} sessionId={paneData()?.data?.sessionId as string ?? ''} command={paneData()?.data?.command as string ?? ''} restore={!!paneData()?.data?.restore} filePath={paneData()?.data?.filePath as string ?? ''} workspaceId={paneData()?.data?.workspaceId as string ?? ''} isPlanFile={!!paneData()?.data?.isPlanFile} line={paneData()?.data?.line as number | undefined} column={paneData()?.data?.column as number | undefined} originalContent={paneData()?.data?.originalContent as string ?? ''} modifiedContent={paneData()?.data?.modifiedContent as string ?? ''} originalLabel={paneData()?.data?.originalLabel as string ?? ''} modifiedLabel={paneData()?.data?.modifiedLabel as string ?? ''} language={paneData()?.data?.language as string ?? ''} readOnly={!!paneData()?.data?.readOnly} noteId={paneData()?.data?.noteId as string ?? ''} />
+              </ErrorBoundary>
             </Suspense>
           )}
         </Show>

@@ -16,6 +16,7 @@ import { listTerminals, destroyTerminal } from '@/core/bindings/terminal';
 import { healthCheck } from '@/core/bindings/health';
 import { addTabWithData } from '@/core/panes/signals';
 import { activeProvider, activeProviderLabel } from '@/core/signals/active-provider';
+import { formatTokens } from '@/utils/format';
 import * as styles from './ResourceMonitorPanel.css';
 
 import type { JSX } from 'solid-js';
@@ -27,12 +28,6 @@ const PROVIDER_COLORS: Record<string, string> = {
   claude: '#a855f7',
   codex: '#22c55e',
   gemini: '#3b82f6',
-};
-
-const formatTokens = (count: number): string => {
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(0)}K`;
-  return String(count);
 };
 
 const formatDuration = (startedAtSecs: number, nowMs: number): string => {

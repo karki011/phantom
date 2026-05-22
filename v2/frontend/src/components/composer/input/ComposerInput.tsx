@@ -9,6 +9,7 @@ import {
 import type { ComposerMode, PermissionMode, EffortLevel, EditorContext } from '@/core/composer/types'
 import { showWarningToast } from '@/shared/Toast/Toast'
 import { Tip } from '@/shared/Tip/Tip'
+import { formatTokens } from '@/utils/format'
 import { ModeToggle } from './ModeToggle'
 import { ModelSelector } from './ModelSelector'
 import { ContextChips } from './ContextChips'
@@ -75,12 +76,6 @@ interface ComposerInputProps {
 
 /** Rough char-to-token estimate (same heuristic V1 uses). */
 const estimateTokens = (text: string): number => Math.ceil(text.length / 4)
-
-/** Format token count for display. */
-const formatTokens = (n: number): string => {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return String(n)
-}
 
 export const ComposerInput = (props: ComposerInputProps) => {
   const [text, setText] = createSignal('')

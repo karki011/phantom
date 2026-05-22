@@ -22,6 +22,7 @@ import { showToast, showWarningToast } from '@/shared/Toast/Toast';
 import { Tip } from '@/shared/Tip/Tip';
 import { vars } from '@/styles/theme.css';
 import { formatCost, formatDuration } from '@/core/signals/journal';
+import { timeAgo } from '@/utils/format';
 import { openRecipePicker, recipePickerOpen } from '@/core/signals/recipes';
 import { ProjectNotes } from '@/shared/ProjectNotes';
 import type { RepoStatus, PrStatus as PrStatusType, CiRun, CheckAnnotation, FailedStep, JournalEntry, EnrichedRecipe, RepoMergeConfig, Reviewer, MergeMethod } from '@/core/types';
@@ -69,17 +70,6 @@ function RecentSessions(props: { repoPath: string | null }) {
     });
     onCleanup(() => { cancelled = true; });
   }));
-
-  const timeAgo = (epochSecs: number | null): string => {
-    if (!epochSecs) return '';
-    const diffMins = Math.round((Date.now() / 1000 - epochSecs) / 60);
-    if (diffMins < 1) return 'just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const hrs = Math.floor(diffMins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    return `${days}d ago`;
-  };
 
   const statusColor = (status: string | null): string => {
     const st = (status ?? '').toLowerCase();

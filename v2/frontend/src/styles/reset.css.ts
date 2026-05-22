@@ -1,4 +1,5 @@
-import { globalStyle } from '@vanilla-extract/css';
+import { globalStyle, style } from '@vanilla-extract/css';
+import { vars } from './theme.css';
 
 globalStyle('*, *::before, *::after', {
   boxSizing: 'border-box',
@@ -12,8 +13,8 @@ globalStyle('html, body, #root', {
 });
 
 globalStyle('::selection', {
-  backgroundColor: 'rgba(124, 58, 237, 0.3)',
-  color: '#e2e8f0',
+  backgroundColor: vars.color.accentMuted,
+  color: vars.color.textPrimary,
 });
 
 globalStyle('::-webkit-scrollbar', {
@@ -26,10 +27,23 @@ globalStyle('::-webkit-scrollbar-track', {
 });
 
 globalStyle('::-webkit-scrollbar-thumb', {
-  background: 'rgba(124, 58, 237, 0.3)',
+  background: vars.color.accentMuted,
   borderRadius: '3px',
 });
 
 globalStyle('::-webkit-scrollbar-thumb:hover', {
-  background: 'rgba(124, 58, 237, 0.5)',
+  background: `color-mix(in srgb, ${vars.color.accent} 50%, transparent)`,
 });
+
+// Respect prefers-reduced-motion — disable animations/transitions for a11y.
+// Applied to html element so it cascades to all children.
+export const reducedMotion = style({
+  '@media': {
+    '(prefers-reduced-motion: reduce)': {
+      animationDuration: '0.001ms !important',
+      animationIterationCount: '1 !important',
+      transitionDuration: '0.001ms !important',
+    },
+  },
+});
+

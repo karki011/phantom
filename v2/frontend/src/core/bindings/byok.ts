@@ -1,7 +1,7 @@
 // Phantom — BYOK bindings (user-supplied Anthropic API key in Keychain)
 // Author: Subash Karki
 
-const App = () => (window as any).go?.['app']?.App;
+import { App } from './_app';
 
 export async function setAnthropicApiKey(key: string): Promise<{ ok: boolean; error?: string }> {
   try {

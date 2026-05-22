@@ -10,6 +10,7 @@ import { setPref, loadPref } from './preferences';
 import { clearWorktreeCache } from '../panes/signals';
 import { pushMru, initMru, pruneMru } from './worktree-mru';
 import type { Workspace, WorktreeStatus } from '../types';
+import { windowVisible } from './visibility';
 
 // Worktree data per project (keyed by project id)
 const [worktreeMap, setWorktreeMap] = createSignal<Record<string, Workspace[]>>({});
@@ -150,6 +151,7 @@ export async function bootstrapWorktrees(): Promise<void> {
   // event below covers the common case in real time.
   refreshAllWorktreeStatuses();
   setInterval(() => {
+    if (!windowVisible()) return;
     refreshAllWorktreeStatuses();
   }, 15_000);
 

@@ -21,7 +21,7 @@ interface MCPStatus {
   error?: string;
 }
 
-const App = () => (window as any).go?.['app']?.App;
+import { App } from '../../../core/bindings/_app';
 
 async function getMCPStatus(): Promise<MCPStatus> {
   try {

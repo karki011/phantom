@@ -1,6 +1,7 @@
 // Author: Subash Karki
 import { Show, createMemo } from 'solid-js'
 import type { ComposerState } from '@/core/composer/types'
+import { formatTokens, formatCostUsd } from '@/utils/format'
 import { chipBase, chipStatus } from './Chip.css'
 import { SessionLifecycleChip } from './SessionLifecycleChip'
 import { statusStrip } from './StatusChipStrip.css'
@@ -8,16 +9,6 @@ import { statusStrip } from './StatusChipStrip.css'
 interface StatusChipStripProps {
   state: ComposerState
   turnCount: number
-}
-
-function formatTokens(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return String(n)
-}
-
-function formatCost(usd: number): string {
-  if (usd < 0.01) return '<$0.01'
-  return `$${usd.toFixed(2)}`
 }
 
 export function StatusChipStrip(props: StatusChipStripProps) {
@@ -39,7 +30,7 @@ export function StatusChipStrip(props: StatusChipStripProps) {
       </Show>
       <Show when={s().totalCostUsd > 0}>
         <span class={`${chipBase} ${chipStatus.neutral}`}>
-          Cost: {formatCost(s().totalCostUsd)}
+          Cost: {formatCostUsd(s().totalCostUsd)}
         </span>
       </Show>
       <Show when={contextPct() > 0}>

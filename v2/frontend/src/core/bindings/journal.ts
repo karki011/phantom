@@ -3,8 +3,7 @@
 
 import type { JournalEntry, DailyStats, DailyJournalEntry } from '../types';
 import { normalize } from './_normalize';
-
-const App = () => (window as any).go?.['app']?.App;
+import { App } from './_app';
 
 // ── Legacy session-based journal ─────────────────────────────────────────────
 

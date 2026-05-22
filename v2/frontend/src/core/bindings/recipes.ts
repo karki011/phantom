@@ -2,8 +2,7 @@
 
 import type { EnrichedRecipe } from '../types';
 import { normalize } from './_normalize';
-
-const App = () => (window as any).go?.['app']?.App;
+import { App } from './_app';
 
 /**
  * Get all recipes (auto-detected + custom) for a project, with favorite status.

@@ -9,7 +9,7 @@ export interface SearchResult {
   matchEnd: number;
 }
 
-const App = () => (window as any).go?.['app']?.App;
+import { App } from './_app';
 
 /**
  * Search file contents within a workspace.

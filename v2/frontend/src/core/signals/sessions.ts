@@ -5,6 +5,7 @@ import { createSignal, createMemo } from 'solid-js';
 import type { Session } from '../types';
 import { getSessions, getSession, forkSession as forkSessionBinding } from '../bindings';
 import { onWailsEvent } from '../events';
+import { windowVisible } from './visibility';
 
 // ── Event payload types (Go backend sends these, NOT full Session objects) ──
 
@@ -72,6 +73,7 @@ export function bootstrapSessions(): void {
 
   // Poll every 15s as fallback when Wails event bridge is unavailable
   setInterval(() => {
+    if (!windowVisible()) return;
     getSessions().then((data) => setSessions(data));
   }, 15_000);
 

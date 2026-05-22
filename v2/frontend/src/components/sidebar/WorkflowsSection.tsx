@@ -8,6 +8,7 @@ import { activeWorktreeId } from '@/core/signals/app';
 import type { Workflow, WorkflowRun } from '@/core/types';
 import { dispatchWorkflow, rerunWorkflow, cancelWorkflowRun } from '@/core/bindings/git';
 import { openURL } from '@/core/bindings/shell';
+import { timeAgo } from '@/utils/format';
 import * as s from '@/styles/right-sidebar.css';
 import { iconSuccess, iconDanger, iconWarning, iconMuted } from '@/styles/utilities.css';
 
@@ -18,16 +19,6 @@ interface WorkflowsSectionProps {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function timeAgo(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diff = Math.floor((now - then) / 1000);
-  if (diff < 60) return 'just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
 
 function getStatusIcon(status: string, conclusion: string): JSX.Element {
   if (conclusion === 'success') return <CheckCircle size={13} class={iconSuccess} />;

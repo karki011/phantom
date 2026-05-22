@@ -10,6 +10,7 @@ import { activeWorktreeId } from '@/core/signals/app';
 import { getAIInsight } from '@/core/bindings';
 import type { AIInsightData, DecisionEntry } from '@/core/bindings';
 import { onWailsEvent } from '@/core/events';
+import { timeAgo } from '@/utils/format';
 import { vars } from '@/styles/theme.css';
 import * as styles from './AIInsightPanel.css';
 
@@ -39,18 +40,6 @@ const outcomeColor = (success: boolean | null): string => {
   if (success === true) return vars.color.success;
   if (success === false) return vars.color.danger;
   return vars.color.textDisabled;
-};
-
-const timeAgo = (iso: string): string => {
-  if (!iso) return '';
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diffMs / 60_000);
-  if (mins < 1) return 'now';
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d`;
 };
 
 const truncateGoal = (goal: string, max = 40): string => {

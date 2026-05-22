@@ -97,18 +97,35 @@ func (g *Generator) EnrichEndOfDay(ctx context.Context, recap string) (string, e
 	}
 
 	prompt := buildEnrichmentPrompt(recap)
-	// Escape single quotes for the shell command template (typical pattern:
-	// `claude --print -p '${PROMPT}'`).
-	escaped := strings.ReplaceAll(prompt, `'`, `'\''`)
-	cmdLine := g.prov.AIGenerateCommand(escaped)
-	if strings.TrimSpace(cmdLine) == "" {
-		return "", fmt.Errorf("journal: provider returned empty command")
-	}
 
 	enrichCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
-	c := exec.CommandContext(enrichCtx, "sh", "-c", cmdLine)
+	// Build the command without the prompt interpolated into the shell string.
+	// When the provider supports stdin transport, pass an empty prompt to get
+	// the base command and pipe the real prompt via stdin. For argv transport
+	// we split the fully-interpolated command into exec args — no shell needed.
+	var c *exec.Cmd
+	switch g.prov.PromptTransport() {
+	case provider.PromptStdin:
+		cmdLine := g.prov.AIGenerateCommand("")
+		if strings.TrimSpace(cmdLine) == "" {
+			return "", fmt.Errorf("journal: provider returned empty command")
+		}
+		args := strings.Fields(cmdLine)
+		c = exec.CommandContext(enrichCtx, args[0], args[1:]...)
+		c.Stdin = strings.NewReader(prompt)
+	default:
+		// argv transport: interpolate prompt into the command template and
+		// exec directly — never route through sh -c with user data.
+		cmdLine := g.prov.AIGenerateCommand(prompt)
+		if strings.TrimSpace(cmdLine) == "" {
+			return "", fmt.Errorf("journal: provider returned empty command")
+		}
+		args := strings.Fields(cmdLine)
+		c = exec.CommandContext(enrichCtx, args[0], args[1:]...)
+	}
+
 	out, err := c.Output()
 	if err != nil {
 		return "", fmt.Errorf("journal: enrichment exec: %w", err)
@@ -137,6 +154,8 @@ func buildEnrichmentPrompt(recap string) string {
 }
 
 // run executes a shell command with a 10s timeout. Returns empty string on error.
+// WARNING: cmd must contain only trusted, hardcoded command strings.
+// Never pass user-influenced data through this function.
 func run(cmd string, cwd string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

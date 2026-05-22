@@ -325,6 +325,16 @@ function handleCommandFinished(state: SessionState, rest: string): void {
   cur.endMarker = state.terminal?.registerMarker(0) ?? undefined;
 
   state.commands.push(cur);
+
+  const MAX_COMMANDS = 200;
+  while (state.commands.length > MAX_COMMANDS) {
+    const old = state.commands.shift()!;
+    old.promptStartMarker?.dispose();
+    old.commandStartMarker?.dispose();
+    old.executedMarker?.dispose();
+    old.endMarker?.dispose();
+  }
+
   state.current = null;
   emitFinished(state, cur);
 }

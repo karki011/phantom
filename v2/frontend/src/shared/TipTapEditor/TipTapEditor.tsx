@@ -177,11 +177,13 @@ export function TipTapEditor(props: TipTapEditorProps) {
 			style={props.fontSize ? { 'font-size': `${props.fontSize}px` } : undefined}
 		>
 			<Show when={props.toolbar !== false}>
-				<div class={styles.editorToolbar}>
+				<div class={styles.editorToolbar} role="toolbar" aria-label="Text formatting">
 					{/* Inline formatting */}
 					<button
 						class={btnClass(format().bold)}
 						title="Bold"
+						aria-label="Bold"
+						aria-pressed={format().bold}
 						onMouseDown={run(() => editor()?.chain().focus().toggleBold().run())}
 					>
 						<Bold size={15} />
@@ -189,6 +191,8 @@ export function TipTapEditor(props: TipTapEditorProps) {
 					<button
 						class={btnClass(format().italic)}
 						title="Italic"
+						aria-label="Italic"
+						aria-pressed={format().italic}
 						onMouseDown={run(() => editor()?.chain().focus().toggleItalic().run())}
 					>
 						<Italic size={15} />
@@ -196,6 +200,8 @@ export function TipTapEditor(props: TipTapEditorProps) {
 					<button
 						class={btnClass(format().strike)}
 						title="Strikethrough"
+						aria-label="Strikethrough"
+						aria-pressed={format().strike}
 						onMouseDown={run(() => editor()?.chain().focus().toggleStrike().run())}
 					>
 						<Strikethrough size={15} />
@@ -203,6 +209,8 @@ export function TipTapEditor(props: TipTapEditorProps) {
 					<button
 						class={btnClass(format().code)}
 						title="Inline Code"
+						aria-label="Code"
+						aria-pressed={format().code}
 						onMouseDown={run(() => editor()?.chain().focus().toggleCode().run())}
 					>
 						<Code size={15} />
@@ -214,6 +222,8 @@ export function TipTapEditor(props: TipTapEditorProps) {
 					<button
 						class={btnClass(format().heading1)}
 						title="Heading 1"
+						aria-label="Heading 1"
+						aria-pressed={format().heading1}
 						onMouseDown={run(() => editor()?.chain().focus().toggleHeading({ level: 1 }).run())}
 					>
 						<Heading1 size={15} />
@@ -221,6 +231,8 @@ export function TipTapEditor(props: TipTapEditorProps) {
 					<button
 						class={btnClass(format().heading2)}
 						title="Heading 2"
+						aria-label="Heading 2"
+						aria-pressed={format().heading2}
 						onMouseDown={run(() => editor()?.chain().focus().toggleHeading({ level: 2 }).run())}
 					>
 						<Heading2 size={15} />
@@ -228,6 +240,8 @@ export function TipTapEditor(props: TipTapEditorProps) {
 					<button
 						class={btnClass(format().heading3)}
 						title="Heading 3"
+						aria-label="Heading 3"
+						aria-pressed={format().heading3}
 						onMouseDown={run(() => editor()?.chain().focus().toggleHeading({ level: 3 }).run())}
 					>
 						<Heading3 size={15} />
@@ -239,6 +253,8 @@ export function TipTapEditor(props: TipTapEditorProps) {
 					<button
 						class={btnClass(format().bulletList)}
 						title="Bullet List"
+						aria-label="Bullet list"
+						aria-pressed={format().bulletList}
 						onMouseDown={run(() => editor()?.chain().focus().toggleBulletList().run())}
 					>
 						<List size={15} />
@@ -246,6 +262,8 @@ export function TipTapEditor(props: TipTapEditorProps) {
 					<button
 						class={btnClass(format().orderedList)}
 						title="Ordered List"
+						aria-label="Ordered list"
+						aria-pressed={format().orderedList}
 						onMouseDown={run(() => editor()?.chain().focus().toggleOrderedList().run())}
 					>
 						<ListOrdered size={15} />
@@ -253,6 +271,8 @@ export function TipTapEditor(props: TipTapEditorProps) {
 					<button
 						class={btnClass(format().taskList)}
 						title="Task List"
+						aria-label="Task list"
+						aria-pressed={format().taskList}
 						onMouseDown={run(() => editor()?.chain().focus().toggleTaskList().run())}
 					>
 						<CheckSquare size={15} />
@@ -264,6 +284,8 @@ export function TipTapEditor(props: TipTapEditorProps) {
 					<button
 						class={btnClass(format().blockquote)}
 						title="Blockquote"
+						aria-label="Blockquote"
+						aria-pressed={format().blockquote}
 						onMouseDown={run(() => editor()?.chain().focus().toggleBlockquote().run())}
 					>
 						<Quote size={15} />
@@ -271,6 +293,8 @@ export function TipTapEditor(props: TipTapEditorProps) {
 					<button
 						class={btnClass(format().codeBlock)}
 						title="Code Block"
+						aria-label="Code block"
+						aria-pressed={format().codeBlock}
 						onMouseDown={run(() => editor()?.chain().focus().toggleCodeBlock().run())}
 					>
 						<FileCode size={15} />
@@ -278,6 +302,7 @@ export function TipTapEditor(props: TipTapEditorProps) {
 					<button
 						class={styles.toolbarButton}
 						title="Horizontal Rule"
+						aria-label="Horizontal rule"
 						onMouseDown={run(() => editor()?.chain().focus().setHorizontalRule().run())}
 					>
 						<Minus size={15} />

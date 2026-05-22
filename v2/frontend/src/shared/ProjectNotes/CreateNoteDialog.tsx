@@ -6,18 +6,12 @@ import { PhantomModal, phantomModalStyles } from '@/shared/PhantomModal/PhantomM
 import { addNote } from '@/core/signals/notes';
 import { buttonRecipe } from '@/styles/recipes.css';
 import { vars } from '@/styles/theme.css';
+import { NOTE_TYPES } from '@/utils/note-types';
 
 interface CreateNoteDialogProps {
   open: () => boolean;
   onClose: () => void;
 }
-
-const NOTE_TYPES = [
-  { value: 'todo', label: 'Todo', color: '#f59e0b' },
-  { value: 'idea', label: 'Idea', color: '#3b82f6' },
-  { value: 'bug', label: 'Bug', color: '#ef4444' },
-  { value: 'note', label: 'Note', color: '#56CCFF' },
-] as const;
 
 type NoteType = (typeof NOTE_TYPES)[number]['value'];
 

@@ -2,8 +2,7 @@
 
 import type { Session, Task, ActivityLog, SessionState } from '../types';
 import { normalize } from './_normalize';
-
-const App = () => (window as any).go?.['app']?.App;
+import { App } from './_app';
 
 export async function getSessions(): Promise<Session[]> {
   try {

@@ -494,7 +494,7 @@ func GetCheckAnnotations(ctx context.Context, repoPath, branch, checkName string
 
 	apiPath := fmt.Sprintf("repos/%s/commits/%s/check-runs", ownerRepo, sha)
 	cmd := exec.CommandContext(ctx, ghBin(), "api", apiPath, "--jq",
-		fmt.Sprintf(".check_runs[] | select(.name == \"%s\") | .id", checkName))
+		fmt.Sprintf(`.check_runs[] | select(.name == "%s") | .id`, jqEscapeString(checkName)))
 	cmd.Dir = repoPath
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
@@ -639,6 +639,13 @@ func parseRunJobFromURL(checkURL string) (runID, jobID string) {
 		jobID = parts[2]
 	}
 	return
+}
+
+// jqEscapeString escapes special characters for safe interpolation into jq string literals.
+func jqEscapeString(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	return s
 }
 
 func parseOwnerRepo(remoteURL string) string {

@@ -697,7 +697,7 @@ export const dropdownItemActive = style({
 // === Inline Rendering ===
 
 export const markdownLink = style({
-  color: '#a855f7',
+  color: vars.color.accent,
   fontWeight: 600,
   textDecoration: 'none',
   cursor: 'pointer',
@@ -712,7 +712,7 @@ export const bracketSpan = style({
 });
 
 export const prHashSpan = style({
-  color: '#a855f7',
+  color: vars.color.accent,
   fontWeight: 600,
 });
 
