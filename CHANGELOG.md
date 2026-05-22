@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.57](https://github.com/karki011/phantom/compare/v0.1.56...v0.1.57) (2026-05-22)
+
+
+### Bug Fixes
+
+* v2 hardening + feat: markdown preview ([#149](https://github.com/karki011/phantom/issues/149)) ([84f2bdd](https://github.com/karki011/phantom/commit/84f2bdd67ca5d67c63d002593afdbf4c39f1484c))
+
 ## [0.1.56](https://github.com/karki011/phantom/compare/v0.1.55...v0.1.56) (2026-05-21)
 
 
