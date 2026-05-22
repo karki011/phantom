@@ -6,19 +6,8 @@ import { For, Show, createEffect, createMemo } from 'solid-js';
 import { RefreshCw, ChevronLeft, ChevronRight } from 'lucide-solid';
 import { PhantomDrawer } from '../PhantomDrawer/PhantomDrawer';
 import { digestOpen, closeDigest, digestData, digestLoading, loadDigest, costReport, digestDate, goToPrevDay, goToNextDay, goToToday, isToday } from '@/core/signals/digest';
+import { formatTokens, formatCostUsd } from '@/utils/format';
 import * as styles from './DigestDrawer.css';
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
-  return String(n);
-}
-
-function formatCost(cost: number): string {
-  if (cost === 0) return '$0.00';
-  if (cost < 0.01) return `$${cost.toFixed(4)}`;
-  return `$${cost.toFixed(2)}`;
-}
 
 function formatPct(rate: number): string {
   return `${Math.round(rate * 100)}%`;
@@ -69,7 +58,7 @@ function CostBreakdown() {
                     <div class={styles.costBarTrack}>
                       <div class={styles.costBarFill} style={{ width: `${pct}%` }} />
                     </div>
-                    <span class={styles.costBarValue}>{formatCost(cost)}</span>
+                    <span class={styles.costBarValue}>{formatCostUsd(cost)}</span>
                   </div>
                 );
               }}
@@ -190,7 +179,7 @@ export function DigestDrawer() {
                 </div>
 
                 <div class={styles.statRow}>
-                  <span class={styles.statValue}>{formatCost(data().estimatedCost)}</span>
+                  <span class={styles.statValue}>{formatCostUsd(data().estimatedCost)}</span>
                   <span class={styles.statLabel}>estimated cost</span>
                 </div>
 

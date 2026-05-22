@@ -1,8 +1,7 @@
 // Author: Subash Karki
 
 import type { HealthResponse } from '../types';
-
-const App = () => (window as any).go?.['app']?.App;
+import { App } from './_app';
 
 export async function healthCheck(): Promise<HealthResponse | null> {
   try {

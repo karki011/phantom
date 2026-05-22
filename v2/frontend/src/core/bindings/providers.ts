@@ -2,8 +2,7 @@
 // Author: Subash Karki
 
 import type { ProviderInfo, HealthStatus } from '../types/provider';
-
-const App = () => (window as any).go?.['app']?.App;
+import { App } from './_app';
 
 export async function getProviders(): Promise<ProviderInfo[]> {
   try {

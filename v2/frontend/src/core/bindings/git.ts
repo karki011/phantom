@@ -2,8 +2,7 @@
 
 import type { Workspace, RepoStatus, FileStatus, CommitInfo, FileEntry, PrStatus, CiRun, CheckAnnotation, RepoMergeConfig, MergeMethod } from '../types';
 import { normalize } from './_normalize';
-
-const App = () => (window as any).go?.['app']?.App;
+import { App } from './_app';
 
 export async function getProjectBranches(projectId: string): Promise<string[]> {
   try {

@@ -1,7 +1,7 @@
 // Phantom — Shell operation bindings (Finder, default app)
 // Author: Subash Karki
 
-const App = () => (window as any).go?.['app']?.App;
+import { App } from './_app';
 
 export async function revealInFinder(path: string): Promise<boolean> {
   try { await App()?.RevealInFinder(path); return true; } catch { return false; }

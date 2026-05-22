@@ -15,17 +15,9 @@ import {
   contextMenuItemDanger,
   contextMenuSeparator,
 } from '@/styles/sidebar.css';
+import { NOTE_COLORS } from '@/utils/note-types';
 import * as styles from './NoteCard.css';
 import type { ProjectNote } from '@/core/types';
-
-// ── Color map ───────────────────────────────────────────────────────────────
-
-const NOTE_COLORS: Record<string, string> = {
-  todo: '#f59e0b',
-  idea: '#3b82f6',
-  bug: '#ef4444',
-  note: '', // filled at render time with accent CSS var
-};
 
 // ── Markdown renderer ───────────────────────────────────────────────────────
 

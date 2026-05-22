@@ -6,6 +6,7 @@
 
 import { createSignal, onCleanup, For, Show } from 'solid-js';
 import { Check, X, Pin, Bot } from 'lucide-solid';
+import { formatTokens } from '@/utils/format';
 import * as styles from './ComposerAgentPanel.css';
 
 // ── Public types ────────────────────────────────────────────────────────
@@ -41,11 +42,6 @@ const formatElapsed = (startMs: number, endMs: number): string => {
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;
   return `${m}m ${s}s`;
-};
-
-const formatTokens = (n: number): string => {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return `${n}`;
 };
 
 const truncateResult = (text: string, max = 500): string =>

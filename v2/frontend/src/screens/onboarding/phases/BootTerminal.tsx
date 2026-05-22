@@ -10,7 +10,7 @@ import type { BootLine, LineStyle, BootScanData } from '../config/types';
 import { BootRings } from './BootRings';
 import { PhantomMark } from '../../../shared/PhantomMark/PhantomMark';
 
-const App = () => (window as any).go?.['app']?.App;
+import { App } from '../../../core/bindings/_app';
 
 interface BootTerminalProps {
   onBootComplete: (scan?: BootScanData) => void;

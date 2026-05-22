@@ -2,9 +2,7 @@
 // Author: Subash Karki
 
 import { normalize } from './_normalize';
-
-const App = () => (window as any).go?.['app']?.App;
-const V2 = () => (window as any).go?.['composer']?.Bindings;
+import { App, ComposerBindings as V2 } from './_app';
 
 export interface ComposerMention {
   path: string;

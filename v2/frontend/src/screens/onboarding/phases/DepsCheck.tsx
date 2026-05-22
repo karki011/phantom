@@ -18,7 +18,7 @@ import { InstallGuide } from './InstallGuide';
 import * as styles from '../styles/deps-check.css';
 import * as phaseStyles from '../styles/phases.css';
 
-const App = () => (window as any).go?.['app']?.App;
+import { App } from '../../../core/bindings/_app';
 
 interface DepsCheckProps {
   scan?: BootScanData;

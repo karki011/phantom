@@ -129,6 +129,12 @@ export const switchComposerWorkspace = (worktreeId: string): void => {
       stores: new Map(sessionStores),
       activeId: activeSessionId(),
     })
+
+    const MAX_CACHED = 5
+    if (sessionCache.size > MAX_CACHED) {
+      const oldest = sessionCache.keys().next().value
+      if (oldest && oldest !== worktreeId) sessionCache.delete(oldest)
+    }
   }
   previousComposerWorktreeId = worktreeId
 
@@ -137,6 +143,10 @@ export const switchComposerWorkspace = (worktreeId: string): void => {
 
   const cached = sessionCache.get(worktreeId)
   if (cached) {
+    // Refresh LRU recency by re-inserting
+    sessionCache.delete(worktreeId)
+    sessionCache.set(worktreeId, cached)
+
     // Restore the saved session stores into the live map
     for (const [id, tuple] of cached.stores) {
       sessionStores.set(id, tuple)

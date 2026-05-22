@@ -76,11 +76,8 @@ export const bootstrapJournal = async (): Promise<void> => {
   ]);
 };
 
-// Helper: format cost from microdollars
-export const formatCost = (micros: number | null): string => {
-  if (!micros) return '$0.00';
-  return `$${(micros / 1_000_000).toFixed(2)}`;
-};
+// Re-export from canonical format utils
+export { formatCostMicros as formatCost } from '../../utils/format';
 
 // Helper: normalize timestamp to seconds (handles both ms and s)
 const toSecs = (t: number): number => (t > 1e12 ? Math.floor(t / 1000) : t);

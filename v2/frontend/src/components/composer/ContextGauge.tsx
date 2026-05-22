@@ -2,17 +2,12 @@
 
 import { Show, createMemo, type Component } from 'solid-js';
 import type { ComposerState } from '@/core/composer/types';
+import { formatTokens } from '@/utils/format';
 import * as s from './ContextGauge.css';
 
 interface ContextGaugeProps {
   state: ComposerState;
 }
-
-const formatTokenCount = (n: number): string => {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return `${n}`;
-};
 
 const ContextGauge: Component<ContextGaugeProps> = (props) => {
   const pct = createMemo(() => props.state.contextUsedPct);
@@ -53,7 +48,7 @@ const ContextGauge: Component<ContextGaugeProps> = (props) => {
           aria-valuemin={0}
           aria-valuemax={100}
           aria-label={`Context window usage: ${pct().toFixed(0)}%`}
-          title={`Session: ${formatTokenCount(totalIn())} in / ${formatTokenCount(totalOut())} out · $${cost().toFixed(4)} · ${pct().toFixed(0)}% context`}
+          title={`Session: ${formatTokens(totalIn())} in / ${formatTokens(totalOut())} out · $${cost().toFixed(4)} · ${pct().toFixed(0)}% context`}
         >
           <div
             class={s.gaugeFill}
@@ -63,7 +58,7 @@ const ContextGauge: Component<ContextGaugeProps> = (props) => {
             }}
           />
           <span class={s.gaugeLabel}>
-            {formatTokenCount(totalIn())} in / {formatTokenCount(totalOut())} out · ${cost().toFixed(4)} · {pct().toFixed(0)}%
+            {formatTokens(totalIn())} in / {formatTokens(totalOut())} out · ${cost().toFixed(4)} · {pct().toFixed(0)}%
           </span>
         </div>
       </div>

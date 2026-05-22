@@ -2,23 +2,11 @@
 
 import { type Component, Show } from 'solid-js'
 import type { ComposerState } from '@/core/composer/types'
+import { formatTokens, formatCostUsd } from '@/utils/format'
 import * as css from './ComposerStatusStrip.css'
 
 interface ComposerStatusStripProps {
   state: ComposerState
-}
-
-const formatTokens = (n: number): string => {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
-  return String(n)
-}
-
-const formatCost = (usd: number): string => {
-  if (usd === 0) return ''
-  if (usd < 0.01) return `$${usd.toFixed(4)}`
-  if (usd < 1) return `$${usd.toFixed(3)}`
-  return `$${usd.toFixed(2)}`
 }
 
 const ComposerStatusStrip: Component<ComposerStatusStripProps> = (props) => {
@@ -64,7 +52,7 @@ const ComposerStatusStrip: Component<ComposerStatusStripProps> = (props) => {
       </Show>
       <Show when={props.state.totalCostUsd > 0}>
         <span class={css.separator}>·</span>
-        <span class={css.tokenCount}>{formatCost(props.state.totalCostUsd)}</span>
+        <span class={css.tokenCount}>{formatCostUsd(props.state.totalCostUsd)}</span>
       </Show>
       <Show when={contextPct() > 0}>
         <span class={css.separator}>·</span>

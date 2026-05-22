@@ -30,7 +30,7 @@ export const backdrop = style({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  background: 'rgba(0, 0, 0, 0.55)',
+  background: `color-mix(in srgb, ${vars.color.bgPrimary} 55%, transparent)`,
   backdropFilter: 'blur(6px)',
   WebkitBackdropFilter: 'blur(6px)',
   animation: `${backdropFadeIn} 100ms ease-out`,
@@ -86,7 +86,7 @@ export const rowGlyph = style({
   alignItems: 'center',
   justifyContent: 'center',
   background: vars.color.bgActive,
-  color: '#ffffff',
+  color: vars.color.textPrimary,
   fontWeight: 700,
   fontSize: '11px',
   fontFamily: vars.font.body,
@@ -98,7 +98,7 @@ export const rowBranch = style({
   fontFamily: vars.font.mono,
   fontSize: '13px',
   fontWeight: 600,
-  color: '#ffffff',
+  color: vars.color.textPrimary,
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
@@ -108,7 +108,7 @@ export const rowBranch = style({
 export const rowProject = style({
   fontFamily: vars.font.body,
   fontSize: '11px',
-  color: 'rgba(255, 255, 255, 0.5)',
+  color: vars.color.textSecondary,
   flexShrink: 0,
   whiteSpace: 'nowrap',
 });
@@ -124,7 +124,7 @@ export const footer = style({
   borderTop: `1px solid ${vars.color.divider}`,
   fontFamily: vars.font.mono,
   fontSize: '12px',
-  color: 'rgba(255, 255, 255, 0.45)',
+  color: vars.color.textDisabled,
   letterSpacing: '0.03em',
   userSelect: 'none',
 });
@@ -138,6 +138,6 @@ export const footerKbd = style({
   borderRadius: '4px',
   fontSize: '11px',
   fontFamily: vars.font.mono,
-  color: 'rgba(255, 255, 255, 0.6)',
+  color: vars.color.textSecondary,
   lineHeight: 1.5,
 });

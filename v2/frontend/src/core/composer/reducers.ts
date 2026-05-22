@@ -26,6 +26,13 @@ type SetState = (fn: (state: ComposerState) => void) => void
 let msgCounter = 0
 const nextMsgId = () => 'msg_' + ++msgCounter
 
+const MAX_MESSAGES = 500
+function trimMessages(messages: Message[]) {
+  if (messages.length > MAX_MESSAGES) {
+    messages.splice(0, messages.length - MAX_MESSAGES)
+  }
+}
+
 /** Reset counter — exposed for tests only. */
 export const resetMsgCounter = () => {
   msgCounter = 0
@@ -120,6 +127,7 @@ export const reduceAssistantDelta = (
         s.strategy = null
       }
       s.messages.push(msg)
+      trimMessages(s.messages)
       s.streaming = { msgId: id, blockIdx: 0 }
     })
   } else {
@@ -466,6 +474,7 @@ export const reduceAssistantMessage = (
         s.strategy = null
       }
       s.messages.push(newMsg)
+      trimMessages(s.messages)
       if (!isFinal) {
         s.streaming = { msgId: id, blockIdx: 0 }
       } else {
@@ -604,6 +613,7 @@ const handleStreamMessageStart = (setState: SetState, state: ComposerState) => {
       s.strategy = null
     }
     s.messages.push(msg)
+    trimMessages(s.messages)
     s.streaming = { msgId: id, blockIdx: 0 }
   })
 }
@@ -634,6 +644,7 @@ const handleStreamBlockStart = (
         s.strategy = null
       }
       s.messages.push(msg)
+      trimMessages(s.messages)
       s.streaming = { msgId: id, blockIdx: 0 }
     })
     // Re-find after creation — the state reference is stale but we need the
@@ -730,6 +741,7 @@ const handleStreamDelta = (
         s.strategy = null
       }
       s.messages.push(msg)
+      trimMessages(s.messages)
       s.streaming = { msgId: id, blockIdx: 0 }
     })
     return
@@ -1081,6 +1093,7 @@ export const reduceError = (
       timestamp: Date.now(),
     }
     s.messages.push(msg)
+    trimMessages(s.messages)
     s.streaming = null
   })
 }
@@ -1170,6 +1183,7 @@ export const reduceCompactBoundary = (
       timestamp: Date.now(),
     }
     s.messages.push(msg)
+    trimMessages(s.messages)
   })
 }
 

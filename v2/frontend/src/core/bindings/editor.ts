@@ -3,8 +3,7 @@
 
 import { showErrorToast } from '../../shared/Toast/Toast';
 import type { BlameLine } from '../types';
-
-const App = () => (window as any).go?.['app']?.App;
+import { App } from './_app';
 
 /**
  * Read file contents from a workspace.

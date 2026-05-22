@@ -4,6 +4,7 @@
 import { createSignal, createMemo, onMount, Show, For } from 'solid-js';
 import { getDailyStatsRange, getRecentSessions } from '@/core/bindings/journal';
 import { formatCost } from '@/core/signals/journal';
+import { formatTokens } from '@/utils/format';
 import { BarChart } from '@/shared/BarChart/BarChart';
 import * as styles from './AnalyticsPanel.css';
 
@@ -18,12 +19,6 @@ const PROVIDER_COLORS: Record<string, string> = {
 };
 
 const DAY_ABBREVS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-const formatTokens = (count: number): string => {
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(0)}K`;
-  return String(count);
-};
 
 const formatAvgDuration = (totalSecs: number, sessionCount: number): string => {
   if (sessionCount === 0 || totalSecs <= 0) return '0m';

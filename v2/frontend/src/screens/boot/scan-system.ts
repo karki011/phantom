@@ -34,7 +34,7 @@ interface BootScanData {
   agents?: AgentStatus[];
 }
 
-const App = () => (window as any).go?.['app']?.App;
+import { App } from '../../core/bindings/_app';
 
 /** Short display names for known agents — keeps the summary row compact. */
 const AGENT_SHORT_NAMES: Record<string, string> = {

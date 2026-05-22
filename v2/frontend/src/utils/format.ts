@@ -3,17 +3,28 @@
 
 /** Format token count: 48120 → "48.1K", 1200000 → "1.2M" */
 export function formatTokens(n: number | null): string {
-  if (n === null || n === undefined) return '0';
+  if (n == null) return '';
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
 }
 
-/** Format cost from microdollars: 820000 → "$0.82" */
-export function formatCost(micros: number | null): string {
-  if (micros === null || micros === undefined) return '$0.00';
-  return `$${(micros / 1_000_000).toFixed(2)}`;
+/** Format cost from USD amount: 0.82 → "$0.82", 0.005 → "$0.0050" */
+export function formatCostUsd(usd: number | null): string {
+  if (usd == null || usd === 0) return '$0.00';
+  if (usd < 0.01) return `$${usd.toFixed(4)}`;
+  if (usd < 1) return `$${usd.toFixed(3)}`;
+  return `$${usd.toFixed(2)}`;
 }
+
+/** Format cost from microdollars: 820000 → "$0.82" */
+export function formatCostMicros(micros: number | null): string {
+  if (micros == null) return '$0.00';
+  return formatCostUsd(micros / 1_000_000);
+}
+
+/** @deprecated Use formatCostMicros instead */
+export const formatCost = formatCostMicros;
 
 /** Format unix epoch (seconds or ms) → "HH:MM:SS" */
 export function formatTime(epoch: number | null): string {
@@ -26,18 +37,20 @@ export function formatTime(epoch: number | null): string {
   return `${hh}:${mm}:${ss}`;
 }
 
-/** Relative time for display: epoch → "2m ago" */
-export function relativeTime(epoch: number | null): string {
-  if (!epoch) return '';
-  const ts = epoch > 1e12 ? epoch : epoch * 1000;
-  const secs = Math.floor((Date.now() - ts) / 1000);
-  if (secs < 60) return `${secs}s ago`;
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+/** Relative time for display: epoch/ISO string → "2m ago" */
+export function timeAgo(input: number | string | null): string {
+  if (!input) return '';
+  const ms = typeof input === 'string'
+    ? new Date(input).getTime()
+    : (input > 1e12 ? input : input * 1000);
+  const secs = Math.floor((Date.now() - ms) / 1000);
+  if (secs < 60) return 'just now';
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+  return `${Math.floor(secs / 86400)}d ago`;
 }
+
+export const relativeTime = timeAgo;
 
 /** Known model substring → short display name */
 const MODEL_SHORT_NAMES: Record<string, string> = {

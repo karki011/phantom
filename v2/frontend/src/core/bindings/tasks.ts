@@ -1,8 +1,7 @@
 // Author: Subash Karki
 
 import { normalize } from './_normalize';
-
-const App = () => (window as any).go?.['app']?.App;
+import { App } from './_app';
 
 export interface TaskItem {
   id: string;

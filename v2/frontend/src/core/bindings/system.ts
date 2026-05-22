@@ -1,7 +1,7 @@
 // Phantom — system-level Wails bindings (factory reset, etc.)
 // Author: Subash Karki
 
-const App = () => (window as any).go?.['app']?.App;
+import { App } from './_app';
 
 export async function factoryResetLocalData(confirmation: string): Promise<string> {
   try {

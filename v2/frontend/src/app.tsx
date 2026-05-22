@@ -1,12 +1,13 @@
 // Phantom — App shell (Wave 1: Worktree Workspace layout)
 // Author: Subash Karki
 
-import { createSignal, createEffect, onMount, onCleanup, Show, untrack } from 'solid-js';
+import { createSignal, createEffect, onMount, onCleanup, Show, untrack, ErrorBoundary } from 'solid-js';
 
 window.addEventListener('error', (e) => {
   if (e.message?.includes('ResizeObserver')) e.stopImmediatePropagation();
 });
 import { shadowMonarchDarkTheme } from './styles/theme.css';
+import { reducedMotion } from './styles/reset.css';
 import * as styles from './styles/app.css';
 import * as shellStyles from './styles/app-shell.css';
 import { isFullscreen, initFullscreenDetection, stopFullscreenDetection } from './core/signals/fullscreen';
@@ -58,6 +59,8 @@ import ComposerDrawer from './components/composer/ComposerDrawer';
 import ComposerStatusPill from './components/composer/ComposerStatusPill';
 import { DigestDrawer } from './shared/DigestDrawer/DigestDrawer';
 import { PerfOverlay } from './components/PerfOverlay/PerfOverlay';
+import { vars } from './styles/theme.css';
+import { setWindowVisible, windowVisible } from './core/signals/visibility';
 import { bootstrapProjectNotes } from './core/signals/notes';
 
 export function App() {
@@ -78,6 +81,8 @@ export function App() {
 
   onMount(async () => {
     document.body.classList.add(shadowMonarchDarkTheme);
+    // Apply reduced-motion class for a11y (prefers-reduced-motion media query)
+    document.documentElement.classList.add(reducedMotion);
 
     await waitForWails();
 
@@ -145,12 +150,14 @@ export function App() {
     // Notify Go backend of window focus/blur so background pollers can throttle.
     // Use both window focus/blur (covers app-level) and visibilitychange (covers
     // WebView tab/minimize) for robustness in Wails WebKit.
-    const handleFocus = () => window.go?.app?.App?.OnWindowFocused();
-    const handleBlur = () => window.go?.app?.App?.OnWindowBlurred();
+    const handleFocus = () => { setWindowVisible(true); window.go?.app?.App?.OnWindowFocused(); };
+    const handleBlur = () => { setWindowVisible(false); window.go?.app?.App?.OnWindowBlurred(); };
     const handleVisChange = () => {
       if (document.hidden) {
+        setWindowVisible(false);
         window.go?.app?.App?.OnWindowBlurred();
       } else {
+        setWindowVisible(true);
         window.go?.app?.App?.OnWindowFocused();
       }
     };
@@ -196,6 +203,14 @@ export function App() {
     }
   });
 
+  // Immediately refresh stale data when app becomes visible again
+  createEffect(() => {
+    if (windowVisible()) {
+      import('@/core/bindings').then(m => m.getSessions?.());
+      import('@/core/signals/worktrees').then(m => m.refreshAllWorktreeStatuses?.());
+      import('@/core/bindings/terminal').then(m => m.listTerminals?.());
+    }
+  });
 
   async function handleShutdown() {
     if (shuttingDown()) return;
@@ -304,29 +319,44 @@ export function App() {
       </Show>
 
       <Show when={ready() && !showOnboarding() && bootCeremonyDone()}>
-        <WindowDragStrip />
+        <ErrorBoundary fallback={(err, reset) => {
+          console.error('[ErrorBoundary:App]', err);
+          return (
+            <div style={{ display: 'flex', 'flex-direction': 'column', 'align-items': 'center', 'justify-content': 'center', height: '100%', gap: vars.space.md, color: vars.color.textPrimary }}>
+              <div style={{ 'font-family': vars.font.display, 'font-size': vars.fontSize.lg }}>Something went wrong</div>
+              <div style={{ 'font-family': vars.font.mono, 'font-size': vars.fontSize.xs, color: vars.color.textSecondary, 'max-width': '500px', 'text-align': 'center', overflow: 'hidden', 'text-overflow': 'ellipsis' }}>
+                {String(err)}
+              </div>
+              <button style={{ padding: `${vars.space.sm} ${vars.space.md}`, 'border-radius': vars.radius.md, background: vars.color.accent, color: vars.color.textInverse, border: 'none', cursor: 'pointer', 'font-family': vars.font.body }} onClick={() => reset()}>
+                Try Again
+              </button>
+            </div>
+          );
+        }}>
+          <WindowDragStrip />
 
-        <div class={shellStyles.mainContent}>
-          <Show when={activeTopTab() === 'system'}>
-            <SystemCockpit />
-          </Show>
+          <div class={shellStyles.mainContent}>
+            <Show when={activeTopTab() === 'system'}>
+              <SystemCockpit />
+            </Show>
 
-          <Show when={activeTopTab() === 'worktree'}>
-            <div class={shellStyles.threeColumnLayout}>
-              <WorktreeSidebar />
+            <Show when={activeTopTab() === 'worktree'}>
+              <div class={shellStyles.threeColumnLayout}>
+                <WorktreeSidebar />
 
-              <div class={shellStyles.centerWorkspace}>
-                <Show when={activeWorktreeId()} fallback={<WelcomePage />}>
-                  <Workspace />
+                <div class={shellStyles.centerWorkspace}>
+                  <Show when={activeWorktreeId()} fallback={<WelcomePage />}>
+                    <Workspace />
+                  </Show>
+                </div>
+
+                <Show when={activeWorktreeId()}>
+                  <RightSidebar />
                 </Show>
               </div>
-
-              <Show when={activeWorktreeId()}>
-                <RightSidebar />
-              </Show>
-            </div>
-          </Show>
-        </div>
+            </Show>
+          </div>
+        </ErrorBoundary>
       </Show>
 
       <DigestDrawer />

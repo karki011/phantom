@@ -1,6 +1,6 @@
 // Author: Subash Karki
 
-const App = () => (window as any).go?.['app']?.App;
+import { App } from './_app';
 
 export interface PerfSnapshot {
   count: number;

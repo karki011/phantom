@@ -397,3 +397,45 @@ export const wrapToggleBtn = style({
     },
   },
 });
+
+// ── Markdown preview toggle ──────────────────────────────────────────────────
+
+export const previewToggleGroup = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  marginLeft: 'auto',
+  marginRight: vars.space.sm,
+  height: 24,
+  borderRadius: vars.radius.md,
+  border: `1px solid ${vars.color.border}`,
+  overflow: 'hidden',
+});
+
+export const previewToggleBtn = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  height: '100%',
+  padding: `0 ${vars.space.sm}`,
+  border: 'none',
+  background: 'transparent',
+  color: vars.color.textSecondary,
+  fontFamily: vars.font.mono,
+  fontSize: '11px',
+  fontWeight: 500,
+  cursor: 'pointer',
+  transition: `color ${vars.animation.fast} ease, background ${vars.animation.fast} ease`,
+  ':hover': {
+    color: vars.color.textPrimary,
+    background: vars.color.bgHover,
+  },
+  selectors: {
+    '&[data-active="true"]': {
+      color: vars.color.accent,
+      background: `color-mix(in srgb, ${vars.color.accentMuted} 40%, transparent)`,
+    },
+    '& + &': {
+      borderLeft: `1px solid ${vars.color.border}`,
+    },
+  },
+});
