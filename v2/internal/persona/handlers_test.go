@@ -90,6 +90,43 @@ func TestGitHandler_RecentChanges_NoGit(t *testing.T) {
 	}
 }
 
+func TestAIHandler_EmptyQuery(t *testing.T) {
+	h := NewAIHandler(newNilEngine(), "false") // "false" binary exits immediately
+	intent := Intent{
+		Lane:    LaneLocalReasoning,
+		Handler: "ai",
+		Method:  "reason",
+		Args:    map[string]string{"query": ""},
+		Raw:     "",
+	}
+	resp := h.Handle(context.Background(), intent, "")
+	if resp.Text == "" {
+		t.Fatal("expected non-empty response for empty AI query")
+	}
+	if !containsAny(resp.Text, "rephrase") {
+		t.Errorf("expected rephrase prompt for empty query, got: %q", resp.Text)
+	}
+}
+
+func TestAIHandler_GracefulDegradation(t *testing.T) {
+	// Use a non-existent binary to test graceful degradation.
+	h := NewAIHandler(newNilEngine(), "/nonexistent/claude-binary-that-does-not-exist")
+	intent := Intent{
+		Lane:    LaneLocalReasoning,
+		Handler: "ai",
+		Method:  "reason",
+		Args:    map[string]string{"query": "what is go"},
+		Raw:     "what is go",
+	}
+	resp := h.Handle(context.Background(), intent, "/tmp")
+	if resp.Text == "" {
+		t.Fatal("expected non-empty response on claude binary failure")
+	}
+	if !containsAny(resp.Text, "couldn't reach", "AI backend") {
+		t.Errorf("expected graceful degradation message, got: %q", resp.Text)
+	}
+}
+
 func TestSearchHandler_EmptyQuery(t *testing.T) {
 	h := NewSearchHandler(newNilEngine())
 	intent := Intent{

@@ -58,6 +58,9 @@ func TestRouter_WhyDidBuildFail(t *testing.T) {
 	if intent.Lane != LaneLocalReasoning {
 		t.Fatalf("expected local_reasoning lane, got %s", intent.Lane)
 	}
+	if intent.Handler != "ai" {
+		t.Fatalf("expected ai handler, got %s", intent.Handler)
+	}
 }
 
 func TestRouter_SearchQuery(t *testing.T) {
@@ -68,11 +71,25 @@ func TestRouter_SearchQuery(t *testing.T) {
 	}
 }
 
-func TestRouter_UnknownFallsToReasoning(t *testing.T) {
+func TestRouter_UnknownFallsToAI(t *testing.T) {
 	r := NewRouter()
 	intent := r.Classify("explain the trade-offs of microservices vs monolith")
 	if intent.Lane != LaneLocalReasoning {
 		t.Fatalf("expected local_reasoning for unknown input, got %s", intent.Lane)
+	}
+	if intent.Handler != "ai" {
+		t.Fatalf("expected ai handler for unknown input, got %s", intent.Handler)
+	}
+}
+
+func TestRouter_FallbackToAI(t *testing.T) {
+	r := NewRouter()
+	intent := r.Classify("random gibberish xyzzy")
+	if intent.Handler != "ai" {
+		t.Fatalf("expected ai fallback handler, got %s", intent.Handler)
+	}
+	if intent.Args["query"] != "random gibberish xyzzy" {
+		t.Fatalf("expected raw query in args, got %q", intent.Args["query"])
 	}
 }
 

@@ -102,14 +102,19 @@ func TestPersona_Ask_TrustAllowed(t *testing.T) {
 	}
 }
 
-func TestPersona_Ask_LLMFallback(t *testing.T) {
+func TestPersona_Ask_AIFallback(t *testing.T) {
 	p := NewPersona(PersonaDeps{})
 	ctx := context.Background()
 
-	// "explain the code" routes to handler "llm" which returns a helpful fallback.
+	// "explain the code" routes to the "ai" handler. Without a working claude
+	// binary in CI, it returns a graceful degradation message.
 	resp := p.Ask(ctx, "explain the code")
-	if !strings.Contains(resp.Text, "local LLM") {
-		t.Errorf("expected LLM fallback response, got %q", resp.Text)
+	if resp.Text == "" {
+		t.Error("expected non-empty response from AI fallback")
+	}
+	// It should not say "I don't have a handler" — the ai handler is registered.
+	if strings.Contains(resp.Text, "I don't have a handler") {
+		t.Errorf("expected ai handler to be registered, got: %q", resp.Text)
 	}
 }
 

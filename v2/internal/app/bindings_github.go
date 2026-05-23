@@ -44,6 +44,11 @@ func (a *App) WatchWorktree(worktreeId string) {
 	if newPath != "" && a.gitWarmCache != nil {
 		a.gitWarmCache.Warm(a.ctx, newPath)
 	}
+
+	// Keep Persona in sync with the active project path.
+	if a.Persona != nil {
+		a.Persona.SetProjectPath(newPath)
+	}
 }
 
 // SetActiveWorktree is the explicit project-switch entry point. It updates
@@ -55,6 +60,10 @@ func (a *App) SetActiveWorktree(worktreeId string) *git.WarmSnapshot {
 		if a.gitWatcher != nil {
 			a.gitWatcher.SetActiveProjects(nil)
 		}
+		// Clear Persona project path when no worktree is active.
+		if a.Persona != nil {
+			a.Persona.SetProjectPath("")
+		}
 		return nil
 	}
 	repoPath, err := a.resolveWorkspacePath(worktreeId)
@@ -64,6 +73,10 @@ func (a *App) SetActiveWorktree(worktreeId string) *git.WarmSnapshot {
 	}
 	if a.gitWatcher != nil {
 		a.gitWatcher.SetActiveProject(repoPath)
+	}
+	// Keep Persona in sync with the active project path.
+	if a.Persona != nil {
+		a.Persona.SetProjectPath(repoPath)
 	}
 	if a.gitWarmCache == nil {
 		return nil

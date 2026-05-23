@@ -18,6 +18,21 @@ func (a *App) PersonaAsk(input string) map[string]interface{} {
 			"quickActions": []interface{}{},
 		}
 	}
+
+	// Ensure the active project path is set before each ask. If the path is
+	// empty (e.g. SetActiveWorktree was never called), try resolving it from
+	// the currently watched worktree so git queries don't return empty results.
+	if state := a.Persona.GetState(); state.ActiveProject == "" {
+		a.watchedMu.RLock()
+		wID := a.watchedWorktree
+		a.watchedMu.RUnlock()
+		if wID != "" {
+			if p, err := a.resolveWorkspacePath(wID); err == nil && p != "" {
+				a.Persona.SetProjectPath(p)
+			}
+		}
+	}
+
 	resp := a.Persona.Ask(a.ctx, input)
 	qa := make([]interface{}, 0, len(resp.QuickActions))
 	for _, action := range resp.QuickActions {

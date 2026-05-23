@@ -45,12 +45,19 @@ func NewPersona(deps PersonaDeps) *Persona {
 	router := NewRouter()
 	trust := NewTrustManager(deps.PrefGetter, deps.PrefSetter)
 
+	// Resolve the Claude CLI binary path for the AI handler.
+	claudeBin := "claude"
+	if resolved, err := composer.ResolveClaudeBin(); err == nil {
+		claudeBin = resolved
+	}
+
 	handlers := map[string]Handler{
 		"status":    NewStatusHandler(engine),
 		"git":       NewGitHandler(engine),
 		"search":    NewSearchHandler(engine),
 		"workspace": NewWorkspaceHandler(engine),
-		"llm":       NewLLMHandler(),
+		"ai":        NewAIHandler(engine, claudeBin),
+		"llm":       NewLLMHandler(), // kept for backward compatibility
 	}
 
 	emit := deps.EmitFn

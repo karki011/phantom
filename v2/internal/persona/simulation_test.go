@@ -288,41 +288,50 @@ func TestSim_QueryRouting_SwitchProject_TrustBlocked(t *testing.T) {
 	simContains(t, resp, "trust tier")
 }
 
-func TestSim_QueryRouting_WhyBuildFail_LLMFallback(t *testing.T) {
+func TestSim_QueryRouting_WhyBuildFail_AIHandler(t *testing.T) {
 	p, _, _ := simPersona(nil)
 	ctx := context.Background()
 
 	resp := p.Ask(ctx, "why did the build fail")
 	simNotContains(t, resp, "I don't have a handler")
-	simContains(t, resp, "llm")
+	// AI handler is registered; without a working claude binary it degrades gracefully.
+	if resp.Text == "" {
+		t.Error("expected non-empty response from AI handler")
+	}
 }
 
-func TestSim_QueryRouting_ExplainError_LLMFallback(t *testing.T) {
+func TestSim_QueryRouting_ExplainError_AIHandler(t *testing.T) {
 	p, _, _ := simPersona(nil)
 	ctx := context.Background()
 
 	resp := p.Ask(ctx, "explain this error")
 	simNotContains(t, resp, "I don't have a handler")
-	simContains(t, resp, "llm")
+	if resp.Text == "" {
+		t.Error("expected non-empty response from AI handler")
+	}
 }
 
-func TestSim_QueryRouting_Summarize_LLMFallback(t *testing.T) {
+func TestSim_QueryRouting_Summarize_AIHandler(t *testing.T) {
 	p, _, _ := simPersona(nil)
 	ctx := context.Background()
 
 	resp := p.Ask(ctx, "summarize the changes")
 	simNotContains(t, resp, "I don't have a handler")
-	simContains(t, resp, "llm")
+	if resp.Text == "" {
+		t.Error("expected non-empty response from AI handler")
+	}
 }
 
-func TestSim_QueryRouting_Gibberish_LLMFallback(t *testing.T) {
+func TestSim_QueryRouting_Gibberish_AIHandler(t *testing.T) {
 	p, _, _ := simPersona(nil)
 	ctx := context.Background()
 
 	resp := p.Ask(ctx, "random gibberish xyzzy")
 	simNotContains(t, resp, "I don't have a handler")
-	// LLM handler returns text mentioning "local LLM" or suggestions
-	simContains(t, resp, "llm")
+	// AI handler returns a response (either from Claude or graceful degradation).
+	if resp.Text == "" {
+		t.Error("expected non-empty response from AI handler")
+	}
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

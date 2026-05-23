@@ -37,8 +37,8 @@ func NewRouter() *Router {
 		{pattern: regexp.MustCompile(`(?i)pause\s+claude`), lane: LaneClaudeTask, handler: "claude", method: "pause"},
 		{pattern: regexp.MustCompile(`(?i)stop\s+claude`), lane: LaneClaudeTask, handler: "claude", method: "stop"},
 		{pattern: regexp.MustCompile(`(?i)resume\s+claude`), lane: LaneClaudeTask, handler: "claude", method: "resume"},
-		{pattern: regexp.MustCompile(`(?i)why\s+did\s+.*\s*fail`), lane: LaneLocalReasoning, handler: "llm", method: "analyzeFailure"},
-		{pattern: regexp.MustCompile(`(?i)(?:explain|summarize|describe)\s+.+`), lane: LaneLocalReasoning, handler: "llm", method: "reason"},
+		{pattern: regexp.MustCompile(`(?i)why\s+did\s+.*\s*fail`), lane: LaneLocalReasoning, handler: "ai", method: "analyzeFailure"},
+		{pattern: regexp.MustCompile(`(?i)(?:explain|summarize|describe)\s+.+`), lane: LaneLocalReasoning, handler: "ai", method: "reason"},
 	}
 	return r
 }
@@ -66,7 +66,7 @@ func (r *Router) Classify(input string) Intent {
 	}
 	return Intent{
 		Lane:    LaneLocalReasoning,
-		Handler: "llm",
+		Handler: "ai",
 		Method:  "reason",
 		Args:    map[string]string{"query": trimmed},
 		Raw:     trimmed,
