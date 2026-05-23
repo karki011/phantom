@@ -24,7 +24,9 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/composer"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
 	"github.com/subashkarki/phantom-os-v2/internal/journal"
+	"github.com/subashkarki/phantom-os-v2/internal/git"
 	"github.com/subashkarki/phantom-os-v2/internal/linker"
+	"github.com/subashkarki/phantom-os-v2/internal/persona"
 	"github.com/subashkarki/phantom-os-v2/internal/provider"
 	"github.com/subashkarki/phantom-os-v2/internal/provider/claude"
 	"github.com/subashkarki/phantom-os-v2/internal/provider/codex"
@@ -248,6 +250,26 @@ func main() {
 	sessionCtrl := session.NewController(database.Writer, streamStore, emitFn)
 	a.SetSessionCtrl(sessionCtrl)
 
+	// 10. Create Persona service — bridges context engine, trust, and routing.
+	personaSvc := persona.NewPersona(persona.PersonaDeps{
+		ContextDeps: persona.ContextDeps{
+			DB:           database,
+			Terminal:     term,
+			CollectorReg: registry,
+			// FileIndexers populated lazily inside App.Startup → initFileGraph;
+			// nil is safe — ContextEngine.GraphSummary handles it gracefully.
+			FileIndexers: nil,
+			GitStatusFn:  git.GetRepoStatus,
+			GitLogFn: func(ctx context.Context, path string, limit int) ([]git.CommitInfo, error) {
+				return git.Log(ctx, path, limit, 0)
+			},
+		},
+		PrefGetter: &dbPrefGetter{q: queries},
+		PrefSetter: &dbPrefSetter{q: queries},
+		EmitFn:     emitFn,
+	})
+	a.SetPersona(personaSvc)
+
 	// 11. Run Wails. OnStartup / OnShutdown delegate to App methods which
 	//    also start/stop the registry and close the DB in correct order.
 	err = wails.Run(&options.App{
@@ -307,4 +329,26 @@ func selectActiveProvider(reg *provider.Registry, queries *db.Queries) (provider
 	}
 
 	return nil, errors.New("no providers available")
+}
+
+// dbPrefGetter adapts db.Queries to persona.PrefGetter.
+type dbPrefGetter struct{ q *db.Queries }
+
+func (g *dbPrefGetter) GetPreference(key string) string {
+	val, err := g.q.GetPreference(context.Background(), key)
+	if err != nil {
+		return ""
+	}
+	return val
+}
+
+// dbPrefSetter adapts db.Queries to persona.PrefSetter.
+type dbPrefSetter struct{ q *db.Queries }
+
+func (s *dbPrefSetter) SetPreference(key, value string) error {
+	return s.q.SetPreference(context.Background(), db.SetPreferenceParams{
+		Key:       key,
+		Value:     value,
+		UpdatedAt: time.Now().Unix(),
+	})
 }
