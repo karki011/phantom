@@ -3,6 +3,8 @@
 
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { PersonaPill } from '@/components/persona/PersonaPill';
+import { initPersonaSignals, setupDoubleTapMeta } from '@/core/persona/signals';
 import { Pin } from 'lucide-solid';
 import { APP_NAME } from '@/core/branding';
 import {
@@ -126,6 +128,8 @@ function ServerLogPinButton(props: {
 export function WindowDragStrip() {
   onMount(() => {
     startSystemStatsPoll();
+    initPersonaSignals();
+    setupDoubleTapMeta();
   });
   onCleanup(() => {
     stopSystemStatsPoll();
@@ -217,6 +221,9 @@ export function WindowDragStrip() {
           </span>
         </Show>
       </div>
+
+      <PersonaPill />
+      {/* <PersonaDropdown /> */}
 
       <div class={shellStyles.windowDragStripRight}>
         <div class={shellStyles.headerActions}>
