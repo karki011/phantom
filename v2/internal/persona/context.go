@@ -19,7 +19,10 @@ type ContextDeps struct {
 	DB           *db.DB
 	Terminal     *terminal.Manager
 	CollectorReg *collector.Registry
-	FileIndexers map[string]*filegraph.Indexer
+	// FileIndexers is a lazy getter that returns the live indexer map.
+	// Using a func allows Persona (created before Startup) to read
+	// indexers that are initialized later inside App.Startup → initFileGraph.
+	FileIndexers func() map[string]*filegraph.Indexer
 	GitStatusFn  func(ctx context.Context, path string) (*git.RepoStatus, error)
 	GitLogFn     func(ctx context.Context, path string, limit int) ([]git.CommitInfo, error)
 }
@@ -61,6 +64,7 @@ func (e *ContextEngine) ClaudeSessions(ctx context.Context, projectFilter string
 			SessionID:   s.ID,
 			ProjectPath: cwd,
 			LiveState:   s.Status.String,
+			LastTool:    s.ToolSummary.String,
 			StartedAt:   startedAt,
 		})
 	}
@@ -122,7 +126,8 @@ func (e *ContextEngine) GraphSummary(projectCwd string) GraphSummary {
 	if e == nil || projectCwd == "" || e.deps.FileIndexers == nil {
 		return GraphSummary{}
 	}
-	for _, ix := range e.deps.FileIndexers {
+	indexers := e.deps.FileIndexers()
+	for _, ix := range indexers {
 		if ix == nil {
 			continue
 		}

@@ -256,9 +256,9 @@ func main() {
 			DB:           database,
 			Terminal:     term,
 			CollectorReg: registry,
-			// FileIndexers populated lazily inside App.Startup → initFileGraph;
-			// nil is safe — ContextEngine.GraphSummary handles it gracefully.
-			FileIndexers: nil,
+			// FileIndexers is a lazy getter — reads the live map from App
+			// which is populated inside App.Startup → initFileGraph.
+			FileIndexers: a.GetFileIndexers,
 			GitStatusFn:  git.GetRepoStatus,
 			GitLogFn: func(ctx context.Context, path string, limit int) ([]git.CommitInfo, error) {
 				return git.Log(ctx, path, limit, 0)

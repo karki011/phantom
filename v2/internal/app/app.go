@@ -195,6 +195,14 @@ func (a *App) SetJournal(j journalAppender) { a.journal = j }
 // Ctx returns the app-level context (valid after Startup is called).
 func (a *App) Ctx() context.Context { return a.ctx }
 
+// GetFileIndexers returns a snapshot of the live file indexer map.
+// Safe to call before Startup (returns nil map) and concurrently.
+func (a *App) GetFileIndexers() map[string]*filegraph.Indexer {
+	a.fileIndexersMu.RLock()
+	defer a.fileIndexersMu.RUnlock()
+	return a.fileIndexers
+}
+
 type HealthResponse struct {
 	Status     string  `json:"status"`
 	Version    string  `json:"version"`
