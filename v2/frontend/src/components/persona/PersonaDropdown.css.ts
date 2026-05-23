@@ -201,6 +201,54 @@ export const thinkingDot = style({
   },
 });
 
+const micPulse = keyframes({
+  '0%, 100%': { boxShadow: `0 0 0 0 ${vars.color.success}` },
+  '50%': { boxShadow: `0 0 0 4px transparent` },
+});
+
+const micButtonBase = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '28px',
+  height: '28px',
+  padding: 0,
+  background: vars.color.bgTertiary,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: vars.radius.md,
+  color: vars.color.textSecondary,
+  cursor: 'pointer',
+  flexShrink: 0,
+  transition: `background ${vars.animation.fast}, border-color ${vars.animation.fast}, color ${vars.animation.fast}`,
+  selectors: {
+    '&:hover': {
+      background: vars.color.bgHover,
+      borderColor: vars.color.accent,
+      color: vars.color.textPrimary,
+    },
+    '&:disabled': {
+      opacity: 0.4,
+      cursor: 'not-allowed',
+    },
+  },
+});
+
+export const micButton = micButtonBase;
+
+export const micButtonActive = style([micButtonBase, {
+  background: vars.color.success,
+  borderColor: vars.color.success,
+  color: vars.color.textInverse,
+  animation: `${micPulse} 1.4s ease-in-out infinite`,
+  selectors: {
+    '&:hover': {
+      background: vars.color.success,
+      borderColor: vars.color.success,
+      color: vars.color.textInverse,
+    },
+  },
+}]);
+
 export const sendButton = style({
   padding: `${vars.space.xs} ${vars.space.sm}`,
   background: vars.color.accent,

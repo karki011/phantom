@@ -2,6 +2,8 @@
 package app
 
 import (
+	"os/exec"
+
 	"github.com/subashkarki/phantom-os-v2/internal/persona"
 )
 
@@ -113,4 +115,46 @@ func (a *App) PersonaGetTrust(projectID string) int {
 		return 0
 	}
 	return int(a.Persona.GetTrust(projectID))
+}
+
+// PersonaSpeak uses macOS `say` command as a TTS fallback when Web Speech
+// API is unavailable in the WebView. Runs async (Start, not Run) so the
+// frontend doesn't block waiting for speech to finish.
+func (a *App) PersonaSpeak(text string) error {
+	if text == "" {
+		return nil
+	}
+	return exec.Command("say", "-v", "Samantha", "-r", "200", text).Start()
+}
+
+// PersonaSetPillState allows the frontend to drive pill state transitions
+// during voice input/output. Maps string → PillState and emits via Persona.
+func (a *App) PersonaSetPillState(state string) {
+	if a.Persona == nil {
+		return
+	}
+	var pill persona.PillState
+	switch state {
+	case "listening":
+		pill = persona.PillListening
+	case "speaking":
+		pill = persona.PillSpeaking
+	case "observing":
+		pill = persona.PillObserving
+	case "attention":
+		pill = persona.PillAttention
+	default:
+		pill = persona.PillIdle
+	}
+	// Use exported method to set state; status text is derived from state.
+	statusMap := map[persona.PillState]string{
+		persona.PillListening: "Listening...",
+		persona.PillSpeaking:  "Speaking...",
+		persona.PillObserving: "Observing",
+		persona.PillAttention: "Attention",
+		persona.PillIdle:      "Ready",
+	}
+	status := statusMap[pill]
+	// Access the exported SetPillState via a helper on Persona.
+	a.Persona.SetPillStateExternal(pill, status)
 }

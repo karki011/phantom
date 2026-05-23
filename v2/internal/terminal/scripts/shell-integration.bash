@@ -164,6 +164,15 @@ elif [[ "$__phantom_dbg_trap" != '__phantom_preexec "$_"' && "$__phantom_dbg_tra
 	trap '__phantom_preexec_all "$_"' DEBUG
 fi
 
+# ─── Claude command intercept ────────────────────────────────────────────────
+# When the user types `claude ...` in a Phantom terminal, this function sends
+# an OSC 633;Claude;<args> notification so Phantom can track the session, then
+# runs the real claude binary transparently.
+claude() {
+	builtin printf '\e]633;Claude;%s\a' "$*"
+	command claude "$@"
+}
+
 __phantom_update_prompt
 
 __phantom_restore_exit_code() { return "$1"; }

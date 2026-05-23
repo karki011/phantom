@@ -108,5 +108,14 @@ __phantom_preexec() {
 	__phantom_command_output_start
 }
 
+# ─── Claude command intercept ────────────────────────────────────────────────
+# When the user types `claude ...` in a Phantom terminal, this function sends
+# an OSC 633;Claude;<args> notification so Phantom can track the session, then
+# runs the real claude binary transparently.
+claude() {
+	builtin printf '\e]633;Claude;%s\a' "$*"
+	command claude "$@"
+}
+
 add-zsh-hook precmd __phantom_precmd
 add-zsh-hook preexec __phantom_preexec

@@ -45,6 +45,12 @@ type Session struct {
 	// detached." The Manager's reaper destroys sessions that have been
 	// detached longer than the configured linger window (default 24h).
 	LastDetachedAt time.Time
+
+	// OnClaudeDetected is called when the shell integration emits an
+	// OSC 633;Claude;<args> sequence, signalling the user ran `claude`
+	// in this terminal. The callback receives the session ID and the
+	// raw args string. Set by the Manager after construction.
+	OnClaudeDetected func(sessionID, args string)
 }
 
 // SessionInfo is a read-only metadata snapshot of a Session.
@@ -99,6 +105,14 @@ func (s *Session) readLoop() {
 			s.mu.Lock()
 			s.LastActiveAt = time.Now()
 			s.mu.Unlock()
+
+			// Detect OSC 633;Claude;<args> sequences emitted by the
+			// shell integration's claude() wrapper function.
+			if args, found := DetectClaudeOSC(data); found {
+				if s.OnClaudeDetected != nil {
+					go s.OnClaudeDetected(s.ID, args)
+				}
+			}
 
 			// Write to scrollback ring buffer (thread-safe internally).
 			_, _ = s.Scrollback.Write(data)

@@ -3,6 +3,7 @@
 import { createSignal, createMemo } from 'solid-js';
 import type { PillState, PersonaState, PersonaResponse, Message } from './types';
 import { personaGetState, personaGetHistory, personaAsk } from './bindings';
+import { createVoiceEngine, type VoiceEngine, type VoiceState } from './voice';
 
 const [personaState, setPersonaState] = createSignal<PersonaState>({
   pillState: 'idle',
@@ -16,8 +17,29 @@ const [isExpanded, setIsExpanded] = createSignal(false);
 const [lastResponse, setLastResponse] = createSignal<PersonaResponse | null>(null);
 const [isThinking, setIsThinking] = createSignal(false);
 
-export const pillState = createMemo<PillState>(() => personaState().pillState);
-export const statusText = createMemo(() => personaState().statusText);
+// ─── Voice engine ──────────────────────────────────────────────────────────
+let voiceEngine: VoiceEngine | null = null;
+const [voiceState, setVoiceState] = createSignal<VoiceState>('idle');
+const [interimTranscript, setInterimTranscript] = createSignal('');
+
+export const isVoiceSupported = createMemo(() => {
+  return voiceEngine?.isSupported() ?? false;
+});
+export { voiceState, interimTranscript };
+
+export const pillState = createMemo<PillState>(() => {
+  // Voice state overrides the backend pill state for visual feedback.
+  const vs = voiceState();
+  if (vs === 'listening') return 'listening';
+  if (vs === 'speaking') return 'speaking';
+  return personaState().pillState;
+});
+export const statusText = createMemo(() => {
+  const vs = voiceState();
+  if (vs === 'listening') return 'Listening...';
+  if (vs === 'speaking') return 'Speaking...';
+  return personaState().statusText;
+});
 export const personaMessages = messages;
 export const personaExpanded = isExpanded;
 export const personaThinking = isThinking;
@@ -41,6 +63,31 @@ export async function sendToPersona(input: string): Promise<PersonaResponse> {
   }
 }
 
+// ─── Voice control ─────────────────────────────────────────────────────────
+
+/**
+ * Start voice input. Transcribes speech, sends final result to Persona,
+ * then speaks the response aloud.
+ */
+export function startVoiceInput() {
+  if (!voiceEngine || !voiceEngine.isSupported()) return;
+  setInterimTranscript('');
+  voiceEngine.startListening();
+}
+
+/** Stop voice input (cancels in-flight recognition). */
+export function stopVoiceInput() {
+  if (!voiceEngine) return;
+  voiceEngine.stopListening();
+  setInterimTranscript('');
+}
+
+/** Stop any in-progress speech output. */
+export function stopSpeaking() {
+  if (!voiceEngine) return;
+  voiceEngine.stopSpeaking();
+}
+
 export function initPersonaSignals() {
   personaGetState().then(setPersonaState);
   personaGetHistory().then((h) => {
@@ -55,6 +102,27 @@ export function initPersonaSignals() {
       setLastResponse(data);
     });
   }
+
+  // Initialize voice engine.
+  voiceEngine = createVoiceEngine();
+
+  voiceEngine.onStateChange((vs) => {
+    setVoiceState(vs);
+  });
+
+  voiceEngine.onResult((text, isFinal) => {
+    setInterimTranscript(text);
+    if (isFinal && text.trim()) {
+      setInterimTranscript('');
+      // Send to Persona then speak the response.
+      sendToPersona(text.trim()).then((resp) => {
+        const speakText = resp.speak || resp.text;
+        if (speakText && voiceEngine) {
+          voiceEngine.speak(speakText);
+        }
+      });
+    }
+  });
 }
 
 let lastMetaDown = 0;

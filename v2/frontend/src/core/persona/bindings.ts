@@ -55,3 +55,19 @@ export async function personaGetTrust(projectId: string): Promise<number> {
     return 0;
   }
 }
+
+export async function personaSpeak(text: string): Promise<void> {
+  try {
+    await app()?.PersonaSpeak(text);
+  } catch (err) {
+    console.error('[persona] speak error:', err);
+  }
+}
+
+export async function personaSetPillState(state: string): Promise<void> {
+  try {
+    await app()?.PersonaSetPillState(state);
+  } catch (err) {
+    console.error('[persona] setPillState error:', err);
+  }
+}

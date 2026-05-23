@@ -27,6 +27,11 @@ const reaperTickInterval = 5 * time.Minute
 type Manager struct {
 	sessions sync.Map // map[string]*Session
 	mu       sync.Mutex
+
+	// onClaudeDetected is set via SetClaudeDetectedHandler and applied
+	// to every new Session so the caller is notified when the user runs
+	// `claude` inside a Phantom terminal.
+	onClaudeDetected func(sessionID, args string)
 }
 
 // New creates a Manager.
@@ -89,6 +94,12 @@ func (m *Manager) Create(ctx context.Context, id, cwd string, cols, rows uint16)
 		Shell:        shell,
 		CreatedAt:    now,
 		LastActiveAt: now,
+	}
+
+	// Attach the Claude detection callback before starting the read loop
+	// so no OSC sequences are missed.
+	if m.onClaudeDetected != nil {
+		sess.OnClaudeDetected = m.onClaudeDetected
 	}
 
 	sess.Start()
@@ -243,6 +254,15 @@ func lingerWindow() time.Duration {
 		}
 	}
 	return defaultLingerHours * time.Hour
+}
+
+// SetClaudeDetectedHandler registers a callback invoked whenever a terminal
+// session detects the OSC 633;Claude;<args> escape sequence. The callback
+// is applied to all sessions created after this call. Thread-safe.
+func (m *Manager) SetClaudeDetectedHandler(fn func(sessionID, args string)) {
+	m.mu.Lock()
+	m.onClaudeDetected = fn
+	m.mu.Unlock()
 }
 
 // AdoptOrphans is a stub for future PTY-survives-Go-restart support. Today,

@@ -322,6 +322,29 @@ func (a *App) Startup(ctx context.Context) {
 	if a.Terminal != nil {
 		a.Terminal.AdoptOrphans(a.ctx)
 		a.Terminal.StartReaper(a.ctx)
+
+		// Wire Claude detection: when a user runs `claude` in a terminal,
+		// the shell integration emits OSC 633;Claude;<args>. The terminal
+		// session's readLoop detects it and invokes this callback, which
+		// updates the Persona pill and emits a frontend event.
+		a.Terminal.SetClaudeDetectedHandler(func(sessionID, args string) {
+			log.Info("terminal: claude command detected", "terminal", sessionID, "args", args)
+
+			// Update Persona pill state.
+			if a.Persona != nil {
+				label := "Claude"
+				if args != "" {
+					label = fmt.Sprintf("Claude: %s", truncateStr(args, 50))
+				}
+				a.Persona.OnClaudeDetectedInTerminal(label)
+			}
+
+			// Emit event so the frontend can show activity indicators.
+			wailsRuntime.EventsEmit(a.ctx, "terminal:claude-started", map[string]interface{}{
+				"terminalId": sessionID,
+				"args":       args,
+			})
+		})
 	}
 
 	// Wire PID lookup so Controller can suspend/resume/kill Claude processes.

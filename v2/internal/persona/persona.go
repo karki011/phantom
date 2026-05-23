@@ -219,6 +219,16 @@ func (p *Persona) GetTrust(projectID string) TrustTier {
 	return p.trust.GetTier(projectID)
 }
 
+// OnClaudeDetectedInTerminal is called by the terminal subsystem when the
+// shell integration detects the user ran `claude` in a Phantom terminal.
+// It sets the pill to observing state with the given label.
+func (p *Persona) OnClaudeDetectedInTerminal(label string) {
+	if p == nil {
+		return
+	}
+	p.setPillState(PillObserving, label)
+}
+
 // ─── proactive status polling ───────────────────────────────────────────────
 
 // Start launches the background polling loop. Cancel ctx to stop it.
@@ -271,6 +281,12 @@ func (p *Persona) refreshStatus(ctx context.Context) {
 }
 
 // ─── internal helpers ───────────────────────────────────────────────────────
+
+// SetPillStateExternal is the exported version of setPillState, called by
+// frontend-driven voice state transitions via the App binding layer.
+func (p *Persona) SetPillStateExternal(pill PillState, status string) {
+	p.setPillState(pill, status)
+}
 
 // setPillState updates the pill state + status text and emits a state event.
 func (p *Persona) setPillState(pill PillState, status string) {
