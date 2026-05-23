@@ -27,6 +27,10 @@ type PersonaDeps struct {
 // maxHistory caps the number of conversation messages kept in memory.
 const maxHistory = 100
 
+// stickyClaudeTTL is how long a shell-intercept or stream-activity detection
+// protects the pill from being overwritten by the 2s polling loop.
+const stickyClaudeTTL = 30 * time.Second
+
 // Persona is the top-level service tying context, routing, trust, and handlers.
 type Persona struct {
 	mu            sync.RWMutex
@@ -38,6 +42,18 @@ type Persona struct {
 	handlers      map[string]Handler
 	emitFn        EmitFn
 	activeProject string
+
+	// Sticky Claude detection: shell intercept fires OnClaudeDetectedInTerminal
+	// which sets these fields. refreshStatus() skips overwriting the pill while
+	// the detection is fresh (within stickyClaudeTTL).
+	lastClaudeDetect time.Time
+	lastClaudeLabel  string
+
+	// lastActivity stores the most recent terminal:activity summary pushed
+	// from the stream event hook so refreshStatus() can display real-time
+	// tool info (e.g. "Claude: editing auth.ts") instead of stale DB data.
+	lastActivityTime    time.Time
+	lastActivitySummary string
 }
 
 // NewPersona creates a fully wired Persona from the given deps.
@@ -221,12 +237,36 @@ func (p *Persona) GetTrust(projectID string) TrustTier {
 
 // OnClaudeDetectedInTerminal is called by the terminal subsystem when the
 // shell integration detects the user ran `claude` in a Phantom terminal.
-// It sets the pill to observing state with the given label.
+// It sets the pill to observing state with the given label and marks a
+// sticky timestamp so refreshStatus() won't overwrite it for stickyClaudeTTL.
 func (p *Persona) OnClaudeDetectedInTerminal(label string) {
 	if p == nil {
 		return
 	}
+	p.mu.Lock()
+	p.lastClaudeDetect = time.Now()
+	p.lastClaudeLabel = label
+	p.mu.Unlock()
+
 	p.setPillState(PillObserving, label)
+}
+
+// OnTerminalActivity is called from the stream event hook when real-time
+// tool activity is detected in a Claude session. The summary is a formatted
+// string like "Editing auth.ts" or "Running: npm test".
+func (p *Persona) OnTerminalActivity(summary string) {
+	if p == nil || summary == "" {
+		return
+	}
+	p.mu.Lock()
+	p.lastActivityTime = time.Now()
+	p.lastActivitySummary = summary
+	// Also refresh sticky detect so real-time activity extends the window.
+	p.lastClaudeDetect = time.Now()
+	p.lastClaudeLabel = fmt.Sprintf("Claude: %s", summary)
+	p.mu.Unlock()
+
+	p.setPillState(PillObserving, fmt.Sprintf("Claude: %s", summary))
 }
 
 // ─── proactive status polling ───────────────────────────────────────────────
@@ -252,7 +292,17 @@ func (p *Persona) watchLoop(ctx context.Context) {
 func (p *Persona) refreshStatus(ctx context.Context) {
 	p.mu.RLock()
 	projectPath := p.activeProject
+	stickyFresh := time.Since(p.lastClaudeDetect) < stickyClaudeTTL
+	activityFresh := time.Since(p.lastActivityTime) < stickyClaudeTTL
+	activitySummary := p.lastActivitySummary
 	p.mu.RUnlock()
+
+	// If shell intercept or stream activity fired recently, don't overwrite.
+	// The pill already shows the real-time label from OnClaudeDetectedInTerminal
+	// or OnTerminalActivity — polling would clobber it with stale DB data.
+	if stickyFresh {
+		return
+	}
 
 	sessions := p.engine.ClaudeSessions(ctx, projectPath)
 	terminals := p.engine.TerminalSessions(ctx)
@@ -266,6 +316,12 @@ func (p *Persona) refreshStatus(ctx context.Context) {
 				lastTool = s.LastTool
 			}
 		}
+	}
+
+	// Prefer recent stream activity summary over DB-level tool info.
+	if activeClaude > 0 && activityFresh && activitySummary != "" {
+		p.setPillState(PillObserving, fmt.Sprintf("Claude: %s", activitySummary))
+		return
 	}
 
 	switch {

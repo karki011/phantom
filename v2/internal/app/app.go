@@ -376,7 +376,7 @@ func (a *App) Startup(ctx context.Context) {
 		})
 	}
 
-	// Wire stream event hook — activity detection + terminal activity.
+	// Wire stream event hook — activity detection + terminal activity + persona pill.
 	if a.Stream != nil {
 		a.Stream.SetEventHook(func(ctx context.Context, ev *stream.Event) {
 			// Activity detection (async, zero-blocking) — runs for all providers.
@@ -384,6 +384,15 @@ func (a *App) Startup(ctx context.Context) {
 
 			// Terminal activity bridge — emit terminal:activity for linked panes.
 			a.emitTerminalActivity(ev)
+
+			// Push real-time tool activity into the Persona pill so it shows
+			// "Claude: editing auth.ts" instead of generic "1 Claude session(s)".
+			if a.Persona != nil && ev != nil {
+				summary := formatActivitySummary(ev)
+				if summary != "" {
+					a.Persona.OnTerminalActivity(summary)
+				}
+			}
 		})
 	}
 

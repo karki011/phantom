@@ -1,7 +1,7 @@
 // Author: Subash Karki
 
 import type { Component } from 'solid-js';
-import { createSignal, createMemo, Show } from 'solid-js';
+import { createSignal, createMemo } from 'solid-js';
 import {
   sendToPersona,
   isVoiceSupported,
@@ -73,31 +73,41 @@ export const PersonaInput: Component = () => {
         aria-label="Message input"
         autocomplete="off"
       />
-      <Show when={isVoiceSupported()}>
-        <button
-          class={isListening() ? styles.micButtonActive : styles.micButton}
-          type="button"
-          onClick={handleMicClick}
-          disabled={loading()}
-          aria-label={isListening() ? 'Stop listening' : 'Start voice input'}
-          title={isListening() ? 'Stop listening' : 'Voice input'}
+      <button
+        class={isListening() ? styles.micButtonActive : styles.micButton}
+        type="button"
+        onClick={handleMicClick}
+        disabled={loading() || !isVoiceSupported()}
+        aria-label={
+          !isVoiceSupported()
+            ? 'Voice input unavailable in this runtime'
+            : isListening()
+              ? 'Stop listening'
+              : 'Start voice input'
+        }
+        title={
+          !isVoiceSupported()
+            ? 'Voice input unavailable in this runtime'
+            : isListening()
+              ? 'Stop listening'
+              : 'Voice input'
+        }
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-            <line x1="12" x2="12" y1="19" y2="22" />
-          </svg>
-        </button>
-      </Show>
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+          <line x1="12" x2="12" y1="19" y2="22" />
+        </svg>
+      </button>
       <button
         class={styles.sendButton}
         type="button"
