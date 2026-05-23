@@ -85,6 +85,6 @@ export interface DiffPaneData {
   originalContent: string;
   /** Full content of the modified version */
   modifiedContent: string;
-  /** Monaco language ID */
+  /** Language ID for syntax highlighting */
   language?: string;
 }

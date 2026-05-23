@@ -266,7 +266,7 @@ const GIT_ACTIONS: CommandAction[] = [
     shortcut: '⌘⇧G',
     keywords: ['git', 'blame', 'annotate', 'author', 'history'],
     execute: () => {
-      // Dispatch to the active Monaco editor's blame toggle action
+      // Dispatch to the active editor's blame toggle action
       window.dispatchEvent(new CustomEvent('phantom:editor-toggle-blame'));
     },
   },
