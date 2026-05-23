@@ -134,11 +134,10 @@ func (h *AIHandler) buildPrompt(ctx context.Context, query, projectPath string) 
 // callClaude invokes the Claude CLI in single-turn mode and returns stdout.
 func (h *AIHandler) callClaude(ctx context.Context, prompt, projectPath string) (string, error) {
 	args := []string{
-		"--print",
-		"--model", "haiku",
-		"--bare",
+		"-p",
+		"--model", "sonnet",
+		"--tools", "",
 		"--no-session-persistence",
-		"--allowedTools", "",
 		"--max-turns", "1",
 		prompt,
 	}
