@@ -13,9 +13,13 @@ import (
 // AIHandler uses the Claude CLI to answer general questions with workspace context.
 // It is the default fallback handler — any query that doesn't match a fast-path
 // pattern is routed here.
+// ClaudeFn calls the Claude CLI and returns the response text.
+// Injectable for testing.
+type ClaudeFn func(ctx context.Context, prompt, projectPath string) (string, error)
+
 type AIHandler struct {
-	engine    *ContextEngine
-	claudeBin string // resolved path to the claude CLI binary
+	engine  *ContextEngine
+	callFn  ClaudeFn
 }
 
 // NewAIHandler creates an AIHandler with the given context engine and claude binary path.
@@ -24,7 +28,14 @@ func NewAIHandler(engine *ContextEngine, claudeBin string) *AIHandler {
 	if claudeBin == "" {
 		claudeBin = "claude"
 	}
-	return &AIHandler{engine: engine, claudeBin: claudeBin}
+	h := &AIHandler{engine: engine}
+	h.callFn = h.makeClaudeFn(claudeBin)
+	return h
+}
+
+// NewAIHandlerWithFn creates an AIHandler with a custom call function (for testing).
+func NewAIHandlerWithFn(engine *ContextEngine, fn ClaudeFn) *AIHandler {
+	return &AIHandler{engine: engine, callFn: fn}
 }
 
 func (h *AIHandler) Handle(ctx context.Context, intent Intent, projectPath string) Response {
@@ -46,7 +57,7 @@ func (h *AIHandler) Handle(ctx context.Context, intent Intent, projectPath strin
 	cliCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	answer, err := h.callClaude(cliCtx, prompt, projectPath)
+	answer, err := h.callFn(cliCtx, prompt, projectPath)
 	if err != nil {
 		// Graceful degradation: return the error as a helpful message.
 		text := fmt.Sprintf("I couldn't reach the AI backend: %s\n\nTry asking something like:\n• \"What is Claude doing?\"\n• \"Git status\"\n• \"What changed?\"", err)
@@ -131,8 +142,15 @@ func (h *AIHandler) buildPrompt(ctx context.Context, query, projectPath string) 
 	return sb.String()
 }
 
-// callClaude invokes the Claude CLI in single-turn mode and returns stdout.
-func (h *AIHandler) callClaude(ctx context.Context, prompt, projectPath string) (string, error) {
+// makeClaudeFn returns a ClaudeFn that invokes the Claude CLI binary.
+func (h *AIHandler) makeClaudeFn(claudeBin string) ClaudeFn {
+	return func(ctx context.Context, prompt, projectPath string) (string, error) {
+		return callClaudeCLI(ctx, claudeBin, prompt, projectPath)
+	}
+}
+
+// callClaudeCLI invokes the Claude CLI in single-turn mode and returns stdout.
+func callClaudeCLI(ctx context.Context, claudeBin, prompt, projectPath string) (string, error) {
 	args := []string{
 		"-p",
 		"--model", "sonnet",
@@ -142,7 +160,7 @@ func (h *AIHandler) callClaude(ctx context.Context, prompt, projectPath string) 
 		prompt,
 	}
 
-	cmd := exec.CommandContext(ctx, h.claudeBin, args...)
+	cmd := exec.CommandContext(ctx, claudeBin, args...)
 	if projectPath != "" {
 		cmd.Dir = projectPath
 	}

@@ -31,6 +31,7 @@ func simPersona(deps *ContextDeps) (*Persona, *stubPrefs, map[string]int) {
 			emitted[name]++
 			mu.Unlock()
 		},
+		AICallFn: mockAIFn(),
 	}
 	if deps != nil {
 		pd.ContextDeps = *deps
@@ -58,6 +59,14 @@ func simNotContains(t *testing.T, resp Response, subs ...string) {
 		if strings.Contains(lower, strings.ToLower(sub)) {
 			t.Errorf("expected response NOT to contain %q, got:\n  %s", sub, resp.Text)
 		}
+	}
+}
+
+// simNonEmpty checks that resp.Text is not empty.
+func simNonEmpty(t *testing.T, resp Response) {
+	t.Helper()
+	if resp.Text == "" {
+		t.Error("expected non-empty response")
 	}
 }
 
@@ -91,6 +100,14 @@ func mockGitDeps() ContextDeps {
 
 // ──────────────────────────────────────────────────────────────────────────────
 // 1. Query Routing Simulation
+//
+// All queries now go through the "ai" handler (except Claude control:
+// start/pause/stop/resume). The mock AI function returns a non-empty string
+// starting with "Mock AI response for: ...". Tests verify:
+//   - response is not "I don't have a handler"
+//   - response is non-empty
+//
+// Tests that need to verify specific data content call handlers DIRECTLY.
 // ──────────────────────────────────────────────────────────────────────────────
 
 func TestSim_QueryRouting_ClaudeStatus(t *testing.T) {
@@ -99,7 +116,7 @@ func TestSim_QueryRouting_ClaudeStatus(t *testing.T) {
 
 	resp := p.Ask(ctx, "what is claude doing")
 	simNotContains(t, resp, "I don't have a handler")
-	simContains(t, resp, "session", "claude")
+	simNonEmpty(t, resp)
 }
 
 func TestSim_QueryRouting_ClaudeStatusCaseInsensitive(t *testing.T) {
@@ -108,7 +125,7 @@ func TestSim_QueryRouting_ClaudeStatusCaseInsensitive(t *testing.T) {
 
 	resp := p.Ask(ctx, "What is Claude doing?")
 	simNotContains(t, resp, "I don't have a handler")
-	simContains(t, resp, "session", "claude")
+	simNonEmpty(t, resp)
 }
 
 func TestSim_QueryRouting_ClaudeStatusTypoTolerant(t *testing.T) {
@@ -117,7 +134,7 @@ func TestSim_QueryRouting_ClaudeStatusTypoTolerant(t *testing.T) {
 
 	resp := p.Ask(ctx, "what is calude doing")
 	simNotContains(t, resp, "I don't have a handler")
-	simContains(t, resp, "session", "claude")
+	simNonEmpty(t, resp)
 }
 
 func TestSim_QueryRouting_GitStatus(t *testing.T) {
@@ -128,7 +145,7 @@ func TestSim_QueryRouting_GitStatus(t *testing.T) {
 
 	resp := p.Ask(ctx, "git status")
 	simNotContains(t, resp, "I don't have a handler")
-	simContains(t, resp, "branch", "main")
+	simNonEmpty(t, resp)
 }
 
 func TestSim_QueryRouting_GitLog(t *testing.T) {
@@ -139,7 +156,7 @@ func TestSim_QueryRouting_GitLog(t *testing.T) {
 
 	resp := p.Ask(ctx, "git log")
 	simNotContains(t, resp, "I don't have a handler")
-	simContains(t, resp, "commit")
+	simNonEmpty(t, resp)
 }
 
 func TestSim_QueryRouting_GitDiff(t *testing.T) {
@@ -148,9 +165,10 @@ func TestSim_QueryRouting_GitDiff(t *testing.T) {
 	p.SetProjectPath("/mock/project")
 	ctx := context.Background()
 
-	// "git diff" routes to git handler with type=diff, which falls into default (status-like)
+	// "git diff" routes to ai handler — verify it was handled.
 	resp := p.Ask(ctx, "git diff")
 	simNotContains(t, resp, "I don't have a handler")
+	simNonEmpty(t, resp)
 }
 
 func TestSim_QueryRouting_WhatChanged(t *testing.T) {
@@ -161,8 +179,7 @@ func TestSim_QueryRouting_WhatChanged(t *testing.T) {
 
 	resp := p.Ask(ctx, "what changed")
 	simNotContains(t, resp, "I don't have a handler")
-	// Should mention file(s) changed or commit(s)
-	simContains(t, resp, "changed")
+	simNonEmpty(t, resp)
 }
 
 func TestSim_QueryRouting_HowManyTerminals(t *testing.T) {
@@ -171,7 +188,7 @@ func TestSim_QueryRouting_HowManyTerminals(t *testing.T) {
 
 	resp := p.Ask(ctx, "how many terminals are open")
 	simNotContains(t, resp, "I don't have a handler")
-	simContains(t, resp, "terminal")
+	simNonEmpty(t, resp)
 }
 
 func TestSim_QueryRouting_HowManyTerminalsPartial(t *testing.T) {
@@ -180,7 +197,7 @@ func TestSim_QueryRouting_HowManyTerminalsPartial(t *testing.T) {
 
 	resp := p.Ask(ctx, "how many terminals")
 	simNotContains(t, resp, "I don't have a handler")
-	simContains(t, resp, "terminal")
+	simNonEmpty(t, resp)
 }
 
 func TestSim_QueryRouting_SearchForAuthentication(t *testing.T) {
@@ -189,12 +206,7 @@ func TestSim_QueryRouting_SearchForAuthentication(t *testing.T) {
 
 	resp := p.Ask(ctx, "search for authentication")
 	simNotContains(t, resp, "I don't have a handler")
-	// SearchHandler returns "Searching for..." or "file graph is empty" depending on indexer state.
-	// Either way it should mention "graph" or "search" — confirming it routed to SearchHandler.
-	lower := strings.ToLower(resp.Text)
-	if !strings.Contains(lower, "graph") && !strings.Contains(lower, "search") {
-		t.Errorf("expected search handler response, got: %s", resp.Text)
-	}
+	simNonEmpty(t, resp)
 }
 
 func TestSim_QueryRouting_FindUserService(t *testing.T) {
@@ -203,36 +215,46 @@ func TestSim_QueryRouting_FindUserService(t *testing.T) {
 
 	resp := p.Ask(ctx, "find user service")
 	simNotContains(t, resp, "I don't have a handler")
+	simNonEmpty(t, resp)
 }
 
-func TestSim_QueryRouting_OpenTerminal_TrustBlocked(t *testing.T) {
+// "open a terminal" now routes to the "ai" handler (LaneLocalReasoning, TierObserve).
+// Trust blocking ONLY applies to Claude control actions (start/pause/stop/resume).
+func TestSim_QueryRouting_OpenTerminal_AIHandler(t *testing.T) {
 	p, _, _ := simPersona(nil)
 	p.SetProjectPath("/test/project")
 	ctx := context.Background()
 
 	resp := p.Ask(ctx, "open a terminal")
-	// Should be blocked at tier 0 (requires TierTerminal)
-	simContains(t, resp, "trust tier")
+	// Routes to AI handler — non-empty, no trust block.
+	simNotContains(t, resp, "I don't have a handler")
+	simNotContains(t, resp, "trust tier")
+	simNonEmpty(t, resp)
 }
 
-func TestSim_QueryRouting_OpenTerminalShort_TrustBlocked(t *testing.T) {
+func TestSim_QueryRouting_OpenTerminalShort_AIHandler(t *testing.T) {
 	p, _, _ := simPersona(nil)
 	p.SetProjectPath("/test/project")
 	ctx := context.Background()
 
 	resp := p.Ask(ctx, "open terminal")
-	simContains(t, resp, "trust tier")
+	simNotContains(t, resp, "I don't have a handler")
+	simNotContains(t, resp, "trust tier")
+	simNonEmpty(t, resp)
 }
 
-func TestSim_QueryRouting_RunCommand_TrustBlocked(t *testing.T) {
+func TestSim_QueryRouting_RunCommand_AIHandler(t *testing.T) {
 	p, _, _ := simPersona(nil)
 	p.SetProjectPath("/test/project")
 	ctx := context.Background()
 
 	resp := p.Ask(ctx, "run npm test")
-	simContains(t, resp, "trust tier")
+	simNotContains(t, resp, "I don't have a handler")
+	simNotContains(t, resp, "trust tier")
+	simNonEmpty(t, resp)
 }
 
+// Claude control actions (start/pause/stop/resume) ARE still trust-blocked.
 func TestSim_QueryRouting_StartClaude_TrustBlocked(t *testing.T) {
 	p, _, _ := simPersona(nil)
 	p.SetProjectPath("/test/project")
@@ -279,13 +301,15 @@ func TestSim_QueryRouting_ResumeClaude_TrustBlocked(t *testing.T) {
 	simContains(t, resp, "trust tier")
 }
 
-func TestSim_QueryRouting_SwitchProject_TrustBlocked(t *testing.T) {
+// "switch to project" now routes to AI handler — not trust-blocked.
+func TestSim_QueryRouting_SwitchProject_AIHandler(t *testing.T) {
 	p, _, _ := simPersona(nil)
 	p.SetProjectPath("/test/project")
 	ctx := context.Background()
 
 	resp := p.Ask(ctx, "switch to project phantom")
-	simContains(t, resp, "trust tier")
+	simNotContains(t, resp, "I don't have a handler")
+	simNonEmpty(t, resp)
 }
 
 func TestSim_QueryRouting_WhyBuildFail_AIHandler(t *testing.T) {
@@ -336,6 +360,10 @@ func TestSim_QueryRouting_Gibberish_AIHandler(t *testing.T) {
 
 // ──────────────────────────────────────────────────────────────────────────────
 // 2. Trust Tier Simulation
+//
+// Only Claude control actions (start/pause/stop/resume) require elevated trust.
+// All other queries (including "open a terminal", "run command", "switch project")
+// now go to the AI handler at TierObserve — they are NOT blocked.
 // ──────────────────────────────────────────────────────────────────────────────
 
 func TestSim_TrustTier_Tier0_ObserveWorks(t *testing.T) {
@@ -343,7 +371,7 @@ func TestSim_TrustTier_Tier0_ObserveWorks(t *testing.T) {
 	p.SetProjectPath("/test/project")
 	ctx := context.Background()
 
-	// StateLookup queries (observe-level) should work at tier 0
+	// All non-claude-control queries work at tier 0 (AI handler, LaneLocalReasoning).
 	resp := p.Ask(ctx, "what is claude doing")
 	simNotContains(t, resp, "trust tier")
 
@@ -351,17 +379,13 @@ func TestSim_TrustTier_Tier0_ObserveWorks(t *testing.T) {
 	simNotContains(t, resp, "trust tier")
 }
 
-func TestSim_TrustTier_Tier0_ActionBlocked(t *testing.T) {
+func TestSim_TrustTier_Tier0_ClaudeControlBlocked(t *testing.T) {
 	p, _, _ := simPersona(nil)
 	p.SetProjectPath("/test/project")
 	ctx := context.Background()
 
-	// SystemAction requires TierTerminal (1)
-	resp := p.Ask(ctx, "open a terminal")
-	simContains(t, resp, "trust tier")
-
-	// ClaudeTask requires TierClaude (2)
-	resp = p.Ask(ctx, "start claude")
+	// Only ClaudeTask lane actions are blocked at tier 0.
+	resp := p.Ask(ctx, "start claude")
 	simContains(t, resp, "trust tier")
 }
 
@@ -371,11 +395,10 @@ func TestSim_TrustTier_Tier1_TerminalUnblocked(t *testing.T) {
 	_ = p.SetTrust("/test/project", TierTerminal)
 	ctx := context.Background()
 
-	// SystemAction (terminal) should now pass trust check
+	// "open a terminal" routes to AI handler at tier 0 anyway — works at any tier.
 	resp := p.Ask(ctx, "open a terminal")
 	simNotContains(t, resp, "trust tier")
-	// It will hit "I don't have a handler" since terminal handler is not registered,
-	// but the trust gate is cleared.
+	simNonEmpty(t, resp)
 }
 
 func TestSim_TrustTier_Tier1_ClaudeStillBlocked(t *testing.T) {
@@ -416,7 +439,7 @@ func TestSim_TrustTier_Tier3_EverythingWorks(t *testing.T) {
 	_ = p.SetTrust("/test/project", TierGit)
 	ctx := context.Background()
 
-	// All lanes should pass trust
+	// All queries should pass trust
 	queries := []string{
 		"what is claude doing",
 		"open a terminal",
@@ -436,26 +459,27 @@ func TestSim_TrustTier_ProgressiveEscalation(t *testing.T) {
 	p.SetProjectPath("/test/project")
 	ctx := context.Background()
 
-	// Tier 0: terminal blocked
-	resp := p.Ask(ctx, "open a terminal")
+	// Tier 0: Claude control blocked, AI queries work
+	resp := p.Ask(ctx, "start claude")
 	simContains(t, resp, "trust tier")
 
-	// Upgrade to tier 1: terminal unblocked, claude blocked
-	_ = p.SetTrust("/test/project", TierTerminal)
+	// "open a terminal" goes to AI handler — not blocked at any tier
 	resp = p.Ask(ctx, "open a terminal")
 	simNotContains(t, resp, "trust tier")
 
+	// Upgrade to tier 1: Claude still blocked
+	_ = p.SetTrust("/test/project", TierTerminal)
 	resp = p.Ask(ctx, "start claude")
 	simContains(t, resp, "trust tier")
 
-	// Upgrade to tier 2: claude unblocked
+	// Upgrade to tier 2: Claude unblocked
 	_ = p.SetTrust("/test/project", TierClaude)
 	resp = p.Ask(ctx, "start claude")
 	simNotContains(t, resp, "trust tier")
 
 	// Upgrade to tier 3: everything works
 	_ = p.SetTrust("/test/project", TierGit)
-	resp = p.Ask(ctx, "switch to project phantom")
+	resp = p.Ask(ctx, "pause claude")
 	simNotContains(t, resp, "trust tier")
 }
 
@@ -593,6 +617,7 @@ func TestSim_State_EmitsStateEvents(t *testing.T) {
 	p := NewPersona(PersonaDeps{
 		PrefGetter: prefs,
 		PrefSetter: prefs,
+		AICallFn:   mockAIFn(),
 		EmitFn: func(name string, data interface{}) {
 			if name == "persona:state" {
 				if s, ok := data.(PersonaState); ok {
@@ -648,28 +673,48 @@ func TestSim_State_SetProjectPathUpdates(t *testing.T) {
 
 // ──────────────────────────────────────────────────────────────────────────────
 // 5. Context Engine with Mock Data
+//
+// These tests call handlers DIRECTLY (not through Persona.Ask) to verify data
+// correctness, since Ask now routes everything through the AI handler which
+// returns a generic mock response.
 // ──────────────────────────────────────────────────────────────────────────────
 
 func TestSim_Context_GitStatusWithMockData(t *testing.T) {
 	deps := mockGitDeps()
-	p, _, _ := simPersona(&deps)
-	p.SetProjectPath("/mock/project")
+	engine := NewContextEngine(deps)
 	ctx := context.Background()
 
-	resp := p.Ask(ctx, "git status")
-	// Should report branch main, staged 2, unstaged 1
+	handler := NewGitHandler(engine)
+	intent := Intent{
+		Lane:    LaneLocalReasoning,
+		Handler: "git",
+		Method:  "query",
+		Args:    map[string]string{"type": "status"},
+		Raw:     "git status",
+	}
+	resp := handler.Handle(ctx, intent, "/mock/project")
+
+	// Should report branch main and staged count.
 	simContains(t, resp, "main")
 	simContains(t, resp, "staged")
 }
 
 func TestSim_Context_GitLogWithMockData(t *testing.T) {
 	deps := mockGitDeps()
-	p, _, _ := simPersona(&deps)
-	p.SetProjectPath("/mock/project")
+	engine := NewContextEngine(deps)
 	ctx := context.Background()
 
-	resp := p.Ask(ctx, "git log")
-	// Should contain commit info from mocks
+	handler := NewGitHandler(engine)
+	intent := Intent{
+		Lane:    LaneLocalReasoning,
+		Handler: "git",
+		Method:  "query",
+		Args:    map[string]string{"type": "log"},
+		Raw:     "git log",
+	}
+	resp := handler.Handle(ctx, intent, "/mock/project")
+
+	// Should contain commit info from mocks.
 	simContains(t, resp, "commit")
 	simContains(t, resp, "abc1234")
 	simContains(t, resp, "feat: add auth")
@@ -677,14 +722,22 @@ func TestSim_Context_GitLogWithMockData(t *testing.T) {
 
 func TestSim_Context_WhatChangedWithMockData(t *testing.T) {
 	deps := mockGitDeps()
-	p, _, _ := simPersona(&deps)
-	p.SetProjectPath("/mock/project")
+	engine := NewContextEngine(deps)
 	ctx := context.Background()
 
-	resp := p.Ask(ctx, "what changed")
-	// recentChanges should report total file changes and commit count
+	handler := NewGitHandler(engine)
+	intent := Intent{
+		Lane:    LaneLocalReasoning,
+		Handler: "git",
+		Method:  "recentChanges",
+		Args:    map[string]string{},
+		Raw:     "what changed",
+	}
+	resp := handler.Handle(ctx, intent, "/mock/project")
+
+	// recentChanges should report total file changes and commit count.
 	simContains(t, resp, "file")
-	simContains(t, resp, "3")     // 3 commits
+	simContains(t, resp, "3")      // 3 commits
 	simContains(t, resp, "commit") // "commit(s)"
 }
 
@@ -917,25 +970,22 @@ func TestSim_FullConversation(t *testing.T) {
 	p.SetProjectPath("/mock/project")
 	ctx := context.Background()
 
-	// Simulate a realistic multi-turn conversation.
-	steps := []struct {
-		input    string
-		contains []string // expected substrings in response
-	}{
-		{"what is claude doing", []string{"claude", "session"}},
-		{"git status", []string{"main", "staged"}},
-		{"what changed", []string{"file", "changed"}},
-		{"how many terminals", []string{"terminal"}},
-		{"git log", []string{"abc1234"}},
+	// All queries now go to AI handler — verify non-empty, no "don't have a handler".
+	steps := []string{
+		"what is claude doing",
+		"git status",
+		"what changed",
+		"how many terminals",
+		"git log",
 	}
 
-	for _, step := range steps {
-		resp := p.Ask(ctx, step.input)
-		for _, sub := range step.contains {
-			if !strings.Contains(strings.ToLower(resp.Text), strings.ToLower(sub)) {
-				t.Errorf("step %q: expected %q in response, got:\n  %s",
-					step.input, sub, resp.Text)
-			}
+	for _, input := range steps {
+		resp := p.Ask(ctx, input)
+		if resp.Text == "" {
+			t.Errorf("step %q: expected non-empty response", input)
+		}
+		if strings.Contains(strings.ToLower(resp.Text), "i don't have a handler") {
+			t.Errorf("step %q: got unexpected 'no handler' response: %s", input, resp.Text)
 		}
 	}
 
@@ -960,15 +1010,15 @@ func TestSim_TrustEscalation_FullFlow(t *testing.T) {
 	p.SetProjectPath(projectID)
 	ctx := context.Background()
 
-	// Phase 1: Observe (tier 0) — only read queries work
+	// Phase 1: Observe (tier 0) — AI queries work, Claude control blocked.
 	resp := p.Ask(ctx, "git status")
 	simNotContains(t, resp, "trust tier")
-	simContains(t, resp, "main")
+	simNonEmpty(t, resp)
 
-	resp = p.Ask(ctx, "open a terminal")
+	resp = p.Ask(ctx, "start claude")
 	simContains(t, resp, "trust tier")
 
-	// Phase 2: Terminal (tier 1) — terminal actions unblock
+	// Phase 2: Terminal (tier 1) — Claude control still blocked.
 	_ = p.SetTrust(projectID, TierTerminal)
 	resp = p.Ask(ctx, "open a terminal")
 	simNotContains(t, resp, "trust tier")
@@ -976,14 +1026,14 @@ func TestSim_TrustEscalation_FullFlow(t *testing.T) {
 	resp = p.Ask(ctx, "start claude")
 	simContains(t, resp, "trust tier")
 
-	// Phase 3: Claude (tier 2) — claude actions unblock
+	// Phase 3: Claude (tier 2) — Claude control unblocked.
 	_ = p.SetTrust(projectID, TierClaude)
 	resp = p.Ask(ctx, "pause claude")
 	simNotContains(t, resp, "trust tier")
 
-	// Phase 4: Git (tier 3) — everything works
+	// Phase 4: Git (tier 3) — everything works.
 	_ = p.SetTrust(projectID, TierGit)
-	resp = p.Ask(ctx, "switch to project phantom")
+	resp = p.Ask(ctx, "stop claude")
 	simNotContains(t, resp, "trust tier")
 }
 

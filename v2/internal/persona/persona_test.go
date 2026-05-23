@@ -31,8 +31,27 @@ func (s *stubPrefs) SetPreference(key, value string) error {
 	return nil
 }
 
+// mockAIFn returns a mock ClaudeFn for tests that avoids calling the real Claude CLI.
+func mockAIFn() ClaudeFn {
+	return func(_ context.Context, prompt, _ string) (string, error) {
+		return "Mock AI response for: " + prompt[:min(50, len(prompt))], nil
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// testDeps returns PersonaDeps with a mock AI function for fast tests.
+func testDeps() PersonaDeps {
+	return PersonaDeps{AICallFn: mockAIFn()}
+}
+
 func TestNewPersona(t *testing.T) {
-	p := NewPersona(PersonaDeps{})
+	p := NewPersona(testDeps())
 	if p == nil {
 		t.Fatal("expected non-nil Persona")
 	}
@@ -46,7 +65,7 @@ func TestNewPersona(t *testing.T) {
 }
 
 func TestPersona_Ask_StateLookup(t *testing.T) {
-	p := NewPersona(PersonaDeps{})
+	p := NewPersona(testDeps())
 	ctx := context.Background()
 
 	resp := p.Ask(ctx, "what is claude doing")
@@ -71,14 +90,15 @@ func TestPersona_Ask_TrustBlocked(t *testing.T) {
 	p := NewPersona(PersonaDeps{
 		PrefGetter: prefs,
 		PrefSetter: prefs,
+		AICallFn:   mockAIFn(),
 	})
 	ctx := context.Background()
 
 	// Set active project so trust checks apply.
 	p.SetProjectPath("/test/project")
 
-	// "open terminal" requires TierTerminal (1), but default is TierObserve (0).
-	resp := p.Ask(ctx, "open a terminal")
+	// "start claude" is LaneClaudeTask, requires TierClaude (2) — blocked at TierObserve (0).
+	resp := p.Ask(ctx, "start claude with auth refactor")
 	if resp.Text != "That action requires a higher trust tier for this project." {
 		t.Errorf("expected trust-blocked response, got %q", resp.Text)
 	}
@@ -89,6 +109,7 @@ func TestPersona_Ask_TrustAllowed(t *testing.T) {
 	p := NewPersona(PersonaDeps{
 		PrefGetter: prefs,
 		PrefSetter: prefs,
+		AICallFn:   mockAIFn(),
 	})
 	ctx := context.Background()
 
@@ -103,7 +124,7 @@ func TestPersona_Ask_TrustAllowed(t *testing.T) {
 }
 
 func TestPersona_Ask_AIFallback(t *testing.T) {
-	p := NewPersona(PersonaDeps{})
+	p := NewPersona(testDeps())
 	ctx := context.Background()
 
 	// "explain the code" routes to the "ai" handler. Without a working claude
@@ -119,7 +140,7 @@ func TestPersona_Ask_AIFallback(t *testing.T) {
 }
 
 func TestPersona_SetProjectPath(t *testing.T) {
-	p := NewPersona(PersonaDeps{})
+	p := NewPersona(testDeps())
 	p.SetProjectPath("/home/user/myproject")
 
 	state := p.GetState()
@@ -129,7 +150,7 @@ func TestPersona_SetProjectPath(t *testing.T) {
 }
 
 func TestPersona_GetContext_EmptyDeps(t *testing.T) {
-	p := NewPersona(PersonaDeps{})
+	p := NewPersona(testDeps())
 	ctx := context.Background()
 
 	pc := p.GetContext(ctx)
@@ -142,7 +163,7 @@ func TestPersona_GetContext_EmptyDeps(t *testing.T) {
 }
 
 func TestPersona_HistoryCap(t *testing.T) {
-	p := NewPersona(PersonaDeps{})
+	p := NewPersona(testDeps())
 	ctx := context.Background()
 
 	// Ask more than maxHistory/2 times (each Ask adds 2 messages).
@@ -164,6 +185,7 @@ func TestPersona_EmitFnCalled(t *testing.T) {
 			emitted[name]++
 			mu.Unlock()
 		},
+		AICallFn: mockAIFn(),
 	})
 	ctx := context.Background()
 

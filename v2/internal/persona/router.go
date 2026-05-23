@@ -21,24 +21,11 @@ type Router struct {
 func NewRouter() *Router {
 	r := &Router{}
 	r.rules = []rule{
-		{pattern: regexp.MustCompile(`(?i)what\s+is\s+claude\s+doing`), lane: LaneStateLookup, handler: "status", method: "claudeStatus"},
-		{pattern: regexp.MustCompile(`(?i)what\s+is\s+(?:claude|calude|cluade|cladue)\s+doing`), lane: LaneStateLookup, handler: "status", method: "claudeStatus"},
-		{pattern: regexp.MustCompile(`(?i)claude\s+status`), lane: LaneStateLookup, handler: "status", method: "claudeStatus"},
-		{pattern: regexp.MustCompile(`(?i)(?:is|what(?:'s|s))\s+(?:claude|the\s+ai|the\s+agent)\s+(?:doing|running|working)`), lane: LaneStateLookup, handler: "status", method: "claudeStatus"},
-		{pattern: regexp.MustCompile(`(?i)how\s+many\s+terminal`), lane: LaneStateLookup, handler: "status", method: "terminalCount"},
-		{pattern: regexp.MustCompile(`(?i)git\s+(status|log|diff|blame)`), lane: LaneStateLookup, handler: "git", method: "query", argExtractors: map[string]int{"type": 1}},
-		{pattern: regexp.MustCompile(`(?i)what\s+changed`), lane: LaneStateLookup, handler: "git", method: "recentChanges"},
-		{pattern: regexp.MustCompile(`(?i)show\s+(me\s+)?git\s+(status|log|diff|blame)`), lane: LaneStateLookup, handler: "git", method: "query", argExtractors: map[string]int{"type": 2}},
-		{pattern: regexp.MustCompile(`(?i)open\s+(a\s+)?(terminal|tab|shell)`), lane: LaneSystemAction, handler: "terminal", method: "open"},
-		{pattern: regexp.MustCompile(`(?i)^run\s+(.+)`), lane: LaneSystemAction, handler: "terminal", method: "runCommand", argExtractors: map[string]int{"command": 1}},
-		{pattern: regexp.MustCompile(`(?i)(?:search|find)\s+(?:for\s+)?(.+)`), lane: LaneStateLookup, handler: "search", method: "search", argExtractors: map[string]int{"query": 1}},
-		{pattern: regexp.MustCompile(`(?i)switch\s+to\s+(?:project\s+)?(.+)`), lane: LaneSystemAction, handler: "workspace", method: "switchProject", argExtractors: map[string]int{"project": 1}},
+		// Claude session control — these are actions, not questions, so they stay as direct handlers.
 		{pattern: regexp.MustCompile(`(?i)(?:start\s+claude|help\s+me\s+with)\s*(.+)?`), lane: LaneClaudeTask, handler: "claude", method: "spawn", argExtractors: map[string]int{"task": 1}},
 		{pattern: regexp.MustCompile(`(?i)pause\s+claude`), lane: LaneClaudeTask, handler: "claude", method: "pause"},
 		{pattern: regexp.MustCompile(`(?i)stop\s+claude`), lane: LaneClaudeTask, handler: "claude", method: "stop"},
 		{pattern: regexp.MustCompile(`(?i)resume\s+claude`), lane: LaneClaudeTask, handler: "claude", method: "resume"},
-		{pattern: regexp.MustCompile(`(?i)why\s+did\s+.*\s*fail`), lane: LaneLocalReasoning, handler: "ai", method: "analyzeFailure"},
-		{pattern: regexp.MustCompile(`(?i)(?:explain|summarize|describe)\s+.+`), lane: LaneLocalReasoning, handler: "ai", method: "reason"},
 	}
 	return r
 }

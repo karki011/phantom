@@ -21,6 +21,7 @@ type PersonaDeps struct {
 	PrefSetter  PrefSetter
 	EmitFn      EmitFn
 	ComposerMgr *composer.Manager // Composer V2 manager for Claude session control
+	AICallFn    ClaudeFn          // optional: override AI handler's Claude call (for testing)
 }
 
 // maxHistory caps the number of conversation messages kept in memory.
@@ -51,13 +52,20 @@ func NewPersona(deps PersonaDeps) *Persona {
 		claudeBin = resolved
 	}
 
+	var aiHandler Handler
+	if deps.AICallFn != nil {
+		aiHandler = NewAIHandlerWithFn(engine, deps.AICallFn)
+	} else {
+		aiHandler = NewAIHandler(engine, claudeBin)
+	}
+
 	handlers := map[string]Handler{
 		"status":    NewStatusHandler(engine),
 		"git":       NewGitHandler(engine),
 		"search":    NewSearchHandler(engine),
 		"workspace": NewWorkspaceHandler(engine),
-		"ai":        NewAIHandler(engine, claudeBin),
-		"llm":       NewLLMHandler(), // kept for backward compatibility
+		"ai":        aiHandler,
+		"llm":       NewLLMHandler(),
 	}
 
 	emit := deps.EmitFn
