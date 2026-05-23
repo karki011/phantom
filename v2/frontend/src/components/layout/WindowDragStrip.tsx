@@ -32,6 +32,7 @@ import { PhantomDrawer } from '@/shared/PhantomDrawer/PhantomDrawer';
 import * as drawerStyles from '@/shared/PhantomDrawer/PhantomDrawer.css';
 import { AppBackendLogDrawer } from './AppBackendLogDrawer';
 import { ChevronLeft, ChevronRight, SystemIcon, FolderIcon } from './header-icons';
+import { PersonaDropdown } from '@/components/persona/PersonaDropdown';
 import * as shellStyles from '@/styles/app-shell.css';
 import { headerIconPulse } from '@/components/ai-command-center/ai-command-center.css';
 
@@ -223,7 +224,7 @@ export function WindowDragStrip() {
       </div>
 
       <PersonaPill />
-      {/* <PersonaDropdown /> */}
+      <PersonaDropdown />
 
       <div class={shellStyles.windowDragStripRight}>
         <div class={shellStyles.headerActions}>
