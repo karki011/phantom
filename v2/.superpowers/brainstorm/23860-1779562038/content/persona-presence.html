@@ -1,0 +1,175 @@
+<h2>How should Phantom Persona live in the app?</h2>
+<p class="subtitle">You described something like Siri / "OK Google" — always accessible, voice-activated, ambient. Let's nail down the interaction model.</p>
+
+<div class="cards">
+
+  <!-- Option A: Floating Orb -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #0a0a0f; padding: 32px; display: flex; align-items: center; justify-content: center; min-height: 280px;">
+      <div style="position: relative;">
+        <!-- App shell mockup -->
+        <div style="width: 500px; height: 220px; border: 1px solid #1e1e2e; border-radius: 10px; overflow: hidden; background: #111118;">
+          <!-- Title bar -->
+          <div style="height: 28px; background: #16161f; border-bottom: 1px solid #1e1e2e; display: flex; align-items: center; padding: 0 12px;">
+            <div style="display: flex; gap: 6px;">
+              <div style="width: 10px; height: 10px; border-radius: 50%; background: #ef4444;"></div>
+              <div style="width: 10px; height: 10px; border-radius: 50%; background: #f59e0b;"></div>
+              <div style="width: 10px; height: 10px; border-radius: 50%; background: #22c55e;"></div>
+            </div>
+            <div style="flex:1; text-align: center; font-size: 11px; color: #555566; font-family: monospace;">P H A N T O M</div>
+          </div>
+          <!-- Content area -->
+          <div style="display: flex; height: 192px;">
+            <!-- Sidebar -->
+            <div style="width: 44px; background: #0f0f17; border-right: 1px solid #1e1e2e;"></div>
+            <!-- Main content -->
+            <div style="flex: 1; padding: 16px;">
+              <div style="height: 14px; width: 60%; background: #1e1e2e; border-radius: 3px; margin-bottom: 8px;"></div>
+              <div style="height: 10px; width: 80%; background: #1a1a24; border-radius: 3px; margin-bottom: 6px;"></div>
+              <div style="height: 10px; width: 45%; background: #1a1a24; border-radius: 3px;"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Floating Orb -->
+        <div style="position: absolute; bottom: -12px; right: -12px; width: 52px; height: 52px; border-radius: 50%; background: radial-gradient(circle at 40% 40%, #00d4ff, #0088aa); box-shadow: 0 0 24px rgba(0, 212, 255, 0.4), 0 4px 12px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; cursor: pointer;">
+          <div style="font-size: 18px; color: white; font-weight: 800; font-family: 'Inter', sans-serif;">P</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Floating Orb</h3>
+      <p>Always-visible glowing orb in bottom-right corner. Click or say "Phantom" to activate. Expands into a chat overlay. Pulses when it has something to say. Lives above all panes.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Instantly accessible from any view</li><li>Non-intrusive when idle</li><li>Visual heartbeat (pulse = alive)</li><li>Siri-like mental model</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Overlaps content in small windows</li><li>Another floating element to manage</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option B: Command Bar (Spotlight style) -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #0a0a0f; padding: 32px; display: flex; align-items: center; justify-content: center; min-height: 280px;">
+      <div style="position: relative;">
+        <!-- App shell mockup -->
+        <div style="width: 500px; height: 220px; border: 1px solid #1e1e2e; border-radius: 10px; overflow: hidden; background: #111118; filter: brightness(0.5);">
+          <div style="height: 28px; background: #16161f; border-bottom: 1px solid #1e1e2e; display: flex; align-items: center; padding: 0 12px;">
+            <div style="display: flex; gap: 6px;">
+              <div style="width: 10px; height: 10px; border-radius: 50%; background: #ef4444;"></div>
+              <div style="width: 10px; height: 10px; border-radius: 50%; background: #f59e0b;"></div>
+              <div style="width: 10px; height: 10px; border-radius: 50%; background: #22c55e;"></div>
+            </div>
+          </div>
+          <div style="display: flex; height: 192px;">
+            <div style="width: 44px; background: #0f0f17; border-right: 1px solid #1e1e2e;"></div>
+            <div style="flex: 1;"></div>
+          </div>
+        </div>
+        <!-- Spotlight bar -->
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 420px; background: #16161f; border: 1px solid rgba(0, 212, 255, 0.3); border-radius: 12px; box-shadow: 0 0 40px rgba(0, 212, 255, 0.15), 0 20px 60px rgba(0,0,0,0.6); overflow: hidden;">
+          <div style="padding: 14px 18px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #1e1e2e;">
+            <div style="width: 20px; height: 20px; border-radius: 50%; background: radial-gradient(circle, #00d4ff, #0088aa); flex-shrink: 0;"></div>
+            <div style="flex: 1; font-size: 14px; color: #8888a0; font-family: 'Inter', sans-serif;">Ask Phantom anything...</div>
+            <div style="font-size: 10px; color: #555566; font-family: monospace; padding: 2px 8px; border: 1px solid #2a2a3a; border-radius: 4px;">⌘K</div>
+          </div>
+          <div style="padding: 10px 18px;">
+            <div style="font-size: 11px; color: #555566; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px;">Suggestions</div>
+            <div style="padding: 8px 0; font-size: 13px; color: #8888a0;">What is Claude doing?</div>
+            <div style="padding: 8px 0; font-size: 13px; color: #8888a0;">Why did the build fail?</div>
+            <div style="padding: 8px 0; font-size: 13px; color: #8888a0;">Open a new terminal</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Command Bar (Spotlight Style)</h3>
+      <p>Press ⌘K or say "Phantom" to summon a floating command bar. Type or speak. Shows contextual suggestions. Dismisses after action. Think macOS Spotlight meets ChatGPT.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Zero screen real-estate when inactive</li><li>Familiar Spotlight/Alfred mental model</li><li>Fast keyboard-first workflow</li><li>Natural for quick questions</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>No persistent visual presence</li><li>Multi-turn conversations feel cramped</li><li>Can't show proactive notifications without interrupting</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option C: Hybrid — Orb + Expanding Panel -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #0a0a0f; padding: 32px; display: flex; align-items: center; justify-content: center; min-height: 280px;">
+      <div style="position: relative;">
+        <!-- App shell mockup -->
+        <div style="width: 500px; height: 220px; border: 1px solid #1e1e2e; border-radius: 10px; overflow: hidden; background: #111118;">
+          <div style="height: 28px; background: #16161f; border-bottom: 1px solid #1e1e2e; display: flex; align-items: center; padding: 0 12px;">
+            <div style="display: flex; gap: 6px;">
+              <div style="width: 10px; height: 10px; border-radius: 50%; background: #ef4444;"></div>
+              <div style="width: 10px; height: 10px; border-radius: 50%; background: #f59e0b;"></div>
+              <div style="width: 10px; height: 10px; border-radius: 50%; background: #22c55e;"></div>
+            </div>
+            <div style="flex:1; text-align: center; font-size: 11px; color: #555566; font-family: monospace;">P H A N T O M</div>
+          </div>
+          <div style="display: flex; height: 192px;">
+            <!-- Sidebar -->
+            <div style="width: 44px; background: #0f0f17; border-right: 1px solid #1e1e2e;"></div>
+            <!-- Main content (dimmed) -->
+            <div style="flex: 1; padding: 16px; opacity: 0.3;">
+              <div style="height: 14px; width: 60%; background: #1e1e2e; border-radius: 3px; margin-bottom: 8px;"></div>
+              <div style="height: 10px; width: 80%; background: #1a1a24; border-radius: 3px;"></div>
+            </div>
+            <!-- Persona panel (right side) -->
+            <div style="width: 220px; background: #13131b; border-left: 1px solid rgba(0, 212, 255, 0.15); display: flex; flex-direction: column;">
+              <!-- Panel header -->
+              <div style="padding: 10px 14px; border-bottom: 1px solid #1e1e2e; display: flex; align-items: center; gap: 8px;">
+                <div style="width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle, #00d4ff, #0088aa); animation: none;"></div>
+                <span style="font-size: 12px; color: var(--accent-cyan, #00d4ff); font-weight: 600; font-family: monospace; letter-spacing: 1px;">PHANTOM</span>
+                <span style="font-size: 10px; color: #22c55e; margin-left: auto;">listening</span>
+              </div>
+              <!-- Chat messages -->
+              <div style="flex: 1; padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow: hidden;">
+                <div style="background: #1e1e2e; border-radius: 8px; padding: 8px 10px; font-size: 11px; color: #8888a0; align-self: flex-start; max-width: 85%;">Claude finished the auth refactor. 3 files changed, tests passing.</div>
+                <div style="background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.15); border-radius: 8px; padding: 8px 10px; font-size: 11px; color: #e4e4ed; align-self: flex-end; max-width: 85%;">Open a terminal and run the tests</div>
+                <div style="background: #1e1e2e; border-radius: 8px; padding: 8px 10px; font-size: 11px; color: #8888a0; align-self: flex-start; max-width: 85%;">Done. Terminal open in tab 3, running npm test...</div>
+              </div>
+              <!-- Input -->
+              <div style="padding: 8px 10px; border-top: 1px solid #1e1e2e;">
+                <div style="background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 8px; padding: 8px 10px; font-size: 11px; color: #555566;">Ask or say "Phantom"...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Small orb indicator (when panel is collapsed) -->
+        <div style="position: absolute; bottom: 8px; right: 8px; display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(0, 212, 255, 0.08); border: 1px solid rgba(0, 212, 255, 0.15); border-radius: 100px;">
+          <div style="width: 8px; height: 8px; border-radius: 50%; background: #00d4ff;"></div>
+          <span style="font-size: 10px; color: #00d4ff; font-family: monospace;">⌘K</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Hybrid — Orb + Expanding Panel (Recommended)</h3>
+      <p>Small status orb in the title bar or rail. Say "Phantom" or press ⌘K for quick commands (Spotlight mode). Click the orb to expand a right-side panel for conversations. Panel persists for multi-turn chat. Orb pulses for proactive notifications.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Quick commands AND deep conversations</li><li>Always-visible status indicator</li><li>Proactive notifications via orb pulse</li><li>Panel doesn't block terminal/editor</li><li>Familiar: Copilot Chat + Siri combined</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>More complex to build (two modes)</li><li>Panel takes horizontal space when open</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top: 32px;">
+  <h3>Key Behaviors (All Options)</h3>
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-top: 12px;">
+    <div style="background: #16161f; border: 1px solid #1e1e2e; border-radius: 8px; padding: 14px;">
+      <div style="font-size: 11px; color: #00d4ff; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">Wake Word</div>
+      <div style="font-size: 13px; color: #e4e4ed;">"Phantom" activates listening</div>
+    </div>
+    <div style="background: #16161f; border: 1px solid #1e1e2e; border-radius: 8px; padding: 14px;">
+      <div style="font-size: 11px; color: #a855f7; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">Keyboard</div>
+      <div style="font-size: 13px; color: #e4e4ed;">⌘K for instant access</div>
+    </div>
+    <div style="background: #16161f; border: 1px solid #1e1e2e; border-radius: 8px; padding: 14px;">
+      <div style="font-size: 11px; color: #22c55e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">Proactive</div>
+      <div style="font-size: 13px; color: #e4e4ed;">Orb pulses when Phantom has info</div>
+    </div>
+    <div style="background: #16161f; border: 1px solid #1e1e2e; border-radius: 8px; padding: 14px;">
+      <div style="font-size: 11px; color: #f59e0b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">Actions</div>
+      <div style="font-size: 13px; color: #e4e4ed;">Open terminals, run Claude, check git</div>
+    </div>
+  </div>
+</div>

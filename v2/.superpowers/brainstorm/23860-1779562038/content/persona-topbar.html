@@ -1,0 +1,247 @@
+<h2>Phantom Persona in the Top Bar</h2>
+<p class="subtitle">Integrated into the title bar — ambient presence that's always one click or voice command away. Which placement feels right?</p>
+
+<div class="cards">
+
+  <!-- Option A: Center of top bar -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #0a0a0f; padding: 24px; display: flex; align-items: center; justify-content: center; min-height: 200px;">
+      <!-- Full top bar replica -->
+      <div style="width: 100%; max-width: 680px;">
+        <!-- Top bar -->
+        <div style="height: 36px; background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 8px; display: flex; align-items: center; padding: 0 12px; gap: 8px;">
+          <!-- Left: nav + system/project -->
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="color: #555566; font-size: 12px;">←</div>
+            <div style="padding: 2px 8px; background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 4px; font-size: 10px; color: #8888a0; font-family: monospace;">SYSTEM</div>
+            <div style="padding: 2px 8px; background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 4px; font-size: 10px; color: #00d4ff; font-family: monospace;">PROJECT</div>
+          </div>
+
+          <!-- Center: Phantom Persona -->
+          <div style="flex: 1; display: flex; justify-content: center;">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 3px 14px; background: rgba(0, 212, 255, 0.06); border: 1px solid rgba(0, 212, 255, 0.15); border-radius: 100px; cursor: pointer; transition: all 0.2s;">
+              <div style="width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle, #00d4ff, #0088aa); box-shadow: 0 0 8px rgba(0, 212, 255, 0.4);"></div>
+              <span style="font-size: 11px; color: #00d4ff; font-family: 'Inter', sans-serif; font-weight: 600; letter-spacing: 2px;">PHANTOM</span>
+              <span style="font-size: 9px; color: #555566; font-family: monospace; padding: 1px 6px; border: 1px solid #2a2a3a; border-radius: 3px;">⌘K</span>
+            </div>
+          </div>
+
+          <!-- Right: metrics + icons -->
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 10px; color: #555566; font-family: monospace;">CPU 17%</span>
+            <span style="font-size: 10px; color: #555566; font-family: monospace;">RAM 26G</span>
+            <div style="display: flex; gap: 6px;">
+              <div style="width: 16px; height: 16px; border-radius: 4px; background: #1a1a24;"></div>
+              <div style="width: 16px; height: 16px; border-radius: 4px; background: #1a1a24;"></div>
+              <div style="width: 16px; height: 16px; border-radius: 4px; background: #1a1a24;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Expanded state (below bar) -->
+        <div style="margin-top: 8px; width: 420px; margin-left: auto; margin-right: auto; background: #13131b; border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 30px rgba(0, 212, 255, 0.08); overflow: hidden;">
+          <div style="padding: 12px 16px; border-bottom: 1px solid #1e1e2e; display: flex; align-items: center; gap: 8px;">
+            <div style="width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle, #00d4ff, #0088aa);"></div>
+            <span style="font-size: 12px; color: #e4e4ed; font-weight: 500;">What can I help with?</span>
+            <span style="margin-left: auto; font-size: 10px; color: #22c55e;">● listening</span>
+          </div>
+          <div style="padding: 10px 16px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="padding: 8px 12px; background: #1a1a24; border-radius: 8px; font-size: 12px; color: #8888a0; cursor: pointer;">🔍 What is Claude doing right now?</div>
+            <div style="padding: 8px 12px; background: #1a1a24; border-radius: 8px; font-size: 12px; color: #8888a0; cursor: pointer;">📂 Show me what changed</div>
+            <div style="padding: 8px 12px; background: #1a1a24; border-radius: 8px; font-size: 12px; color: #8888a0; cursor: pointer;">▶ Open terminal and run tests</div>
+          </div>
+          <div style="padding: 10px 16px; border-top: 1px solid #1e1e2e;">
+            <div style="background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #555566; display: flex; align-items: center; gap: 8px;">
+              <span style="flex: 1;">Type or speak...</span>
+              <span style="font-size: 10px; color: #00d4ff;">🎤</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Center of Top Bar — Drops Down</h3>
+      <p>Phantom pill sits dead-center in the title bar. Click or ⌘K opens a dropdown panel below it. Orb pulses when it has updates. Feels like the app's brain is literally in the center of everything.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Right side near icons, expands to side panel -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #0a0a0f; padding: 24px; display: flex; align-items: center; justify-content: center; min-height: 200px;">
+      <div style="width: 100%; max-width: 680px;">
+        <!-- Top bar -->
+        <div style="height: 36px; background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 8px; display: flex; align-items: center; padding: 0 12px; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="color: #555566; font-size: 12px;">←</div>
+            <div style="padding: 2px 8px; background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 4px; font-size: 10px; color: #8888a0; font-family: monospace;">SYSTEM</div>
+            <div style="padding: 2px 8px; background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 4px; font-size: 10px; color: #00d4ff; font-family: monospace;">PROJECT</div>
+          </div>
+
+          <!-- Center: metrics -->
+          <div style="flex: 1; display: flex; justify-content: center; gap: 12px;">
+            <span style="font-size: 10px; color: #22c55e; font-family: monospace;">● 2 sessions</span>
+            <span style="font-size: 10px; color: #555566; font-family: monospace;">CPU 17%</span>
+            <span style="font-size: 10px; color: #555566; font-family: monospace;">RAM 26G</span>
+          </div>
+
+          <!-- Right: Phantom + icons -->
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <!-- Phantom button (active state with glow) -->
+            <div style="display: flex; align-items: center; gap: 6px; padding: 3px 12px; background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.25); border-radius: 6px; cursor: pointer; box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);">
+              <div style="width: 8px; height: 8px; border-radius: 50%; background: #00d4ff; box-shadow: 0 0 6px rgba(0, 212, 255, 0.6);"></div>
+              <span style="font-size: 10px; color: #00d4ff; font-weight: 600; font-family: monospace;">⌘K</span>
+            </div>
+            <div style="width: 1px; height: 16px; background: #2a2a3a;"></div>
+            <div style="display: flex; gap: 6px;">
+              <div style="width: 16px; height: 16px; border-radius: 4px; background: #1a1a24;"></div>
+              <div style="width: 16px; height: 16px; border-radius: 4px; background: #1a1a24;"></div>
+              <div style="width: 16px; height: 16px; border-radius: 4px; background: #1a1a24;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Side panel mockup (right edge) -->
+        <div style="display: flex; margin-top: 8px; gap: 8px; height: 180px;">
+          <!-- Main content area (dimmed) -->
+          <div style="flex: 1; background: #111118; border: 1px solid #1e1e2e; border-radius: 8px; opacity: 0.4; padding: 16px;">
+            <div style="height: 12px; width: 50%; background: #1e1e2e; border-radius: 3px; margin-bottom: 8px;"></div>
+            <div style="height: 10px; width: 70%; background: #1a1a24; border-radius: 3px; margin-bottom: 6px;"></div>
+            <div style="height: 10px; width: 40%; background: #1a1a24; border-radius: 3px;"></div>
+          </div>
+          <!-- Phantom panel (right) -->
+          <div style="width: 260px; background: #13131b; border: 1px solid rgba(0, 212, 255, 0.15); border-radius: 8px; display: flex; flex-direction: column; overflow: hidden;">
+            <div style="padding: 10px 12px; border-bottom: 1px solid #1e1e2e; display: flex; align-items: center; gap: 6px;">
+              <div style="width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle, #00d4ff, #0088aa);"></div>
+              <span style="font-size: 11px; color: #00d4ff; font-weight: 600; letter-spacing: 1px;">PHANTOM</span>
+              <span style="margin-left: auto; font-size: 9px; color: #22c55e;">listening</span>
+            </div>
+            <div style="flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 6px; overflow: hidden;">
+              <div style="background: #1e1e2e; border-radius: 6px; padding: 6px 10px; font-size: 10px; color: #8888a0; align-self: flex-start; max-width: 90%;">Claude is running tests in terminal 2...</div>
+              <div style="background: rgba(0, 212, 255, 0.08); border: 1px solid rgba(0, 212, 255, 0.12); border-radius: 6px; padding: 6px 10px; font-size: 10px; color: #e4e4ed; align-self: flex-end;">Show me the failures</div>
+              <div style="background: #1e1e2e; border-radius: 6px; padding: 6px 10px; font-size: 10px; color: #8888a0; align-self: flex-start; max-width: 90%;">2 tests failed in auth.test.ts — assertion on line 42 and timeout on line 87.</div>
+            </div>
+            <div style="padding: 6px 8px; border-top: 1px solid #1e1e2e;">
+              <div style="background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 6px; padding: 8px 10px; font-size: 11px; color: #555566;">Ask Phantom...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Right Side of Top Bar — Opens Side Panel</h3>
+      <p>Compact Phantom button near the existing icon cluster. Click or ⌘K slides open a right-side panel (like the existing Files/Changes sidebar). Keeps metrics in center where they are now.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Between metrics and icons (inline) -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #0a0a0f; padding: 24px; display: flex; align-items: center; justify-content: center; min-height: 200px;">
+      <div style="width: 100%; max-width: 680px;">
+        <!-- Top bar -->
+        <div style="height: 36px; background: #0f0f14; border: 1px solid #1e1e2e; border-radius: 8px; display: flex; align-items: center; padding: 0 12px; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="color: #555566; font-size: 12px;">←</div>
+            <div style="padding: 2px 8px; background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 4px; font-size: 10px; color: #8888a0; font-family: monospace;">SYSTEM</div>
+            <div style="padding: 2px 8px; background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 4px; font-size: 10px; color: #00d4ff; font-family: monospace;">PROJECT</div>
+          </div>
+
+          <!-- Center: metrics -->
+          <div style="flex: 1; display: flex; justify-content: center; gap: 12px;">
+            <span style="font-size: 10px; color: #22c55e; font-family: monospace;">● 2 sessions</span>
+            <span style="font-size: 10px; color: #555566; font-family: monospace;">CPU 17%</span>
+            <span style="font-size: 10px; color: #555566; font-family: monospace;">RAM 26G</span>
+          </div>
+
+          <!-- Phantom inline status (between metrics and icons) -->
+          <div style="display: flex; align-items: center; gap: 6px; padding: 3px 12px; background: rgba(0, 212, 255, 0.06); border: 1px solid rgba(0, 212, 255, 0.12); border-radius: 100px; cursor: pointer;">
+            <div style="width: 8px; height: 8px; border-radius: 50%; background: #00d4ff; box-shadow: 0 0 6px rgba(0, 212, 255, 0.5);"></div>
+            <span style="font-size: 10px; color: #8888a0; font-family: monospace; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Claude running tests...</span>
+          </div>
+
+          <div style="width: 1px; height: 16px; background: #2a2a3a;"></div>
+
+          <div style="display: flex; gap: 6px;">
+            <div style="width: 16px; height: 16px; border-radius: 4px; background: #1a1a24;"></div>
+            <div style="width: 16px; height: 16px; border-radius: 4px; background: #1a1a24;"></div>
+            <div style="width: 16px; height: 16px; border-radius: 4px; background: #1a1a24;"></div>
+          </div>
+        </div>
+
+        <!-- Expanded: dropdown from that position -->
+        <div style="margin-top: 8px; margin-left: auto; margin-right: 80px; width: 380px; background: #13131b; border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 24px rgba(0, 212, 255, 0.06); overflow: hidden;">
+          <!-- Status banner -->
+          <div style="padding: 10px 14px; background: rgba(0, 212, 255, 0.04); border-bottom: 1px solid #1e1e2e; display: flex; align-items: center; gap: 8px;">
+            <div style="width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle, #00d4ff, #0088aa);"></div>
+            <div style="flex: 1;">
+              <div style="font-size: 11px; color: #e4e4ed; font-weight: 500;">Claude is running tests in terminal 2</div>
+              <div style="font-size: 10px; color: #555566; margin-top: 2px;">3 files changed · auth.ts, user.ts, index.ts</div>
+            </div>
+            <span style="font-size: 9px; color: #22c55e;">● live</span>
+          </div>
+          <!-- Quick actions -->
+          <div style="padding: 8px 14px; display: flex; gap: 6px; flex-wrap: wrap;">
+            <div style="padding: 4px 10px; background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 6px; font-size: 10px; color: #8888a0; cursor: pointer;">Show diff</div>
+            <div style="padding: 4px 10px; background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 6px; font-size: 10px; color: #8888a0; cursor: pointer;">Open terminal</div>
+            <div style="padding: 4px 10px; background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 6px; font-size: 10px; color: #8888a0; cursor: pointer;">Ask Claude</div>
+            <div style="padding: 4px 10px; background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 6px; font-size: 10px; color: #8888a0; cursor: pointer;">Git status</div>
+          </div>
+          <!-- Chat area -->
+          <div style="padding: 8px 14px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="background: #1e1e2e; border-radius: 8px; padding: 8px 10px; font-size: 11px; color: #8888a0; align-self: flex-start; max-width: 85%;">Tests are running. 12/24 passed so far. I'll let you know when they finish.</div>
+          </div>
+          <!-- Input -->
+          <div style="padding: 8px 14px; border-top: 1px solid #1e1e2e;">
+            <div style="background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 8px; padding: 9px 12px; font-size: 11px; color: #555566; display: flex; align-items: center; gap: 8px;">
+              <span style="flex: 1;">Ask Phantom or say "Phantom"...</span>
+              <span style="font-size: 9px; color: #00d4ff;">🎤</span>
+              <span style="font-size: 9px; color: #555566; padding: 1px 6px; border: 1px solid #2a2a3a; border-radius: 3px;">⌘K</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Inline Status Pill + Dropdown (Recommended)</h3>
+      <p>A live status pill in the top bar that shows what Phantom is tracking ("Claude running tests..."). Click to expand a dropdown with status, quick actions, and chat. The pill IS the status indicator — it's working even when you're not talking to it.</p>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>States of the Top Bar Pill</h3>
+  <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px;">
+    <!-- Idle -->
+    <div style="display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: #16161f; border: 1px solid #1e1e2e; border-radius: 8px;">
+      <div style="display: flex; align-items: center; gap: 6px; padding: 3px 12px; background: rgba(0, 212, 255, 0.04); border: 1px solid rgba(0, 212, 255, 0.1); border-radius: 100px; flex-shrink: 0;">
+        <div style="width: 8px; height: 8px; border-radius: 50%; background: #555566;"></div>
+        <span style="font-size: 10px; color: #555566; font-family: monospace;">Phantom</span>
+      </div>
+      <span style="font-size: 12px; color: #555566;">Idle — nothing active</span>
+    </div>
+    <!-- Watching Claude -->
+    <div style="display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: #16161f; border: 1px solid #1e1e2e; border-radius: 8px;">
+      <div style="display: flex; align-items: center; gap: 6px; padding: 3px 12px; background: rgba(0, 212, 255, 0.06); border: 1px solid rgba(0, 212, 255, 0.15); border-radius: 100px; flex-shrink: 0;">
+        <div style="width: 8px; height: 8px; border-radius: 50%; background: #00d4ff; box-shadow: 0 0 6px rgba(0, 212, 255, 0.5);"></div>
+        <span style="font-size: 10px; color: #8888a0; font-family: monospace;">Claude editing auth.ts</span>
+      </div>
+      <span style="font-size: 12px; color: #8888a0;">Observing Claude — shows current activity</span>
+    </div>
+    <!-- Notification -->
+    <div style="display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: #16161f; border: 1px solid #1e1e2e; border-radius: 8px;">
+      <div style="display: flex; align-items: center; gap: 6px; padding: 3px 12px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 100px; flex-shrink: 0;">
+        <div style="width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);"></div>
+        <span style="font-size: 10px; color: #f59e0b; font-family: monospace;">2 tests failed</span>
+      </div>
+      <span style="font-size: 12px; color: #f59e0b;">Needs attention — pulsing amber</span>
+    </div>
+    <!-- Listening -->
+    <div style="display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: #16161f; border: 1px solid #1e1e2e; border-radius: 8px;">
+      <div style="display: flex; align-items: center; gap: 6px; padding: 3px 12px; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 100px; flex-shrink: 0;">
+        <div style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);"></div>
+        <span style="font-size: 10px; color: #22c55e; font-family: monospace;">● Listening...</span>
+      </div>
+      <span style="font-size: 12px; color: #22c55e;">Voice activated — "Phantom" wake word detected</span>
+    </div>
+  </div>
+</div>

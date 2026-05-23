@@ -22,7 +22,9 @@ func NewRouter() *Router {
 	r := &Router{}
 	r.rules = []rule{
 		{pattern: regexp.MustCompile(`(?i)what\s+is\s+claude\s+doing`), lane: LaneStateLookup, handler: "status", method: "claudeStatus"},
+		{pattern: regexp.MustCompile(`(?i)what\s+is\s+(?:claude|calude|cluade|cladue)\s+doing`), lane: LaneStateLookup, handler: "status", method: "claudeStatus"},
 		{pattern: regexp.MustCompile(`(?i)claude\s+status`), lane: LaneStateLookup, handler: "status", method: "claudeStatus"},
+		{pattern: regexp.MustCompile(`(?i)(?:is|what(?:'s|s))\s+(?:claude|the\s+ai|the\s+agent)\s+(?:doing|running|working)`), lane: LaneStateLookup, handler: "status", method: "claudeStatus"},
 		{pattern: regexp.MustCompile(`(?i)how\s+many\s+terminal`), lane: LaneStateLookup, handler: "status", method: "terminalCount"},
 		{pattern: regexp.MustCompile(`(?i)git\s+(status|log|diff|blame)`), lane: LaneStateLookup, handler: "git", method: "query", argExtractors: map[string]int{"type": 1}},
 		{pattern: regexp.MustCompile(`(?i)what\s+changed`), lane: LaneStateLookup, handler: "git", method: "recentChanges"},

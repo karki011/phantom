@@ -209,3 +209,20 @@ func (h *WorkspaceHandler) switchProject(project string) string {
 	}
 	return fmt.Sprintf("Switching to project %q is not yet enabled — action tier locked.", project)
 }
+
+// ─── LLMHandler (fallback) ──────────────────────────────────────────────────
+
+type LLMHandler struct{}
+
+func NewLLMHandler() *LLMHandler { return &LLMHandler{} }
+
+func (h *LLMHandler) Handle(_ context.Context, intent Intent, _ string) Response {
+	query := intent.Args["query"]
+	if query == "" {
+		query = intent.Raw
+	}
+	return Response{
+		Text:  fmt.Sprintf("I'd need a local LLM to answer that. Try asking something like:\n• \"What is Claude doing?\"\n• \"Git status\"\n• \"What changed?\"\n\nLocal LLM integration is coming soon."),
+		Speak: "I need a local model to answer that. Try a simpler question.",
+	}
+}

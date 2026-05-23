@@ -50,6 +50,7 @@ func NewPersona(deps PersonaDeps) *Persona {
 		"git":       NewGitHandler(engine),
 		"search":    NewSearchHandler(engine),
 		"workspace": NewWorkspaceHandler(engine),
+		"llm":       NewLLMHandler(),
 	}
 
 	emit := deps.EmitFn

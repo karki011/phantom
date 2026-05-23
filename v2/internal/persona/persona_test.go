@@ -3,6 +3,7 @@ package persona
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -101,14 +102,14 @@ func TestPersona_Ask_TrustAllowed(t *testing.T) {
 	}
 }
 
-func TestPersona_Ask_UnknownHandler(t *testing.T) {
+func TestPersona_Ask_LLMFallback(t *testing.T) {
 	p := NewPersona(PersonaDeps{})
 	ctx := context.Background()
 
-	// "explain the code" routes to handler "llm" which is not registered.
+	// "explain the code" routes to handler "llm" which returns a helpful fallback.
 	resp := p.Ask(ctx, "explain the code")
-	if resp.Text != "I don't have a handler for that yet." {
-		t.Errorf("expected missing-handler response, got %q", resp.Text)
+	if !strings.Contains(resp.Text, "local LLM") {
+		t.Errorf("expected LLM fallback response, got %q", resp.Text)
 	}
 }
 
