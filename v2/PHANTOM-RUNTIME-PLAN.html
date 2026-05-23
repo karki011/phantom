@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phantom Runtime — Master Plan</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    --bg-primary: #0a0a0f;
+    --bg-secondary: #111118;
+    --bg-card: #16161f;
+    --bg-card-hover: #1c1c28;
+    --bg-accent: rgba(0, 212, 255, 0.06);
+    --border: #1e1e2e;
+    --border-accent: rgba(0, 212, 255, 0.2);
+    --text-primary: #e4e4ed;
+    --text-secondary: #8888a0;
+    --text-muted: #555566;
+    --accent-cyan: #00d4ff;
+    --accent-purple: #a855f7;
+    --accent-gold: #f59e0b;
+    --accent-green: #22c55e;
+    --accent-red: #ef4444;
+    --accent-pink: #ec4899;
+    --accent-blue: #3b82f6;
+    --glow-cyan: 0 0 30px rgba(0, 212, 255, 0.15);
+    --glow-purple: 0 0 30px rgba(168, 85, 247, 0.15);
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  .noise-overlay {
+    position: fixed;
+    inset: 0;
+    opacity: 0.03;
+    pointer-events: none;
+    z-index: 9999;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .hero {
+    position: relative;
+    padding: 80px 40px 60px;
+    text-align: center;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 800px;
+    background: radial-gradient(ellipse, rgba(0, 212, 255, 0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border: 1px solid var(--border-accent);
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent-cyan);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 24px;
+    background: rgba(0, 212, 255, 0.04);
+  }
+
+  .hero-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-cyan);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+
+  .hero h1 {
+    font-size: 56px;
+    font-weight: 800;
+    letter-spacing: -2px;
+    line-height: 1.1;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-cyan) 50%, var(--accent-purple) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero p {
+    font-size: 18px;
+    color: var(--text-secondary);
+    max-width: 600px;
+    margin: 0 auto 40px;
+    font-weight: 300;
+  }
+
+  .stats-row {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    text-align: center;
+  }
+
+  .stat-value {
+    font-size: 36px;
+    font-weight: 800;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .stat-value.cyan { color: var(--accent-cyan); }
+  .stat-value.green { color: var(--accent-green); }
+  .stat-value.gold { color: var(--accent-gold); }
+  .stat-value.purple { color: var(--accent-purple); }
+
+  .stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 40px;
+  }
+
+  section {
+    margin-bottom: 80px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .section-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-cyan);
+    background: rgba(0, 212, 255, 0.08);
+    border: 1px solid rgba(0, 212, 255, 0.15);
+    padding: 4px 12px;
+    border-radius: 6px;
+  }
+
+  .section-title {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+
+  /* Architecture Diagram */
+  .arch-diagram {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 48px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .arch-diagram::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+  }
+
+  .arch-layers {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .arch-layer {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .arch-box {
+    padding: 14px 24px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    text-align: center;
+    min-width: 160px;
+    position: relative;
+  }
+
+  .arch-box.ui {
+    background: rgba(168, 85, 247, 0.1);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    color: var(--accent-purple);
+  }
+
+  .arch-box.runtime {
+    background: rgba(0, 212, 255, 0.1);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    color: var(--accent-cyan);
+  }
+
+  .arch-box.engine {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: var(--accent-gold);
+  }
+
+  .arch-box.infra {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: var(--accent-green);
+  }
+
+  .arch-box.missing {
+    border-style: dashed;
+    opacity: 0.6;
+  }
+
+  .arch-box .status-dot {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  .status-dot.done { background: var(--accent-green); }
+  .status-dot.partial { background: var(--accent-gold); }
+  .status-dot.missing { background: var(--accent-red); }
+
+  .arch-arrow {
+    color: var(--text-muted);
+    font-size: 18px;
+    text-align: center;
+    line-height: 1;
+  }
+
+  .arch-legend {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  /* Gap Matrix */
+  .gap-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+
+  .gap-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    transition: all 0.2s ease;
+  }
+
+  .gap-card:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-accent);
+  }
+
+  .gap-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+
+  .gap-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    flex: 1;
+  }
+
+  .gap-pct {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 100px;
+    white-space: nowrap;
+  }
+
+  .gap-pct.high { background: rgba(34, 197, 94, 0.15); color: var(--accent-green); }
+  .gap-pct.mid { background: rgba(245, 158, 11, 0.15); color: var(--accent-gold); }
+  .gap-pct.low { background: rgba(239, 68, 68, 0.15); color: var(--accent-red); }
+
+  .gap-bar-track {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+
+  .gap-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.8s ease;
+  }
+
+  .gap-bar-fill.high { background: var(--accent-green); }
+  .gap-bar-fill.mid { background: var(--accent-gold); }
+  .gap-bar-fill.low { background: var(--accent-red); }
+
+  .gap-details {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .gap-tag {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-top: 8px;
+  }
+
+  .gap-tag.done { background: rgba(34, 197, 94, 0.12); color: var(--accent-green); }
+  .gap-tag.partial { background: rgba(245, 158, 11, 0.12); color: var(--accent-gold); }
+  .gap-tag.missing { background: rgba(239, 68, 68, 0.12); color: var(--accent-red); }
+  .gap-tag.stub { background: rgba(59, 130, 246, 0.12); color: var(--accent-blue); }
+
+  /* Signal Flow */
+  .signal-matrix {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .signal-matrix table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .signal-matrix th {
+    padding: 14px 20px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .signal-matrix td {
+    padding: 12px 20px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .signal-matrix tr:last-child td { border-bottom: none; }
+
+  .signal-matrix tr:hover td {
+    background: rgba(0, 212, 255, 0.02);
+  }
+
+  .signal-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .signal-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+  }
+
+  .signal-status.flows { color: var(--accent-green); }
+  .signal-status.siloed { color: var(--accent-gold); }
+  .signal-status.missing { color: var(--accent-red); }
+
+  .signal-icon {
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+  }
+
+  /* Phase Timeline */
+  .timeline {
+    position: relative;
+    padding-left: 60px;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 24px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(
+      180deg,
+      var(--accent-cyan),
+      var(--accent-purple),
+      var(--accent-gold),
+      var(--accent-green),
+      var(--accent-pink)
+    );
+    opacity: 0.3;
+  }
+
+  .phase {
+    position: relative;
+    margin-bottom: 48px;
+  }
+
+  .phase:last-child { margin-bottom: 0; }
+
+  .phase-dot {
+    position: absolute;
+    left: -42px;
+    top: 6px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid;
+  }
+
+  .phase-dot.p0 { border-color: var(--accent-cyan); background: rgba(0, 212, 255, 0.3); }
+  .phase-dot.p1 { border-color: var(--accent-purple); background: rgba(168, 85, 247, 0.3); }
+  .phase-dot.p2 { border-color: var(--accent-gold); background: rgba(245, 158, 11, 0.3); }
+  .phase-dot.p3 { border-color: var(--accent-green); background: rgba(34, 197, 94, 0.3); }
+  .phase-dot.p4 { border-color: var(--accent-pink); background: rgba(236, 72, 153, 0.3); }
+
+  .phase-header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+
+  .phase-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .phase-label.p0 { background: rgba(0, 212, 255, 0.12); color: var(--accent-cyan); }
+  .phase-label.p1 { background: rgba(168, 85, 247, 0.12); color: var(--accent-purple); }
+  .phase-label.p2 { background: rgba(245, 158, 11, 0.12); color: var(--accent-gold); }
+  .phase-label.p3 { background: rgba(34, 197, 94, 0.12); color: var(--accent-green); }
+  .phase-label.p4 { background: rgba(236, 72, 153, 0.12); color: var(--accent-pink); }
+
+  .phase-name {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  .phase-meta {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .phase-meta-item {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .phase-goal {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+    padding-left: 16px;
+    border-left: 2px solid var(--border);
+    font-style: italic;
+  }
+
+  .task-list {
+    list-style: none;
+  }
+
+  .task-item {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 16px;
+    align-items: center;
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    transition: background 0.15s ease;
+  }
+
+  .task-item:hover {
+    background: var(--bg-card);
+  }
+
+  .task-name {
+    font-weight: 500;
+  }
+
+  .task-impact, .task-effort {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 100px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .task-impact.high { background: rgba(239, 68, 68, 0.12); color: var(--accent-red); }
+  .task-impact.med { background: rgba(245, 158, 11, 0.12); color: var(--accent-gold); }
+  .task-impact.low { background: rgba(59, 130, 246, 0.12); color: var(--accent-blue); }
+
+  .task-effort.s { background: rgba(34, 197, 94, 0.12); color: var(--accent-green); }
+  .task-effort.m { background: rgba(245, 158, 11, 0.12); color: var(--accent-gold); }
+  .task-effort.l { background: rgba(239, 68, 68, 0.12); color: var(--accent-red); }
+
+  /* Risk Table */
+  .risk-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 16px;
+  }
+
+  .risk-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+
+  .risk-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .risk-title::before {
+    content: '⚠';
+    font-size: 14px;
+  }
+
+  .risk-mitigation {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding-left: 16px;
+    border-left: 2px solid var(--accent-green);
+  }
+
+  /* Target Metrics */
+  .metrics-table {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .metrics-table table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .metrics-table th {
+    padding: 14px 20px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .metrics-table td {
+    padding: 12px 20px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .metrics-table tr:last-child td { border-bottom: none; }
+
+  .metric-baseline { color: var(--text-muted); }
+  .metric-target { color: var(--accent-gold); }
+  .metric-vision { color: var(--accent-cyan); }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 60px 40px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .footer-brand {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--accent-cyan);
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .hero h1 { font-size: 36px; }
+    .container { padding: 0 20px; }
+    .hero { padding: 40px 20px; }
+    .stats-row { gap: 24px; }
+    .arch-diagram { padding: 24px; }
+    .timeline { padding-left: 40px; }
+    .timeline::before { left: 14px; }
+    .phase-dot { left: -32px; }
+    .gap-grid { grid-template-columns: 1fr; }
+    .task-item { grid-template-columns: 1fr; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="noise-overlay"></div>
+
+<!-- Hero -->
+<header class="hero">
+  <div class="hero-badge">Assessment Complete</div>
+  <h1>Phantom Runtime</h1>
+  <p>Intelligent Developer Runtime — PRD vs Current State Gap Analysis & Phased Roadmap</p>
+  <div class="stats-row">
+    <div class="stat">
+      <div class="stat-value cyan">60%</div>
+      <div class="stat-label">V1 PRD Complete</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value green">7</div>
+      <div class="stat-label">AI Strategies</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value gold">5</div>
+      <div class="stat-label">Phases Planned</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value purple">12-16w</div>
+      <div class="stat-label">Est. Timeline</div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+<!-- Architecture -->
+<section>
+  <div class="section-header">
+    <span class="section-number">01</span>
+    <h2 class="section-title">Target Architecture</h2>
+  </div>
+  <div class="arch-diagram">
+    <div class="arch-layers">
+      <div class="arch-layer">
+        <div class="arch-box ui">
+          Terminal Pane<span class="status-dot done"></span>
+        </div>
+        <div class="arch-box ui">
+          Composer (Claude)<span class="status-dot done"></span>
+        </div>
+        <div class="arch-box ui missing">
+          Phantom Persona<span class="status-dot missing"></span>
+        </div>
+      </div>
+      <div class="arch-arrow">↕</div>
+      <div class="arch-layer">
+        <div class="arch-box runtime" style="min-width: 520px;">
+          Wails Event Bus — typed events, routing, persistence<span class="status-dot partial"></span>
+        </div>
+      </div>
+      <div class="arch-arrow">↕</div>
+      <div class="arch-layer">
+        <div class="arch-box engine">
+          PTY Runtime + OSC Parser<span class="status-dot partial"></span>
+        </div>
+        <div class="arch-box engine">
+          AI Engine / Orchestrator<span class="status-dot done"></span>
+        </div>
+        <div class="arch-box engine missing">
+          Workspace Intelligence<span class="status-dot partial"></span>
+        </div>
+      </div>
+      <div class="arch-arrow">↕</div>
+      <div class="arch-layer">
+        <div class="arch-box infra">
+          Ghostty / libghostty<span class="status-dot partial"></span>
+        </div>
+        <div class="arch-box infra">
+          Claude CLI (subprocess)<span class="status-dot done"></span>
+        </div>
+        <div class="arch-box infra">
+          SQLite + FTS5<span class="status-dot partial"></span>
+        </div>
+      </div>
+    </div>
+    <div class="arch-legend">
+      <div class="legend-item"><div class="legend-dot" style="background: var(--accent-green);"></div> Done</div>
+      <div class="legend-item"><div class="legend-dot" style="background: var(--accent-gold);"></div> Partial</div>
+      <div class="legend-item"><div class="legend-dot" style="background: var(--accent-red);"></div> Missing</div>
+      <div class="legend-item"><div class="legend-dot" style="background: transparent; border: 1px dashed var(--text-muted);"></div> Dashed = Not built</div>
+    </div>
+  </div>
+</section>
+
+<!-- Component Status -->
+<section>
+  <div class="section-header">
+    <span class="section-number">02</span>
+    <h2 class="section-title">Component Status Matrix</h2>
+  </div>
+  <div class="gap-grid">
+    <div class="gap-card">
+      <div class="gap-card-header">
+        <div class="gap-card-title">PTY Runtime Layer</div>
+        <div class="gap-pct high">90%</div>
+      </div>
+      <div class="gap-bar-track"><div class="gap-bar-fill high" style="width: 90%"></div></div>
+      <div class="gap-details">
+        Multi-session via creack/pty, ring buffer scrollback, fan-out listeners, 24h reaper. Missing: cross-restart PTY adoption, subprocess enumeration.
+      </div>
+      <span class="gap-tag done">Production</span>
+    </div>
+
+    <div class="gap-card">
+      <div class="gap-card-header">
+        <div class="gap-card-title">Ghostty Integration</div>
+        <div class="gap-pct high">80%</div>
+      </div>
+      <div class="gap-bar-track"><div class="gap-bar-fill high" style="width: 80%"></div></div>
+      <div class="gap-details">
+        CGo bridge, runtime lifecycle, surface management, NSView + CAMetalLayer, Wails host window discovery, Y-flip coords. Missing: wired into app startup, frontend bindings.
+      </div>
+      <span class="gap-tag partial">Code-Complete, Unwired</span>
+    </div>
+
+    <div class="gap-card">
+      <div class="gap-card-header">
+        <div class="gap-card-title">Shell Integration</div>
+        <div class="gap-pct mid">50%</div>
+      </div>
+      <div class="gap-bar-track"><div class="gap-bar-fill mid" style="width: 50%"></div></div>
+      <div class="gap-details">
+        Full OSC 633 protocol in bash/zsh. Frontend parses command boundaries, exit codes, CWD. Critical gap: data trapped in frontend — no Go-side parser, no backend events.
+      </div>
+      <span class="gap-tag partial">Frontend-Only Silo</span>
+    </div>
+
+    <div class="gap-card">
+      <div class="gap-card-header">
+        <div class="gap-card-title">AI Agent Observation</div>
+        <div class="gap-pct mid">45%</div>
+      </div>
+      <div class="gap-bar-track"><div class="gap-bar-fill mid" style="width: 45%"></div></div>
+      <div class="gap-details">
+        JSONL streaming, live state inference (running/waiting/idle), PID lifecycle. Summarization and file tracking are post-session only. No real-time stall event.
+      </div>
+      <span class="gap-tag partial">Post-Hoc Only</span>
+    </div>
+
+    <div class="gap-card">
+      <div class="gap-card-header">
+        <div class="gap-card-title">Workspace Intelligence</div>
+        <div class="gap-pct mid">45%</div>
+      </div>
+      <div class="gap-bar-track"><div class="gap-bar-fill mid" style="width: 45%"></div></div>
+      <div class="gap-details">
+        File dependency graph, recent edits, strategy memory all working. Git history, terminal events, session memories not wired into AI context. FTS5 tables exist but are empty.
+      </div>
+      <span class="gap-tag partial">Siloed Signals</span>
+    </div>
+
+    <div class="gap-card">
+      <div class="gap-card-header">
+        <div class="gap-card-title">Terminal Event Bus</div>
+        <div class="gap-pct low">35%</div>
+      </div>
+      <div class="gap-bar-track"><div class="gap-bar-fill low" style="width: 35%"></div></div>
+      <div class="gap-details">
+        12 of 35+ PRD event types. Missing: command.start/end, ai.response.*, git.commit, workspace.index. No formal bus abstraction — loose string constants with untyped payloads.
+      </div>
+      <span class="gap-tag missing">Incomplete</span>
+    </div>
+
+    <div class="gap-card">
+      <div class="gap-card-header">
+        <div class="gap-card-title">Stream Interception</div>
+        <div class="gap-pct low">20%</div>
+      </div>
+      <div class="gap-bar-track"><div class="gap-bar-fill low" style="width: 20%"></div></div>
+      <div class="gap-details">
+        PTY output goes raw to xterm.js with 2ms batching. No middleware pipeline on output path. Only input interception is the inline AI ? prefix.
+      </div>
+      <span class="gap-tag missing">No Middleware</span>
+    </div>
+
+    <div class="gap-card">
+      <div class="gap-card-header">
+        <div class="gap-card-title">Phantom Persona Assistant</div>
+        <div class="gap-pct low">10%</div>
+      </div>
+      <div class="gap-bar-track"><div class="gap-bar-fill low" style="width: 10%"></div></div>
+      <div class="gap-details">
+        Zero assistant infrastructure. No personality, no workspace Q&A, no proactive intelligence. Composer exists but is a bare Claude CLI wrapper with no Phantom identity.
+      </div>
+      <span class="gap-tag missing">Not Started</span>
+    </div>
+  </div>
+</section>
+
+<!-- Signal Flow -->
+<section>
+  <div class="section-header">
+    <span class="section-number">03</span>
+    <h2 class="section-title">Signal Integration — The Core Gap</h2>
+  </div>
+  <div class="signal-matrix">
+    <table>
+      <thead>
+        <tr>
+          <th>Signal Source</th>
+          <th>Collected?</th>
+          <th>Flows to AI Context?</th>
+          <th>Gap</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="signal-name">File dependency graph</td>
+          <td><span class="signal-status flows"><span class="signal-icon">✓</span> Yes</span></td>
+          <td><span class="signal-status flows"><span class="signal-icon">✓</span> Yes</span></td>
+          <td style="color: var(--text-muted);">None</td>
+        </tr>
+        <tr>
+          <td class="signal-name">Recent file edits</td>
+          <td><span class="signal-status flows"><span class="signal-icon">✓</span> Yes</span></td>
+          <td><span class="signal-status flows"><span class="signal-icon">✓</span> Yes</span></td>
+          <td style="color: var(--text-muted);">None</td>
+        </tr>
+        <tr>
+          <td class="signal-name">Branch name</td>
+          <td><span class="signal-status flows"><span class="signal-icon">✓</span> Yes</span></td>
+          <td><span class="signal-status flows"><span class="signal-icon">✓</span> Yes</span></td>
+          <td style="color: var(--text-muted);">None</td>
+        </tr>
+        <tr>
+          <td class="signal-name">Strategy patterns</td>
+          <td><span class="signal-status flows"><span class="signal-icon">✓</span> Yes</span></td>
+          <td><span class="signal-status flows"><span class="signal-icon">✓</span> Yes</span></td>
+          <td style="color: var(--text-muted);">None</td>
+        </tr>
+        <tr>
+          <td class="signal-name">Git log / blame / diff</td>
+          <td><span class="signal-status flows"><span class="signal-icon">✓</span> Yes</span></td>
+          <td><span class="signal-status missing"><span class="signal-icon">✗</span> No</span></td>
+          <td style="color: var(--accent-gold);">Exists in git/ package, not wired to context.go</td>
+        </tr>
+        <tr>
+          <td class="signal-name">Terminal commands (OSC 633)</td>
+          <td><span class="signal-status siloed"><span class="signal-icon">◐</span> Frontend only</span></td>
+          <td><span class="signal-status missing"><span class="signal-icon">✗</span> No</span></td>
+          <td style="color: var(--accent-red);">Parsed by xterm.js addon, never reaches Go backend</td>
+        </tr>
+        <tr>
+          <td class="signal-name">Session memories</td>
+          <td><span class="signal-status siloed"><span class="signal-icon">◐</span> Extracted, not stored</span></td>
+          <td><span class="signal-status missing"><span class="signal-icon">✗</span> No</span></td>
+          <td style="color: var(--accent-red);">MemoryExtractor.Store() is a no-op</td>
+        </tr>
+        <tr>
+          <td class="signal-name">Build / test results</td>
+          <td><span class="signal-status missing"><span class="signal-icon">✗</span> No</span></td>
+          <td><span class="signal-status missing"><span class="signal-icon">✗</span> No</span></td>
+          <td style="color: var(--accent-red);">No diagnostics integration</td>
+        </tr>
+        <tr>
+          <td class="signal-name">Error history</td>
+          <td><span class="signal-status missing"><span class="signal-icon">✗</span> No</span></td>
+          <td><span class="signal-status missing"><span class="signal-icon">✗</span> No</span></td>
+          <td style="color: var(--accent-red);">No error memory across sessions</td>
+        </tr>
+        <tr>
+          <td class="signal-name">Architecture patterns</td>
+          <td><span class="signal-status missing"><span class="signal-icon">✗</span> No</span></td>
+          <td><span class="signal-status missing"><span class="signal-icon">✗</span> No</span></td>
+          <td style="color: var(--accent-red);">No module boundary / layer detection</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Roadmap -->
+<section>
+  <div class="section-header">
+    <span class="section-number">04</span>
+    <h2 class="section-title">Phased Roadmap</h2>
+  </div>
+  <div class="timeline">
+
+    <!-- Phase 0 -->
+    <div class="phase">
+      <div class="phase-dot p0"></div>
+      <div class="phase-header">
+        <span class="phase-label p0">Phase 0</span>
+        <h3 class="phase-name">Foundation Cleanup</h3>
+      </div>
+      <div class="phase-meta">
+        <span class="phase-meta-item">⏱ 1 week</span>
+        <span class="phase-meta-item">🎯 Close easy high-impact gaps</span>
+      </div>
+      <div class="phase-goal">Wire the data that's already collected but sitting unused. Biggest bang-for-buck phase.</div>
+      <ul class="task-list">
+        <li class="task-item">
+          <span class="task-name">Wire MemoryExtractor.Store() → db.InsertMemory</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort s">S</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Wire InsertPattern callers for ai_patterns_fts</span>
+          <span class="task-impact med">Med</span>
+          <span class="task-effort s">S</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Add git log summary (last 10 commits) to context.go</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort s">S</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Add git diff summary (staged + unstaged) to context.go</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort s">S</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Emit ai.response.started + ai.response.complete events</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort s">S</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Remove Electron/Hono references from ai-ware branch</span>
+          <span class="task-impact low">Low</span>
+          <span class="task-effort m">M</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Phase 1 -->
+    <div class="phase">
+      <div class="phase-dot p1"></div>
+      <div class="phase-header">
+        <span class="phase-label p1">Phase 1</span>
+        <h3 class="phase-name">Terminal Intelligence Bridge</h3>
+      </div>
+      <div class="phase-meta">
+        <span class="phase-meta-item">⏱ 2-3 weeks</span>
+        <span class="phase-meta-item">🎯 Shell events flow end-to-end</span>
+      </div>
+      <div class="phase-goal">The single highest-leverage phase. Transforms the terminal from "text surface" into "observable runtime" by building a Go-side OSC 633 parser.</div>
+      <ul class="task-list">
+        <li class="task-item">
+          <span class="task-name">Build Go-side OSC 633 parser in PTY readLoop</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort m">M</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Emit command.start, command.end, cwd.changed events</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort s">S</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Persist terminal commands to DB (cmd, exit code, duration, cwd)</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort m">M</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Wire terminal command history into context.go</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort s">S</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Build formal EventBus with typed events + routing</span>
+          <span class="task-impact med">Med</span>
+          <span class="task-effort m">M</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Add session.focused event tracking</span>
+          <span class="task-impact low">Low</span>
+          <span class="task-effort s">S</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Phase 2 -->
+    <div class="phase">
+      <div class="phase-dot p2"></div>
+      <div class="phase-header">
+        <span class="phase-label p2">Phase 2</span>
+        <h3 class="phase-name">Phantom Persona Assistant</h3>
+      </div>
+      <div class="phase-meta">
+        <span class="phase-meta-item">⏱ 3-4 weeks</span>
+        <span class="phase-meta-item">🎯 Interactive AI companion with workspace awareness</span>
+      </div>
+      <div class="phase-goal">The feature that makes Phantom unique — a workspace-native AI personality that understands your runtime, not just your code.</div>
+      <ul class="task-list">
+        <li class="task-item">
+          <span class="task-name">Design Phantom persona system prompt (personality, constraints)</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort s">S</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Create internal/assistant/ — dedicated assistant runtime</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort m">M</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Build workspace query handlers ("What changed?", "What is Claude doing?")</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort l">L</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Wire all context signals into assistant prompt</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort m">M</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Build assistant UI pane (distinct from Composer)</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort m">M</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Proactive notifications: Claude done, build failed, stale sessions</span>
+          <span class="task-impact med">Med</span>
+          <span class="task-effort m">M</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Per-workspace persona config (tone, verbosity, proactiveness)</span>
+          <span class="task-impact low">Low</span>
+          <span class="task-effort s">S</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Phase 3 -->
+    <div class="phase">
+      <div class="phase-dot p3"></div>
+      <div class="phase-header">
+        <span class="phase-label p3">Phase 3</span>
+        <h3 class="phase-name">Ghostty Terminal Surface</h3>
+      </div>
+      <div class="phase-meta">
+        <span class="phase-meta-item">⏱ 2-3 weeks</span>
+        <span class="phase-meta-item">🎯 Native GPU-accelerated rendering</span>
+      </div>
+      <div class="phase-goal">Replace xterm.js with Ghostty. The rendering code is 80% done — this phase is mostly plumbing.</div>
+      <ul class="task-list">
+        <li class="task-item">
+          <span class="task-name">Wire ghostty.NewApp() into app.Startup() with build tag</span>
+          <span class="task-impact med">Med</span>
+          <span class="task-effort s">S</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Create Wails bindings: Create/Destroy/Resize NativeTerminal</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort m">M</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Connect NativeTerminalPane.tsx → bindings → surface</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort m">M</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">ResizeObserver → SetPlacement() with Y-flip coords</span>
+          <span class="task-impact med">Med</span>
+          <span class="task-effort s">S</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Integration test: mixed xterm.js + Ghostty split panes</span>
+          <span class="task-impact med">Med</span>
+          <span class="task-effort m">M</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Make Ghostty default, xterm.js fallback</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort s">S</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Phase 4 -->
+    <div class="phase">
+      <div class="phase-dot p4"></div>
+      <div class="phase-header">
+        <span class="phase-label p4">Phase 4</span>
+        <h3 class="phase-name">Deep Intelligence</h3>
+      </div>
+      <div class="phase-meta">
+        <span class="phase-meta-item">⏱ 4-6 weeks</span>
+        <span class="phase-meta-item">🎯 Architecture awareness + semantic search + multi-agent</span>
+      </div>
+      <div class="phase-goal">The long-term vision — Phantom becomes an intelligent operating layer for software development.</div>
+      <ul class="task-list">
+        <li class="task-item">
+          <span class="task-name">Module boundary detection via import graph cluster analysis</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort l">L</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Build error capture → AI context pipeline</span>
+          <span class="task-impact med">Med</span>
+          <span class="task-effort m">M</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Vector embeddings for file content + commit messages</span>
+          <span class="task-impact med">Med</span>
+          <span class="task-effort l">L</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Cross-session knowledge retrieval</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort m">M</span>
+        </li>
+        <li class="task-item">
+          <span class="task-name">Multi-agent coordination from assistant</span>
+          <span class="task-impact high">High</span>
+          <span class="task-effort l">L</span>
+        </li>
+      </ul>
+    </div>
+
+  </div>
+</section>
+
+<!-- Risk Assessment -->
+<section>
+  <div class="section-header">
+    <span class="section-number">05</span>
+    <h2 class="section-title">Risk Assessment</h2>
+  </div>
+  <div class="risk-grid">
+    <div class="risk-card">
+      <div class="risk-title">Ghostty libghostty API instability</div>
+      <div class="risk-mitigation">Feature-flag behind <code>//go:build ghostty</code> tag. xterm.js fallback always works. Surface code already handles API changes via callback stubs.</div>
+    </div>
+    <div class="risk-card">
+      <div class="risk-title">OSC 633 parser adds PTY latency</div>
+      <div class="risk-mitigation">Parse in a separate goroutine on the fan-out channel, not in the hot read path. Benchmarks before/after — target &lt;1ms overhead per write.</div>
+    </div>
+    <div class="risk-card">
+      <div class="risk-title">Assistant prompt size explosion</div>
+      <div class="risk-mitigation">Hard cap at 8KB with tiered priority system (already in SessionMemoryBuilder). Context window budget enforcement per signal source.</div>
+    </div>
+    <div class="risk-card">
+      <div class="risk-title">Persona "uncanny valley"</div>
+      <div class="risk-mitigation">Start minimal — workspace awareness first, personality second. Terse and helpful beats chatty and clever. Let users configure verbosity.</div>
+    </div>
+    <div class="risk-card">
+      <div class="risk-title">Session memory storage grows unbounded</div>
+      <div class="risk-mitigation">TTL-based cleanup already in schema (extractor defines 60-180 day TTLs). Add compaction schedule. FTS5 index size is naturally bounded.</div>
+    </div>
+    <div class="risk-card">
+      <div class="risk-title">Cross-platform shell integration divergence</div>
+      <div class="risk-mitigation">OSC 633 is a standard (used by VS Code, Warp, iTerm2). Go parser is protocol-level, not shell-specific. Fish support is the only gap.</div>
+    </div>
+  </div>
+</section>
+
+<!-- Target Metrics -->
+<section>
+  <div class="section-header">
+    <span class="section-number">06</span>
+    <h2 class="section-title">Target Metrics</h2>
+  </div>
+  <div class="metrics-table">
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Today (Baseline)</th>
+          <th>After Phase 1</th>
+          <th>After Phase 4</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="color: var(--text-primary); font-family: inherit; font-weight: 500;">Event types in bus</td>
+          <td class="metric-baseline">12</td>
+          <td class="metric-target">25</td>
+          <td class="metric-vision">40+</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-primary); font-family: inherit; font-weight: 500;">Context signals feeding AI</td>
+          <td class="metric-baseline">3</td>
+          <td class="metric-target">7</td>
+          <td class="metric-vision">12+</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-primary); font-family: inherit; font-weight: 500;">Session memories in FTS5</td>
+          <td class="metric-baseline">0</td>
+          <td class="metric-target">100+ / day</td>
+          <td class="metric-vision">500+ / day</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-primary); font-family: inherit; font-weight: 500;">AI stall detection latency</td>
+          <td class="metric-baseline">5-30s</td>
+          <td class="metric-target">&lt;2s</td>
+          <td class="metric-vision">&lt;500ms</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-primary); font-family: inherit; font-weight: 500;">Claude completion detection</td>
+          <td class="metric-baseline">5-30s</td>
+          <td class="metric-target">&lt;2s</td>
+          <td class="metric-vision">&lt;1s</td>
+        </tr>
+        <tr>
+          <td style="color: var(--text-primary); font-family: inherit; font-weight: 500;">Assistant query response</td>
+          <td class="metric-baseline">N/A</td>
+          <td class="metric-target">N/A</td>
+          <td class="metric-vision">&lt;1s</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Recommended First Move -->
+<section>
+  <div class="section-header">
+    <span class="section-number">07</span>
+    <h2 class="section-title">Recommended First Move</h2>
+  </div>
+  <div class="arch-diagram" style="text-align: left;">
+    <p style="font-size: 16px; line-height: 1.8; color: var(--text-secondary); max-width: 700px;">
+      Start <strong style="color: var(--accent-cyan);">Phase 0</strong> + <strong style="color: var(--accent-purple);">Phase 1</strong> in parallel.
+    </p>
+    <br>
+    <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.8;">
+      The memory Store fix is a <strong style="color: var(--accent-green);">15-minute change</strong>. Adding git context to the AI pipeline is <strong style="color: var(--accent-green);">~1 hour</strong>. The Go-side OSC 633 parser (<strong style="color: var(--accent-gold);">~200 lines</strong>) is the single highest-leverage piece — it turns every terminal session into a stream of structured intelligence.
+    </p>
+    <br>
+    <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.8;">
+      Without signals flowing, the Phantom Persona (Phase 2) has nothing interesting to say. <strong style="color: var(--text-primary);">Data first, personality second.</strong>
+    </p>
+    <br>
+    <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px;">
+      <div style="padding: 10px 20px; background: rgba(0, 212, 255, 0.08); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--accent-cyan);">
+        Day 1: Wire MemoryExtractor.Store()
+      </div>
+      <div style="padding: 10px 20px; background: rgba(0, 212, 255, 0.08); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--accent-cyan);">
+        Day 1: Git log + diff → context.go
+      </div>
+      <div style="padding: 10px 20px; background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--accent-purple);">
+        Week 1-2: OSC 633 Go parser
+      </div>
+      <div style="padding: 10px 20px; background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--accent-purple);">
+        Week 2-3: Terminal → AI pipeline
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="footer-brand">P H A N T O M</div>
+  <p>Intelligent Developer Runtime — Assessment by Subash Karki — 2026-05-23</p>
+</footer>
+
+</body>
+</html>
