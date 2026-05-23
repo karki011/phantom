@@ -3,6 +3,7 @@ package persona
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -190,6 +191,57 @@ func (p *Persona) GetTrust(projectID string) TrustTier {
 		return TierObserve
 	}
 	return p.trust.GetTier(projectID)
+}
+
+// ─── proactive status polling ───────────────────────────────────────────────
+
+// Start launches the background polling loop. Cancel ctx to stop it.
+func (p *Persona) Start(ctx context.Context) {
+	go p.watchLoop(ctx)
+}
+
+func (p *Persona) watchLoop(ctx context.Context) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			p.refreshStatus(ctx)
+		}
+	}
+}
+
+func (p *Persona) refreshStatus(ctx context.Context) {
+	p.mu.RLock()
+	projectPath := p.activeProject
+	p.mu.RUnlock()
+
+	sessions := p.engine.ClaudeSessions(ctx, projectPath)
+	terminals := p.engine.TerminalSessions(ctx)
+
+	var activeClaude int
+	var lastTool string
+	for _, s := range sessions {
+		if s.LiveState == "running" || s.LiveState == "waiting" {
+			activeClaude++
+			if s.LastTool != "" {
+				lastTool = s.LastTool
+			}
+		}
+	}
+
+	switch {
+	case activeClaude > 0 && lastTool != "":
+		p.setPillState(PillObserving, fmt.Sprintf("Claude: %s", lastTool))
+	case activeClaude > 0:
+		p.setPillState(PillObserving, fmt.Sprintf("%d Claude session(s)", activeClaude))
+	case len(terminals) > 0:
+		p.setPillState(PillIdle, fmt.Sprintf("%d terminal(s)", len(terminals)))
+	default:
+		p.setPillState(PillIdle, "Phantom")
+	}
 }
 
 // ─── internal helpers ───────────────────────────────────────────────────────

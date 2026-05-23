@@ -391,6 +391,11 @@ func (a *App) Startup(ctx context.Context) {
 			a.EmitGitStatus()
 		},
 	)
+
+	// Start persona proactive status polling (2s refresh loop).
+	if a.Persona != nil {
+		a.Persona.Start(a.ctx)
+	}
 }
 
 func (a *App) DomReady(ctx context.Context) {
