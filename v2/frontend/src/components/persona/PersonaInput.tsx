@@ -29,9 +29,15 @@ export const PersonaInput: Component = () => {
     }
   };
 
+  let inputRef: HTMLInputElement | undefined;
+
   return (
     <div class={styles.inputArea}>
       <input
+        ref={(el) => {
+          inputRef = el;
+          requestAnimationFrame(() => el.focus());
+        }}
         class={styles.inputBox}
         type="text"
         value={value()}
