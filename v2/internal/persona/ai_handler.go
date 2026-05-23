@@ -135,10 +135,11 @@ func (h *AIHandler) buildPrompt(ctx context.Context, query, projectPath string) 
 func (h *AIHandler) callClaude(ctx context.Context, prompt, projectPath string) (string, error) {
 	args := []string{
 		"--print",
-		"--output-format", "text",
 		"--model", "haiku",
-		"--no-session-persistence",
 		"--bare",
+		"--no-session-persistence",
+		"--allowedTools", "",
+		"--max-turns", "1",
 		prompt,
 	}
 
