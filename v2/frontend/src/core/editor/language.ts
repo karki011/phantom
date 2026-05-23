@@ -42,7 +42,7 @@ const EXTENSION_MAP: Record<string, string> = {
   // Config
   yaml: 'yaml',
   yml: 'yaml',
-  toml: 'ini', // Monaco doesn't have toml; ini is close
+  toml: 'ini', // ini is the closest match for toml
   ini: 'ini',
   env: 'ini',
   xml: 'xml',
@@ -98,7 +98,7 @@ const FILENAME_MAP: Record<string, string> = {
 };
 
 /**
- * Detect the Monaco language ID for a given file path.
+ * Detect the language ID for a given file path.
  * Uses filename-specific overrides first, then falls back to extension mapping.
  */
 export const detectLanguage = (filePath: string): string => {

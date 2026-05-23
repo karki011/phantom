@@ -5,7 +5,9 @@ import { Portal } from 'solid-js/web';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import 'highlight.js/styles/github-dark-dimmed.min.css';
+import { createVirtualizer } from '@tanstack/solid-virtual';
 import { detectLanguage } from '@/core/editor/language';
+import { highlightCode as shikiHighlightCode, type HighlightedLine } from '@/core/editor/highlighter';
 import { readFileContents, writeFileContents } from '@/core/bindings/editor';
 import { readPlanFile, writePlanFile } from '@/core/bindings/plans';
 import {
@@ -19,16 +21,13 @@ import { setSelectedFile, setRevealFilePath, setRightSidebarTab } from '@/core/s
 import { setActivePaneInTab, tabs, removeTab, activePaneId } from '@/core/panes/signals';
 import { worktreeMap } from '@/core/signals/worktrees';
 import { showToast } from '@/shared/Toast/Toast';
-import CodeMirrorEditor from '@/core/editor/CodeMirrorEditor';
 import DiffViewer from '@/shared/DiffViewer/DiffViewer';
-import { loadLanguage } from '@/core/editor/cm-languages';
-import { phantomThemeExtension } from '@/core/editor/cm-theme';
 import { highlightCode } from '@/core/composer/highlighter';
 import { TextWrap, Clipboard, X as XIcon } from 'lucide-solid';
-import type { Extension } from '@codemirror/state';
 import * as styles from '@/styles/viewer.css';
 import * as markdownStyles from '@/styles/markdown-preview.css';
 import * as sidebarStyles from '@/styles/right-sidebar.css';
+import * as fvStyles from './FileViewer.css';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,6 +46,12 @@ interface FileViewerProps {
   [key: string]: unknown;
 }
 
+// ── Virtualization constants ────────────────────────────────────────────────
+const LINE_HEIGHT = 20;
+const OVERSCAN = 30;
+const CHUNK_THRESHOLD = 500;
+const CHUNK_BUFFER = 200;
+
 interface FileTab {
   filePath: string;
   fileName: string;
@@ -57,6 +62,7 @@ interface FileTab {
   dirty: boolean;
   isPlanFile: boolean;
   editing: boolean;
+  lines: string[];
 }
 
 interface DiffTab {
@@ -104,24 +110,6 @@ export default function FileViewer(props: FileViewerProps) {
     return '';
   });
 
-  // ── Language extension (async, reactive) ─────────────────────────────────
-
-  const [langExtension, setLangExtension] = createSignal<Extension | undefined>(undefined);
-
-  createEffect(
-    on(
-      () => currentLang(),
-      async (lang) => {
-        if (!lang || lang === 'plaintext') {
-          setLangExtension(undefined);
-          return;
-        }
-        const ext = await loadLanguage(lang);
-        setLangExtension(ext ?? undefined);
-      },
-    ),
-  );
-
   // ── File tab management ──────────────────────────────────────────────────
 
   const addFileTab = async (path: string, isPlan = false, line?: number) => {
@@ -167,6 +155,7 @@ export default function FileViewer(props: FileViewerProps) {
       dirty: false,
       isPlanFile: isPlan,
       editing: false,
+      lines: text.split('\n'),
     };
 
     setFileTabs((prev) => [...prev, tab]);
@@ -218,7 +207,7 @@ export default function FileViewer(props: FileViewerProps) {
   const handleContentChange = (value: string) => {
     const idx = activeFileTab();
     setFileTabs((prev) => prev.map((f, i) =>
-      i === idx ? { ...f, content: value, dirty: value !== f.originalContent } : f,
+      i === idx ? { ...f, content: value, dirty: value !== f.originalContent, lines: value.split('\n') } : f,
     ));
   };
 
@@ -365,12 +354,85 @@ export default function FileViewer(props: FileViewerProps) {
   const activeFile = () => fileTabs()[activeFileTab()] ?? null;
   const activeDiff = () => diffTabs()[activeDiffTab()] ?? null;
 
+  // ── Shiki state & virtualizer ─────────────────────────────────────────────
+
+  const [scrollRef, setScrollRef] = createSignal<HTMLDivElement | null>(null);
+  const [highlightCache, setHighlightCache] = createSignal<Map<number, HighlightedLine>>(new Map());
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  let highlightingInProgress = false;
+
+  const totalLines = createMemo(() => activeFile()?.lines.length ?? 0);
+
+  const virtualizer = createVirtualizer({
+    get count() { return totalLines(); },
+    getScrollElement: () => scrollRef(),
+    estimateSize: () => LINE_HEIGHT,
+    overscan: OVERSCAN,
+  });
+
+  const triggerInitialHighlight = async () => {
+    const file = activeFile();
+    if (!file) return;
+    if (file.lines.length <= CHUNK_THRESHOLD) {
+      await highlightAll(file);
+    } else {
+      await highlightChunk(file, 0, CHUNK_THRESHOLD);
+    }
+  };
+
+  const highlightAll = async (file: FileTab) => {
+    if (highlightingInProgress) return;
+    highlightingInProgress = true;
+    try {
+      const result = await shikiHighlightCode(file.content, file.language);
+      const newCache = new Map<number, HighlightedLine>();
+      result.forEach((line, i) => newCache.set(i, line));
+      setHighlightCache(newCache);
+    } finally {
+      highlightingInProgress = false;
+    }
+  };
+
+  const highlightChunk = async (file: FileTab, start: number, end: number) => {
+    const lines = file.lines.slice(start, end);
+    const code = lines.join('\n');
+    try {
+      const result = await shikiHighlightCode(code, file.language);
+      setHighlightCache((prev) => {
+        const next = new Map(prev);
+        result.forEach((line, i) => next.set(start + i, line));
+        return next;
+      });
+    } catch { /* plaintext fallback */ }
+  };
+
+  const highlightVisibleChunk = () => {
+    const file = activeFile();
+    if (!file || file.lines.length <= CHUNK_THRESHOLD) return;
+    const items = virtualizer.getVirtualItems();
+    if (items.length === 0) return;
+    const first = Math.max(0, items[0].index - CHUNK_BUFFER);
+    const last = Math.min(file.lines.length, items[items.length - 1].index + CHUNK_BUFFER);
+    const cache = highlightCache();
+    if (cache.has(first) && cache.has(last - 1)) return;
+    void highlightChunk(file, first, last);
+  };
+
+  createEffect(() => {
+    virtualizer.getVirtualItems();
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(highlightVisibleChunk, 80);
+  });
+
+  createEffect(on(activeFileTab, () => {
+    setHighlightCache(new Map());
+    void triggerInitialHighlight();
+  }));
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+
   const scrollToLine = (line: number) => {
-    if (!scrollContainerRef) return;
-    requestAnimationFrame(() => {
-      const el = scrollContainerRef.querySelector(`[data-line="${line}"]`);
-      el?.scrollIntoView({ block: 'center' });
-    });
+    virtualizer.scrollToIndex(line - 1, { align: 'center' });
   };
 
   function currentLang(): string {
@@ -488,12 +550,12 @@ export default function FileViewer(props: FileViewerProps) {
     });
   });
 
-  // Reset preview mode when switching to a non-markdown file
+  // Auto-toggle preview mode based on file type
   createEffect(
     on(
       () => activeFile()?.filePath,
       () => {
-        if (!isMarkdown()) setPreviewMode(false);
+        setPreviewMode(isMarkdown());
       },
     ),
   );
@@ -526,6 +588,7 @@ export default function FileViewer(props: FileViewerProps) {
       if (props.originalContent) return;
       void addFileTab(fp, !!props.isPlanFile);
     },
+    { defer: true },
   ));
 
   // ── Events ───────────────────────────────────────────────────────────────
@@ -726,18 +789,65 @@ export default function FileViewer(props: FileViewerProps) {
           </div>
         </Show>
 
-        {/* File view — CodeMirror editor or markdown preview */}
+        {/* File view — shiki virtualized viewer, textarea editor, or markdown preview */}
         <Show when={!loading() && mode() === 'file' && activeFile()}>
           <Show when={previewMode() && isMarkdown()} fallback={
-            <CodeMirrorEditor
-              content={activeFile()!.content}
-              language={langExtension()}
-              readOnly={!activeFile()!.editing}
-              lineWrapping={lineWrapping()}
-              theme={phantomThemeExtension}
-              onChange={handleContentChange}
-              class={styles.cmFillContainer}
-            />
+            <Show when={activeFile()!.editing} fallback={
+              /* ── Shiki virtualized read-only viewer ── */
+              <div
+                class={fvStyles.scrollArea}
+                ref={(el: HTMLDivElement) => requestAnimationFrame(() => setScrollRef(el))}
+              >
+                <div style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+                  <For each={virtualizer.getVirtualItems()}>
+                    {(vRow) => {
+                      const cache = highlightCache();
+                      const cached = cache.get(vRow.index);
+                      const rawLine = activeFile()!.lines[vRow.index] ?? '';
+                      return (
+                        <div
+                          class={fvStyles.lineRow}
+                          data-line={vRow.index + 1}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: `${vRow.size}px`,
+                            transform: `translateY(${vRow.start}px)`,
+                          }}
+                        >
+                          <span class={fvStyles.gutter}>{vRow.index + 1}</span>
+                          <span class={fvStyles.lineContent} data-wrap={lineWrapping()}>
+                            <Show when={cached} fallback={rawLine || ' '}>
+                              <For each={cached!.tokens}>
+                                {(tok) => (
+                                  <span style={{
+                                    color: tok.color,
+                                    'font-style': tok.fontStyle,
+                                  }}>
+                                    {tok.content}
+                                  </span>
+                                )}
+                              </For>
+                            </Show>
+                          </span>
+                        </div>
+                      );
+                    }}
+                  </For>
+                </div>
+              </div>
+            }>
+              {/* ── Textarea editing mode ── */}
+              <textarea
+                class={styles.editTextarea}
+                value={activeFile()!.content}
+                onInput={(e) => handleContentChange(e.currentTarget.value)}
+                spellcheck={false}
+                style={{ 'white-space': lineWrapping() ? 'pre-wrap' : 'pre' }}
+              />
+            </Show>
           }>
             <div class={markdownStyles.previewContainer}>
               <div class={markdownStyles.scrollArea}>
@@ -751,7 +861,7 @@ export default function FileViewer(props: FileViewerProps) {
           </Show>
         </Show>
 
-        {/* Diff view — CodeMirror merge */}
+        {/* Diff view */}
         <Show when={!loading() && mode() === 'diff' && activeDiff()}>
           <DiffViewer
             originalContent={activeDiff()!.originalContent}

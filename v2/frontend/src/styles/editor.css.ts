@@ -139,7 +139,7 @@ export const fileTabClose = style({
 });
 
 // ---------------------------------------------------------------------------
-// Monaco container
+// Editor container
 // ---------------------------------------------------------------------------
 
 export const editorContainer = style({

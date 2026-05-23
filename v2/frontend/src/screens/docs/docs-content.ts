@@ -486,7 +486,7 @@ export const DOC_SECTIONS: DocSection[] = [
           sections: [
             {
               type: 'paragraph',
-              text: 'PhantomOS includes a built-in code editor powered by Monaco (the same engine behind VS Code). It supports multi-file editing with tabs, dirty state tracking, and language-aware syntax highlighting.',
+              text: 'PhantomOS includes a built-in code editor with Shiki-powered syntax highlighting and virtualized rendering. It supports multi-file editing with tabs, dirty state tracking, and language-aware syntax highlighting.',
             },
             {
               type: 'heading',
