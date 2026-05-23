@@ -3,19 +3,25 @@ package persona
 
 import (
 	"context"
-	"os/exec"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/subashkarki/phantom-os-v2/internal/collector"
+	"github.com/subashkarki/phantom-os-v2/internal/db"
+	"github.com/subashkarki/phantom-os-v2/internal/ai/graph/filegraph"
+	"github.com/subashkarki/phantom-os-v2/internal/git"
+	"github.com/subashkarki/phantom-os-v2/internal/terminal"
 )
 
-// ContextDeps are the live data sources injected into the ContextEngine.
-// All fields are optional; nil means unavailable (engine returns safe defaults).
+// ContextDeps holds references to live v2 services.
+// All fields are optional — nil means unavailable; safe defaults are returned.
 type ContextDeps struct {
-	// ClaudeSessionsFn returns active Claude sessions.
-	ClaudeSessionsFn func(ctx context.Context) []ClaudeSessionStatus
-	// TerminalSessionsFn returns open terminal sessions.
-	TerminalSessionsFn func(ctx context.Context) []TerminalStatus
+	DB           *db.DB
+	Terminal     *terminal.Manager
+	CollectorReg *collector.Registry
+	FileIndexers map[string]*filegraph.Indexer
+	GitStatusFn  func(ctx context.Context, path string) (*git.RepoStatus, error)
+	GitLogFn     func(ctx context.Context, path string, limit int) ([]git.CommitInfo, error)
 }
 
 // ContextEngine provides read-only access to runtime state.
@@ -28,122 +34,117 @@ func NewContextEngine(deps ContextDeps) *ContextEngine {
 	return &ContextEngine{deps: deps}
 }
 
-// ClaudeSessions returns active Claude sessions, or nil if unavailable.
-func (e *ContextEngine) ClaudeSessions(ctx context.Context) []ClaudeSessionStatus {
-	if e == nil || e.deps.ClaudeSessionsFn == nil {
-		return nil
+// ClaudeSessions returns active Claude sessions filtered by project path prefix.
+// Returns an empty (non-nil) slice when deps are unavailable or no sessions match.
+func (e *ContextEngine) ClaudeSessions(ctx context.Context, projectFilter string) []ClaudeSessionStatus {
+	out := []ClaudeSessionStatus{}
+	if e == nil || e.deps.DB == nil {
+		return out
 	}
-	return e.deps.ClaudeSessionsFn(ctx)
+
+	q := db.New(e.deps.DB.Reader)
+	sessions, err := q.ListActiveSessions(ctx)
+	if err != nil {
+		return out
+	}
+
+	for _, s := range sessions {
+		cwd := s.Cwd.String
+		if projectFilter != "" && !strings.HasPrefix(cwd, projectFilter) {
+			continue
+		}
+		var startedAt time.Time
+		if s.StartedAt.Valid {
+			startedAt = time.Unix(s.StartedAt.Int64, 0)
+		}
+		out = append(out, ClaudeSessionStatus{
+			SessionID:   s.ID,
+			ProjectPath: cwd,
+			LiveState:   s.Status.String,
+			StartedAt:   startedAt,
+		})
+	}
+	return out
 }
 
-// TerminalSessions returns open terminal sessions, or nil if unavailable.
-func (e *ContextEngine) TerminalSessions(ctx context.Context) []TerminalStatus {
-	if e == nil || e.deps.TerminalSessionsFn == nil {
-		return nil
+// TerminalSessions returns open terminal sessions mapped to TerminalStatus.
+// Returns an empty (non-nil) slice when the terminal manager is unavailable.
+func (e *ContextEngine) TerminalSessions(_ context.Context) []TerminalStatus {
+	out := []TerminalStatus{}
+	if e == nil || e.deps.Terminal == nil {
+		return out
 	}
-	return e.deps.TerminalSessionsFn(ctx)
+	for _, info := range e.deps.Terminal.List() {
+		out = append(out, TerminalStatus{
+			ID:  info.ID,
+			CWD: info.CWD,
+		})
+	}
+	return out
 }
 
-// GitSummary runs git commands against projectPath and returns a summary.
-// Returns zero-value GitSummary on any error.
-func (e *ContextEngine) GitSummary(ctx context.Context, projectPath string) GitSummary {
-	if projectPath == "" {
+// GitSummary returns a GitSummary for repoPath using the injected git functions.
+// Returns a zero-value struct on missing deps or errors.
+func (e *ContextEngine) GitSummary(ctx context.Context, repoPath string) GitSummary {
+	if e == nil || repoPath == "" || e.deps.GitStatusFn == nil || e.deps.GitLogFn == nil {
 		return GitSummary{}
 	}
 
-	// Branch
-	branch := runGitCmd(ctx, projectPath, "rev-parse", "--abbrev-ref", "HEAD")
-
-	// Status counts
-	statusOut := runGitCmd(ctx, projectPath, "status", "--porcelain")
-	var staged, unstaged, untracked int
-	for _, line := range strings.Split(statusOut, "\n") {
-		if len(line) < 2 {
-			continue
-		}
-		x, y := line[0], line[1]
-		if x == '?' && y == '?' {
-			untracked++
-			continue
-		}
-		if x != ' ' && x != '?' {
-			staged++
-		}
-		if y != ' ' && y != '?' {
-			unstaged++
-		}
+	status, err := e.deps.GitStatusFn(ctx, repoPath)
+	if err != nil || status == nil {
+		return GitSummary{}
 	}
 
-	// Recent commits
-	logOut := runGitCmd(ctx, projectPath, "log", "--oneline", "--format=%H\x1f%s\x1f%an\x1f%ci", "-10")
-	var commits []CommitSummary
-	for _, line := range strings.Split(logOut, "\n") {
-		parts := strings.SplitN(line, "\x1f", 4)
-		if len(parts) < 4 {
-			continue
-		}
-		var t time.Time
-		t, _ = time.Parse("2006-01-02 15:04:05 -0700", strings.TrimSpace(parts[3]))
-		commits = append(commits, CommitSummary{
-			Hash:    parts[0][:min(7, len(parts[0]))],
-			Message: parts[1],
-			Author:  parts[2],
-			When:    t,
+	commits, _ := e.deps.GitLogFn(ctx, repoPath, 10)
+	var recent []CommitSummary
+	for _, c := range commits {
+		recent = append(recent, CommitSummary{
+			Hash:    c.ShortHash,
+			Message: c.Subject,
+			Author:  c.Author,
+			When:    time.Unix(c.Date, 0),
 		})
 	}
 
 	return GitSummary{
-		Branch:        branch,
-		IsClean:       staged == 0 && unstaged == 0 && untracked == 0,
-		Staged:        staged,
-		Unstaged:      unstaged,
-		Untracked:     untracked,
-		RecentCommits: commits,
+		Branch:        status.Branch,
+		IsClean:       status.IsClean,
+		Staged:        len(status.Staged),
+		Unstaged:      len(status.Unstaged),
+		Untracked:     len(status.Untracked),
+		RecentCommits: recent,
 	}
 }
 
-// GraphSummary returns a stub graph summary (real implementation would query the graph engine).
-func (e *ContextEngine) GraphSummary(ctx context.Context, projectPath string) GraphSummary {
-	if projectPath == "" {
+// GraphSummary finds the matching indexer by RootDir prefix and returns graph stats.
+// Returns a zero-value struct when no matching indexer is found.
+func (e *ContextEngine) GraphSummary(projectCwd string) GraphSummary {
+	if e == nil || projectCwd == "" || e.deps.FileIndexers == nil {
 		return GraphSummary{}
 	}
-	// Approximate file count via find; ignore errors
-	out := runShellCmd(ctx, projectPath, "find", ".", "-name", "*.go", "-o", "-name", "*.ts", "-o", "-name", "*.tsx")
-	count := len(strings.Split(strings.TrimSpace(out), "\n"))
-	if strings.TrimSpace(out) == "" {
-		count = 0
+	for _, ix := range e.deps.FileIndexers {
+		if ix == nil {
+			continue
+		}
+		if strings.HasPrefix(projectCwd, ix.RootDir()) {
+			files, symbols, edges := ix.Graph().Stats()
+			return GraphSummary{
+				FileCount:   files,
+				SymbolCount: symbols,
+				EdgeCount:   edges,
+			}
+		}
 	}
-	return GraphSummary{FileCount: count}
+	return GraphSummary{}
 }
 
-// runGitCmd runs a git command in dir and returns trimmed stdout (empty on error).
-func runGitCmd(ctx context.Context, dir string, args ...string) string {
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
+// Assemble collects all context signals for the given project path / worktree.
+func (e *ContextEngine) Assemble(ctx context.Context, projectPath string, _ string) PersonaContext {
+	return PersonaContext{
+		ActiveProject:    projectPath,
+		ClaudeSessions:   e.ClaudeSessions(ctx, projectPath),
+		TerminalSessions: e.TerminalSessions(ctx),
+		RecentGit:        e.GitSummary(ctx, projectPath),
+		FileGraph:        e.GraphSummary(projectPath),
 	}
-	return strings.TrimSpace(string(out))
 }
-
-// runShellCmd runs any command in dir and returns trimmed stdout (empty on error).
-func runShellCmd(ctx context.Context, dir string, name string, args ...string) string {
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// ensure strconv is used (used indirectly via callers)
-var _ = strconv.Itoa
