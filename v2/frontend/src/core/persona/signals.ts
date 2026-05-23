@@ -14,11 +14,13 @@ const [personaState, setPersonaState] = createSignal<PersonaState>({
 const [messages, setMessages] = createSignal<Message[]>([]);
 const [isExpanded, setIsExpanded] = createSignal(false);
 const [lastResponse, setLastResponse] = createSignal<PersonaResponse | null>(null);
+const [isThinking, setIsThinking] = createSignal(false);
 
 export const pillState = createMemo<PillState>(() => personaState().pillState);
 export const statusText = createMemo(() => personaState().statusText);
 export const personaMessages = messages;
 export const personaExpanded = isExpanded;
+export const personaThinking = isThinking;
 export const togglePersonaExpanded = () => setIsExpanded((v) => !v);
 export const closePersona = () => setIsExpanded(false);
 export const openPersona = () => setIsExpanded(true);
@@ -26,13 +28,17 @@ export const openPersona = () => setIsExpanded(true);
 export async function sendToPersona(input: string): Promise<PersonaResponse> {
   const userMsg: Message = { role: 'user', text: input, timestamp: new Date().toISOString() };
   setMessages((prev) => [...prev, userMsg]);
+  setIsThinking(true);
 
-  const resp = await personaAsk(input);
-
-  const phantomMsg: Message = { role: 'phantom', text: resp.text, timestamp: new Date().toISOString() };
-  setMessages((prev) => [...prev, phantomMsg]);
-  setLastResponse(resp);
-  return resp;
+  try {
+    const resp = await personaAsk(input);
+    const phantomMsg: Message = { role: 'phantom', text: resp.text, timestamp: new Date().toISOString() };
+    setMessages((prev) => [...prev, phantomMsg]);
+    setLastResponse(resp);
+    return resp;
+  } finally {
+    setIsThinking(false);
+  }
 }
 
 export function initPersonaSignals() {

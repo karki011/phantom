@@ -174,6 +174,33 @@ export const inputBox = style({
   },
 });
 
+const thinkingPulse = keyframes({
+  '0%, 100%': { opacity: 0.3 },
+  '50%': { opacity: 1 },
+});
+
+export const thinkingBubble = style({
+  alignSelf: 'flex-start',
+  display: 'flex',
+  gap: '4px',
+  padding: `${vars.space.sm} ${vars.space.md}`,
+  background: vars.color.bgTertiary,
+  border: `1px solid ${vars.color.border}`,
+  borderRadius: `${vars.radius.md} ${vars.radius.md} ${vars.radius.md} ${vars.radius.sm}`,
+});
+
+export const thinkingDot = style({
+  width: '6px',
+  height: '6px',
+  borderRadius: vars.radius.full,
+  background: vars.color.accent,
+  animation: `${thinkingPulse} 1.4s ease-in-out infinite`,
+  selectors: {
+    '&:nth-child(2)': { animationDelay: '0.2s' },
+    '&:nth-child(3)': { animationDelay: '0.4s' },
+  },
+});
+
 export const sendButton = style({
   padding: `${vars.space.xs} ${vars.space.sm}`,
   background: vars.color.accent,

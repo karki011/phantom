@@ -2,7 +2,7 @@
 
 import type { Component } from 'solid-js';
 import { createEffect, For, Show } from 'solid-js';
-import { personaExpanded, closePersona, personaMessages, statusText } from '@/core/persona/signals';
+import { personaExpanded, closePersona, personaMessages, statusText, personaThinking } from '@/core/persona/signals';
 import { PersonaMessage } from './PersonaMessage';
 import { PersonaInput } from './PersonaInput';
 import { PersonaQuickActions } from './PersonaQuickActions';
@@ -48,6 +48,13 @@ export const PersonaDropdown: Component = () => {
             <For each={personaMessages()}>
               {(msg) => <PersonaMessage message={msg} />}
             </For>
+            <Show when={personaThinking()}>
+              <div class={styles.thinkingBubble}>
+                <span class={styles.thinkingDot} />
+                <span class={styles.thinkingDot} />
+                <span class={styles.thinkingDot} />
+              </div>
+            </Show>
           </Show>
         </div>
 
