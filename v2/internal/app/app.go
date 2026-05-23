@@ -35,6 +35,7 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/integration"
 	"github.com/subashkarki/phantom-os-v2/internal/linker"
 	"github.com/subashkarki/phantom-os-v2/internal/perf"
+	"github.com/subashkarki/phantom-os-v2/internal/persona"
 	"github.com/subashkarki/phantom-os-v2/internal/provider"
 	"github.com/subashkarki/phantom-os-v2/internal/session"
 	"github.com/subashkarki/phantom-os-v2/internal/stream"
@@ -104,6 +105,7 @@ type App struct {
 	ComposerV2Bind    *composer.Bindings
 	ConflictTracker   *conflict.Tracker
 	collectorRegistry *collector.Registry
+	Persona           *persona.Persona
 
 	// AI context injection — initialized during Startup from DB connections.
 	ctxProvider *graphctx.ContextProvider

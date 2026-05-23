@@ -80,6 +80,10 @@ const (
 	EventEmbeddingSetupComplete = "embedding:setup-complete"
 	// payload: { error: string }
 	EventEmbeddingSetupFailed = "embedding:setup-failed"
+
+	// Persona lifecycle events.
+	EventPersonaState    = "persona:state"    // payload: PersonaState
+	EventPersonaResponse = "persona:response" // payload: Response
 )
 
 func EmitEvent(ctx context.Context, name string, data interface{}) {

@@ -39,7 +39,7 @@ func (h *StatusHandler) Handle(ctx context.Context, intent Intent, projectPath s
 
 // claudeStatus returns a human-readable summary of active Claude sessions.
 func (h *StatusHandler) claudeStatus(ctx context.Context, projectPath string) string {
-	sessions := h.engine.ClaudeSessions(ctx)
+	sessions := h.engine.ClaudeSessions(ctx, projectPath)
 	if len(sessions) == 0 {
 		return "No active Claude sessions."
 	}
@@ -165,7 +165,7 @@ func (h *SearchHandler) Handle(ctx context.Context, intent Intent, projectPath s
 
 // search returns a message describing a graph-backed search.
 func (h *SearchHandler) search(ctx context.Context, query string, projectPath string) string {
-	graph := h.engine.GraphSummary(ctx, projectPath)
+	graph := h.engine.GraphSummary(projectPath)
 
 	if graph.FileCount == 0 {
 		return "The file graph is empty — no files indexed yet."
