@@ -32,6 +32,9 @@ func NewRouter() *Router {
 		{pattern: regexp.MustCompile(`(?i)(?:search|find)\s+(?:for\s+)?(.+)`), lane: LaneStateLookup, handler: "search", method: "search", argExtractors: map[string]int{"query": 1}},
 		{pattern: regexp.MustCompile(`(?i)switch\s+to\s+(?:project\s+)?(.+)`), lane: LaneSystemAction, handler: "workspace", method: "switchProject", argExtractors: map[string]int{"project": 1}},
 		{pattern: regexp.MustCompile(`(?i)(?:start\s+claude|help\s+me\s+with)\s*(.+)?`), lane: LaneClaudeTask, handler: "claude", method: "spawn", argExtractors: map[string]int{"task": 1}},
+		{pattern: regexp.MustCompile(`(?i)pause\s+claude`), lane: LaneClaudeTask, handler: "claude", method: "pause"},
+		{pattern: regexp.MustCompile(`(?i)stop\s+claude`), lane: LaneClaudeTask, handler: "claude", method: "stop"},
+		{pattern: regexp.MustCompile(`(?i)resume\s+claude`), lane: LaneClaudeTask, handler: "claude", method: "resume"},
 		{pattern: regexp.MustCompile(`(?i)why\s+did\s+.*\s*fail`), lane: LaneLocalReasoning, handler: "llm", method: "analyzeFailure"},
 		{pattern: regexp.MustCompile(`(?i)(?:explain|summarize|describe)\s+.+`), lane: LaneLocalReasoning, handler: "llm", method: "reason"},
 	}

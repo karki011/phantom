@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/subashkarki/phantom-os-v2/internal/composer"
 )
 
 // EmitFn is the callback used to push Wails events to the frontend.
@@ -18,6 +20,7 @@ type PersonaDeps struct {
 	PrefGetter  PrefGetter
 	PrefSetter  PrefSetter
 	EmitFn      EmitFn
+	ComposerMgr *composer.Manager // Composer V2 manager for Claude session control
 }
 
 // maxHistory caps the number of conversation messages kept in memory.
@@ -66,6 +69,13 @@ func NewPersona(deps PersonaDeps) *Persona {
 		handlers: handlers,
 		emitFn:   emit,
 	}
+
+	// Register ClaudeHandler if Composer Manager is available.
+	if deps.ComposerMgr != nil {
+		claudeHandler := NewClaudeHandler(deps.ComposerMgr, p.setPillState)
+		p.handlers["claude"] = claudeHandler
+	}
+
 	return p
 }
 

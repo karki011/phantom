@@ -264,9 +264,10 @@ func main() {
 				return git.Log(ctx, path, limit, 0)
 			},
 		},
-		PrefGetter: &dbPrefGetter{q: queries},
-		PrefSetter: &dbPrefSetter{q: queries},
-		EmitFn:     emitFn,
+		PrefGetter:  &dbPrefGetter{q: queries},
+		PrefSetter:  &dbPrefSetter{q: queries},
+		EmitFn:      emitFn,
+		ComposerMgr: composerV2Mgr,
 	})
 	a.SetPersona(personaSvc)
 
