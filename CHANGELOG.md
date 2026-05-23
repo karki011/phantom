@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.58](https://github.com/karki011/phantom/compare/v0.1.57...v0.1.58) (2026-05-23)
+
+
+### Features
+
+* replace CodeMirror with shiki virtualized viewer (keep markdown preview) ([#151](https://github.com/karki011/phantom/issues/151)) ([02fe077](https://github.com/karki011/phantom/commit/02fe077997ce5b44c7c2bcb44e156ffd945b1100))
+
 ## [0.1.57](https://github.com/karki011/phantom/compare/v0.1.56...v0.1.57) (2026-05-22)
 
 
