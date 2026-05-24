@@ -2,7 +2,7 @@
 
 import { createSignal, createMemo } from 'solid-js';
 import type { PillState, PersonaState, PersonaResponse, Message } from './types';
-import { personaGetState, personaGetHistory, personaAsk } from './bindings';
+import { personaGetState, personaGetHistory, personaAsk, personaSpeak } from './bindings';
 import { createVoiceEngine, type VoiceEngine, type VoiceState } from './voice';
 
 const [personaState, setPersonaState] = createSignal<PersonaState>({
@@ -16,6 +16,11 @@ const [messages, setMessages] = createSignal<Message[]>([]);
 const [isExpanded, setIsExpanded] = createSignal(false);
 const [lastResponse, setLastResponse] = createSignal<PersonaResponse | null>(null);
 const [isThinking, setIsThinking] = createSignal(false);
+
+// ─── Voice preference ─────────────────────────────────────────────────────
+const [voiceEnabled, setVoiceEnabled] = createSignal(true);
+export { voiceEnabled };
+export const toggleVoice = () => setVoiceEnabled((v) => !v);
 
 // ─── Voice engine ──────────────────────────────────────────────────────────
 let voiceEngine: VoiceEngine | null = null;
@@ -57,6 +62,15 @@ export async function sendToPersona(input: string): Promise<PersonaResponse> {
     const phantomMsg: Message = { role: 'phantom', text: resp.text, timestamp: new Date().toISOString() };
     setMessages((prev) => [...prev, phantomMsg]);
     setLastResponse(resp);
+
+    // Always speak the response via Go TTS (macOS `say`) when voice is enabled.
+    if (voiceEnabled()) {
+      const speakText = resp.speak || resp.text;
+      if (speakText) {
+        personaSpeak(speakText);
+      }
+    }
+
     return resp;
   } finally {
     setIsThinking(false);
@@ -114,13 +128,8 @@ export function initPersonaSignals() {
     setInterimTranscript(text);
     if (isFinal && text.trim()) {
       setInterimTranscript('');
-      // Send to Persona then speak the response.
-      sendToPersona(text.trim()).then((resp) => {
-        const speakText = resp.speak || resp.text;
-        if (speakText && voiceEngine) {
-          voiceEngine.speak(speakText);
-        }
-      });
+      // Send to Persona — TTS is handled inside sendToPersona now.
+      sendToPersona(text.trim());
     }
   });
 }

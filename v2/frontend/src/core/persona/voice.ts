@@ -40,14 +40,10 @@ export function createVoiceEngine(): VoiceEngine {
   let state: VoiceState = 'idle';
   let resultCallbacks: ResultCallback[] = [];
   let stateCallbacks: StateCallback[] = [];
-  let currentUtterance: SpeechSynthesisUtterance | null = null;
 
   const hasSpeechRecognition =
     typeof window !== 'undefined' &&
     ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window);
-
-  const hasSpeechSynthesis =
-    typeof window !== 'undefined' && 'speechSynthesis' in window;
 
   const setState = (next: VoiceState) => {
     if (state === next) return;
@@ -96,20 +92,6 @@ export function createVoiceEngine(): VoiceEngine {
     return r;
   };
 
-  /** Pick a good macOS voice for TTS. Prefer Samantha / Alex / system default. */
-  const pickVoice = (): SpeechSynthesisVoice | null => {
-    if (!hasSpeechSynthesis) return null;
-    const voices = speechSynthesis.getVoices();
-    // Prefer English voices that sound natural.
-    const preferred = ['Samantha', 'Alex', 'Karen', 'Daniel'];
-    for (const name of preferred) {
-      const v = voices.find((v) => v.name === name);
-      if (v) return v;
-    }
-    // Fallback to first English voice.
-    return voices.find((v) => v.lang.startsWith('en')) ?? voices[0] ?? null;
-  };
-
   return {
     isSupported() {
       return hasSpeechRecognition;
@@ -144,50 +126,16 @@ export function createVoiceEngine(): VoiceEngine {
 
     async speak(text: string) {
       if (!text) return;
-
-      // Try browser TTS first.
-      if (hasSpeechSynthesis) {
-        return new Promise<void>((resolve) => {
-          // Cancel any in-progress speech.
-          speechSynthesis.cancel();
-
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.rate = 1.05;
-          utterance.pitch = 1.0;
-          utterance.volume = 1.0;
-
-          const voice = pickVoice();
-          if (voice) utterance.voice = voice;
-
-          currentUtterance = utterance;
-
-          utterance.onstart = () => setState('speaking');
-          utterance.onend = () => {
-            currentUtterance = null;
-            setState('idle');
-            resolve();
-          };
-          utterance.onerror = () => {
-            currentUtterance = null;
-            setState('idle');
-            resolve();
-          };
-
-          speechSynthesis.speak(utterance);
-        });
-      }
-
-      // Fallback to Go binding.
+      // Always use Go binding (macOS `say`) — browser speechSynthesis is
+      // unreliable / unavailable in WKWebView.
       setState('speaking');
       await goSpeak(text);
       setState('idle');
     },
 
     stopSpeaking() {
-      if (hasSpeechSynthesis) {
-        speechSynthesis.cancel();
-      }
-      currentUtterance = null;
+      // Note: cannot cancel Go-side `say` process from here — just reset state.
+      // Future: send a cancel signal to Go if needed.
       if (state === 'speaking') {
         setState('idle');
       }
@@ -205,9 +153,6 @@ export function createVoiceEngine(): VoiceEngine {
       if (recognition) {
         try { recognition.abort(); } catch { /* ok */ }
         recognition = null;
-      }
-      if (hasSpeechSynthesis) {
-        speechSynthesis.cancel();
       }
       resultCallbacks = [];
       stateCallbacks = [];

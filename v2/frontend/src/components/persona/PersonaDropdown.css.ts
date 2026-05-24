@@ -141,6 +141,7 @@ export const quickActionChip = style({
 });
 
 export const inputArea = style({
+  position: 'relative',
   display: 'flex',
   alignItems: 'center',
   gap: vars.space.sm,
