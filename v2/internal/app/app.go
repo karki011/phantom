@@ -436,6 +436,15 @@ func (a *App) Startup(ctx context.Context) {
 	if a.Persona != nil {
 		a.Persona.Start(a.ctx)
 	}
+
+	// Wire Persona Ask into the API server so the /api/persona/claude
+	// endpoint can spawn managed Claude sessions from the terminal shell
+	// intercept.
+	if a.apiServer != nil && a.Persona != nil {
+		a.apiServer.SetPersonaAsk(func(input string) map[string]interface{} {
+			return a.PersonaAsk(input)
+		})
+	}
 }
 
 func (a *App) DomReady(ctx context.Context) {

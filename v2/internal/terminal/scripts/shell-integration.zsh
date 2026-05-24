@@ -109,11 +109,47 @@ __phantom_preexec() {
 }
 
 # ─── Claude command intercept ────────────────────────────────────────────────
-# When the user types `claude ...` in a Phantom terminal, this function sends
-# an OSC 633;Claude;<args> notification so Phantom can track the session, then
-# runs the real claude binary transparently.
+# When the user types `claude ...` in a Phantom terminal, this function spawns
+# a MANAGED Claude session through Phantom's API. Phantom owns the process
+# lifecycle, tracks tool calls in real-time for the pill, and allows
+# Persona to pause/stop/redirect the session.
+#
+# If the API is unreachable, falls back to running the real claude binary.
 claude() {
-	builtin printf '\e]633;Claude;%s\a' "$*"
+	builtin emulate -L zsh
+
+	local __phantom_port="${PHANTOM_API_PORT:-3849}"
+	local __phantom_tid="${PHANTOM_TERMINAL_ID:-}"
+	local __phantom_args="$*"
+	local __phantom_cwd="${PWD}"
+
+	# Emit OSC notification (for pill update even if API fails).
+	builtin printf '\e]633;Claude;%s\a' "$__phantom_args"
+
+	# Try spawning a managed session via Phantom API.
+	if (( $+commands[curl] )); then
+		local __phantom_json
+		__phantom_json=$(builtin printf '{"args":"%s","cwd":"%s","terminalId":"%s"}' \
+			"${__phantom_args//\"/\\\"}" \
+			"${__phantom_cwd//\"/\\\"}" \
+			"$__phantom_tid")
+
+		local __phantom_resp
+		__phantom_resp=$(command curl -s --max-time 3 \
+			-X POST "http://localhost:${__phantom_port}/api/persona/claude" \
+			-H 'Content-Type: application/json' \
+			-d "$__phantom_json" 2>/dev/null)
+
+		if [[ $? -eq 0 ]] && builtin print -r -- "$__phantom_resp" | command grep -q '"text"'; then
+			# Phantom accepted the session.
+			builtin printf '\n\033[1;36mPhantom\033[0m is managing this Claude session.\n'
+			builtin printf '  %s\n' "$(builtin print -r -- "$__phantom_resp" | command grep -o '"text":"[^"]*"' | head -1 | cut -d'"' -f4)"
+			builtin printf '  Use the Persona pill to monitor, pause, or stop.\n\n'
+			return 0
+		fi
+	fi
+
+	# Fallback: API unreachable — run claude directly.
 	command claude "$@"
 }
 

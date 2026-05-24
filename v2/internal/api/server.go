@@ -65,6 +65,11 @@ type ServerDeps struct {
 	// OrchestratorDeps provides the strategy pipeline for the /api/orchestrator/assess
 	// endpoint. When nil, the endpoint returns 503.
 	OrchestratorDeps *orchestrator.Dependencies
+
+	// PersonaAsk is an optional callback that sends user input to the Persona
+	// service and returns the response. When set, the /api/persona/claude
+	// endpoint uses it to spawn managed Claude sessions.
+	PersonaAsk func(input string) map[string]interface{}
 }
 
 // hookHealthEntry records the last health report from a hook.
@@ -209,6 +214,9 @@ func (s *Server) registerRoutes() {
 	// Verification (for post-edit-verifier hook)
 	s.mux.HandleFunc("POST /api/verify/queue", s.handleVerifyQueue)
 	s.mux.HandleFunc("GET /api/verify/latest", s.handleVerifyLatest)
+
+	// Persona — managed Claude session spawn from terminal shell intercept
+	s.mux.HandleFunc("POST /api/persona/claude", s.handlePersonaClaude)
 
 	// Hook relay (phantom-relay hook — real-time tool event capture)
 	s.mux.HandleFunc("POST /api/hooks/relay", s.handleHookRelay)
@@ -817,6 +825,56 @@ func (s *Server) handleHookRelay(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+// ---------------------------------------------------------------------------
+// Persona — Managed Claude Session
+// ---------------------------------------------------------------------------
+
+// handlePersonaClaude spawns a managed Claude session through the Persona
+// service. Called by the shell integration's claude() function so Phantom owns
+// the Claude process lifecycle instead of letting it run unmanaged.
+func (s *Server) handlePersonaClaude(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Args       string `json:"args"`
+		CWD        string `json:"cwd"`
+		TerminalID string `json:"terminalId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+
+	if s.deps.PersonaAsk == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "Persona service not available",
+		})
+		return
+	}
+
+	slog.Info("persona/claude: spawn request",
+		"args", body.Args,
+		"cwd", body.CWD,
+		"terminal", body.TerminalID,
+	)
+
+	// Route through the Persona Ask interface — it classifies the input
+	// as a "claude spawn" intent and dispatches to ClaudeHandler.spawn().
+	prompt := body.Args
+	if prompt == "" {
+		prompt = "start a claude session"
+	}
+	input := fmt.Sprintf("run claude %s", prompt)
+
+	resp := s.deps.PersonaAsk(input)
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// SetPersonaAsk injects the Persona ask callback after construction. The API
+// server starts before the Persona service is fully wired.
+func (s *Server) SetPersonaAsk(fn func(input string) map[string]interface{}) {
+	s.deps.PersonaAsk = fn
 }
 
 // ---------------------------------------------------------------------------

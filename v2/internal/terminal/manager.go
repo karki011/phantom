@@ -68,6 +68,11 @@ func (m *Manager) Create(ctx context.Context, id, cwd string, cols, rows uint16)
 
 	ctx, cancel := context.WithCancel(ctx)
 
+	// Inject the terminal session ID and API port so shell integration
+	// scripts can communicate back to Phantom (e.g. managed Claude spawn).
+	env = append(env, "PHANTOM_TERMINAL_ID="+id)
+	env = append(env, fmt.Sprintf("PHANTOM_API_PORT=%d", apiPort()))
+
 	cmd := exec.CommandContext(ctx, shell, args...)
 	cmd.Dir = cwd
 	cmd.Env = env
@@ -351,6 +356,16 @@ func buildCleanEnv() []string {
 	env = append(env, "TERM_PROGRAM=PhantomOS")
 
 	return env
+}
+
+// apiPort reads PHANTOM_API_PORT or falls back to 3849 (the default).
+func apiPort() int {
+	if raw := os.Getenv("PHANTOM_API_PORT"); raw != "" {
+		if p, err := strconv.Atoi(raw); err == nil && p > 0 {
+			return p
+		}
+	}
+	return 3849
 }
 
 // ensurePATH makes sure /usr/local/bin and /opt/homebrew/bin appear in PATH.
