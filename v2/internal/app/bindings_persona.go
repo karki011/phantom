@@ -124,7 +124,7 @@ func (a *App) PersonaSpeak(text string) error {
 	if text == "" {
 		return nil
 	}
-	return exec.Command("say", "-v", "Samantha", "-r", "200", text).Start()
+	return exec.Command("say", "-v", "Samantha", "-r", "160", text).Start()
 }
 
 // PersonaSetPillState allows the frontend to drive pill state transitions
