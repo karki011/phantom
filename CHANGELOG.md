@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.61](https://github.com/karki011/phantom/compare/v0.1.60...v0.1.61) (2026-05-26)
+
+
+### Features
+
+* **sidebar:** sort projects and live section alphabetically ([#155](https://github.com/karki011/phantom/issues/155)) ([3f44618](https://github.com/karki011/phantom/commit/3f44618b9f10d43714a205b154389857dc9ff80a))
+
 ## [0.1.60](https://github.com/karki011/phantom/compare/v0.1.59...v0.1.60) (2026-05-26)
 
 
