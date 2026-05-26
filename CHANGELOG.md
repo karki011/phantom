@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.60](https://github.com/karki011/phantom/compare/v0.1.59...v0.1.60) (2026-05-26)
+
+
+### Bug Fixes
+
+* **git:** robust worktree removal with proper error logging and startup prune ([5bb36d0](https://github.com/karki011/phantom/commit/5bb36d04137838224a4b61311f25444432abd10f))
+
 ## [0.1.59](https://github.com/karki011/phantom/compare/v0.1.58...v0.1.59) (2026-05-26)
 
 
