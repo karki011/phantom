@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.1.59](https://github.com/karki011/phantom/compare/v0.1.58...v0.1.59) (2026-05-26)
+
+
+### Features
+
+* **persona:** add Claude Runtime handler with spawn/pause/stop/resume ([8b4228b](https://github.com/karki011/phantom/commit/8b4228bf47884dcc1f185d2dd03f4f76827dbf20))
+* **persona:** add context engine with safe nil-dep defaults ([49df0e0](https://github.com/karki011/phantom/commit/49df0e0240eebb7ad1cac8b8ab4508912c462122))
+* **persona:** add frontend types and Wails binding wrappers ([5555f03](https://github.com/karki011/phantom/commit/5555f035edb34b11764cd3176e5796ae7d39fee3))
+* **persona:** add HTTP endpoint for managed Claude sessions + update shell intercept ([301f8d8](https://github.com/karki011/phantom/commit/301f8d87e5770c6bf5e3d4eefea9ed5f6fe331d3))
+* **persona:** add observe-tier handlers (status, git, search, workspace) ([4e9d3af](https://github.com/karki011/phantom/commit/4e9d3af2172231488eb46ae2c9b8881186c726fd))
+* **persona:** add Persona service with Wails bindings and event constants ([cdc05ba](https://github.com/karki011/phantom/commit/cdc05baafced968fa44d4fbcd1484b4c988f842b))
+* **persona:** add PersonaDropdown with chat, quick actions, and input ([4f991de](https://github.com/karki011/phantom/commit/4f991deaabbf21423569dbdc32d501c4308201de))
+* **persona:** add PersonaPill component to top bar ([5689b2d](https://github.com/karki011/phantom/commit/5689b2dbc7bf40d4a6fefc25216b81db8dae5eeb))
+* **persona:** add proactive status polling with 2s refresh ([4c8db35](https://github.com/karki011/phantom/commit/4c8db35c8de6c85e1e84c368bbe6520f8cc46926))
+* **persona:** add progressive trust tier manager ([2ac38b8](https://github.com/karki011/phantom/commit/2ac38b843fa1c9b63a9df00c0eab1e6f4c1220b1))
+* **persona:** add smart router with keyword intent classification ([321a269](https://github.com/karki011/phantom/commit/321a26928eb55d9a838e967db3ea2c037db86c16))
+* **persona:** add SolidJS signals with double-tap meta detection ([7ed0704](https://github.com/karki011/phantom/commit/7ed0704855aded45168fbb9a6e4bef1e890bea1b))
+* **persona:** add thinking indicator while waiting for AI response ([21782e2](https://github.com/karki011/phantom/commit/21782e2d8a0e2beac5533bac1ed30ee7749b818c))
+* **persona:** add types package scaffold ([9d4a4f9](https://github.com/karki011/phantom/commit/9d4a4f97c6606527d21729f0c3a510af79257efd))
+* **persona:** add voice engine with Web Speech API STT/TTS + mic button ([3ec19fa](https://github.com/karki011/phantom/commit/3ec19faf6192e77e756b2a65a5eadea81c4cff91))
+* **persona:** AI-first routing + autofocus input + thinking indicator ([90d114e](https://github.com/karki011/phantom/commit/90d114e43e19c002b102393c57ea46669b3997ef))
+* **persona:** wire active project path + add AI-powered default handler via Claude CLI ([e530103](https://github.com/karki011/phantom/commit/e5301038076dcff281b2f58aba46fafc31522910))
+* **persona:** wire Persona service into app startup ([00047c9](https://github.com/karki011/phantom/commit/00047c932be5c204d1232317d9db873098ef8ff6))
+
+
+### Bug Fixes
+
+* **persona:** add LLM fallback handler, fix typo-tolerant routing ([58e4310](https://github.com/karki011/phantom/commit/58e4310eb0d20d52345d5a280a18a3c54ebdc26c))
+* **persona:** always speak responses via Go TTS + voice toggle ([b315927](https://github.com/karki011/phantom/commit/b315927a4fcb6d1d4b81894e7892bc0f512f7474))
+* **persona:** correct Claude CLI flags in AI handler ([a4d1313](https://github.com/karki011/phantom/commit/a4d13134fc846e425c87fde819e805f9560725c1))
+* **persona:** correct Claude CLI invocation flags per docs ([fdeca74](https://github.com/karki011/phantom/commit/fdeca741e4e607916da3c65171d6c9428a6583a7))
+* **persona:** correct CLI flags per official docs verification ([edaa94f](https://github.com/karki011/phantom/commit/edaa94f72d44d98eb8137a185e4aba9e30a3d4de))
+* **persona:** slow down TTS rate from 200 to 160 wpm for natural pacing ([5dc74c1](https://github.com/karki011/phantom/commit/5dc74c18cd2dbb1447bc9dbfdbc6c321dcd727f8))
+* **persona:** sticky Claude pill state + real-time tool tracking + always-show mic button ([bee1929](https://github.com/karki011/phantom/commit/bee192970256b1f2e28aac6a94231c268c4814cf))
+* **persona:** use Pattern A for Claude CLI — no tools, deterministic ([97f1857](https://github.com/karki011/phantom/commit/97f1857c9a4c46291beffcda4cb2a7dce7e68af2))
+* **persona:** wire file indexers lazily + map LastTool from DB ([bbec2b8](https://github.com/karki011/phantom/commit/bbec2b8288b3afc9e2b3b7f220b505debc0ccf68))
+
+
+### Documentation
+
+* add Phantom Persona design spec and runtime assessment ([f399e7f](https://github.com/karki011/phantom/commit/f399e7f7cfb3de34790f0c082b8cbd55c8286ea2))
+* add Phantom Persona foundation implementation plan ([8865021](https://github.com/karki011/phantom/commit/88650212618f42781457625ded46ce267a939e1f))
+
 ## [0.1.58](https://github.com/karki011/phantom/compare/v0.1.57...v0.1.58) (2026-05-23)
 
 
