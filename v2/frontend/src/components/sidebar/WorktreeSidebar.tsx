@@ -57,10 +57,14 @@ export function WorktreeSidebar() {
   // Split filtered projects into favorites and the rest
   const starredIds = createMemo(() => new Set(starredProjects().map((p) => p.id)));
   const favoriteProjects = createMemo(() =>
-    filteredProjects().filter((p) => starredIds().has(p.id)),
+    filteredProjects()
+      .filter((p) => starredIds().has(p.id))
+      .sort((a, b) => a.name.localeCompare(b.name)),
   );
   const otherProjects = createMemo(() =>
-    filteredProjects().filter((p) => !starredIds().has(p.id)),
+    filteredProjects()
+      .filter((p) => !starredIds().has(p.id))
+      .sort((a, b) => a.name.localeCompare(b.name)),
   );
 
   async function handleAddProject() {
