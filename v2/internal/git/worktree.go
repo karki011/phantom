@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/charmbracelet/log"
 )
 
 // worktreeRoot is the unexpanded base directory for worktrees.
@@ -100,52 +102,83 @@ func Create(ctx context.Context, repoPath, branch, targetDir, baseBranch string)
 	return err
 }
 
-// Remove detaches a worktree. It finds the main repo via git-common-dir,
-// then uses `worktree remove --force`. If that fails, it prunes and removes
-// the directory manually.
+// Remove fully detaches a worktree from git and cleans up on disk.
+// Steps: resolve main repo → git worktree remove --force → os.RemoveAll →
+// git worktree prune → remove empty parent dirs under worktree root.
 func Remove(ctx context.Context, worktreePath string) error {
-	// Find the main repository. Try from worktree path first; if the dir
-	// is already gone (user deleted from Finder), walk up the parent to
-	// find a valid git repo for the prune command.
-	var mainRepo string
-	commonDir, err := runGit(ctx, worktreePath, "rev-parse", "--git-common-dir")
-	if err == nil {
-		absCommonDir, absErr := filepath.Abs(filepath.Join(worktreePath, commonDir))
-		if absErr == nil {
-			mainRepo = filepath.Dir(absCommonDir)
-		}
-	}
-	if mainRepo == "" {
-		// Worktree dir gone — resolve from parent directories.
-		dir := filepath.Dir(worktreePath)
-		for dir != "/" && dir != "." {
-			if cd, e := runGit(ctx, dir, "rev-parse", "--git-common-dir"); e == nil {
-				if abs, ae := filepath.Abs(filepath.Join(dir, cd)); ae == nil {
-					mainRepo = filepath.Dir(abs)
-					break
-				}
-			}
-			dir = filepath.Dir(dir)
-		}
-	}
+	mainRepo := resolveMainRepo(ctx, worktreePath)
 
 	if mainRepo != "" {
-		// Try force remove
-		_, removeErr := runGit(ctx, mainRepo, "worktree", "remove", worktreePath, "--force")
-		_ = removeErr // logged by caller; continue to cleanup
-		// Ensure directory is gone even if git worktree remove succeeded
-		// partially or left behind untracked files.
-		if _, statErr := os.Stat(worktreePath); statErr == nil {
-			_ = os.RemoveAll(worktreePath)
+		if _, err := runGit(ctx, mainRepo, "worktree", "remove", worktreePath, "--force"); err != nil {
+			log.Warn("git worktree remove failed, falling back to manual cleanup", "path", worktreePath, "err", err)
 		}
-		// Always prune to clean up stale git worktree metadata
-		_, _ = runGit(ctx, mainRepo, "worktree", "prune")
+		if _, statErr := os.Stat(worktreePath); statErr == nil {
+			if err := os.RemoveAll(worktreePath); err != nil {
+				log.Warn("os.RemoveAll failed for worktree dir", "path", worktreePath, "err", err)
+			}
+		}
+		if _, err := runGit(ctx, mainRepo, "worktree", "prune"); err != nil {
+			log.Warn("git worktree prune failed", "repo", mainRepo, "err", err)
+		}
 	} else {
-		// Last resort: just remove the directory
+		log.Warn("could not resolve main repo, removing directory only", "path", worktreePath)
 		_ = os.RemoveAll(worktreePath)
 	}
 
+	cleanEmptyParents(worktreePath)
 	return nil
+}
+
+// resolveMainRepo finds the main repository for a worktree path.
+// Tries git-common-dir from the worktree first, then walks parent dirs.
+func resolveMainRepo(ctx context.Context, worktreePath string) string {
+	commonDir, err := runGit(ctx, worktreePath, "rev-parse", "--git-common-dir")
+	if err == nil {
+		if abs, absErr := filepath.Abs(filepath.Join(worktreePath, commonDir)); absErr == nil {
+			return filepath.Dir(abs)
+		}
+	}
+	dir := filepath.Dir(worktreePath)
+	for dir != "/" && dir != "." {
+		if cd, e := runGit(ctx, dir, "rev-parse", "--git-common-dir"); e == nil {
+			if abs, ae := filepath.Abs(filepath.Join(dir, cd)); ae == nil {
+				return filepath.Dir(abs)
+			}
+		}
+		dir = filepath.Dir(dir)
+	}
+	return ""
+}
+
+// cleanEmptyParents removes empty ancestor directories up to (but not
+// including) the worktree root (~/.phantom-os/worktrees).
+func cleanEmptyParents(worktreePath string) {
+	root, err := expandWorktreeRoot()
+	if err != nil {
+		return
+	}
+	dir := filepath.Dir(worktreePath)
+	for dir != root && strings.HasPrefix(dir, root) {
+		entries, readErr := os.ReadDir(dir)
+		if readErr != nil || len(entries) > 0 {
+			break
+		}
+		if err := os.Remove(dir); err != nil {
+			break
+		}
+		log.Debug("removed empty worktree parent dir", "dir", dir)
+		dir = filepath.Dir(dir)
+	}
+}
+
+// PruneAll runs `git worktree prune` for a list of repository paths.
+// Intended for startup cleanup of stale worktree metadata.
+func PruneAll(ctx context.Context, repoPaths []string) {
+	for _, repo := range repoPaths {
+		if _, err := runGit(ctx, repo, "worktree", "prune"); err != nil {
+			log.Warn("startup prune failed", "repo", repo, "err", err)
+		}
+	}
 }
 
 // List returns all worktrees for the given repository by parsing

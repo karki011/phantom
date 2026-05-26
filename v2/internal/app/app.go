@@ -307,6 +307,9 @@ func (a *App) Startup(ctx context.Context) {
 	// toggle. Failures are logged, not fatal.
 	go a.selfHealMCPRegistration()
 
+	// Prune stale git worktree metadata for all known projects.
+	go a.pruneStaleWorktrees()
+
 	// Mark orphaned terminals (active in DB but no live PTY) as ended.
 	// Handles crash recovery: terminals that were active when the app last exited.
 	if a.DB != nil {
@@ -859,6 +862,29 @@ func (a *App) selfHealMCPRegistration() {
 	if failed > 0 {
 		a.emitMCPFailure("enable-projects", fmt.Errorf("%d of %d project(s) failed to enable phantom-ai (see logs)", failed, len(paths)))
 	}
+}
+
+// pruneStaleWorktrees runs `git worktree prune` for every known project
+// repo so stale metadata left by external deletions or incomplete removals
+// is cleaned on each boot.
+func (a *App) pruneStaleWorktrees() {
+	if a.DB == nil {
+		return
+	}
+	q := db.New(a.DB.Reader)
+	projects, err := q.ListProjects(a.ctx)
+	if err != nil {
+		log.Warn("app: worktree prune — list projects failed", "err", err)
+		return
+	}
+	paths := make([]string, 0, len(projects))
+	for _, p := range projects {
+		if p.RepoPath != "" {
+			paths = append(paths, p.RepoPath)
+		}
+	}
+	git.PruneAll(a.ctx, paths)
+	log.Info("app: startup worktree prune complete", "repos", len(paths))
 }
 
 // emitMCPFailure surfaces an MCP registration error to the frontend via the
