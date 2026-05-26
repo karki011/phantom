@@ -72,6 +72,6 @@ export const liveWorktrees = createMemo<LiveWorktree[]>(() => {
     }
   }
 
-  result.sort((a, b) => b.terminalCount - a.terminalCount);
+  result.sort((a, b) => a.branch.localeCompare(b.branch) || a.projectName.localeCompare(b.projectName));
   return result;
 });
