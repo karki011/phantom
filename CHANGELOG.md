@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.62](https://github.com/karki011/phantom/compare/v0.1.61...v0.1.62) (2026-05-28)
+
+
+### Features
+
+* **pr:** add rubber stamp approval button for 5/5 Greptile PRs ([#157](https://github.com/karki011/phantom/issues/157)) ([f3a6c3f](https://github.com/karki011/phantom/commit/f3a6c3fa464226f64ebefa6d7e14872353f2122f))
+
 ## [0.1.61](https://github.com/karki011/phantom/compare/v0.1.60...v0.1.61) (2026-05-26)
 
 
