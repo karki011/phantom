@@ -47,6 +47,8 @@ export {
   dispatchWorkflow,
   rerunWorkflow,
   cancelWorkflowRun,
+  rubberStampPr,
+  getGitHubLogin,
 } from './git';
 export { revealInFinder, openInFinder, openInDefaultApp, openURL } from './shell';
 export { readFileByPath, readFileContents, writeFileContents, getFileAtRevision, getWorkspaceBlame, createFile, createFolder, deleteFile } from './editor';

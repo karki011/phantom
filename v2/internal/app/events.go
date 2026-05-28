@@ -48,6 +48,7 @@ const (
 	EventPrMerging    = "pr:merging"     // payload: { worktreeId, prNumber, autoMerge bool }
 	EventPrMerged     = "pr:merged"      // payload: { worktreeId, prNumber }
 	EventMergeFailed  = "pr:merge-failed" // payload: { worktreeId, prNumber, message }
+	EventPrApproved   = "pr:approved"     // payload: { worktreeId, prNumber }
 
 	// MCP self-heal / repair failure surfacing.
 	// payload: { phase: "register" | "enable-projects", error: string, hint?: string }

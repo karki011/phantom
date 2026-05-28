@@ -202,3 +202,21 @@ export async function cancelWorkflowRun(worktreeId: string, runId: number): Prom
   try { return (await App()?.CancelWorkflowRunForWorkspace(worktreeId, runId)) ?? ''; }
   catch (err) { return err instanceof Error ? err.message : 'cancel failed'; }
 }
+
+// ── Rubber Stamp ──────────────────────────────────────────────────────────
+
+export async function rubberStampPr(worktreeId: string, prNumber: number): Promise<string> {
+  try {
+    return (await App()?.RubberStampPrForWorkspace(worktreeId, prNumber)) ?? 'unknown error';
+  } catch (err) {
+    return String(err);
+  }
+}
+
+export async function getGitHubLogin(): Promise<string> {
+  try {
+    return (await App()?.GetGitHubLoginForWorkspace()) ?? '';
+  } catch {
+    return '';
+  }
+}
