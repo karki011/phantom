@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.64](https://github.com/karki011/phantom/compare/v0.1.63...v0.1.64) (2026-05-28)
+
+
+### Features
+
+* **terminal:** ship native libghostty by default in dev and release ([6a92580](https://github.com/karki011/phantom/commit/6a92580c9e748f301dd10e3c5819f20da18ccae6))
+
+
+### Bug Fixes
+
+* **v2:** resolve pre-existing vet, typecheck, and test failures ([f71cad3](https://github.com/karki011/phantom/commit/f71cad3502d24d07d60549d20fc2ac4aaacf9195))
+
+
+### Performance
+
+* **git:** fast sidebar via stale-while-revalidate status cache ([5c0fac9](https://github.com/karki011/phantom/commit/5c0fac91af83e5f802e6c33232951aefa7104662))
+
 ## [0.1.63](https://github.com/karki011/phantom/compare/v0.1.62...v0.1.63) (2026-05-28)
 
 
