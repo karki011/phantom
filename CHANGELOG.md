@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.63](https://github.com/karki011/phantom/compare/v0.1.62...v0.1.63) (2026-05-28)
+
+
+### Features
+
+* **panes:** add Kill Port pane for viewing and killing processes by port ([#159](https://github.com/karki011/phantom/issues/159)) ([1552af1](https://github.com/karki011/phantom/commit/1552af19c78120fed17cf900822229e4d7df682b))
+
 ## [0.1.62](https://github.com/karki011/phantom/compare/v0.1.61...v0.1.62) (2026-05-28)
 
 
