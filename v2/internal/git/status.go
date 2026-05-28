@@ -32,9 +32,17 @@ type RepoStatus struct {
 	Conflicts    []string     `json:"conflicts"`
 }
 
-// WorktreeStatus enriches WorktreeInfo with live repo status and optional session data.
+// WorktreeStatus enriches a worktree's identity with live repo status and optional
+// session data. WorktreeInfo's fields are inlined explicitly rather than embedded:
+// its Branch json tag would otherwise collide with RepoStatus.Branch, and
+// encoding/json drops *both* conflicting promoted fields — silently omitting
+// `branch` from the output. Branch is therefore sourced from the embedded
+// RepoStatus (set to the worktree's branch at assembly).
 type WorktreeStatus struct {
-	WorktreeInfo
+	Path       string `json:"path"`
+	Commit     string `json:"commit"`
+	IsBare     bool   `json:"is_bare"`
+	IsPrunable bool   `json:"is_prunable"`
 	RepoStatus
 	ActiveSession string  `json:"active_session,omitempty"`
 	PRNumber      int     `json:"pr_number,omitempty"`
@@ -192,12 +200,10 @@ func GetWorktreeStatus(ctx context.Context, worktreePath string) (*WorktreeStatu
 		return nil, err
 	}
 
+	rs.Branch = branch // the worktree's branch is authoritative
 	return &WorktreeStatus{
-		WorktreeInfo: WorktreeInfo{
-			Path:   worktreePath,
-			Branch: branch,
-			Commit: commit,
-		},
+		Path:       worktreePath,
+		Commit:     commit,
 		RepoStatus: *rs,
 	}, nil
 }

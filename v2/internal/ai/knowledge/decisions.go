@@ -316,7 +316,11 @@ type FailedApproach struct {
 // decay weight drops below 0.05 (~4.3 half-lives, ~387 days at default 90d)
 // are considered forgotten and excluded from results.
 func (ds *DecisionStore) GetFailedApproaches(goal string) ([]FailedApproach, error) {
-	similar, err := ds.FindSimilar(goal, 0.3)
+	// Use a low similarity floor (0.15) so a strong textual match still surfaces
+	// even when the failed decision had low confidence. FindSimilar multiplies
+	// text similarity by effectiveConfidence, so failure recall must NOT be
+	// suppressed by the failed decision's own (optimistic, pre-outcome) confidence.
+	similar, err := ds.FindSimilar(goal, 0.15)
 	if err != nil {
 		return nil, err
 	}

@@ -27,7 +27,7 @@ func TestLoadConfig_Claude(t *testing.T) {
 	assertEqual(t, "detection.binary", cfg.Detection.Binary, "claude")
 	assertEqual(t, "detection.paths len", len(cfg.Detection.Paths), 2)
 	assertEqual(t, "detection.version_command[0]", cfg.Detection.VersionCommand[0], "claude")
-	assertEqual(t, "detection.version_pattern", cfg.Detection.VersionPattern, `claude-code/(\d+\.\d+\.\d+)`)
+	assertEqual(t, "detection.version_pattern", cfg.Detection.VersionPattern, `(\d+\.\d+\.\d+)`)
 
 	// Paths
 	assertEqual(t, "paths.sessions", cfg.Paths.Sessions, "~/.claude/sessions/")

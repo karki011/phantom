@@ -144,6 +144,19 @@ func (tt *ThresholdTracker) recalibrate() {
 		smoothed := smoothingFactor*target + (1-smoothingFactor)*float64(*tier.current)
 		clamped := clamp(int(math.Round(smoothed)), tier.minVal, tier.maxVal)
 
+		// EMA on small integer thresholds can round straight back to the current
+		// value (e.g. 2 → 1.91 → 2), leaving the threshold permanently stuck.
+		// When recalibration is warranted (we're out of the sweet spot) but
+		// rounding stalls, nudge one step toward the target so sustained
+		// success/failure still moves the threshold. clamp still bounds it.
+		if clamped == *tier.current {
+			if target < float64(*tier.current) {
+				clamped = clamp(*tier.current-1, tier.minVal, tier.maxVal)
+			} else {
+				clamped = clamp(*tier.current+1, tier.minVal, tier.maxVal)
+			}
+		}
+
 		// Oscillation detection — skip if threshold is bouncing
 		if tt.isOscillating(tier.key, clamped) {
 			continue

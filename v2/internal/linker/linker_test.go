@@ -10,6 +10,8 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -38,12 +40,22 @@ func setupTestDB(t *testing.T) *db.Queries {
 		t.Fatal(err)
 	}
 
-	// Apply migrations in order.
-	for _, migration := range []string{
-		"001_initial_schema.up.sql",
-		"002_terminal_lifecycle.up.sql",
-	} {
-		data, err := os.ReadFile(filepath.Join("..", "db", "migrations", migration))
+	// Apply migrations in order. Read all *.up.sql files dynamically and sort
+	// lexically — zero-padded prefixes (001_, 002_, ...) make this migration order.
+	migDir := filepath.Join("..", "db", "migrations")
+	entries, err := os.ReadDir(migDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var migrations []string
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".up.sql") {
+			migrations = append(migrations, e.Name())
+		}
+	}
+	sort.Strings(migrations)
+	for _, migration := range migrations {
+		data, err := os.ReadFile(filepath.Join(migDir, migration))
 		if err != nil {
 			t.Fatal(err)
 		}
