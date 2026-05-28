@@ -6,7 +6,7 @@
 // 3. Process similar goal → prior failures influence strategy selection
 // 4. Confidence decay → old decisions lose weight over time
 // 5. Session memory injection → knowledge surfaces in prompt context
-package ai
+package ai_test
 
 import (
 	"context"
@@ -51,7 +51,11 @@ func TestLearningLoop_FullCycle(t *testing.T) {
 		GapDetector: gapDetector,
 	}
 
-	// === TURN 1: Simple task → Direct strategy ===
+	// === TURN 1: Moderate task → Self-Refine ===
+	// "add a logger to the user service" floors to complexity=moderate via the
+	// assessor's moderateKeywords ("add" → bounded-but-meaningful work). After the
+	// Direct rebalance (direct.go scores Moderate at 0.4, "other strategies may fit
+	// better") Direct no longer dominates moderate tasks, so Self-Refine wins here.
 	result1, err := orchestrator.Process(context.Background(), deps, orchestrator.ProcessInput{
 		Goal: "add a logger to the user service",
 	})
@@ -62,8 +66,8 @@ func TestLearningLoop_FullCycle(t *testing.T) {
 		result1.Strategy.Name, result1.Confidence,
 		result1.TaskContext.Complexity, result1.TaskContext.Risk)
 
-	if result1.Strategy.ID != "direct" {
-		t.Errorf("Turn 1: expected direct, got %s", result1.Strategy.ID)
+	if result1.Strategy.ID != "self-refine" {
+		t.Errorf("Turn 1: expected self-refine for moderate task post-rebalance, got %s", result1.Strategy.ID)
 	}
 
 	// Record success for Direct

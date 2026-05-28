@@ -157,8 +157,10 @@ func TestTimingStatsPercentiles(t *testing.T) {
 	snap := pm.Snapshot()
 	stats := snap.StageTiming[StageTotal]
 
-	if stats.P50 != 10*time.Millisecond {
-		t.Errorf("expected P50=10ms, got %v", stats.P50)
+	// P50 of 20 items: n/2 -> index 10 -> 11ms (0-indexed), matching the
+	// same int(n*pct) convention the P95 assertion below relies on.
+	if stats.P50 != 11*time.Millisecond {
+		t.Errorf("expected P50=11ms, got %v", stats.P50)
 	}
 	// P95 of 20 items: index 19 -> 19ms (0-indexed) or 20ms
 	// int(20*0.95) = 19 -> sorted[19] = 20ms

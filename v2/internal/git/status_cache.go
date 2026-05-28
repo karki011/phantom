@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 const statusCacheTTL = 2 * time.Second
@@ -24,18 +26,30 @@ var statusCache = struct {
 	entries map[string]*statusCacheEntry
 }{entries: make(map[string]*statusCacheEntry)}
 
-// InvalidateStatusCache removes the cached status for a given repo path.
-// Called by the file watcher when git state changes.
+// statusGroup coalesces concurrent git-status refreshes per repo. When the
+// sidebar fires several ListDirectory calls at once (or a stale read triggers
+// a background refresh), only ONE `git status` runs; the rest share its result.
+var statusGroup singleflight.Group
+
+// InvalidateStatusCache marks the cached status for a repo as stale instead of
+// deleting it. The next read serves the stale maps instantly and refreshes in
+// the background — the sidebar never blocks on a cold `git status`. Called by
+// the file watcher when git state changes.
 func InvalidateStatusCache(repoPath string) {
 	statusCache.Lock()
-	delete(statusCache.entries, repoPath)
+	if e, ok := statusCache.entries[repoPath]; ok {
+		e.lastRefresh = time.Time{} // zero time => stale, but maps stay servable
+	}
 	statusCache.Unlock()
 }
 
-// InvalidateAllStatusCaches clears every cached entry.
+// InvalidateAllStatusCaches marks every cached entry stale (see
+// InvalidateStatusCache). Cheap and non-blocking — stale maps remain servable.
 func InvalidateAllStatusCaches() {
 	statusCache.Lock()
-	statusCache.entries = make(map[string]*statusCacheEntry)
+	for _, e := range statusCache.entries {
+		e.lastRefresh = time.Time{}
+	}
 	statusCache.Unlock()
 }
 
@@ -54,28 +68,54 @@ func getCachedStatusAndDirs(ctx context.Context, repoPath string) (map[string]st
 	statusCache.RUnlock()
 
 	if ok && time.Since(entry.lastRefresh) < statusCacheTTL {
+		return entry.statusMap, entry.dirStatusMap // fresh hit
+	}
+
+	if ok {
+		// Stale hit: serve the previous maps instantly and refresh in the
+		// background so the sidebar stays responsive. The background `git
+		// status` is deduped via singleflight, so a burst of stale reads spawns
+		// at most one real refresh. Uses a detached context so the refresh
+		// outlives the caller (a cancelled ListDirectory must not abort it).
+		go refreshStatusCache(context.WithoutCancel(ctx), repoPath)
 		return entry.statusMap, entry.dirStatusMap
 	}
 
-	statusMap := parseGitStatus(ctx, repoPath)
-	dirMap := buildDirStatusMap(statusMap)
+	// Cold start: no maps to serve, so block once on a deduped refresh.
+	e := refreshStatusCache(ctx, repoPath)
+	return e.statusMap, e.dirStatusMap
+}
 
-	statusCache.Lock()
-	statusCache.entries[repoPath] = &statusCacheEntry{
-		statusMap:    statusMap,
-		dirStatusMap: dirMap,
-		lastRefresh:  time.Now(),
-	}
-	statusCache.Unlock()
-
-	return statusMap, dirMap
+// refreshStatusCache runs `git status` for repoPath and stores the result,
+// deduplicating concurrent refreshes for the same repo via singleflight.
+func refreshStatusCache(ctx context.Context, repoPath string) *statusCacheEntry {
+	v, _, _ := statusGroup.Do(repoPath, func() (interface{}, error) {
+		statusMap := parseGitStatus(ctx, repoPath)
+		dirMap := buildDirStatusMap(statusMap)
+		e := &statusCacheEntry{
+			statusMap:    statusMap,
+			dirStatusMap: dirMap,
+			lastRefresh:  time.Now(),
+		}
+		statusCache.Lock()
+		statusCache.entries[repoPath] = e
+		statusCache.Unlock()
+		return e, nil
+	})
+	return v.(*statusCacheEntry)
 }
 
 // parseGitStatus runs `git status --porcelain=v2` and returns the path→XY map,
 // unifying on the same v2 format used by GetRepoStatus.
+//
+// --untracked-files=normal reports untracked directories as a single entry
+// instead of recursing into every file beneath them. On a worktree with large
+// untracked trees (node_modules, build output) this turns a multi-second scan
+// into milliseconds — the same trade-off VS Code/JetBrains make. Directory
+// badges are preserved: buildDirStatusMap still tags the untracked dir.
 func parseGitStatus(ctx context.Context, repoPath string) map[string]string {
 	statusMap := make(map[string]string)
-	out, err := runGitWithRetry(ctx, repoPath, "status", "--porcelain=v2")
+	out, err := runGitWithRetry(ctx, repoPath, "status", "--porcelain=v2", "--untracked-files=normal")
 	if err != nil || out == "" {
 		return statusMap
 	}

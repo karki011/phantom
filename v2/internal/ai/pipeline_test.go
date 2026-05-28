@@ -1,7 +1,7 @@
 // Package ai provides end-to-end pipeline tests for the AI engine.
 //
 // Author: Subash Karki
-package ai
+package ai_test
 
 import (
 	"database/sql"

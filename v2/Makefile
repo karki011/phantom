@@ -5,11 +5,21 @@
 # (xcodebuild -downloadComponent MetalToolchain).
 LIBGHOSTTY_DIR := third_party/ghostty
 LIBGHOSTTY_OUT := $(LIBGHOSTTY_DIR)/macos/GhosttyKit.xcframework
+# Canonical static lib the cgo bindings link against (see -L path in
+# internal/terminal/ghostty/bridge.go). The native zig target writes it here
+# directly (arm64-only); the universal target emits a fat archive under a
+# different slice dir + filename, which `libghostty-universal` stages into place.
 LIBGHOSTTY_LIB := $(LIBGHOSTTY_OUT)/macos-arm64/libghostty-internal-fat.a
+# Fat (arm64+x86_64) archive the universal zig build emits — note the different
+# slice dir AND filename vs the native target.
+LIBGHOSTTY_UNIVERSAL_SRC := $(LIBGHOSTTY_OUT)/macos-arm64_x86_64/ghostty-internal.a
 ZIG_BIN        := $(shell command -v /opt/homebrew/opt/zig@0.15/bin/zig 2>/dev/null || command -v zig)
 
 # Auto-detect libghostty: pass -tags ghostty to Go/Wails only when the lib exists.
-GHOSTTY_TAGS := $(if $(wildcard $(LIBGHOSTTY_LIB)),-tags ghostty,)
+# Recursive (`=`, not `:=`) so it is re-evaluated each time it is used in a recipe
+# — a lib built earlier in the same `make` invocation (as a prerequisite) then
+# still flips the tag on, instead of being missed by a one-shot parse-time check.
+GHOSTTY_TAGS = $(if $(wildcard $(LIBGHOSTTY_LIB)),-tags ghostty,)
 
 libghostty: $(LIBGHOSTTY_LIB)
 $(LIBGHOSTTY_LIB):
@@ -23,7 +33,17 @@ $(LIBGHOSTTY_LIB):
 		-Demit-macos-app=false \
 		-Demit-docs=false
 
-libghostty-universal:
+# Build the universal (arm64+x86_64) lib and stage it at the canonical path the
+# cgo bindings + GHOSTTY_TAGS expect. The zig universal target emits the fat
+# archive under macos-arm64_x86_64/ghostty-internal.a, so without this staging a
+# universal release would find no lib at macos-arm64/libghostty-internal-fat.a
+# and silently ship the no-op stub (native terminal OFF). The zig build only runs
+# when the fat slice is missing; the cp is cheap and idempotent (cache-friendly).
+libghostty-universal: $(LIBGHOSTTY_UNIVERSAL_SRC)
+	@mkdir -p $(dir $(LIBGHOSTTY_LIB))
+	cp $(LIBGHOSTTY_UNIVERSAL_SRC) $(LIBGHOSTTY_LIB)
+
+$(LIBGHOSTTY_UNIVERSAL_SRC):
 	@command -v $(ZIG_BIN) >/dev/null || (echo "zig 0.15 not found: brew install zig@0.15"; exit 1)
 	@xcrun -find metal >/dev/null 2>&1 || (echo "Metal toolchain missing: xcodebuild -downloadComponent MetalToolchain"; exit 1)
 	cd $(LIBGHOSTTY_DIR) && $(ZIG_BIN) build \
@@ -183,7 +203,12 @@ ci: frontend-install frontend-build go-build
 
 release: release-dmg
 
-release-build: mcp-build-universal
+# libghostty-universal is a prerequisite so the native terminal is always
+# compiled into release builds (native-by-default). With GHOSTTY_TAGS recursive,
+# the tag is applied even when the lib is built in this same invocation. If the
+# zig/Metal toolchain is missing the build fails loudly here rather than silently
+# shipping the no-op stub.
+release-build: mcp-build-universal libghostty-universal
 	@echo "==> wails build (universal, trimmed)"
 	wails build -clean -trimpath -platform darwin/universal -ldflags "-s -w" $(GHOSTTY_TAGS)
 	@echo "==> bundling phantom-mcp into .app"

@@ -146,7 +146,7 @@ export function PaneContainer(props: PaneContainerProps) {
                   <div style={{ display: 'flex', 'flex-direction': 'column', 'align-items': 'center', 'justify-content': 'center', height: '100%', gap: vars.space.md, color: vars.color.textSecondary }}>
                     <div style={{ 'font-family': vars.font.mono, 'font-size': vars.fontSize.sm }}>This pane crashed</div>
                     <div style={{ 'font-family': vars.font.mono, 'font-size': vars.fontSize.xs, color: vars.color.textDisabled }}>{String(err)}</div>
-                    <button style={{ padding: `${vars.space.xs} ${vars.space.sm}`, 'border-radius': vars.radius.sm, background: vars.color.surfaceHover, color: vars.color.textPrimary, border: `1px solid ${vars.color.border}`, cursor: 'pointer', 'font-family': vars.font.body, 'font-size': vars.fontSize.xs }} onClick={() => reset()}>
+                    <button style={{ padding: `${vars.space.xs} ${vars.space.sm}`, 'border-radius': vars.radius.sm, background: vars.color.bgTertiary, color: vars.color.textPrimary, border: `1px solid ${vars.color.border}`, cursor: 'pointer', 'font-family': vars.font.body, 'font-size': vars.fontSize.xs }} onClick={() => reset()}>
                       Retry
                     </button>
                   </div>

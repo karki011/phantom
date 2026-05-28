@@ -289,9 +289,13 @@ func (a *App) GetAllWorktreeStatus() []git.WorktreeStatus {
 				break
 			}
 		}
+		rs.Branch = wti.Branch // the worktree's branch is authoritative
 		statuses = append(statuses, git.WorktreeStatus{
-			WorktreeInfo: wti,
-			RepoStatus:   *rs,
+			Path:       wti.Path,
+			Commit:     wti.Commit,
+			IsBare:     wti.IsBare,
+			IsPrunable: wti.IsPrunable,
+			RepoStatus: *rs,
 		})
 	}
 	log.Debug("app/GetAllWorktreeStatus: success", "count", len(statuses))

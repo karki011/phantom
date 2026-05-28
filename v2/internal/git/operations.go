@@ -101,11 +101,19 @@ func runGit(ctx context.Context, repoPath string, args ...string) (string, error
 
 // runGitWithRetry wraps runGit with retry logic for lock contention errors.
 // Git operations can fail transiently when another process holds index.lock or
-// similar lock files. This mirrors VS Code's retry strategy: up to 10 attempts
-// with quadratic backoff (attempt² × 50ms). Only lock-related errors trigger
-// retries; all other errors return immediately.
+// similar lock files. Only lock-related errors trigger retries; all other
+// errors return immediately.
+//
+// Backoff is quadratic (attempt² × 50ms) but capped per attempt and to a small
+// number of retries: this runs on the sidebar read path, so a stuck index must
+// degrade to ~1s, not the ~14s that an uncapped 10-retry quadratic produced.
+// Callers that hit the cap serve stale status from the cache, so failing fast
+// is the right trade-off here.
 func runGitWithRetry(ctx context.Context, repoPath string, args ...string) (string, error) {
-	const maxRetries = 10
+	const (
+		maxRetries = 5
+		maxBackoff = 500 * time.Millisecond
+	)
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		out, err := runGit(ctx, repoPath, args...)
@@ -118,6 +126,9 @@ func runGitWithRetry(ctx context.Context, repoPath string, args ...string) (stri
 			return out, err
 		}
 		backoff := time.Duration(attempt*attempt) * 50 * time.Millisecond
+		if backoff > maxBackoff {
+			backoff = maxBackoff
+		}
 		log.Debug("git/runGitWithRetry: lock contention, retrying",
 			"attempt", attempt+1, "backoff", backoff, "args", strings.Join(args, " "))
 		time.Sleep(backoff)
@@ -458,6 +469,12 @@ func ListDirectory(ctx context.Context, repoPath, dirPath string) ([]FileEntry, 
 
 	gitignoreRules := getCachedGitignoreRules(repoPath)
 
+	// With --untracked-files=normal, git collapses a fully-untracked directory
+	// into a single entry instead of listing each child. If the directory we're
+	// listing lives inside such an untracked subtree, every child is untracked
+	// too — restore per-child badges that -uall used to provide. Computed once.
+	dirUntracked := isWithinUntrackedDir(statusMap, relDir)
+
 	ignoredSet := make(map[string]bool)
 	for _, entry := range entries {
 		name := entry.Name()
@@ -497,6 +514,8 @@ func ListDirectory(ctx context.Context, repoPath, dirPath string) ([]FileEntry, 
 
 		if ignoredSet[name] {
 			fe.GitStatus = "!"
+		} else if dirUntracked {
+			fe.GitStatus = "?"
 		} else if !entry.IsDir() {
 			if status, ok := statusMap[relPath]; ok {
 				fe.GitStatus = normalizeStatus(status)
@@ -511,4 +530,23 @@ func ListDirectory(ctx context.Context, repoPath, dirPath string) ([]FileEntry, 
 	}
 
 	return result, nil
+}
+
+// isWithinUntrackedDir reports whether relDir is an untracked directory or sits
+// inside one. With --untracked-files=normal, untracked directories appear in the
+// status map as a single "dir/" key (trailing slash), so we walk relDir and its
+// ancestors looking for such a marker. relDir is "" for the repo root, which is
+// never itself untracked.
+func isWithinUntrackedDir(statusMap map[string]string, relDir string) bool {
+	for p := relDir; p != ""; {
+		if statusMap[p+"/"] == "??" {
+			return true
+		}
+		idx := strings.LastIndexByte(p, '/')
+		if idx < 0 {
+			break
+		}
+		p = p[:idx]
+	}
+	return false
 }

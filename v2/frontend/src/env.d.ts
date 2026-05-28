@@ -48,6 +48,8 @@ interface Window {
         StartFileGraph(projectID: string): Promise<{ started?: boolean; error?: string; project?: string }>;
         StopFileGraph(projectID: string): Promise<void>;
         RefreshFileGraph(projectID: string): Promise<{ started?: boolean; error?: string; project?: string }>;
+        OnWindowFocused(): Promise<void>;
+        OnWindowBlurred(): Promise<void>;
       };
     };
   };
