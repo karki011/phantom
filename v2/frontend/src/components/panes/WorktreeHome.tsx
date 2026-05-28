@@ -3,7 +3,7 @@
 
 import { createMemo, createSignal, createEffect, on, onCleanup, onMount, Show, For, Index } from 'solid-js';
 import { gsap } from '@/core/animation/gsap-setup';
-import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw, Activity, ChevronDown, GitMerge, Rocket, Eye } from 'lucide-solid';
+import { GitBranch, GitPullRequest, ArrowUp, ArrowDown, FileEdit, FileQuestion, ExternalLink, CheckCircle, XCircle, LoaderCircle, ChevronRight, RefreshCw, Activity, ChevronDown, GitMerge, Rocket, Eye, Stamp } from 'lucide-solid';
 import { activeWorktreeId } from '@/core/signals/app';
 import { activeProject, activeWorktree } from '@/core/signals/worktrees';
 import { addTabWithData } from '@/core/panes/signals';
@@ -15,7 +15,7 @@ import { getPref, loadPref, setPref } from '@/core/signals/preferences';
 import { prStatus, setPrStatus, isCreatingPr, setIsCreatingPr, ghAvailable, setGhAvailable } from '@/core/signals/activity';
 import { SessionControls } from '@/shared/SessionControls/SessionControls';
 import { NewWorktreeDialog } from '@/shared/NewWorktreeDialog/NewWorktreeDialog';
-import { getWorkspaceStatus, gitPull, gitPush, getPrStatus, getCiRuns, getCiRunsForBranch, createPrWithAI, listOpenPrs, isGhCliAvailable, getCheckAnnotations, getFailedSteps, getSessionsByProject, getAllRecipes, getFavoriteRecipes, toggleRecipeFavorite, getRepoMergeConfig, mergePr, disableAutoMerge, postMergeCleanup } from '@/core/bindings';
+import { getWorkspaceStatus, gitPull, gitPush, getPrStatus, getCiRuns, getCiRunsForBranch, createPrWithAI, listOpenPrs, isGhCliAvailable, getCheckAnnotations, getFailedSteps, getSessionsByProject, getAllRecipes, getFavoriteRecipes, toggleRecipeFavorite, getRepoMergeConfig, mergePr, disableAutoMerge, postMergeCleanup, rubberStampPr, getGitHubLogin } from '@/core/bindings';
 import { openURL } from '@/core/bindings/shell';
 import { onWailsEvent } from '@/core/events';
 import { showToast, showWarningToast } from '@/shared/Toast/Toast';
@@ -284,6 +284,12 @@ export default function WorktreeHome() {
   const [activityLoading, setActivityLoading] = createSignal(true);
   const [refreshing, setRefreshing] = createSignal(false);
   const [repoMergeCfg, setRepoMergeCfg] = createSignal<RepoMergeConfig | null>(null);
+  const [ghLogin, setGhLogin] = createSignal('');
+
+  onMount(async () => {
+    const login = await getGitHubLogin();
+    setGhLogin(login);
+  });
 
   // Stagger-animate PR cards when the list populates.
   createEffect(() => {
@@ -790,7 +796,7 @@ export default function WorktreeHome() {
                 <For each={openPrs()}>
                   {(pr) => (
                     <div data-pr-card>
-                      <OpenPrCard pr={pr} prStateColor={prStateColor} prAge={prAge} buildCiTooltip={buildCiTooltip} />
+                      <OpenPrCard pr={pr} prStateColor={prStateColor} prAge={prAge} buildCiTooltip={buildCiTooltip} ghLogin={ghLogin()} />
                     </div>
                   )}
                 </For>
@@ -978,11 +984,13 @@ function OpenPrCard(props: {
   prStateColor: (pr: PrStatusType) => string;
   prAge: (iso: string) => string;
   buildCiTooltip: (runs: CiRun[]) => any;
+  ghLogin: string;
 }) {
   const { pr } = props;
   const [expanded, setExpanded] = createSignal(false);
   const [failedRuns, setFailedRuns] = createSignal<CiRun[]>([]);
   const [loadingRuns, setLoadingRuns] = createSignal(false);
+  const [stamping, setStamping] = createSignal(false);
 
   async function toggleExpand(e: MouseEvent) {
     e.stopPropagation();
@@ -1086,6 +1094,30 @@ function OpenPrCard(props: {
       <div class={styles.prCardActions}>
         <Show when={pr.greptile_score}>
           <GreptileBadge score={pr.greptile_score!} />
+        </Show>
+        <Show when={pr.greptile_score?.startsWith('5') && props.ghLogin && props.ghLogin.toLowerCase() !== pr.author.toLowerCase()}>
+          <button
+            type="button"
+            class={`${styles.rubberStampBtn} ${stamping() ? styles.rubberStampBtnActive : ''}`}
+            disabled={stamping()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setStamping(true);
+              const wtId = activeWorktreeId();
+              if (!wtId) { setStamping(false); return; }
+              rubberStampPr(wtId, pr.number).then((err) => {
+                if (err === '') {
+                  showToast('PR #' + pr.number + ' rubber stamped! 🟩');
+                } else {
+                  showWarningToast('Rubber stamp failed: ' + err);
+                }
+                setStamping(false);
+              });
+            }}
+          >
+            <Stamp size={11} class={styles.rubberStampIcon} />
+            {stamping() ? 'Stamping...' : 'Rubber Stamp'}
+          </button>
         </Show>
         <Show when={pr.review_decision === 'APPROVED'}>
           <span class={styles.prApprovedBadge}>
