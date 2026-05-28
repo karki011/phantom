@@ -1989,6 +1989,55 @@ export const prApprovedBadge = style({
   color: vars.color.success,
 });
 
+const stampPress = keyframes({
+  '0%': { transform: 'scale(1) rotate(-6deg)' },
+  '40%': { transform: 'scale(0.85) rotate(-6deg)' },
+  '60%': { transform: 'scale(1.05) rotate(-6deg)' },
+  '100%': { transform: 'scale(1) rotate(-6deg)' },
+});
+
+export const rubberStampBtn = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '2px 6px',
+  borderRadius: vars.radius.sm,
+  background: `color-mix(in srgb, ${vars.color.success} 8%, transparent)`,
+  border: `1px solid color-mix(in srgb, ${vars.color.success} 20%, transparent)`,
+  cursor: 'pointer',
+  fontFamily: vars.font.mono,
+  fontSize: '0.65rem',
+  fontWeight: 600,
+  color: `color-mix(in srgb, ${vars.color.success} 80%, ${vars.color.textPrimary})`,
+  transition: `all ${vars.animation.fast} ease`,
+  selectors: {
+    '&:hover': {
+      background: `color-mix(in srgb, ${vars.color.success} 18%, transparent)`,
+      borderColor: `color-mix(in srgb, ${vars.color.success} 40%, transparent)`,
+      transform: 'scale(0.97)',
+      boxShadow: `0 1px 4px color-mix(in srgb, ${vars.color.success} 25%, transparent)`,
+    },
+    '&:active': {
+      transform: 'scale(0.92)',
+    },
+    '&:disabled': {
+      opacity: 0.5,
+      cursor: 'not-allowed',
+      transform: 'none',
+      boxShadow: 'none',
+    },
+  },
+});
+
+export const rubberStampIcon = style({
+  transform: 'rotate(-6deg)',
+  transition: `transform ${vars.animation.fast} ease`,
+});
+
+export const rubberStampBtnActive = style({
+  animation: `${stampPress} 0.35s ease`,
+});
+
 export const greptileBadge = style({
   display: 'inline-flex',
   alignItems: 'center',

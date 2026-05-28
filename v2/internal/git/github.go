@@ -10,10 +10,54 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/log"
 	"github.com/subashkarki/phantom-os-v2/internal/provider"
 )
+
+var (
+	loginOnce   sync.Once
+	cachedLogin string
+)
+
+// GetGitHubLogin returns the authenticated GitHub user's login, cached after first call.
+func GetGitHubLogin(ctx context.Context) string {
+	loginOnce.Do(func() {
+		cmd := exec.CommandContext(ctx, ghBin(), "api", "user", "--jq", ".login")
+		out, err := cmd.Output()
+		if err != nil {
+			log.Error("git/GetGitHubLogin: failed", "err", err)
+			return
+		}
+		cachedLogin = strings.TrimSpace(string(out))
+		log.Info("git/GetGitHubLogin: resolved", "login", cachedLogin)
+	})
+	return cachedLogin
+}
+
+// ApprovePr approves a PR with a rubber stamp comment.
+func ApprovePr(ctx context.Context, repoPath string, prNumber int) error {
+	log.Info("git/ApprovePr: called", "prNumber", prNumber)
+	body := "🏅 **APPROVED** — Rubber Stamped\n\nGreptile Score: 5/5 ✓"
+	cmd := exec.CommandContext(ctx, ghBin(), "pr", "review", fmt.Sprintf("%d", prNumber), "--approve", "--body", body)
+	cmd.Dir = repoPath
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		if len(msg) > 400 {
+			msg = msg[:400] + "..."
+		}
+		log.Error("git/ApprovePr: failed", "prNumber", prNumber, "stderr", msg)
+		return fmt.Errorf("gh pr review --approve: %s", msg)
+	}
+	log.Info("git/ApprovePr: success", "prNumber", prNumber)
+	return nil
+}
 
 // IsGhAvailable returns true if the gh CLI is authenticated and available.
 func IsGhAvailable(ctx context.Context) bool {

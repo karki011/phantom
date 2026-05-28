@@ -5,6 +5,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/log"
 	"github.com/subashkarki/phantom-os-v2/internal/db"
@@ -527,6 +528,49 @@ func (a *App) CancelWorkflowRunForWorkspace(worktreeId string, runID int64) stri
 	}
 	log.Info("app/CancelWorkflowRunForWorkspace: success", "worktreeId", worktreeId)
 	return ""
+}
+
+// RubberStampPrForWorkspace approves a PR with a rubber stamp after verifying greptile score and ownership.
+func (a *App) RubberStampPrForWorkspace(worktreeId string, prNumber int) string {
+	log.Info("app/RubberStampPr: called", "worktreeId", worktreeId, "prNumber", prNumber)
+	repoPath, err := a.resolveWorkspacePath(worktreeId)
+	if err != nil {
+		return "failed to resolve workspace"
+	}
+
+	pr, err := git.GetPrStatus(a.ctx, repoPath, fmt.Sprintf("%d", prNumber))
+	if err != nil || pr == nil {
+		return "could not fetch PR status"
+	}
+
+	if pr.GreptileScore == "" || !strings.HasPrefix(pr.GreptileScore, "5") {
+		return "greptile score must be 5/5"
+	}
+
+	login := git.GetGitHubLogin(a.ctx)
+	if login != "" && strings.EqualFold(login, pr.Author) {
+		return "cannot approve your own PR"
+	}
+
+	if err := git.ApprovePr(a.ctx, repoPath, prNumber); err != nil {
+		return err.Error()
+	}
+
+	wailsRuntime.EventsEmit(a.ctx, EventPrApproved, map[string]interface{}{
+		"worktreeId": worktreeId,
+		"prNumber":   prNumber,
+	})
+	select {
+	case a.prRefresh <- struct{}{}:
+	default:
+	}
+	log.Info("app/RubberStampPr: success", "worktreeId", worktreeId, "prNumber", prNumber)
+	return ""
+}
+
+// GetGitHubLoginForWorkspace returns the authenticated GitHub user's login.
+func (a *App) GetGitHubLoginForWorkspace() string {
+	return git.GetGitHubLogin(a.ctx)
 }
 
 // resolveBaseBranch returns the base branch for a workspace by consulting the project's
