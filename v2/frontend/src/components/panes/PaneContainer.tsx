@@ -23,6 +23,7 @@ const PANE_TYPE_LABELS: Record<string, string> = {
   editor: 'Editor',
   home: 'Home',
   'composer': 'Composer',
+  'port-killer': 'Kill Port',
 };
 
 export function PaneContainer(props: PaneContainerProps) {

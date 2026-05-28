@@ -7,7 +7,7 @@ import {
   Monitor, GitBranch, GitFork, Settings, FileSearch, BookOpen,
   Pause, Play, Square, Sun, Moon, ZoomIn, ZoomOut, RotateCcw,
   PenTool, Sidebar, PanelRight, LayoutGrid, Eye, Plug, Sparkles, Keyboard,
-  ClipboardList, Zap,
+  ClipboardList, Zap, Skull,
 } from 'lucide-solid';
 
 // === Pane signals ===
@@ -383,6 +383,14 @@ const SYSTEM_ACTIONS: CommandAction[] = [
     icon: ClipboardList,
     keywords: ['digest', 'summary', 'journal', 'sessions', 'daily', 'ai', 'cost', 'tokens'],
     execute: () => openDigest(),
+  },
+  {
+    id: 'system:kill-port',
+    label: 'Kill Port',
+    category: 'System',
+    icon: Skull,
+    keywords: ['kill', 'port', 'process', 'lsof', 'pid', 'listen', 'tcp'],
+    execute: () => addTabWithData('port-killer', 'Kill Port', {}),
   },
 ];
 

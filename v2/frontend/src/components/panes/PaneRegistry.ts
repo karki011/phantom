@@ -13,6 +13,7 @@ const registry: Partial<Record<PaneType, Component<any>>> = {
   editor: lazy(() => import('./FileViewer')),
   'composer': lazy(() => import('../composer/ComposerPaneV2')),
   notes: lazy(() => import('./NotesPane')),
+  'port-killer': lazy(() => import('./PortKillerPane')),
 };
 
 export function getPaneComponent(kind: string): Component<any> | undefined {

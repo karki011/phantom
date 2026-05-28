@@ -9,7 +9,7 @@ import { createStore, produce } from 'solid-js/store';
 import { activeWorktreeId } from '@/core/signals/app';
 import { worktreeMap } from '@/core/signals/worktrees';
 
-const VALID_PANE_TYPES = new Set(['terminal', 'native-terminal', 'tui', 'editor', 'composer', 'home']);
+const VALID_PANE_TYPES = new Set(['terminal', 'native-terminal', 'tui', 'editor', 'composer', 'home', 'port-killer']);
 
 // Native (libghostty) terminal feature flag — refreshed at startup and on
 // toggle. addTabWithData consults this synchronously to decide whether a
