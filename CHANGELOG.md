@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.65](https://github.com/karki011/phantom/compare/v0.1.64...v0.1.65) (2026-05-29)
+
+
+### Bug Fixes
+
+* **v2:** prevent libghostty setlocale×fork deadlock on app launch ([#163](https://github.com/karki011/phantom/issues/163)) ([c1a4681](https://github.com/karki011/phantom/commit/c1a468167f9b20499e8edf0322261627080fabdc))
+
 ## [0.1.64](https://github.com/karki011/phantom/compare/v0.1.63...v0.1.64) (2026-05-28)
 
 
