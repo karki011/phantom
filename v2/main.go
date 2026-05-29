@@ -43,6 +43,11 @@ import (
 var assets embed.FS
 
 func main() {
+	// Pre-warm the C locale on the main thread before any goroutine can fork.
+	// Prevents a libghostty setlocale() × fork() deadlock on launch — see
+	// locale_warm.go.
+	warmLocale()
+
 	backfillJournal := false
 	for _, arg := range os.Args[1:] {
 		if arg == "--backfill-journal" {
