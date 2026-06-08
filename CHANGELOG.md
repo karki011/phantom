@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.66](https://github.com/karki011/phantom/compare/v0.1.65...v0.1.66) (2026-06-08)
+
+
+### Bug Fixes
+
+* **v2:** serialize native terminal app init to prevent multi-session crash ([ecf0174](https://github.com/karki011/phantom/commit/ecf01742f1ee1d4be1b1c2c7178c83b4d8cc6ed8))
+* **v2:** serialize native terminal app init to prevent multi-session crash ([c27fd05](https://github.com/karki011/phantom/commit/c27fd05693beb4caed53403686b711bf4cb39189))
+
 ## [0.1.65](https://github.com/karki011/phantom/compare/v0.1.64...v0.1.65) (2026-05-29)
 
 
