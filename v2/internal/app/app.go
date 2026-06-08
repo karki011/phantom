@@ -138,10 +138,17 @@ type App struct {
 	// Native (libghostty) terminal state — lazily initialized on first
 	// NativeTerminalCreate call when the feature flag is on. The map is
 	// keyed by frontend pane (terminal) ID. See bindings_native_terminal.go.
-	nativeTerminals  map[string]nativeTerminal
-	nativeHost       nativeHostHandle
-	ghosttyApp       ghosttyAppHandle
-	nativeMu         sync.Mutex
+	nativeTerminals map[string]nativeTerminal
+	nativeHost      nativeHostHandle
+	ghosttyApp      ghosttyAppHandle
+	nativeMu        sync.Mutex
+	// ghosttyInitMu serializes lazy creation of the process-wide
+	// ghosttyApp singleton. libghostty is one ghostty_app_t per process,
+	// so concurrent NativeTerminalCreate calls (multiple panes/sessions
+	// mounting at once) must not each call NewApp. Kept separate from
+	// nativeMu so it can be held across the main-thread dispatch_sync in
+	// NewApp without risking the callback deadlock nativeMu guards against.
+	ghosttyInitMu sync.Mutex
 }
 
 func New() *App {
@@ -290,7 +297,6 @@ func (a *App) Startup(ctx context.Context) {
 		log.Info("app: composer V2 context enricher wired")
 	}
 
-
 	// Initialize the conflict tracker and wire it into the Composer service
 	// so simultaneous panes editing the same repo surface warnings.
 	a.ConflictTracker = conflict.NewTracker(nil)
@@ -407,7 +413,6 @@ func (a *App) Startup(ctx context.Context) {
 
 	// Start GitHub poller — emits pr:updated / ci:updated / prs:list-updated on change.
 	go a.startGitHubPoller()
-
 
 	// Start git filesystem watcher for instant change detection.
 	if gw, err := git.NewWatcher(a.ctx); err == nil {

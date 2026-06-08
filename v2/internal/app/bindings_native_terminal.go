@@ -78,25 +78,47 @@ func (a *App) NativeTerminalCreate(paneID, worktreeID, cwd string) (string, erro
 	host := a.nativeHost
 	a.nativeMu.Unlock()
 
-	// Heavy work (dispatch_sync to main thread) runs WITHOUT the mutex.
+	// Lazy-init the process-wide ghostty app exactly once. The check-then-act
+	// on a.ghosttyApp is NOT atomic (the expensive NewApp runs with nativeMu
+	// released to avoid a main-thread-callback deadlock), so two concurrent
+	// creates would each see nil and each call ghostty_app_new — but libghostty
+	// is one ghostty_app_t per process, which crashes. ghosttyInitMu serializes
+	// the init and a re-check under it collapses the race to a single NewApp.
+	// Heavy work (dispatch_sync to main thread) still runs WITHOUT nativeMu.
 	if gapp == nil {
-		// Register the event dispatcher before creating the app so callbacks
-		// can emit events from the very first tick.
-		ghostty.SetEventDispatcher(func(event string, data interface{}) {
-			wailsRuntime.EventsEmit(a.ctx, event, data)
-		})
+		a.ghosttyInitMu.Lock()
 
-		var err error
-		gapp, err = ghostty.NewApp()
-		if err != nil {
-			return "", err
+		a.nativeMu.Lock()
+		gapp = a.ghosttyApp
+		a.nativeMu.Unlock()
+
+		if gapp == nil {
+			// Register the event dispatcher before creating the app so callbacks
+			// can emit events from the very first tick.
+			ghostty.SetEventDispatcher(func(event string, data interface{}) {
+				wailsRuntime.EventsEmit(a.ctx, event, data)
+			})
+
+			newApp, err := ghostty.NewApp()
+			if err != nil {
+				a.ghosttyInitMu.Unlock()
+				return "", err
+			}
+
+			// Dark theme (Phantom is always dark for now).
+			newApp.SetColorScheme(true)
+
+			// Start the ~60Hz tick loop that drives rendering + IO.
+			ghostty.StartTickLoop(newApp, a.ctx)
+
+			a.nativeMu.Lock()
+			a.ghosttyApp = newApp
+			a.nativeMu.Unlock()
+
+			gapp = newApp
 		}
 
-		// Dark theme (Phantom is always dark for now).
-		gapp.SetColorScheme(true)
-
-		// Start the ~60Hz tick loop that drives rendering + IO.
-		ghostty.StartTickLoop(gapp, a.ctx)
+		a.ghosttyInitMu.Unlock()
 	}
 	if host == nil {
 		var err error
@@ -118,9 +140,10 @@ func (a *App) NativeTerminalCreate(paneID, worktreeID, cwd string) (string, erro
 	host.FocusSubview(view)
 	ghostty.SetFocusedSurface(surf)
 
-	// Re-acquire lock to store results.
+	// Re-acquire lock to store results. a.ghosttyApp is already persisted by
+	// the init block above (under ghosttyInitMu), so only the host + map entry
+	// are stored here.
 	a.nativeMu.Lock()
-	a.ghosttyApp = gapp
 	a.nativeHost = host
 	a.nativeTerminals[paneID] = nativeTerminal{surface: surf, view: view}
 	a.nativeMu.Unlock()
