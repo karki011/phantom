@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.68](https://github.com/karki011/phantom/compare/v0.1.67...v0.1.68) (2026-06-09)
+
+
+### Bug Fixes
+
+* **v2:** eliminate 0.1.65 crash class — multi-terminal, multi-project, and worktree concurrency hardening ([1faf72b](https://github.com/karki011/phantom/commit/1faf72ba35bb1f8ce0cfda05533a8362dbab3a7f))
+* **v2:** eliminate 0.1.65 crash class — multi-terminal/multi-project/worktree concurrency hardening ([1d46e32](https://github.com/karki011/phantom/commit/1d46e3281208955b79859460da48d0b17bfe2974))
+
 ## [0.1.67](https://github.com/karki011/phantom/compare/v0.1.66...v0.1.67) (2026-06-09)
 
 
