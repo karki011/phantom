@@ -197,20 +197,34 @@ func (a *App) emitTerminalActivity(ev *stream.Event) {
 		return
 	}
 
+	// Skip emission if the app context is cancelled (shutdown in flight) —
+	// spawning goroutines that EventsEmit on a cancelled Wails context can
+	// panic. Checked once up front and again per goroutine to close the race
+	// where shutdown fires after this guard but before the goroutine runs.
+	if a.ctx.Err() != nil {
+		return
+	}
+
 	summary := formatActivitySummary(ev)
 	slog.Info("terminal-activity: event", "session_id", ev.SessionID, "tool", ev.ToolName, "summary", summary, "panes", len(panes))
 
 	for _, paneID := range panes {
-		go wailsRuntime.EventsEmit(a.ctx, EventTerminalActivity, map[string]interface{}{
-			"pane_id":    paneID,
-			"session_id": ev.SessionID,
-			"summary":    summary,
-			"event_type": string(ev.Type),
-			"tool_name":  ev.ToolName,
-			"file_path":  ev.FilePath,
-			"is_error":   ev.IsError,
-			"timestamp":  ev.Timestamp,
-		})
+		paneID := paneID
+		go func() {
+			if a.ctx.Err() != nil {
+				return
+			}
+			wailsRuntime.EventsEmit(a.ctx, EventTerminalActivity, map[string]interface{}{
+				"pane_id":    paneID,
+				"session_id": ev.SessionID,
+				"summary":    summary,
+				"event_type": string(ev.Type),
+				"tool_name":  ev.ToolName,
+				"file_path":  ev.FilePath,
+				"is_error":   ev.IsError,
+				"timestamp":  ev.Timestamp,
+			})
+		}()
 	}
 }
 

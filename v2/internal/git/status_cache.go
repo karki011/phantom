@@ -15,16 +15,24 @@ const statusCacheTTL = 2 * time.Second
 // statusCacheEntry holds parsed git status maps and refresh timestamp.
 //   - statusMap: relPath -> XY porcelain code
 //   - dirStatusMap: parent dir relPath -> representative XY code (for O(1) dir badges)
+//   - gen: monotonic generation this entry's data corresponds to. A refresh
+//     captures the repo's generation when it starts; on completion it only
+//     stores if no newer invalidation has bumped the generation (W2-4b — stops
+//     a slow stale refresh from clobbering fresher state).
 type statusCacheEntry struct {
 	statusMap    map[string]string
 	dirStatusMap map[string]string
 	lastRefresh  time.Time
+	gen          uint64
 }
 
 var statusCache = struct {
 	sync.RWMutex
 	entries map[string]*statusCacheEntry
-}{entries: make(map[string]*statusCacheEntry)}
+	// gen tracks the latest invalidation generation per repo. Bumped on every
+	// invalidate so an in-flight refresh can detect it has been superseded.
+	gen map[string]uint64
+}{entries: make(map[string]*statusCacheEntry), gen: make(map[string]uint64)}
 
 // statusGroup coalesces concurrent git-status refreshes per repo. When the
 // sidebar fires several ListDirectory calls at once (or a stale read triggers
@@ -37,6 +45,7 @@ var statusGroup singleflight.Group
 // the file watcher when git state changes.
 func InvalidateStatusCache(repoPath string) {
 	statusCache.Lock()
+	statusCache.gen[repoPath]++
 	if e, ok := statusCache.entries[repoPath]; ok {
 		e.lastRefresh = time.Time{} // zero time => stale, but maps stay servable
 	}
@@ -47,6 +56,9 @@ func InvalidateStatusCache(repoPath string) {
 // InvalidateStatusCache). Cheap and non-blocking — stale maps remain servable.
 func InvalidateAllStatusCaches() {
 	statusCache.Lock()
+	for repo := range statusCache.entries {
+		statusCache.gen[repo]++
+	}
 	for _, e := range statusCache.entries {
 		e.lastRefresh = time.Time{}
 	}
@@ -88,18 +100,38 @@ func getCachedStatusAndDirs(ctx context.Context, repoPath string) (map[string]st
 
 // refreshStatusCache runs `git status` for repoPath and stores the result,
 // deduplicating concurrent refreshes for the same repo via singleflight.
+//
+// A generation guard (W2-4b) prevents a slow refresh from clobbering fresher
+// state: we capture the repo's generation before running `git status`, and on
+// completion store only if no invalidation bumped the generation in the
+// meantime. When superseded, we return the current entry (which a newer
+// refresh will reconcile) instead of overwriting it with stale data.
 func refreshStatusCache(ctx context.Context, repoPath string) *statusCacheEntry {
 	v, _, _ := statusGroup.Do(repoPath, func() (interface{}, error) {
+		statusCache.RLock()
+		startGen := statusCache.gen[repoPath]
+		statusCache.RUnlock()
+
 		statusMap := parseGitStatus(ctx, repoPath)
 		dirMap := buildDirStatusMap(statusMap)
 		e := &statusCacheEntry{
 			statusMap:    statusMap,
 			dirStatusMap: dirMap,
 			lastRefresh:  time.Now(),
+			gen:          startGen,
 		}
+
 		statusCache.Lock()
+		defer statusCache.Unlock()
+		// Stale-win guard: if an invalidation arrived while git ran, our data is
+		// stale. Keep the existing entry if it is at least as fresh; otherwise
+		// store ours (cold start or only-writer) so the sidebar still gets data.
+		if cur, ok := statusCache.entries[repoPath]; ok {
+			if statusCache.gen[repoPath] > startGen || cur.gen > startGen {
+				return cur, nil
+			}
+		}
 		statusCache.entries[repoPath] = e
-		statusCache.Unlock()
 		return e, nil
 	})
 	return v.(*statusCacheEntry)

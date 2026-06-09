@@ -232,6 +232,10 @@ func (a *App) shutdownNativeTerminals() {
 	a.nativeHost = nil
 	a.nativeMu.Unlock()
 
+	// Clean PTY/NSView teardown per surface. Do NOT Free() surfaces here —
+	// gapp.Shutdown() owns surface destruction (it joins the tick loop first,
+	// then frees all tracked surfaces under its render mutex). Freeing here
+	// would double-free / race the tick loop (v0.1.65 shutdown crash).
 	for _, t := range terms {
 		if t.surface != nil {
 			t.surface.RequestClose()
@@ -239,11 +243,8 @@ func (a *App) shutdownNativeTerminals() {
 		if t.view != 0 {
 			ghostty.DetachSubview(t.view)
 		}
-		if t.surface != nil {
-			t.surface.Free()
-		}
 	}
 	if gapp != nil {
-		gapp.Free()
+		gapp.Shutdown()
 	}
 }

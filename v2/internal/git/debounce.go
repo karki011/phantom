@@ -68,12 +68,34 @@ func (d *Debouncer) Trigger() {
 }
 
 // fire executes the callback and sets the cooldown. Called by timer goroutine.
+//
+// Cooldown is entered under mu BEFORE fn() runs, so a Trigger() that arrives
+// while fn() is executing reliably sees the cooldown and marks itself trailing
+// instead of racing in a fresh normal timer (W2-4a — fixes double-fire and
+// orphaned timers). mu is released for the fn() call itself: fn never
+// re-acquires d.mu, and holding it would risk deadlock with callers. After
+// fn(), we re-check trailing under mu and schedule the single deferred fire if
+// a Trigger() landed during the window; we never blindly clear trailing.
 func (d *Debouncer) fire() {
+	d.mu.Lock()
+	d.timer = nil
+	d.coolUntil = time.Now().Add(d.cooldown)
+	d.mu.Unlock()
+
 	d.fn()
 
 	d.mu.Lock()
-	d.coolUntil = time.Now().Add(d.cooldown)
-	d.trailing = false
+	if d.trailing {
+		d.trailing = false
+		remaining := time.Until(d.coolUntil)
+		if remaining < 0 {
+			remaining = 0
+		}
+		if d.timer != nil {
+			d.timer.Stop()
+		}
+		d.timer = time.AfterFunc(remaining+d.delay, d.fire)
+	}
 	d.mu.Unlock()
 
 	log.Debug("debouncer: fired, cooldown active", "cooldown", d.cooldown)

@@ -61,8 +61,13 @@ func (a *App) SubscribeTerminal(sessionID string) {
 			if len(batch) == 0 {
 				return
 			}
-			wailsRuntime.EventsEmit(a.ctx, eventName,
-				base64.StdEncoding.EncodeToString(batch))
+			// Skip emit if the app context is cancelled (shutdown in flight) —
+			// emitting on a cancelled Wails context can panic. Clear the batch
+			// either way so a stale flush never re-fires the same bytes.
+			if subCtx.Err() == nil && a.ctx.Err() == nil {
+				wailsRuntime.EventsEmit(a.ctx, eventName,
+					base64.StdEncoding.EncodeToString(batch))
+			}
 			batch = batch[:0]
 			timerRunning = false
 		}

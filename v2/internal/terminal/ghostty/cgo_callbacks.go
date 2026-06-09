@@ -83,6 +83,22 @@ func SetFocusedSurface(s *Surface) {
 	s.mu.Unlock()
 }
 
+// clearFocusedSurfaceHandle clears focusedSurface iff it currently points at
+// handle. Called under the surface's own lock during Free so the clipboard
+// callbacks (which dereference focusedSurface under focusedMu) can never read a
+// pointer that is about to be / has just been freed. Clearing only on a match
+// avoids stomping a newly-focused surface during a concurrent destroy.
+func clearFocusedSurfaceHandle(handle C.ghostty_surface_t) {
+	if handle == nil {
+		return
+	}
+	focusedMu.Lock()
+	if focusedSurface == handle {
+		focusedSurface = nil
+	}
+	focusedMu.Unlock()
+}
+
 //export phantomGhosttyWakeupCB
 func phantomGhosttyWakeupCB(userdata unsafe.Pointer) {
 	if wakeupCh == nil {
