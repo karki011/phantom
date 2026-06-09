@@ -2,11 +2,14 @@
 
 // Author: Subash Karki
 //
-// Wails-exposed methods for the libghostty-backed native terminal. Native
-// (Metal) terminal is the default on darwin; the frontend pane creates a
-// Surface, parents its PhantomTerminalView as a sibling of the WKWebView,
-// and drives placement from a ResizeObserver. Opt out via env
-// PHANTOM_NATIVE_TERMINAL=0 or the runtime toggle (SetNativeTerminalEnabled(false)).
+// Wails-exposed methods for the libghostty-backed native terminal. The native
+// (Metal/libghostty) terminal is OFF by default as of 0.1.67 — it caused
+// crash/hang regressions in 0.1.65 and 0.1.66, so the app falls back to the
+// proven web/PTY terminal, which is now the default. The frontend pane (when
+// opted in) creates a Surface, parents its PhantomTerminalView as a sibling of
+// the WKWebView, and drives placement from a ResizeObserver. Opt back in for
+// testing via env PHANTOM_NATIVE_TERMINAL=1 (or true) or the runtime toggle
+// (SetNativeTerminalEnabled(true)).
 package app
 
 import (
@@ -21,28 +24,29 @@ import (
 	"github.com/subashkarki/phantom-os-v2/internal/terminal/ghostty"
 )
 
-// nativeTerminalDisabledFlag forces the libghostty path OFF when set —
-// inverted vs the prior "enabled" flag because native is now the default.
-var nativeTerminalDisabledFlag atomic.Bool
+// nativeTerminalEnabledFlag forces the libghostty path ON when set. The
+// native (Metal/libghostty) terminal is OFF by default as of 0.1.67 — it
+// caused crash/hang regressions in 0.1.65 and 0.1.66 (see branch
+// fix/native-terminal-multi-session-crash). The app falls back to the proven
+// web/PTY terminal. Opt back in for testing via PHANTOM_NATIVE_TERMINAL=1
+// (or true), or the runtime toggle SetNativeTerminalEnabled(true).
+var nativeTerminalEnabledFlag atomic.Bool
 
-// NativeTerminalIsEnabled returns true when the libghostty pane is active.
-// Default ON; only OFF when the runtime toggle is flipped or env
-// PHANTOM_NATIVE_TERMINAL=0/false is set.
+// NativeTerminalIsEnabled returns true ONLY when the native terminal has been
+// explicitly opted in. Default OFF.
 func (a *App) NativeTerminalIsEnabled() bool {
-	if nativeTerminalDisabledFlag.Load() {
-		return false
+	if nativeTerminalEnabledFlag.Load() {
+		return true
 	}
-	if v := strings.TrimSpace(os.Getenv("PHANTOM_NATIVE_TERMINAL")); v == "0" || strings.EqualFold(v, "false") {
-		return false
+	if v := strings.TrimSpace(os.Getenv("PHANTOM_NATIVE_TERMINAL")); v == "1" || strings.EqualFold(v, "true") {
+		return true
 	}
-	return true
+	return false
 }
 
-// SetNativeTerminalEnabled toggles the flag at runtime (frontend setting).
-// Persisting to preferences is left to the existing prefs binding; this
-// only flips the in-memory flag so newly-opened terminals route correctly.
+// SetNativeTerminalEnabled toggles the in-memory opt-in flag at runtime.
 func (a *App) SetNativeTerminalEnabled(on bool) {
-	nativeTerminalDisabledFlag.Store(!on)
+	nativeTerminalEnabledFlag.Store(on)
 }
 
 // NativeTerminalCreate opens a libghostty surface, parents the resulting
