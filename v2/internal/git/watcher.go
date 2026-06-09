@@ -28,6 +28,17 @@ type GitEvent struct {
 	RepoPath string
 }
 
+// maxWatches caps the number of fsnotify subscriptions across all repos.
+// macOS exhausts inode watch slots far earlier than Linux; staying under a
+// sane ceiling avoids silent watch drops (lost events → stale status) and the
+// fd pressure that contributed to the v0.1.65 multi-project crash. When the
+// count crosses warnWatchThreshold we log once and stop descending into deeper
+// working-tree dirs (graceful degrade — .git refs stay watched).
+const (
+	maxWatches         = 2048
+	warnWatchThreshold = maxWatches * 8 / 10 // ~80%
+)
+
 type Watcher struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
@@ -36,6 +47,14 @@ type Watcher struct {
 	mu       sync.Mutex
 	debounce map[string]*time.Timer
 	active   *activeProjectRegistry
+	done     chan struct{} // closed by run() on exit; Stop() waits on it
+	stopOnce sync.Once     // guards Stop() so it is idempotent and waits once
+
+	// watched tracks every path successfully added to fsnotify so Unwatch can
+	// remove exactly what was added (no orphan accumulation across project
+	// switches) and so the soft cap can be enforced. Guarded by mu.
+	watched   map[string]struct{}
+	watchWarn bool // soft-cap warning already logged
 
 	// statusDebouncer coalesces rapid status-related events (working tree,
 	// index, status) into a single emission with a 5s cooldown — matching
@@ -56,6 +75,8 @@ func NewWatcher(ctx context.Context) (*Watcher, error) {
 		eventCh:  make(chan GitEvent, 32),
 		debounce: make(map[string]*time.Timer),
 		active:   newActiveProjectRegistry(),
+		done:     make(chan struct{}),
+		watched:  make(map[string]struct{}),
 	}
 
 	// VS Code-style 3-tier suppression for status events:
@@ -102,6 +123,53 @@ func (w *Watcher) SetActiveProject(repoPath string) {
 	w.SetActiveProjects([]string{repoPath})
 }
 
+// addWatch subscribes path to fsnotify, tracking it for later removal and
+// enforcing the soft cap. Returns false when the cap is hit so callers can
+// stop descending into deeper directories. Idempotent: re-adding a tracked
+// path is a no-op (fsnotify.Add itself is idempotent, but we skip the syscall).
+func (w *Watcher) addWatch(path string) bool {
+	w.mu.Lock()
+	if _, ok := w.watched[path]; ok {
+		w.mu.Unlock()
+		return true
+	}
+	count := len(w.watched)
+	if count >= maxWatches {
+		w.mu.Unlock()
+		return false
+	}
+	if count >= warnWatchThreshold && !w.watchWarn {
+		w.watchWarn = true
+		log.Warn("git/Watcher: approaching fsnotify watch ceiling; deeper dirs will be skipped",
+			"watched", count, "ceiling", maxWatches)
+	}
+	w.mu.Unlock()
+
+	if err := w.watcher.Add(path); err != nil {
+		log.Debug("git/Watcher: fsnotify add failed", "path", path, "err", err)
+		return true // not a cap stop; keep trying siblings
+	}
+
+	w.mu.Lock()
+	w.watched[path] = struct{}{}
+	w.mu.Unlock()
+	return true
+}
+
+// removeWatch unsubscribes path from fsnotify and stops tracking it. Safe to
+// call for paths never added (no-op).
+func (w *Watcher) removeWatch(path string) {
+	w.mu.Lock()
+	_, ok := w.watched[path]
+	if ok {
+		delete(w.watched, path)
+	}
+	w.mu.Unlock()
+	if ok {
+		w.watcher.Remove(path)
+	}
+}
+
 func (w *Watcher) WatchRepo(repoPath string) error {
 	gitDir := resolveGitDir(repoPath)
 	if gitDir == "" {
@@ -117,28 +185,28 @@ func (w *Watcher) WatchRepo(repoPath string) error {
 	w.active.register(repoPath, gitDir, commonDir)
 
 	if _, err := os.Stat(filepath.Join(gitDir, "HEAD")); err == nil {
-		w.watcher.Add(gitDir)
+		w.addWatch(gitDir)
 	}
 
 	refsHeads := filepath.Join(commonDir, "refs", "heads")
 	if info, err := os.Stat(refsHeads); err == nil && info.IsDir() {
-		w.watcher.Add(refsHeads)
+		w.addWatch(refsHeads)
 	}
 
 	refsRemotes := filepath.Join(commonDir, "refs", "remotes")
 	if info, err := os.Stat(refsRemotes); err == nil && info.IsDir() {
-		w.watcher.Add(refsRemotes)
+		w.addWatch(refsRemotes)
 		entries, _ := os.ReadDir(refsRemotes)
 		for _, e := range entries {
 			if e.IsDir() {
-				w.watcher.Add(filepath.Join(refsRemotes, e.Name()))
+				w.addWatch(filepath.Join(refsRemotes, e.Name()))
 			}
 		}
 	}
 
 	refsTags := filepath.Join(commonDir, "refs", "tags")
 	if info, err := os.Stat(refsTags); err == nil && info.IsDir() {
-		w.watcher.Add(refsTags)
+		w.addWatch(refsTags)
 	}
 
 	// Watch worktrees metadata so external `git worktree add/remove/prune`
@@ -147,11 +215,11 @@ func (w *Watcher) WatchRepo(repoPath string) error {
 	// each existing subdir so internal changes (HEAD moves, locks) fire too.
 	worktreesDir := filepath.Join(commonDir, "worktrees")
 	if info, err := os.Stat(worktreesDir); err == nil && info.IsDir() {
-		w.watcher.Add(worktreesDir)
+		w.addWatch(worktreesDir)
 		entries, _ := os.ReadDir(worktreesDir)
 		for _, e := range entries {
 			if e.IsDir() {
-				w.watcher.Add(filepath.Join(worktreesDir, e.Name()))
+				w.addWatch(filepath.Join(worktreesDir, e.Name()))
 			}
 		}
 	}
@@ -159,14 +227,16 @@ func (w *Watcher) WatchRepo(repoPath string) error {
 	// Watch working tree root for file changes (like VS Code's ** watcher).
 	// fsnotify is non-recursive, so we watch top-level dirs only.
 	// This catches most edits (Claude writes to src/, etc.)
-	w.watcher.Add(repoPath)
+	w.addWatch(repoPath)
 	w.watchWorkingTreeDirs(repoPath, 0)
 
 	return nil
 }
 
 // watchWorkingTreeDirs recursively watches subdirectories up to maxDepth.
-// Skips .git, node_modules, dist, and other heavy/irrelevant dirs.
+// Skips .git, node_modules, dist, and other heavy/irrelevant dirs. When the
+// soft cap is reached (addWatch returns false), it stops descending — deeper
+// dirs are skipped rather than silently dropped over the OS inode limit.
 func (w *Watcher) watchWorkingTreeDirs(root string, depth int) {
 	const maxDepth = 4
 	if depth > maxDepth {
@@ -187,7 +257,9 @@ func (w *Watcher) watchWorkingTreeDirs(root string, depth int) {
 			continue
 		}
 		dir := filepath.Join(root, name)
-		w.watcher.Add(dir)
+		if !w.addWatch(dir) {
+			return // cap hit: stop descending, degrade gracefully
+		}
 		w.watchWorkingTreeDirs(dir, depth+1)
 	}
 }
@@ -203,52 +275,70 @@ func isIgnoredDir(name string) bool {
 	return ignoredDirs[name]
 }
 
+// UnwatchRepo removes every path this repo contributed to fsnotify. It removes
+// by the tracked set rather than re-deriving paths so it cannot leak orphans
+// when the on-disk layout changed since WatchRepo ran (W2-5): self-extended
+// worktree/refs subdirs, depth-capped working-tree dirs, and dirs that no
+// longer exist are all still untracked here. The prefix sweep at the end
+// catches anything added under this repo's roots after the initial watch.
 func (w *Watcher) UnwatchRepo(repoPath string) {
 	gitDir := resolveGitDir(repoPath)
-	if gitDir != "" {
-		w.watcher.Remove(gitDir)
-	}
 	commonDir := resolveGitCommonDir(repoPath)
 	if commonDir == "" {
 		commonDir = gitDir
 	}
-	if commonDir == "" {
-		return
+
+	roots := make([]string, 0, 3)
+	roots = append(roots, canonicalize(repoPath))
+	if gitDir != "" {
+		roots = append(roots, canonicalize(gitDir))
+	}
+	if commonDir != "" && commonDir != gitDir {
+		roots = append(roots, canonicalize(commonDir))
 	}
 
-	w.watcher.Remove(filepath.Join(commonDir, "refs", "heads"))
-	w.watcher.Remove(filepath.Join(commonDir, "refs", "tags"))
-
-	refsRemotes := filepath.Join(commonDir, "refs", "remotes")
-	w.watcher.Remove(refsRemotes)
-	if entries, err := os.ReadDir(refsRemotes); err == nil {
-		for _, e := range entries {
-			if e.IsDir() {
-				w.watcher.Remove(filepath.Join(refsRemotes, e.Name()))
+	// Snapshot tracked paths whose canonical form sits under any root, then
+	// remove outside the watched-set walk to keep removeWatch's locking simple.
+	w.mu.Lock()
+	var toRemove []string
+	for p := range w.watched {
+		cp := canonicalize(p)
+		for _, root := range roots {
+			if pathHasPrefix(cp, root) {
+				toRemove = append(toRemove, p)
+				break
 			}
 		}
 	}
+	w.mu.Unlock()
 
-	worktreesDir := filepath.Join(commonDir, "worktrees")
-	w.watcher.Remove(worktreesDir)
-	if entries, err := os.ReadDir(worktreesDir); err == nil {
-		for _, e := range entries {
-			if e.IsDir() {
-				w.watcher.Remove(filepath.Join(worktreesDir, e.Name()))
-			}
-		}
+	for _, p := range toRemove {
+		w.removeWatch(p)
 	}
 }
 
+// Stop synchronizes with the run() loop before tearing down so an in-flight
+// handleEvent can never touch a closed fsnotify watcher (W1-4). Sequence:
+//  1. cancel ctx so run() exits its select on the next iteration
+//  2. close fsnotify, which also unblocks a run() goroutine parked on Events
+//  3. wait for run() to actually return (done) — guarantees no handleEvent is
+//     executing past this point
+//  4. stop the debouncer last, after the only goroutine that calls Trigger()
+//     has exited, so no timer can be re-armed after Stop()
+// Idempotent: the once guard makes repeated Stop() calls safe.
 func (w *Watcher) Stop() {
-	w.cancel()
-	if w.statusDebouncer != nil {
-		w.statusDebouncer.Stop()
-	}
-	w.watcher.Close()
+	w.stopOnce.Do(func() {
+		w.cancel()
+		w.watcher.Close()
+		<-w.done
+		if w.statusDebouncer != nil {
+			w.statusDebouncer.Stop()
+		}
+	})
 }
 
 func (w *Watcher) run() {
+	defer close(w.done)
 	for {
 		select {
 		case <-w.ctx.Done():

@@ -29,13 +29,46 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 // Track which worktree owns the current workspace so mutations can reference it
 // without needing to read the reactive signal (avoids Solid tracking in non-reactive context).
 let currentWorktreeId: string | null = null;
+// Monotonic switch token. Every switchWorkspace bumps it. Async operations
+// (debounced save, restore promise) capture it at START and re-check at
+// COMPLETION; any intervening switch invalidates the captured token, so the
+// stale completion is dropped. This is deterministic even across A→B→A
+// round-trips, where comparing the mutable currentWorktreeId alone would
+// wrongly accept the stale fire (the id matches again after the round-trip).
+let switchGeneration = 0;
+// The worktree the pending debounced save was scheduled for. The timer reads the
+// LIVE `workspace` store at fire time, so if a switch happens before the timer
+// fires we must drop the stale fire — otherwise the new worktree's panes get
+// persisted under the old worktree's key (cross-project corruption).
+let pendingSaveWorktreeId: string | null = null;
 
 function saveWorkspaceState(worktreeId: string): void {
   if (saveTimer) clearTimeout(saveTimer);
+  pendingSaveWorktreeId = worktreeId;
+  const scheduledGen = switchGeneration;
   saveTimer = setTimeout(() => {
+    saveTimer = null;
+    // Drop the fire if any switch happened since this save was scheduled: the
+    // live `workspace` store may now hold a different worktree's panes (covers
+    // the A→B→A round-trip that a plain currentWorktreeId === worktreeId check
+    // would let through).
+    if (switchGeneration !== scheduledGen || currentWorktreeId !== worktreeId) return;
     const state = JSON.parse(JSON.stringify(workspace));
     App()?.SaveWorkspaceState(worktreeId, JSON.stringify(state)).catch(() => {});
   }, SAVE_DEBOUNCE_MS);
+}
+
+// Flush any pending debounced save synchronously for the given worktree. Called
+// before a switch mutates `currentWorktreeId` so the old worktree's in-flight
+// edits land under the OLD id rather than being dropped or misrouted.
+function flushPendingSave(worktreeId: string): void {
+  if (saveTimer && pendingSaveWorktreeId === worktreeId) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    pendingSaveWorktreeId = null;
+    const state = JSON.parse(JSON.stringify(workspace));
+    App()?.SaveWorkspaceState(worktreeId, JSON.stringify(state)).catch(() => {});
+  }
 }
 
 // Remove panes with deleted types (journal, diff, playground, chat, markdown-preview, composer-v1)
@@ -50,11 +83,18 @@ function sanitizePanes(state: WorkspaceState): WorkspaceState {
 }
 
 export async function restoreWorkspaceState(worktreeId: string): Promise<boolean> {
+  // Capture the switch token at operation start; a switch during the await bumps
+  // it, marking this completion stale (audit W2-3: capture at start, compare at
+  // completion, drop stale).
+  const startGen = switchGeneration;
   try {
     const stateJSON = await App()?.GetWorkspaceState(worktreeId);
     if (!stateJSON) return false;
     const restored = sanitizePanes(JSON.parse(stateJSON) as WorkspaceState);
     if (!restored.tabs?.length) return false;
+    // The async fetch may resolve after the user switched away. Applying it now
+    // would clobber the live worktree's panes with this (stale) worktree's state.
+    if (switchGeneration !== startGen || (currentWorktreeId !== null && currentWorktreeId !== worktreeId)) return false;
     setWorkspace(restored);
     return true;
   } catch {
@@ -159,13 +199,21 @@ const stateCache = new Map<string, WorkspaceState>();
 let previousWorktreeId: string | null = null;
 
 export function switchWorkspace(worktreeId: string): void {
-  // Save current state under the PREVIOUS worktree before switching
+  // Atomic switch: flush + persist the OLD worktree's state under the OLD id
+  // BEFORE mutating currentWorktreeId. Order matters — once currentWorktreeId
+  // points at the new worktree, any pending debounced save for the old one is
+  // dropped as stale (see saveWorkspaceState), so we must drain it here first.
   if (previousWorktreeId && previousWorktreeId !== worktreeId) {
+    flushPendingSave(previousWorktreeId);
     const cached = JSON.parse(JSON.stringify(workspace));
     stateCache.set(previousWorktreeId, cached);
     // Persist to disk so the state survives crashes
     App()?.SaveWorkspaceState(previousWorktreeId, JSON.stringify(cached)).catch(() => {});
   }
+  // Invalidate any in-flight async save/restore: their captured generation no
+  // longer matches, so completions that resolve after this point are dropped
+  // before they can clobber the new worktree's live panes.
+  switchGeneration++;
   previousWorktreeId = worktreeId;
   currentWorktreeId = worktreeId;
 

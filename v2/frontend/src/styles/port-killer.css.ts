@@ -82,7 +82,7 @@ export const row = style({
   alignItems: 'center',
   selectors: {
     '&:hover': {
-      background: vars.color.surfaceHover,
+      background: vars.color.bgHover,
     },
   },
 });

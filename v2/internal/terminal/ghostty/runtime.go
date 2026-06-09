@@ -95,12 +95,55 @@ func writePhantomGhosttyConfig() string {
 	return path
 }
 
-// App wraps a ghostty_app_t. Use NewApp to construct, Free to release.
+// App wraps a ghostty_app_t. Use NewApp to construct, Shutdown (or Free) to
+// release.
+//
+// Teardown synchronization (the 0.1.65/0.1.66 native-terminal crash class):
+//   - tickMu serializes the C-side ghostty_app_tick (which renders every live
+//     surface) against any ghostty_surface_free. A surface must never be freed
+//     while a tick is mid-render of it, or libghostty dereferences a dangling
+//     ghostty_surface_t. Both App.Tick and Surface.Free take tickMu.
+//   - surfaces is the render set; a surface is removed from it (and from
+//     focusedSurface) before its handle is freed.
+//   - stopTick/tickDone/stopOnce drive a clean stop+join of the tick loop so no
+//     tick can begin after Shutdown starts freeing surfaces.
 type App struct {
-	mu      sync.Mutex
-	handle  C.ghostty_app_t
-	config  C.ghostty_config_t
-	closed  bool
+	mu     sync.Mutex
+	handle C.ghostty_app_t
+	config C.ghostty_config_t
+	closed bool
+
+	// surfaces is the set of live surfaces this app is rendering. Guarded by mu.
+	surfaces map[*Surface]struct{}
+
+	// tickMu serializes App.Tick (C render of all surfaces) against per-surface
+	// frees. Distinct from mu so a free can hold it across the C call without
+	// blocking cheap handle reads.
+	tickMu sync.Mutex
+
+	// Tick-loop lifecycle. stopTick is closed to signal the loop to exit;
+	// tickDone is closed by the loop goroutine once it has fully returned.
+	// stopOnce makes Shutdown idempotent and guards stopTick close.
+	stopTick chan struct{}
+	tickDone chan struct{}
+	stopOnce sync.Once
+}
+
+// trackSurface adds s to the app's render set.
+func (a *App) trackSurface(s *Surface) {
+	a.mu.Lock()
+	if a.surfaces == nil {
+		a.surfaces = make(map[*Surface]struct{})
+	}
+	a.surfaces[s] = struct{}{}
+	a.mu.Unlock()
+}
+
+// untrackSurface removes s from the app's render set.
+func (a *App) untrackSurface(s *Surface) {
+	a.mu.Lock()
+	delete(a.surfaces, s)
+	a.mu.Unlock()
 }
 
 // NewApp creates a new ghostty app instance with default config and stub
@@ -130,7 +173,13 @@ func NewApp() (*App, error) {
 	C.phantom_config_finalize_main(cfg)
 
 	a := &App{config: cfg}
-	a.handle = C.phantom_app_new(unsafe.Pointer(a), cfg)
+	// userdata is intentionally nil: libghostty retains this pointer for the
+	// app's lifetime and hands it to every callback, but our //export callbacks
+	// route via package globals (wakeupCh, focusedSurface) and never read it.
+	// Passing the live *App would hand a Go pointer that now embeds Go pointers
+	// (the surfaces map / tick channels) to C — a cgo-pointer-rule violation
+	// that cgocheck would panic on.
+	a.handle = C.phantom_app_new(nil, cfg)
 	if a.handle == nil {
 		C.phantom_config_free_main(cfg)
 		return nil, errors.New("ghostty_app_new returned nil")
@@ -140,13 +189,22 @@ func NewApp() (*App, error) {
 
 // Tick advances the app's internal event loop. Call regularly (~60Hz)
 // when integrated; once per test for smoke checks.
+//
+// tickMu is held across the C tick so a surface free (which also takes tickMu)
+// can never run while libghostty is mid-render of that surface. The closed/
+// handle check stays under mu (consistent with the other accessors).
 func (a *App) Tick() {
+	a.tickMu.Lock()
+	defer a.tickMu.Unlock()
+
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.closed || a.handle == nil {
+	handle := a.handle
+	closed := a.closed
+	a.mu.Unlock()
+	if closed || handle == nil {
 		return
 	}
-	C.phantom_app_tick_main(a.handle)
+	C.phantom_app_tick_main(handle)
 }
 
 // SetFocus toggles app focus.
@@ -159,7 +217,61 @@ func (a *App) SetFocus(focused bool) {
 	C.phantom_app_set_focus_main(a.handle, C.bool(focused))
 }
 
-// Free releases the ghostty_app_t and its config.
+// Shutdown is the single, idempotent teardown entry point. It is safe to call
+// at any point in app shutdown and does NOT depend on any external context
+// cancellation ordering. In order it:
+//
+//  1. Signals the tick loop to stop and JOINS it (waits for the loop goroutine
+//     to fully exit) so no tick can begin during the frees below.
+//  2. Frees every live surface — each Surface.Free clears focusedSurface and
+//     serializes against the (now-stopped) tick via tickMu.
+//  3. Frees the ghostty_app_t itself.
+//
+// After Shutdown returns, no goroutine in this package holds a live
+// ghostty_surface_t or ghostty_app_t.
+func (a *App) Shutdown() {
+	a.stopTickLoop()
+	a.waitTick()
+
+	a.mu.Lock()
+	surfaces := a.surfaces
+	a.surfaces = nil
+	a.mu.Unlock()
+
+	for s := range surfaces {
+		s.Free()
+	}
+
+	a.Free()
+}
+
+// stopTickLoop signals the tick loop goroutine to exit. Idempotent: stopOnce
+// guards the channel close so multiple Shutdown calls are safe.
+func (a *App) stopTickLoop() {
+	a.stopOnce.Do(func() {
+		a.mu.Lock()
+		stop := a.stopTick
+		a.mu.Unlock()
+		if stop != nil {
+			close(stop)
+		}
+	})
+}
+
+// waitTick blocks until the tick loop goroutine has fully returned. Returns
+// immediately if no loop was ever started.
+func (a *App) waitTick() {
+	a.mu.Lock()
+	done := a.tickDone
+	a.mu.Unlock()
+	if done != nil {
+		<-done
+	}
+}
+
+// Free releases the ghostty_app_t and its config. Prefer Shutdown for full
+// teardown; Free alone does not stop the tick loop or free surfaces. Kept for
+// the smoke test and as the final step of Shutdown.
 func (a *App) Free() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -192,16 +304,29 @@ func (a *App) SetColorScheme(dark bool) {
 
 // StartTickLoop runs the ~60Hz event loop that drives libghostty rendering
 // and IO. It wakes immediately when libghostty signals via the wakeup
-// callback, and ticks at least once every ~16ms. The loop exits when ctx
-// is cancelled.
+// callback, and ticks at least once every ~16ms. The loop exits when ctx is
+// cancelled OR when App.Shutdown closes the app's stopTick channel — whichever
+// comes first. Shutdown joins this goroutine via tickDone before freeing any
+// surface, so a Shutdown that races app-context cancellation is still safe.
 func StartTickLoop(app *App, ctx context.Context) {
 	initWakeup()
+
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	app.mu.Lock()
+	app.stopTick = stop
+	app.tickDone = done
+	app.mu.Unlock()
+
 	go func() {
+		defer close(done)
 		ticker := time.NewTicker(16 * time.Millisecond) // ~60Hz
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
+				return
+			case <-stop:
 				return
 			case <-wakeupCh:
 				app.Tick()

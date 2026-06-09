@@ -66,10 +66,11 @@ func (s *Server) handleWS(ctx context.Context, w http.ResponseWriter, r *http.Re
 	if err != nil {
 		return
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "closing")
+	cl := s.hub.Register(conn)
+	defer s.hub.Unregister(cl)
 
-	s.hub.Register(conn)
-	defer s.hub.Unregister(conn)
+	// The hub-owned client goroutine is the sole writer for this connection.
+	go cl.writeLoop(ctx)
 
 	for {
 		msgType, data, err := conn.Read(ctx)
@@ -82,7 +83,7 @@ func (s *Server) handleWS(ctx context.Context, w http.ResponseWriter, r *http.Re
 			if json.Unmarshal(data, &msg) == nil && msg.Type == TypePing {
 				resp := Message{Type: TypePong}
 				respBytes, _ := json.Marshal(resp)
-				conn.Write(ctx, websocket.MessageText, respBytes)
+				cl.Send(respBytes)
 			}
 		}
 	}

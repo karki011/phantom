@@ -29,6 +29,9 @@ type Session struct {
 
 	mu        sync.RWMutex
 	listeners map[string]chan []byte
+	// listenersClosed is set once readLoop tears down the fan-out set so that
+	// a concurrent Unsubscribe never double-closes a listener channel.
+	listenersClosed bool
 
 	Scrollback *RingBuffer
 
@@ -79,12 +82,15 @@ func (s *Session) readLoop() {
 	buf := make([]byte, readBufSize)
 
 	defer func() {
-		// Close all listener channels on exit.
+		// Close all listener channels on exit. listenersClosed marks the
+		// fan-out set as torn down so a concurrent Unsubscribe never
+		// double-closes a channel readLoop already closed.
 		s.mu.Lock()
 		for id, ch := range s.listeners {
 			close(ch)
 			delete(s.listeners, id)
 		}
+		s.listenersClosed = true
 		s.mu.Unlock()
 	}()
 
@@ -179,6 +185,12 @@ func (s *Session) Subscribe(id string) <-chan []byte {
 func (s *Session) Unsubscribe(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// readLoop already closed and cleared every listener channel; closing
+	// again here would panic (close of closed channel).
+	if s.listenersClosed {
+		return
+	}
 
 	if ch, ok := s.listeners[id]; ok {
 		close(ch)

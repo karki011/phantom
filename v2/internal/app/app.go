@@ -425,7 +425,13 @@ func (a *App) Startup(ctx context.Context) {
 	// Priority pool + warm cache power the instant-switch UX. Status/branch/log
 	// refreshes for the active project ride the high lane; background fetches
 	// for other projects ride the low lane.
-	a.gitPriorityPool = git.NewPriorityPool(a.ctx, 0)
+	// 8 workers keep the active project's interactive high-lane refreshes
+	// responsive instead of queuing behind other projects' background work
+	// (the v0.1.65 regression from a shared 4-worker cap). Surge stays bounded:
+	// the pool caps low-lane (background) work to 4 in-flight so it can never
+	// occupy every worker, and every git subprocess goes through the
+	// package-global gitProcSem=16 backstop against a startup OOM spike.
+	a.gitPriorityPool = git.NewPriorityPool(a.ctx, 8)
 	a.gitWarmCache = git.NewWarmCache(a.gitPriorityPool)
 	a.gitWarmCache.SetCallbacks(
 		func(repoPath string, _ *git.RepoStatus) {

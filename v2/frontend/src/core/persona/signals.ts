@@ -102,19 +102,33 @@ export function stopSpeaking() {
   voiceEngine.stopSpeaking();
 }
 
+// Holds the Wails unsubscribe fns from the current registration so a repeat
+// initPersonaSignals() (every project switch) tears down the previous handlers
+// before re-registering — otherwise they accumulate until WebKit OOMs.
+let personaEventUnsubs: Array<() => void> = [];
+
+function teardownPersonaEvents() {
+  for (const unsub of personaEventUnsubs) unsub();
+  personaEventUnsubs = [];
+}
+
 export function initPersonaSignals() {
   personaGetState().then(setPersonaState);
   personaGetHistory().then((h) => {
     if (h.length > 0) setMessages(h);
   });
 
-  if (typeof window !== 'undefined' && (window as any).runtime) {
-    (window as any).runtime.EventsOn('persona:state', (data: PersonaState) => {
-      setPersonaState(data);
-    });
-    (window as any).runtime.EventsOn('persona:response', (data: PersonaResponse) => {
-      setLastResponse(data);
-    });
+  if (typeof window !== 'undefined' && (window as any).runtime?.EventsOn) {
+    teardownPersonaEvents();
+    const runtime = (window as any).runtime;
+    personaEventUnsubs.push(
+      runtime.EventsOn('persona:state', (data: PersonaState) => {
+        setPersonaState(data);
+      }),
+      runtime.EventsOn('persona:response', (data: PersonaResponse) => {
+        setLastResponse(data);
+      }),
+    );
   }
 
   // Initialize voice engine.

@@ -6,13 +6,25 @@ import (
 	"sync"
 )
 
+// maxLowLaneInflight caps how many low-priority (background) tasks may run
+// concurrently across the whole pool. It must be strictly less than the worker
+// count so background work can never occupy every worker — interactive
+// high-lane tasks always keep dedicated headroom. With 8 workers and a cap of
+// 4, at least 4 workers are always reachable by the high lane.
+const maxLowLaneInflight = 4
+
 // PriorityPool runs git tasks across a fixed worker pool with a high/low lane.
 // Workers prefer high-priority work; low-priority work runs only when the high
-// lane is empty. Follows the standard Go priority-select pattern.
+// lane is empty AND a low-lane slot is free. The low-lane in-flight cap keeps
+// background refreshes from starving interactive (high-lane) work even though
+// both lanes share the same workers. Every task's git subprocess is bounded by
+// the package-global gitProcSem so PriorityPool contributes to the same peak
+// surge cap as Pool.RunAll. Follows the standard Go priority-select pattern.
 type PriorityPool struct {
 	workers int
 	high    chan priorityTask
 	low     chan priorityTask
+	lowSem  chan struct{}
 	ctx     context.Context
 	cancel  context.CancelFunc
 	once    sync.Once
@@ -28,10 +40,19 @@ func NewPriorityPool(ctx context.Context, workers int) *PriorityPool {
 		workers = defaultWorkers
 	}
 	pCtx, cancel := context.WithCancel(ctx)
+	lowCap := maxLowLaneInflight
+	if lowCap >= workers {
+		// Always leave at least one worker reachable only by the high lane.
+		lowCap = workers - 1
+		if lowCap < 1 {
+			lowCap = 1
+		}
+	}
 	p := &PriorityPool{
 		workers: workers,
 		high:    make(chan priorityTask, 256),
 		low:     make(chan priorityTask, 256),
+		lowSem:  make(chan struct{}, lowCap),
 		ctx:     pCtx,
 		cancel:  cancel,
 	}
@@ -92,24 +113,79 @@ func (p *PriorityPool) worker() {
 			if !ok {
 				return
 			}
-			t.fn()
+			p.run(t)
 			continue
 		default:
 		}
 
+		// No high work ready. Only commit to the low lane if a low-lane slot
+		// is free, so background work can never occupy every worker. We try to
+		// reserve the slot non-blockingly and pair it with a low task in the
+		// same select; if no slot is free we keep waiting on high (and low
+		// stays parked until a slot frees), never blocking high-lane progress.
+		if !p.acquireLowSlot() {
+			// All low slots busy. Wait for high work (or a low slot opening)
+			// without consuming a low task we cannot run yet.
+			select {
+			case <-p.ctx.Done():
+				return
+			case t, ok := <-p.high:
+				if !ok {
+					return
+				}
+				p.run(t)
+			case p.lowSem <- struct{}{}:
+				// A low slot freed — loop to pick up high or low next round.
+				<-p.lowSem
+			}
+			continue
+		}
+
+		// Low slot held. Take a low task, but yield to high if one arrives.
 		select {
 		case <-p.ctx.Done():
+			<-p.lowSem
 			return
 		case t, ok := <-p.high:
+			<-p.lowSem // not running a low task; return the slot
 			if !ok {
 				return
 			}
-			t.fn()
+			p.run(t)
 		case t, ok := <-p.low:
 			if !ok {
+				<-p.lowSem
 				return
 			}
-			t.fn()
+			p.runLow(t)
 		}
 	}
+}
+
+// acquireLowSlot tries to reserve a low-lane in-flight slot without blocking.
+func (p *PriorityPool) acquireLowSlot() bool {
+	select {
+	case p.lowSem <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+// run executes a task, bounding its git subprocess via the package-global
+// gitProcSem so PriorityPool shares the same peak-surge cap as Pool.RunAll.
+// gitProcSem is released even if the task panics.
+func (p *PriorityPool) run(t priorityTask) {
+	if !acquireGitProc(p.ctx) {
+		return
+	}
+	defer releaseGitProc()
+	t.fn()
+}
+
+// runLow is run for a low-lane task; it releases the held low-lane slot on
+// return (including panic) in addition to the git-subprocess slot.
+func (p *PriorityPool) runLow(t priorityTask) {
+	defer func() { <-p.lowSem }()
+	p.run(t)
 }

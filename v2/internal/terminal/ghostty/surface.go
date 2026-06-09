@@ -115,11 +115,13 @@ func (a *App) NewSurface(opts SurfaceOptions) (*Surface, error) {
 
 	C.phantom_view_attach_surface_main(viewPtr, unsafe.Pointer(handle))
 
-	return &Surface{
+	s := &Surface{
 		app:    a,
 		view:   viewPtr,
 		handle: handle,
-	}, nil
+	}
+	a.trackSurface(s)
+	return s, nil
 }
 
 // NSView returns the Objective-C NSView pointer for this surface as an
@@ -167,7 +169,28 @@ func (s *Surface) SetOcclusion(hidden bool) {
 }
 
 // Free releases the ghostty_surface_t and the native NSView.
+//
+// Teardown ordering matters (the 0.1.65/0.1.66 crash class):
+//  1. Take the app's tickMu so this free cannot overlap a ghostty_app_tick that
+//     is mid-render of this surface — the tick renders the whole render set, so
+//     freeing a surface handle from under it is a use-after-free.
+//  2. Clear focusedSurface (if it points at this handle) so clipboard callbacks
+//     can never dereference the about-to-be-freed handle.
+//  3. Remove this surface from the app's render set so a subsequent tick won't
+//     touch it.
+//  4. Free the ghostty_surface_t, then release the NSView.
 func (s *Surface) Free() {
+	var app *App
+	s.mu.Lock()
+	app = s.app
+	s.mu.Unlock()
+
+	if app != nil {
+		app.tickMu.Lock()
+		defer app.tickMu.Unlock()
+		app.untrackSurface(s)
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -175,6 +198,7 @@ func (s *Surface) Free() {
 	}
 	s.closed = true
 	if s.handle != nil {
+		clearFocusedSurfaceHandle(s.handle)
 		C.phantom_surface_free_main(s.handle)
 		s.handle = nil
 	}

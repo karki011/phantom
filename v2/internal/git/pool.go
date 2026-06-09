@@ -10,6 +10,38 @@ import (
 
 const defaultWorkers = 8
 
+// maxConcurrentGitProcs bounds the PEAK number of git subprocesses spawned
+// across ALL pools/repos at once. Each fresh Pool defaults to 8 workers, so N
+// concurrent project fetch/status calls would otherwise fan out to 8×N
+// processes (~20MB each → 2.4GB+ OOM spike with 5+ projects on startup). This
+// package-global semaphore caps real-world surge regardless of pool count while
+// staying well above per-call test concurrency so RunAll never deadlocks.
+const maxConcurrentGitProcs = 16
+
+var gitProcSem = make(chan struct{}, maxConcurrentGitProcs)
+
+// acquireGitProc blocks until a git-subprocess slot is free or ctx is
+// cancelled. ok=false means cancellation — the caller must NOT release.
+func acquireGitProc(ctx context.Context) (ok bool) {
+	select {
+	case gitProcSem <- struct{}{}:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+// releaseGitProc frees one git-subprocess slot. Always pair with a successful
+// acquireGitProc, ideally via defer so a panic cannot leak the slot.
+func releaseGitProc() { <-gitProcSem }
+
+// runGitProc runs fn while holding an already-acquired git-subprocess slot and
+// releases it on return — including when fn panics — so the slot never leaks.
+func runGitProc(ctx context.Context, repoPath string, fn func(ctx context.Context, repoPath string) (interface{}, error)) (interface{}, error) {
+	defer releaseGitProc()
+	return fn(ctx, repoPath)
+}
+
 // PoolResult holds the outcome of a single repo operation.
 type PoolResult struct {
 	RepoPath string
@@ -68,7 +100,21 @@ func (p *Pool) RunAll(ctx context.Context, repoPaths []string, fn func(ctx conte
 					return
 				default:
 				}
-				data, err := fn(ctx, repoPath)
+				// Bound peak concurrent git subprocesses across all pools/repos.
+				// Respect cancellation while waiting for a slot so a cancelled
+				// run drains promptly instead of blocking on a saturated sem.
+				select {
+				case gitProcSem <- struct{}{}:
+				case <-ctx.Done():
+					results <- PoolResult{RepoPath: repoPath, Err: ctx.Err()}
+					for rp := range jobs {
+						results <- PoolResult{RepoPath: rp, Err: ctx.Err()}
+					}
+					return
+				}
+				// Release the slot via a func wrapper so a panic in fn() cannot
+				// leak it permanently. The named result lets us still publish.
+				data, err := runGitProc(ctx, repoPath, fn)
 				results <- PoolResult{RepoPath: repoPath, Data: data, Err: err}
 			}
 		}()

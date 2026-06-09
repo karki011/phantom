@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/log"
 )
@@ -171,9 +172,18 @@ func cleanEmptyParents(worktreePath string) {
 	}
 }
 
-// PruneAll runs `git worktree prune` for a list of repository paths.
-// Intended for startup cleanup of stale worktree metadata.
+// pruneMu serializes PruneAll so concurrent/overlapping startup prunes never
+// fight over index.lock or corrupt worktree metadata. `git worktree prune`
+// already iterates one repo at a time here; this mutex additionally guarantees
+// no two PruneAll callers (e.g. rapid restarts) run concurrently.
+var pruneMu sync.Mutex
+
+// PruneAll runs `git worktree prune` for a list of repository paths, one repo
+// at a time. Intended for startup cleanup of stale worktree metadata. Serialized
+// globally via pruneMu to avoid index.lock contention.
 func PruneAll(ctx context.Context, repoPaths []string) {
+	pruneMu.Lock()
+	defer pruneMu.Unlock()
 	for _, repo := range repoPaths {
 		if _, err := runGit(ctx, repo, "worktree", "prune"); err != nil {
 			log.Warn("startup prune failed", "repo", repo, "err", err)
