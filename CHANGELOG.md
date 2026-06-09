@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.67](https://github.com/karki011/phantom/compare/v0.1.66...v0.1.67) (2026-06-09)
+
+
+### Bug Fixes
+
+* **v2:** default native terminal off — stop 0.1.66 crash/hang regression ([1c20855](https://github.com/karki011/phantom/commit/1c208558f0b005e0da68938df79402dc795f0e5e))
+* **v2:** default native terminal off after 0.1.65/0.1.66 crash regressions ([309eabe](https://github.com/karki011/phantom/commit/309eabe8a54f13a532597d7d6da8114075f33c73))
+
 ## [0.1.66](https://github.com/karki011/phantom/compare/v0.1.65...v0.1.66) (2026-06-08)
 
 
