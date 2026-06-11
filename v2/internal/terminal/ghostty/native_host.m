@@ -3,8 +3,17 @@
 // Native host helpers — find the Wails NSWindow (the one that owns the
 // WKWebView) and attach/detach PhantomTerminalView instances as siblings
 // of the web content view. Wails v2 does not expose its NSWindow from Go,
-// so we walk NSApp's window list and pick the first window whose view
-// hierarchy contains a WKWebView.
+// so we walk NSApp's window list and pick the window whose view hierarchy
+// contains a WKWebView. Strict match only — no fallback. A transient boot
+// window grabbed by a fallback gets cached by the Go side and its views
+// die when boot settles, leaving dangling pointers (the 0.1.65 native
+// terminal crash class).
+//
+// This file is compiled WITHOUT ARC. Every ObjC pointer captured into a
+// dispatch block is CFRetain'd at capture (before dispatch) and CFRelease'd
+// exactly once at the end of the block, on every exit path. Pointers are
+// captured as raw void* so MRC block-copy never implicitly retains them at
+// an unpredictable time — lifetime is owned explicitly here.
 
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
@@ -18,6 +27,10 @@ static BOOL phantom_view_contains_webview(NSView *view) {
     return NO;
 }
 
+// Returns the NSWindow whose contentView hierarchy hosts the WKWebView, or
+// NULL if none exists yet (e.g. before DomReady). Callers must treat NULL
+// as a transient "window not ready" condition and retry — never substitute
+// another window.
 void *phantom_find_main_window(void) {
     __block void *result = NULL;
     void (^find)(void) = ^{
@@ -27,10 +40,6 @@ void *phantom_find_main_window(void) {
                 result = (__bridge void *)win;
                 return;
             }
-        }
-        // Fallback — first visible window.
-        for (NSWindow *win in [NSApp windows]) {
-            if (win.isVisible) { result = (__bridge void *)win; return; }
         }
     };
     if ([NSThread isMainThread]) {
@@ -43,36 +52,55 @@ void *phantom_find_main_window(void) {
 
 void *phantom_window_content_view(void *window) {
     if (window == NULL) return NULL;
-    NSWindow *win = (__bridge NSWindow *)window;
+    CFRetain(window);
     __block void *result = NULL;
-    void (^get)(void) = ^{ result = (__bridge void *)win.contentView; };
+    void (^get)(void) = ^{
+        NSWindow *win = (__bridge NSWindow *)window;
+        result = (__bridge void *)win.contentView;
+        CFRelease(window);
+    };
     if ([NSThread isMainThread]) get(); else dispatch_sync(dispatch_get_main_queue(), get);
     return result;
 }
 
 double phantom_window_content_height(void *window) {
     if (window == NULL) return 0;
-    NSWindow *win = (__bridge NSWindow *)window;
+    CFRetain(window);
     __block double h = 0;
-    void (^get)(void) = ^{ h = (double)win.contentView.bounds.size.height; };
+    void (^get)(void) = ^{
+        NSWindow *win = (__bridge NSWindow *)window;
+        h = (double)win.contentView.bounds.size.height;
+        CFRelease(window);
+    };
     if ([NSThread isMainThread]) get(); else dispatch_sync(dispatch_get_main_queue(), get);
     return h;
 }
 
-void phantom_add_native_subview(void *parent, void *child) {
-    if (parent == NULL || child == NULL) return;
-    NSView *p = (__bridge NSView *)parent;
-    NSView *c = (__bridge NSView *)child;
+// Attaches child under window's contentView. Takes the WINDOW, not a
+// contentView pointer — the contentView is re-resolved on the main queue
+// inside the block, because a contentView captured at call time can be
+// freed before the async block runs.
+void phantom_add_native_subview(void *window, void *child) {
+    if (window == NULL || child == NULL) return;
+    CFRetain(window);
+    CFRetain(child);
     dispatch_async(dispatch_get_main_queue(), ^{
-        [p addSubview:c];
+        NSWindow *win = (__bridge NSWindow *)window;
+        NSView *content = win.contentView;
+        if (content != nil) {
+            [content addSubview:(__bridge NSView *)child];
+        }
+        CFRelease(window);
+        CFRelease(child);
     });
 }
 
 void phantom_remove_native_subview(void *child) {
     if (child == NULL) return;
-    NSView *c = (__bridge NSView *)child;
+    CFRetain(child);
     dispatch_async(dispatch_get_main_queue(), ^{
-        [c removeFromSuperview];
+        [(__bridge NSView *)child removeFromSuperview];
+        CFRelease(child);
     });
 }
 
@@ -82,9 +110,18 @@ void phantom_remove_native_subview(void *child) {
 // re-acquire focus when the user interacts with the surface region.
 void phantom_make_first_responder(void *window, void *view) {
     if (window == NULL || view == NULL) return;
-    NSWindow *win = (__bridge NSWindow *)window;
-    NSView *v = (__bridge NSView *)view;
+    CFRetain(window);
+    CFRetain(view);
     dispatch_async(dispatch_get_main_queue(), ^{
-        [win makeFirstResponder:v];
+        NSWindow *win = (__bridge NSWindow *)window;
+        NSView *v = (__bridge NSView *)view;
+        // Only focus a view that is actually parented in this window — the
+        // attach block may have bailed (contentView gone) or the view may
+        // have been detached by a racing destroy.
+        if (v.window == win) {
+            [win makeFirstResponder:v];
+        }
+        CFRelease(window);
+        CFRelease(view);
     });
 }

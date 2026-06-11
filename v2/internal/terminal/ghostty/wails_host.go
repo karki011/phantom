@@ -11,9 +11,8 @@ package ghostty
 #cgo darwin LDFLAGS: -framework Cocoa -framework WebKit
 
 extern void *phantom_find_main_window(void);
-extern void *phantom_window_content_view(void *window);
 extern double phantom_window_content_height(void *window);
-extern void phantom_add_native_subview(void *parent, void *child);
+extern void phantom_add_native_subview(void *window, void *child);
 extern void phantom_remove_native_subview(void *child);
 extern void phantom_make_first_responder(void *window, void *view);
 */
@@ -30,23 +29,20 @@ type HostWindow struct {
 }
 
 // FindHostWindow locates the Wails NSWindow by scanning NSApp.windows for
-// the one whose content view contains a WKWebView. Returns an error if no
-// such window exists (e.g. before DomReady).
+// the one whose content view contains a WKWebView. Strict match only — no
+// fallback window. Returns a transient error if no such window exists yet
+// (e.g. before DomReady); callers may retry.
+//
+// CONTRACT (canonical — frontend retry depends on these exact strings):
+//   - transient:  error message CONTAINS "window not ready" → NativeTerminalPane retries (250ms*attempt, max 8)
+//   - permanent:  "native terminal disabled", "libghostty not available" → no retry, error state
+// Do not rename these substrings without updating NativeTerminalPane.tsx and core/bindings/native-terminal.ts.
 func FindHostWindow() (*HostWindow, error) {
 	w := C.phantom_find_main_window()
 	if w == nil {
-		return nil, errors.New("ghostty: no Wails NSWindow found (called before window opened?)")
+		return nil, errors.New("ghostty: window not ready (no Wails NSWindow hosting a WKWebView yet)")
 	}
 	return &HostWindow{window: w}, nil
-}
-
-// ContentView returns the NSWindow's contentView, which is the parent we
-// attach terminal surfaces to.
-func (h *HostWindow) ContentView() unsafe.Pointer {
-	if h == nil || h.window == nil {
-		return nil
-	}
-	return C.phantom_window_content_view(h.window)
 }
 
 // ContentHeight returns the current contentView height in points. Needed
@@ -60,17 +56,16 @@ func (h *HostWindow) ContentHeight() float64 {
 }
 
 // AttachSubview adds an NSView as a subview of the host window's content
-// view. The view is dispatched onto the main queue so this is safe to
-// call from any goroutine.
+// view. The attach is dispatched onto the main queue so this is safe to
+// call from any goroutine. We pass the WINDOW, never a captured
+// contentView — the contentView is re-resolved inside the main-queue
+// block so a contentView freed between call and dispatch is never
+// messaged.
 func (h *HostWindow) AttachSubview(view uintptr) {
 	if h == nil || h.window == nil || view == 0 {
 		return
 	}
-	parent := C.phantom_window_content_view(h.window)
-	if parent == nil {
-		return
-	}
-	C.phantom_add_native_subview(parent, unsafe.Pointer(view))
+	C.phantom_add_native_subview(h.window, unsafe.Pointer(view))
 }
 
 // DetachSubview removes an NSView from its superview.

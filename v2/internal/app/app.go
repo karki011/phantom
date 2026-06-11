@@ -259,6 +259,11 @@ func (a *App) Startup(ctx context.Context) {
 		}
 	}
 
+	// Surface native-terminal crashes from the previous session. libghostty's
+	// sentry-native handler swallows native crashes, so without this check the
+	// only evidence is a silent exit.
+	go checkGhosttyCrashEnvelopes()
+
 	// Initialize session controller tables.
 	if a.SessionCtrl != nil {
 		if err := a.SessionCtrl.Init(a.ctx); err != nil {

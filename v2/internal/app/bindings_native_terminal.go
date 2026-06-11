@@ -79,7 +79,6 @@ func (a *App) NativeTerminalCreate(paneID, worktreeID, cwd string) (string, erro
 		return paneID, nil
 	}
 	gapp := a.ghosttyApp
-	host := a.nativeHost
 	a.nativeMu.Unlock()
 
 	// Lazy-init the process-wide ghostty app exactly once. The check-then-act
@@ -124,12 +123,15 @@ func (a *App) NativeTerminalCreate(paneID, worktreeID, cwd string) (string, erro
 
 		a.ghosttyInitMu.Unlock()
 	}
-	if host == nil {
-		var err error
-		host, err = ghostty.FindHostWindow()
-		if err != nil {
-			return "", err
-		}
+	// Always re-resolve the host window per create — never trust a cached
+	// handle. The 0.1.65 crash class: a stale cached NSWindow (from a
+	// transient boot window) whose contentView was freed got messaged in a
+	// queued attach block. FindHostWindow is strict-match (WKWebView window
+	// only) and returns a transient "window not ready" error the frontend
+	// retries on.
+	host, err := ghostty.FindHostWindow()
+	if err != nil {
+		return "", err
 	}
 
 	surf, err := gapp.NewSurface(ghostty.SurfaceOptions{
@@ -184,8 +186,17 @@ func (a *App) NativeTerminalSetPlacement(paneID string, x, y, width, height floa
 }
 
 // NativeTerminalDestroy removes the NSView and frees the surface.
-// Sends ghostty_surface_request_close first so the PTY flushes / shell
-// exits cleanly before the surface tears down.
+//
+// Lifecycle serialization (the 0.1.65/0.1.66 crash class):
+//  1. The map entry is deleted under nativeMu BEFORE any teardown runs, so
+//     no other binding (Focus/SetPlacement/Create) can pick up the dying
+//     uintptr handles — no Go-side use after free.
+//  2. Teardown is then one serialized main-queue chain, in enqueue order:
+//     request close (sync, PTY flush) → detach view (autoreleased) → free
+//     surface (sync). The main queue is serial, so any
+//     attach/focus block queued earlier (at create time) runs BEFORE the
+//     free — a queued attach can never message a freed view or surface.
+//     Do not reorder these calls or move any of them off the main queue.
 func (a *App) NativeTerminalDestroy(paneID string) {
 	a.nativeMu.Lock()
 	t, ok := a.nativeTerminals[paneID]
