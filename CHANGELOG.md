@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.69](https://github.com/karki011/phantom/compare/v0.1.68...v0.1.69) (2026-06-11)
+
+
+### Bug Fixes
+
+* **v2:** close native terminal use-after-free crash class (0.1.65-0.1.68) ([68734d6](https://github.com/karki011/phantom/commit/68734d6fe7304e98f9c561e5f09141792c9662dc))
+* **v2:** close native terminal use-after-free crash class (0.1.65–0.1.68) ([f5984d0](https://github.com/karki011/phantom/commit/f5984d0c0abf7ff05e088752b72afed488c8b27a))
+
 ## [0.1.68](https://github.com/karki011/phantom/compare/v0.1.67...v0.1.68) (2026-06-09)
 
 
