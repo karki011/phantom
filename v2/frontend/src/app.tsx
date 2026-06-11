@@ -87,11 +87,11 @@ export function App() {
     await waitForWails();
 
     // Sync native-terminal feature flag so pane routing in signals.ts is
-    // correct before any tab is created.
+    // correct before any tab is created. Memoized — restore paths await the
+    // same promise (ensureNativeTerminalFlagSynced) for race-safe demotion.
     try {
-      const { nativeTerminalIsEnabled } = await import('@/core/bindings/native-terminal');
-      const { setNativeTerminalFlagCached } = await import('@/core/panes/signals');
-      setNativeTerminalFlagCached(await nativeTerminalIsEnabled());
+      const { ensureNativeTerminalFlagSynced } = await import('@/core/bindings/native-terminal');
+      await ensureNativeTerminalFlagSynced();
     } catch {}
 
     const savedTheme = await loadPref('theme');

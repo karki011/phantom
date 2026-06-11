@@ -1,6 +1,7 @@
 // Author: Subash Karki
 
 import { App } from './_app';
+import { setNativeTerminalFlagCached, getNativeTerminalFlagCached } from '@/core/panes/signals';
 
 export async function nativeTerminalIsEnabled(): Promise<boolean> {
   try {
@@ -8,6 +9,26 @@ export async function nativeTerminalIsEnabled(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// Race-safe source of truth for the native-terminal flag at boot. The cached
+// flag in panes/signals.ts is set asynchronously, so early restore paths must
+// await this instead of trusting the (possibly unsynced) cache. After the
+// first sync the live cache wins — toggles update it via
+// setNativeTerminalFlagCached.
+let flagSynced = false;
+let flagSyncPromise: Promise<boolean> | null = null;
+
+export function ensureNativeTerminalFlagSynced(): Promise<boolean> {
+  if (flagSynced) return Promise.resolve(getNativeTerminalFlagCached());
+  if (!flagSyncPromise) {
+    flagSyncPromise = nativeTerminalIsEnabled().then((on) => {
+      setNativeTerminalFlagCached(on);
+      flagSynced = true;
+      return on;
+    });
+  }
+  return flagSyncPromise;
 }
 
 export async function setNativeTerminalEnabled(on: boolean): Promise<void> {
@@ -18,6 +39,9 @@ export async function setNativeTerminalEnabled(on: boolean): Promise<void> {
   }
 }
 
+// Unlike the other wrappers this RETHROWS so the caller can distinguish the
+// transient `window not ready` error (retryable, see contract at
+// FindHostWindow in internal/terminal/ghostty/wails_host.go) from permanent failures.
 export async function nativeTerminalCreate(
   paneId: string,
   worktreeId: string,
@@ -28,7 +52,7 @@ export async function nativeTerminalCreate(
     return typeof id === 'string' ? id : null;
   } catch (error) {
     console.error('[native-terminal] create failed', { paneId, error });
-    return null;
+    throw error;
   }
 }
 

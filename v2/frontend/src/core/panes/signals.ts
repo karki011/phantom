@@ -71,12 +71,34 @@ function flushPendingSave(worktreeId: string): void {
   }
 }
 
-// Remove panes with deleted types (journal, diff, playground, chat, markdown-preview, composer-v1)
-function sanitizePanes(state: WorkspaceState): WorkspaceState {
+// Rewrite 'native-terminal' leaves to 'terminal' across a layout tree.
+// PaneContainer renders from the leaf's paneType, so demotion must touch the
+// layout as well as the panes map.
+function demoteNativeLeaves(node: LayoutNode): void {
+  if (node.type === 'leaf') {
+    if (node.paneType === 'native-terminal') node.paneType = 'terminal';
+    return;
+  }
+  demoteNativeLeaves(node.first);
+  demoteNativeLeaves(node.second);
+}
+
+// Remove panes with deleted types (journal, diff, playground, chat, markdown-preview, composer-v1).
+// When the native-terminal flag is off, demote persisted 'native-terminal'
+// panes to 'terminal' so they reattach as web terminals. Restore paths run
+// before the async flag sync may have landed, so they must pass the awaited
+// flag (ensureNativeTerminalFlagSynced) instead of relying on the cache.
+function sanitizePanes(state: WorkspaceState, nativeEnabled: boolean): WorkspaceState {
   for (const tab of state.tabs ?? []) {
     const staleIds = Object.keys(tab.panes).filter(id => !VALID_PANE_TYPES.has(tab.panes[id].kind));
     for (const id of staleIds) {
       delete tab.panes[id];
+    }
+    if (!nativeEnabled) {
+      for (const pane of Object.values(tab.panes)) {
+        if (pane.kind === 'native-terminal') pane.kind = 'terminal';
+      }
+      if (tab.layout) demoteNativeLeaves(tab.layout);
     }
   }
   return state;
@@ -88,9 +110,10 @@ export async function restoreWorkspaceState(worktreeId: string): Promise<boolean
   // completion, drop stale).
   const startGen = switchGeneration;
   try {
+    const nativeEnabled = await ensureNativeTerminalFlagSynced();
     const stateJSON = await App()?.GetWorkspaceState(worktreeId);
     if (!stateJSON) return false;
-    const restored = sanitizePanes(JSON.parse(stateJSON) as WorkspaceState);
+    const restored = sanitizePanes(JSON.parse(stateJSON) as WorkspaceState, nativeEnabled);
     if (!restored.tabs?.length) return false;
     // The async fetch may resolve after the user switched away. Applying it now
     // would clobber the live worktree's panes with this (stale) worktree's state.
@@ -104,11 +127,12 @@ export async function restoreWorkspaceState(worktreeId: string): Promise<boolean
 
 export async function bootstrapWorkspaceStates(): Promise<void> {
   try {
+    const nativeEnabled = await ensureNativeTerminalFlagSynced();
     const allStates: Record<string, string> | undefined = await App()?.GetAllWorkspaceStates();
     if (!allStates) return;
     for (const [worktreeId, stateJSON] of Object.entries(allStates)) {
       try {
-        const state = sanitizePanes(JSON.parse(stateJSON) as WorkspaceState);
+        const state = sanitizePanes(JSON.parse(stateJSON) as WorkspaceState, nativeEnabled);
         if (state.tabs?.length) {
           stateCache.set(worktreeId, state);
         }
@@ -121,6 +145,7 @@ export async function bootstrapWorkspaceStates(): Promise<void> {
   }
 }
 import type { WorkspaceState, Tab, PaneType, PaneLeaf, LayoutNode } from './types';
+import { ensureNativeTerminalFlagSynced } from '@/core/bindings/native-terminal';
 import {
   uid,
   removePaneFromLayout,
